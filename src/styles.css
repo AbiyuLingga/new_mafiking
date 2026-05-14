@@ -1,0 +1,422 @@
+:root {
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --ink: #0b1326;
+  --paper: #FBF8F1;
+  --yel: #FFF44F;
+  --rule: rgba(11, 19, 38, 0.10);
+  --rule-strong: rgba(11, 19, 38, 0.16);
+  --muted: rgba(11, 19, 38, 0.55);
+  --muted-2: rgba(11, 19, 38, 0.35);
+  --density-pad: 1;
+  --card-radius: 1.5rem;
+}
+
+html.radius-sharp { --card-radius: 0.75rem; }
+html.radius-smooth { --card-radius: 2rem; }
+
+html.density-spacious { --density-pad: 1.25; }
+html.density-compact { --density-pad: 0.8; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.005em;
+}
+
+.font-display { font-family: var(--font-display); letter-spacing: -0.025em; }
+.font-mono { font-family: var(--font-mono); }
+.font-body { font-family: var(--font-sans); }
+
+::selection { background: var(--yel); color: var(--ink); }
+
+/* Hairline rules */
+.hairline { border-color: var(--rule); }
+.hairline-strong { border-color: var(--rule-strong); }
+
+/* Subtle tiny label */
+.kicker {
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* Yellow highlight */
+.hi-yel {
+  background-image: linear-gradient(to top, var(--yel) 0, var(--yel) 0.38em, transparent 0.38em);
+  display: inline;
+  padding: 0 0.05em;
+}
+
+/* Pill button — minimal */
+.btn-ink {
+  background: var(--ink);
+  color: white;
+  padding: 0.85rem 1.4rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.92rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: transform .18s ease, box-shadow .18s ease, opacity .18s;
+  letter-spacing: -0.01em;
+}
+.btn-ink:hover { transform: translateY(-1px); box-shadow: 0 8px 20px -10px rgba(11,19,38,0.4); }
+.btn-ink:active { transform: translateY(0); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink);
+  padding: 0.85rem 1.4rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.92rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--rule-strong);
+  transition: background .18s, border-color .18s;
+}
+.btn-ghost:hover { background: rgba(11,19,38,0.03); border-color: var(--ink); }
+
+.btn-yel {
+  background: var(--yel);
+  color: var(--ink);
+  padding: 0.85rem 1.4rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.92rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: transform .18s, box-shadow .18s;
+}
+.btn-yel:hover { transform: translateY(-1px); box-shadow: 0 12px 30px -10px rgba(255,244,79,0.6); }
+
+/* Minimal tag chip */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink);
+  background: white;
+}
+.tag-yel { background: var(--yel); border-color: transparent; color: var(--ink); }
+.tag-ink { background: var(--ink); border-color: transparent; color: white; }
+
+/* Cards */
+.card {
+  background: white;
+  border: 1px solid var(--rule);
+  border-radius: var(--card-radius);
+  transition: border-color .2s, box-shadow .2s, transform .2s;
+}
+.card-hover:hover {
+  border-color: var(--rule-strong);
+  box-shadow: 0 18px 40px -24px rgba(11,19,38,0.15);
+  transform: translateY(-2px);
+}
+
+/* Soft shadow card variant */
+.card-soft {
+  background: white;
+  border-radius: var(--card-radius);
+  box-shadow: 0 1px 0 rgba(11,19,38,0.04), 0 12px 30px -18px rgba(11,19,38,0.10);
+}
+
+/* Yellow accent card */
+.card-yel {
+  background: var(--yel);
+  border-radius: var(--card-radius);
+}
+
+/* Scrollbar hide */
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Section paddings honour density */
+.sec-y { padding-top: calc(5rem * var(--density-pad)); padding-bottom: calc(5rem * var(--density-pad)); }
+.sec-y-sm { padding-top: calc(3rem * var(--density-pad)); padding-bottom: calc(3rem * var(--density-pad)); }
+.gap-d { gap: calc(1.5rem * var(--density-pad)); }
+.pad-d { padding: calc(1.75rem * var(--density-pad)); }
+
+/* Focus */
+button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Photo placeholder */
+.photo-frame {
+  position: relative;
+  background-color: #f1f0ec;
+  background-image:
+    repeating-linear-gradient(135deg, rgba(11,19,38,0.04) 0, rgba(11,19,38,0.04) 1px, transparent 1px, transparent 14px);
+  border-radius: 1.5rem;
+  overflow: hidden;
+}
+.photo-frame::after {
+  content: attr(data-label);
+  position: absolute;
+  bottom: 12px;
+  right: 14px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(11,19,38,0.4);
+}
+
+/* Progress bar */
+.bar {
+  height: 4px;
+  background: rgba(11,19,38,0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bar > div {
+  height: 100%;
+  background: var(--ink);
+  border-radius: 999px;
+}
+.bar-yel > div { background: var(--yel); }
+
+/* Tiny dot */
+.dot-active::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #16a34a;
+  margin-right: 6px;
+  vertical-align: middle;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .55; }
+}
+
+/* Tabular nums for stats */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* Mapel switch animation */
+@keyframes mapel-in {
+  0%   { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.mapel-anim { animation: mapel-in 340ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.mapel-stagger > * { animation: mapel-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.mapel-stagger > *:nth-child(1) { animation-delay: 40ms; }
+.mapel-stagger > *:nth-child(2) { animation-delay: 90ms; }
+.mapel-stagger > *:nth-child(3) { animation-delay: 140ms; }
+.mapel-stagger > *:nth-child(4) { animation-delay: 190ms; }
+.mapel-stagger > *:nth-child(5) { animation-delay: 240ms; }
+.mapel-stagger > *:nth-child(6) { animation-delay: 290ms; }
+
+/* ─── Amber palette (warm, friendly) ───────────────────────────────────── */
+:root {
+  --amber-50: #FFFBEB;
+  --amber-100: #FEF3C7;
+  --amber-200: #FDE68A;
+  --amber-300: #FCD34D;
+  --amber-500: #F59E0B;
+  --amber-600: #D97706;
+  --amber-700: #B45309;
+  --amber-800: #92400E;
+}
+
+.bg-paper { background: var(--paper); }
+.bg-paper-soft { background: rgba(251, 248, 241, 0.82); }
+.bg-amber-50 { background: var(--amber-50); }
+.bg-amber-100 { background: var(--amber-100); }
+.text-amber-500 { color: var(--amber-500); }
+.text-amber-600 { color: var(--amber-600); }
+.text-amber-700 { color: var(--amber-700); }
+.text-amber-800 { color: var(--amber-800); }
+.border-amber-100 { border-color: var(--amber-100); }
+.border-amber-200 { border-color: var(--amber-200); }
+
+/* Amber card with soft SVG wave blobs in top-right */
+.card-tone {
+  border-radius: var(--card-radius);
+  position: relative;
+  overflow: hidden;
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s;
+}
+.card-tone::before {
+  content: "";
+  position: absolute;
+  top: 0; right: 0;
+  width: 240px; height: 200px;
+  background-image: url('../assets/card-bg.png');
+  background-repeat: no-repeat;
+  background-position: top right;
+  background-size: cover;
+  pointer-events: none;
+  opacity: 0.28;
+  mix-blend-mode: multiply;
+}
+.card-tone:hover { transform: translateY(-2px); }
+
+.card-amber {
+  background: linear-gradient(140deg, #FFFDF6 0%, #FCF5E4 100%);
+  border: 1px solid rgba(180, 130, 50, 0.10);
+}
+.card-amber::before {
+  filter: sepia(1) saturate(1.8) hue-rotate(-10deg) brightness(1.1);
+}
+.card-amber:hover {
+  box-shadow: 0 16px 36px -26px rgba(120, 80, 20, 0.18);
+  border-color: rgba(180, 130, 50, 0.20);
+}
+
+.card-blue {
+  background: linear-gradient(140deg, #F7FBFF 0%, #E5EFFC 100%);
+  border: 1px solid rgba(60, 110, 180, 0.10);
+}
+.card-blue::before {
+  filter: sepia(1) saturate(1.6) hue-rotate(185deg) brightness(1.1);
+}
+.card-blue:hover {
+  box-shadow: 0 16px 36px -26px rgba(30, 60, 130, 0.18);
+  border-color: rgba(60, 110, 180, 0.22);
+}
+
+.card-emerald {
+  background: linear-gradient(140deg, #F6FCF8 0%, #E2F4E9 100%);
+  border: 1px solid rgba(40, 130, 80, 0.10);
+}
+.card-emerald::before {
+  filter: sepia(1) saturate(1.6) hue-rotate(100deg) brightness(1.05);
+}
+.card-emerald:hover {
+  box-shadow: 0 16px 36px -26px rgba(20, 90, 60, 0.18);
+  border-color: rgba(40, 130, 80, 0.22);
+}
+
+/* Progress bar tints */
+.bar-blue > div    { background: #2563EB; }
+.bar-emerald > div { background: #059669; }
+
+/* Amber pill buttons */
+.btn-amber {
+  background: var(--amber-700);
+  color: white;
+  padding: 0.6rem 1.1rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: transform .15s ease, box-shadow .15s ease, background .15s;
+  letter-spacing: -0.005em;
+}
+.btn-amber:hover {
+  background: var(--amber-800);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px -8px rgba(180, 83, 9, 0.55);
+}
+
+.btn-amber-soft {
+  background: rgba(254, 243, 199, 0.85);
+  color: var(--amber-800);
+  padding: 0.6rem 1.1rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid rgba(245, 158, 11, 0.20);
+  transition: background .15s, border-color .15s;
+}
+.btn-amber-soft:hover {
+  background: var(--amber-200);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+/* Amber bar variant */
+.bar-amber > div { background: var(--amber-500); }
+
+/* Bab chip — small uppercase tag for chapter cards */
+.chip-bab {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--amber-200);
+  color: var(--amber-700);
+  backdrop-filter: blur(4px);
+}
+
+/* Nav gamified chips */
+.chip-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 0.7rem;
+  background: var(--amber-50);
+  border: 1px solid var(--amber-200);
+  color: var(--amber-700);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.82rem;
+  transition: background .15s;
+}
+.chip-streak:hover { background: var(--amber-100); }
+
+.chip-level {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.3rem 0.65rem 0.3rem 0.35rem;
+  border-radius: 0.7rem;
+  background: white;
+  border: 1px solid var(--rule);
+}
+.chip-level .lvl-badge {
+  width: 22px; height: 22px;
+  border-radius: 999px;
+  background: var(--amber-100);
+  color: var(--amber-700);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+}
+.chip-level .lvl-bar {
+  width: 56px; height: 4px;
+  background: rgba(11,19,38,0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.chip-level .lvl-bar > div {
+  height: 100%;
+  background: var(--amber-500);
+  border-radius: 999px;
+}
