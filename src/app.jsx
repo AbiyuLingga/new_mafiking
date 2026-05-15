@@ -19,6 +19,8 @@ const App = () => {
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [currentUser, setCurrentUser] = React.useState(null);
   const [isAdmin, setIsAdmin] = React.useState(false);
+  const isGuest = currentUser && currentUser.display_name?.startsWith("Tamu_");
+  const isLoggedIn = currentUser && !isGuest;
 
   React.useEffect(() => {
     MafikingAPI.get("/api/auth/me")
@@ -62,7 +64,7 @@ const App = () => {
   return (
     <div className="min-h-screen flex flex-col bg-paper text-ink">
       <OfflineBanner />
-      {route !== "practice" && (
+      {route !== "practice" && isLoggedIn && (
         <Nav route={route} setRoute={navigate} navStyle={tweaks.navStyle} gamified={route === "belajar" || route === "misi" || route === "profile"} />
       )}
 
@@ -78,7 +80,7 @@ const App = () => {
         </div>
       </main>
 
-      {route === "lobby" && <Footer setRoute={navigate} />}
+      {route === "lobby" && isLoggedIn && <Footer setRoute={navigate} />}
 
       <ToastContainer />
 

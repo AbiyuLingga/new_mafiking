@@ -90,8 +90,12 @@ app.use(helmet({
 app.use(express.json({ limit: '12mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
+if (isProduction && !process.env.SESSION_SECRET) {
+  throw new Error('SESSION_SECRET wajib diset di .env untuk production.');
+}
+
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'new-mafiking-local-secret',
+  secret: process.env.SESSION_SECRET || 'new-mafiking-local-dev-only',
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -136,6 +140,18 @@ app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth/register', registerLimiter);
 app.use('/api/correction', correctionLimiter);
 
+// Hapus guest user yang tidak pernah login lebih dari 7 hari, tiap 24 jam
+setInterval(() => {
+  try {
+    const result = db.prepare(
+      "DELETE FROM users WHERE password_hash = 'none' AND (last_active IS NULL OR last_active < date('now', '-7 days'))"
+    ).run();
+    if (result.changes > 0) console.log(`[cleanup] Hapus ${result.changes} guest user lama.`);
+  } catch (e) {
+    console.error('[cleanup] Guest cleanup error:', e);
+  }
+}, 24 * 60 * 60 * 1000);
+
 app.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
   if (req.path === '/api/health' || req.path === '/api/payment/callback') return next();
@@ -176,7 +192,10 @@ const staticCache = {
 
 app.use('/assets', express.static(path.join(__dirname, 'assets'), staticCache));
 app.use('/src', express.static(path.join(__dirname, 'src'), staticCache));
-app.get('/SOP-DEEPSEEK-IMPORT-SOAL.md', (_req, res) => {
+app.get('/SOP-DEEPSEEK-IMPORT-SOAL.md', (req, res) => {
+  if (!req.session?.role || req.session.role !== 'admin') {
+    return res.status(403).send('Forbidden');
+  }
   res.type('text/markdown; charset=utf-8').sendFile(path.join(__dirname, 'SOP-DEEPSEEK-IMPORT-SOAL.md'));
 });
 app.get('/tweaks-panel.jsx', (_req, res) => {

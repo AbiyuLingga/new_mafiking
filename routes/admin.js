@@ -197,14 +197,14 @@ router.get('/users', (req, res) => {
     } catch (e) { console.error('GET /users error:', e); res.status(500).json({ error: e.message }); }
 });
 
-router.put('/users/:id/password', (req, res) => {
+router.put('/users/:id/password', async (req, res) => {
     try {
         const { newPassword } = req.body;
         if (!newPassword || newPassword.length < 8) {
             return res.status(400).json({ error: 'Password minimal 8 karakter' });
         }
         const bcrypt = require('bcrypt');
-        const password_hash = bcrypt.hashSync(newPassword, 10);
+        const password_hash = await bcrypt.hash(newPassword, 10);
         const db = req.app.locals.db;
         const info = db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(password_hash, req.params.id);
         if (info.changes === 0) return res.status(404).json({ error: 'User tidak ditemukan' });

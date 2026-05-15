@@ -3,7 +3,133 @@
 const Lobby = ({ setRoute, tweaks, currentUser }) => {
   const isRegistered = currentUser && !currentUser.display_name?.startsWith("Tamu_");
   if (isRegistered) return <Dashboard user={currentUser} setRoute={setRoute} tweaks={tweaks} />;
-  return <Landing setRoute={setRoute} tweaks={tweaks} />;
+  if (currentUser) return <LoginScreen />;
+  return null;
+};
+
+const LoginScreen = () => {
+  const { useState } = React;
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      await MafikingAPI.post('/api/auth/login', { username, password });
+      window.location.reload();
+    } catch (err) {
+      setError(err.message || 'Username atau password salah.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{
+      background: '#0F172A',
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'relative',
+      overflow: 'hidden',
+      fontFamily: 'inherit',
+    }}>
+      {/* Blobs */}
+      <div style={{
+        position: 'absolute', borderRadius: '50%', filter: 'blur(80px)', opacity: 0.5,
+        width: 400, height: 400, background: 'rgba(245,228,79,0.15)', top: -100, left: -100,
+      }} />
+      <div style={{
+        position: 'absolute', borderRadius: '50%', filter: 'blur(80px)', opacity: 0.5,
+        width: 500, height: 500, background: 'rgba(30,64,175,0.4)', bottom: -150, right: -100,
+      }} />
+
+      {/* Card */}
+      <div style={{
+        background: 'rgba(30,41,59,0.75)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        border: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: 24,
+        padding: 40,
+        width: '100%',
+        maxWidth: 420,
+        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+        position: 'relative',
+        zIndex: 10,
+        margin: '0 16px',
+      }}>
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <img src="/assets/logo.png" alt="Mafiking" style={{ width: 60, height: 60, objectFit: 'contain', marginBottom: 10 }} />
+          <h1 style={{ fontSize: 28, color: '#FDF15B', letterSpacing: 1, margin: 0 }}>Mafiking</h1>
+          <p style={{ color: 'rgba(203,213,225,0.7)', fontSize: 13, marginTop: 6 }}>Bimbel TPB ITB</p>
+        </div>
+
+        <form onSubmit={handleLogin}>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: 'block', fontSize: 13, color: '#cbd5e1', marginBottom: 8 }}>Username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="Masukkan username"
+              required
+              autoFocus
+              style={{
+                width: '100%', padding: '14px 16px', boxSizing: 'border-box',
+                background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 12, color: '#fff', fontSize: 15, outline: 'none',
+              }}
+              onFocus={e => e.target.style.borderColor = '#FDF15B'}
+              onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+            />
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ display: 'block', fontSize: 13, color: '#cbd5e1', marginBottom: 8 }}>Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              style={{
+                width: '100%', padding: '14px 16px', boxSizing: 'border-box',
+                background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 12, color: '#fff', fontSize: 15, outline: 'none',
+              }}
+              onFocus={e => e.target.style.borderColor = '#FDF15B'}
+              onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+            />
+            {error && (
+              <p style={{ color: '#ef4444', fontSize: 13, marginTop: 8, marginLeft: 4 }}>{error}</p>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%', padding: 14,
+              background: loading ? 'rgba(253,241,91,0.5)' : 'linear-gradient(135deg,#FDF15B,#F5E44F)',
+              color: '#0F172A', border: 'none', borderRadius: 12,
+              fontSize: 16, fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer',
+              boxShadow: '0 4px 15px rgba(253,241,91,0.3)',
+              transition: 'transform 0.2s, box-shadow 0.2s',
+            }}
+          >
+            {loading ? 'Masuk...' : 'Masuk'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 };
 
 // ─── Landing (marketing, untuk anonymous/guest) ───────────────────────────

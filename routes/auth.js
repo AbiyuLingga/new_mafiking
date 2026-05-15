@@ -16,7 +16,7 @@ setInterval(() => {
 }, 10 * 60 * 1000);
 
 // POST /api/auth/login
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) {
         return res.status(400).json({ error: 'Username dan password diperlukan' });
@@ -43,7 +43,7 @@ router.post('/login', (req, res) => {
         return res.status(401).json({ error: 'Username atau password salah' });
     }
 
-    const match = bcrypt.compareSync(password, user.password_hash);
+    const match = await bcrypt.compare(password, user.password_hash);
     if (!match) {
         const current = loginAttempts.get(username) || { count: 0, lastAttempt: 0 };
         current.count += 1;
@@ -52,10 +52,14 @@ router.post('/login', (req, res) => {
         return res.status(401).json({ error: 'Username atau password salah' });
     }
 
-    // Login berhasil, hapus attempt counter
+    // Beta mode: batasi akses hanya ke akun tertentu
+    const betaUser = process.env.BETA_USERNAME;
+    if (betaUser && user.username !== betaUser) {
+        return res.status(401).json({ error: 'Username atau password salah' });
+    }
+
     loginAttempts.delete(username);
 
-    // Update last_active
     db.prepare('UPDATE users SET last_active = date(?) WHERE id = ?')
         .run(new Date().toISOString().split('T')[0], user.id);
 
