@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>Panduan Import Soal MAFIKING</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      color: #172033;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11.5pt;
+      line-height: 1.58;
+      margin: 0;
+    }
+
+    h1 {
+      border-bottom: 2px solid #22314f;
+      color: #14213d;
+      font-size: 22pt;
+      line-height: 1.2;
+      margin: 0 0 14px;
+      padding-bottom: 10px;
+    }
+
+    h2 {
+      color: #14213d;
+      font-size: 15pt;
+      margin: 22px 0 8px;
+    }
+
+    p {
+      margin: 0 0 10px;
+    }
+
+    ul,
+    ol {
+      margin: 8px 0 12px 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 4px 0;
+    }
+
+    table {
+      border-collapse: collapse;
+      margin: 10px 0 14px;
+      width: 100%;
+    }
+
+    th,
+    td {
+      border: 1px solid #c9d1df;
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef3fb;
+      color: #14213d;
+      font-weight: 700;
+    }
+
+    code {
+      background: #f4f6f9;
+      border: 1px solid #d7dde8;
+      border-radius: 4px;
+      color: #0f172a;
+      font-family: "DejaVu Sans Mono", Consolas, monospace;
+      font-size: 10pt;
+      padding: 1px 4px;
+    }
+
+    pre {
+      background: #f8fafc;
+      border: 1px solid #d7dde8;
+      border-radius: 8px;
+      color: #0f172a;
+      font-family: "DejaVu Sans Mono", Consolas, monospace;
+      font-size: 9.5pt;
+      line-height: 1.45;
+      margin: 10px 0 16px;
+      overflow-wrap: anywhere;
+      padding: 12px 14px;
+      white-space: pre-wrap;
+    }
+
+    hr {
+      border: 0;
+      border-top: 1px solid #d9e1ec;
+      margin: 18px 0;
+    }
+
+    strong {
+      color: #111827;
+    }
+  </style>
+</head>
+<body>
+  <h1>Panduan Import Soal MAFIKING</h1>
+  <p>Dokumen ini menjelaskan cara membuat file soal yang siap diupload ke sistem MAFIKING. Ikuti format di bawah agar soal, pilihan jawaban, dan pembahasan bisa diproses otomatis.</p>
+
+  <hr>
+
+  <h2>Format File yang Diterima</h2>
+  <ul>
+    <li><strong>PDF</strong> — hasil scan atau cetak dari buku/lembar soal</li>
+    <li><strong>DOCX</strong> — dokumen Word</li>
+    <li><strong>TXT / MD</strong> — teks biasa atau markdown</li>
+  </ul>
+
+  <hr>
+
+  <h2>Isi yang Perlu Ada di File</h2>
+  <p>Untuk setiap soal, sertakan:</p>
+  <ol>
+    <li><strong>Teks soal</strong> — kalimat pertanyaannya</li>
+    <li><strong>Pilihan jawaban</strong> (opsional, untuk soal pilihan ganda) — minimal 4 pilihan, tandai yang benar</li>
+    <li><strong>Pembahasan</strong> (opsional) — langkah penyelesaian dari awal sampai akhir</li>
+  </ol>
+  <p>Jika pembahasan tidak disertakan, sistem akan membuatkan otomatis. Jika kunci jawaban tidak disertakan, sistem akan menentukan sendiri — tapi lebih baik Anda sertakan.</p>
+
+  <hr>
+
+  <h2>Penulisan Notasi Matematika</h2>
+  <p>Gunakan LaTeX sederhana <strong>tanpa tanda <code>$</code></strong>:</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Yang Dimaksud</th>
+        <th>Tulis Seperti Ini</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Pecahan ½</td>
+        <td><code>\frac{1}{2}</code></td>
+      </tr>
+      <tr>
+        <td>x kuadrat</td>
+        <td><code>x^2</code> atau <code>x^{2}</code></td>
+      </tr>
+      <tr>
+        <td>Integral</td>
+        <td><code>\int x^2 dx</code></td>
+      </tr>
+      <tr>
+        <td>Akar</td>
+        <td><code>\sqrt{x}</code></td>
+      </tr>
+      <tr>
+        <td>sin, cos, ln</td>
+        <td><code>\sin x</code>, <code>\cos x</code>, <code>\ln x</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <h2>Contoh Soal 1 — Pilihan Ganda dengan Pembahasan</h2>
+  <pre>Soal 1
+Nilai dari \int 2x(x^2+1)^3 dx adalah ...
+
+Pilihan:
+A. \frac{(x^2+1)^4}{4} + C  ← BENAR
+B. \frac{(x^2+1)^3}{3} + C
+C. 2x \cdot \frac{(x^2+1)^4}{4} + C
+D. (x^2+1)^4 + C
+
+Pembahasan:
+Langkah 1 — Substitusi
+Misalkan u = x^2+1, maka du = 2x dx.
+Integral menjadi \int u^3 du.
+
+Langkah 2 — Integralkan
+\int u^3 du = \frac{u^4}{4} + C
+
+Langkah 3 — Substitusi Balik
+= \frac{(x^2+1)^4}{4} + C</pre>
+
+  <hr>
+
+  <h2>Contoh Soal 2 — Isian (Open) dengan Pembahasan</h2>
+  <pre>Soal 2
+Tentukan turunan pertama dari f(x) = x^3 - 3x^2 + 5x - 2.
+
+Jawaban: 3x^2 - 6x + 5
+
+Pembahasan:
+Langkah 1 — Aturan Pangkat
+Turunkan suku per suku menggunakan aturan d/dx[x^n] = nx^{n-1}.
+
+Langkah 2 — Hitung
+- Turunan x^3 = 3x^2
+- Turunan -3x^2 = -6x
+- Turunan 5x = 5
+- Turunan konstanta -2 = 0
+
+Langkah 3 — Gabungkan
+f'(x) = 3x^2 - 6x + 5</pre>
+
+  <hr>
+
+  <h2>Contoh Soal 3 — Pilihan Ganda Tanpa Pembahasan</h2>
+  <pre>Soal 3
+Jika \lim_{x \to 2} \frac{x^2 - 4}{x - 2} = L, maka nilai L adalah ...
+
+Pilihan:
+A. 0
+B. 2
+C. 4  ← BENAR
+D. Tidak ada
+
+Kunci: C</pre>
+  <p>Jika tidak ada pembahasan, sistem akan membuatkannya otomatis berdasarkan jawaban yang benar.</p>
+
+  <hr>
+
+  <h2>Template Kosong</h2>
+  <p>Salin template ini dan isi dengan soal Anda:</p>
+  <pre>Soal [nomor]
+[Tulis teks soal di sini]
+
+Pilihan:
+A. [pilihan A]
+B. [pilihan B]
+C. [pilihan C]
+D. [pilihan D]
+Kunci: [huruf pilihan yang benar]
+
+Pembahasan:
+Langkah 1 — [Nama Langkah]
+[Penjelasan langkah]
+
+Langkah 2 — [Nama Langkah]
+[Penjelasan langkah]
+
+[dst...]</pre>
+  <p>Untuk soal isian (tanpa pilihan ganda), hapus bagian Pilihan dan ganti dengan:</p>
+  <pre>Jawaban: [tulis jawaban di sini]</pre>
+
+  <hr>
+
+  <h2>Tips</h2>
+  <ul>
+    <li><strong>Sertakan nomor soal</strong> agar urutan tidak kacau saat diproses.</li>
+    <li><strong>Tandai kunci jawaban</strong> dengan jelas — bisa dengan tanda <code>← BENAR</code>, <code>*</code>, atau <code>Kunci: A</code>.</li>
+    <li><strong>Satu file bisa berisi banyak soal</strong> — tidak perlu upload satu per satu.</li>
+    <li><strong>Pembahasan boleh dilewati</strong> — sistem akan membuatkan, tapi kualitasnya lebih baik jika Anda isi sendiri.</li>
+    <li>Setelah upload, Anda tetap bisa <strong>mengedit soal, pilihan, dan pembahasan</strong> sebelum menyimpan ke database.</li>
+  </ul>
+</body>
+</html>

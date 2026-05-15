@@ -5,7 +5,14 @@ const router = express.Router();
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const MAX_BASE64_CHARS = 10_000_000;
-const DEFAULT_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+const TRANSCRIBE_MODELS = [
+  'gemini-2.5-flash-lite',
+];
+const EVALUATE_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+];
+const PROFILE_MODELS = EVALUATE_MODELS;
 
 const EVALUATE_SYSTEM_PROMPT = [
   'Kamu adalah asisten guru matematika yang teliti.',
@@ -93,13 +100,12 @@ function getGeminiKeys() {
     .filter(Boolean);
 }
 
-function getGeminiModels() {
-  return (process.env.GEMINI_MODELS || '')
+function getGeminiModels(base) {
+  const env = (process.env.GEMINI_MODELS || '')
     .split(',')
     .map((model) => model.trim())
-    .filter(Boolean)
-    .concat(DEFAULT_MODELS)
-    .filter((model, index, models) => models.indexOf(model) === index);
+    .filter(Boolean);
+  return [...new Set([...env, ...base])];
 }
 
 function stripBase64Prefix(value) {
@@ -226,13 +232,12 @@ function normalizeProfileSummary(raw, sourceText) {
   };
 }
 
-async function callGeminiWithFallback({ parts, schema, systemInstruction }) {
+async function callGeminiWithFallback({ models, parts, schema, systemInstruction }) {
   const keys = getGeminiKeys();
-  const models = getGeminiModels();
   const attempts = [];
 
   if (!keys.length) {
-    const error = new Error('Tidak ada Gemini API key. Isi GEMINI_KEY_1 di .env.');
+    const error = new Error('Tidak ada API key. Isi GEMINI_KEY_1 di .env.');
     error.status = 500;
     throw error;
   }
@@ -260,7 +265,7 @@ async function callGeminiWithFallback({ parts, schema, systemInstruction }) {
         lastError = error;
         attempts.push({
           keyIndex: keyIndex + 1,
-          message: error.message || 'Gemini request failed',
+          message: error.message || 'AI request failed',
           model,
           retryable: isRetryableGeminiError(error),
           status: error.status ?? error.response?.status ?? 500
@@ -340,6 +345,7 @@ router.post('/transcribe', isAuthenticated, async (req, res) => {
     if (!cleanBase64) return res.status(400).json({ error: 'imageBase64 wajib dikirim.' });
 
     const result = await callGeminiWithFallback({
+      models: getGeminiModels(TRANSCRIBE_MODELS),
       schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
       systemInstruction: 'Baca tulisan tangan matematika pada gambar. Jangan memperbaiki jawaban, hanya transkripsikan.',
       parts: [
@@ -394,6 +400,7 @@ router.post('/evaluate', isAuthenticated, async (req, res) => {
     }
 
     const result = await callGeminiWithFallback({
+      models: getGeminiModels(EVALUATE_MODELS),
       schema: EVALUATION_SCHEMA,
       systemInstruction: EVALUATE_SYSTEM_PROMPT,
       parts
@@ -475,6 +482,7 @@ router.post('/profile-summary', isAuthenticated, async (req, res) => {
     }
 
     const result = await callGeminiWithFallback({
+      models: getGeminiModels(PROFILE_MODELS),
       schema: PROFILE_SCHEMA,
       systemInstruction: PROFILE_SYSTEM_PROMPT,
       parts: [{ text: `Buat raport belajar dari data berikut:\n\n${JSON.stringify(compactAttempts)}` }]

@@ -18,14 +18,41 @@ const chapterData = {
   ],
 };
 
-const Belajar = ({ setRoute, tweaks }) => {
+const Belajar = ({ setRoute, tweaks, isAdmin }) => {
   const [mapel, setMapel] = useState("Matematika");
   const [semester, setSemester] = useState(1);
+  const [dbInit, setDbInit] = useState(null);
 
   const cardStyle = tweaks.chapterCard || "list";
   const selectorStyle = tweaks.mapelSelector || "pills";
 
-  const chapters = chapterData[mapel].filter((c) => c.semester === semester);
+  function loadDbChapters() {
+    MafikingAPI.get('/api/quiz/init').then(data => setDbInit(data)).catch(() => {});
+  }
+
+  useEffect(() => { loadDbChapters(); }, []);
+
+  const problemCounts = (dbInit && dbInit.problemCounts) || {};
+  const rawDbChapters = dbInit ? (dbInit.chapters || []).map((c, idx) => ({
+    id: c.id,
+    num: c.sort_order || idx + 1,
+    title: c.title,
+    icon: c.icon || '',
+    sub: c.description || '',
+    est: c.est || '',
+    progress: 0,
+    total: (c.subtopics || []).reduce((s, sub) => s + (problemCounts[sub.id] || 0), 0),
+    semester: Number(c.semester) || 1,
+    mapel: c.mapel || 'Matematika',
+    topics: (() => { try { return JSON.parse(c.topics || '[]'); } catch(_) { return []; } })(),
+    read: false,
+  })) : null;
+
+  const useDb = rawDbChapters !== null;
+  const allMapelChapters = useDb
+    ? rawDbChapters.filter(c => c.mapel === mapel)
+    : (chapterData[mapel] || []);
+  const chapters = allMapelChapters.filter(c => c.semester === semester);
 
   return (
     <div className="bg-paper">
@@ -53,18 +80,12 @@ const Belajar = ({ setRoute, tweaks }) => {
             const inProgress = chapters.filter(c => c.progress > 0).length;
             const pct = totalSoal > 0 ? (doneSoal / totalSoal) * 100 : 0;
             const M = MAPEL_META[mapel];
-            const tonePalette = {
-              amber:   { bg: "#FEF3C7", fg: "#B45309", ring: "rgba(217, 119, 6, 0.18)" },
-              blue:    { bg: "#DBEAFE", fg: "#1D4ED8", ring: "rgba(37, 99, 235, 0.18)" },
-              emerald: { bg: "#D1FAE5", fg: "#047857", ring: "rgba(5, 150, 105, 0.18)" },
-            };
-            const tone = tonePalette[M.color] || tonePalette.amber;
+            const toneClass = { amber: "tone-icon-amber", blue: "tone-icon-blue", emerald: "tone-icon-emerald" }[M.color] || "tone-icon-amber";
             const barTone = { amber: "bar-amber", blue: "bar-blue", emerald: "bar-emerald" }[M.color] || "bar-amber";
             return (
               <div className="flex items-start gap-4 mb-6 mapel-anim">
                 <div
-                  className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 mt-0.5"
-                  style={{ background: tone.bg, color: tone.fg, boxShadow: `0 0 0 1px ${tone.ring}` }}
+                  className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 mt-0.5 ${toneClass}`}
                 >
                   <M.icon className="w-5 h-5" />
                 </div>
@@ -82,10 +103,16 @@ const Belajar = ({ setRoute, tweaks }) => {
           })()}
 
 
-          {/* Chapter cards — variant */}
-          {cardStyle === "numbered" && <ChaptersNumbered chapters={chapters} setRoute={setRoute} mapel={mapel} />}
-          {cardStyle === "soft" && <ChaptersSoft chapters={chapters} setRoute={setRoute} mapel={mapel} />}
-          {cardStyle === "magazine" && <ChaptersMagazine chapters={chapters} setRoute={setRoute} mapel={mapel} />}
+          {/* Chapter cards — admin mode shows inline editor, user mode shows card variants */}
+          {isAdmin && typeof AdminBelajarView !== "undefined" ? (
+            <AdminBelajarView setRoute={setRoute} mapel={mapel} chapters={allMapelChapters} onChaptersChanged={loadDbChapters} />
+          ) : (
+            <React.Fragment>
+              {cardStyle === "numbered" && <ChaptersNumbered chapters={chapters} setRoute={setRoute} mapel={mapel} />}
+              {cardStyle === "soft" && <ChaptersSoft chapters={chapters} setRoute={setRoute} mapel={mapel} />}
+              {cardStyle === "magazine" && <ChaptersMagazine chapters={chapters} setRoute={setRoute} mapel={mapel} />}
+            </React.Fragment>
+          )}
 
         </div>
       </section>
@@ -101,8 +128,11 @@ const SemesterKicker = ({ semester, setSemester }) => {
     <div className="mb-4">
       <div className="relative inline-block">
         <button
+          aria-expanded={open}
+          aria-label={`Ganti semester. Aktif: Semester ${semester}`}
           onClick={() => setOpen(!open)}
           className="inline-flex items-center gap-2 font-display font-bold text-xl tracking-[-0.02em] hover:text-ink/70 transition-colors"
+          type="button"
         >
           Semester {semester}
           <Icon.ChevD className={`w-5 h-5 text-ink/35 transition-transform ${open ? "rotate-180" : ""}`} />
@@ -252,7 +282,7 @@ const ChaptersNumbered = ({ chapters, setRoute, mapel }) => (
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
               {isActive && <span className="tag-yel tag">Aktif</span>}
-              <span className="text-xs text-ink/40 flex items-center gap-1"><Icon.Clock className="w-3 h-3" /> {c.est} · {c.total} soal</span>
+              <span className="text-xs text-ink/55 flex items-center gap-1"><Icon.Clock className="w-3 h-3" /> {c.est} · {c.total} soal</span>
             </div>
             <h3 className="font-display font-bold text-2xl md:text-3xl tracking-[-0.02em] leading-tight mb-1.5">{c.title}</h3>
             {pct > 0 && (
@@ -344,7 +374,7 @@ const ChaptersMagazine = ({ chapters, setRoute, mapel }) => (
             )}
           </div>
           <div className="mt-5">
-            <div className={`text-xs font-mono mb-1.5 ${isHero ? "text-white/40" : "text-ink/40"}`}>Bab {c.num} · {c.est}</div>
+            <div className={`text-xs font-mono mb-1.5 ${isHero ? "text-white/55" : "text-ink/55"}`}>Bab {c.num} · {c.est}</div>
             <h3 className={`font-display font-bold text-2xl tracking-[-0.02em] leading-tight ${isHero ? "text-white" : ""}`}>{c.title}</h3>
             {pct > 0 && (
               <div className="flex items-center gap-3 mt-4">

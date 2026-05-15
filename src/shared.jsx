@@ -236,11 +236,11 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false }) => {
             </button>
           )}
           {gamified && (
-            <button onClick={() => setRoute("profile")} className={`w-9 h-9 inline-flex items-center justify-center rounded-full border hairline ${isInk ? "text-white hover:bg-white/10" : "hover:bg-ink/5"}`} title="Profil">
+            <button aria-label="Buka profil" onClick={() => setRoute("profile")} type="button" className={`w-9 h-9 inline-flex items-center justify-center rounded-full border hairline ${isInk ? "text-white hover:bg-white/10" : "hover:bg-ink/5"}`}>
               <Icon.User className="w-4 h-4" />
             </button>
           )}
-          <button className={`md:hidden ml-1 w-10 h-10 inline-flex items-center justify-center rounded-full ${isInk ? "hover:bg-white/10 text-white" : "hover:bg-ink/5"}`} onClick={() => setMenuOpen(!menuOpen)}>
+          <button aria-label={menuOpen ? "Tutup menu" : "Buka menu"} aria-expanded={menuOpen} className={`md:hidden ml-1 w-10 h-10 inline-flex items-center justify-center rounded-full ${isInk ? "hover:bg-white/10 text-white" : "hover:bg-ink/5"}`} onClick={() => setMenuOpen(!menuOpen)} type="button">
             {menuOpen ? <Icon.X /> : <Icon.Menu />}
           </button>
         </div>
@@ -310,9 +310,82 @@ const Footer = ({ setRoute }) => (
   </footer>
 );
 
+// ─── Skeleton shimmer ────────────────────────────────────────────────────
+const Skeleton = ({ className = "" }) => (
+  <div className={`skeleton-shimmer rounded-lg ${className}`} aria-hidden="true" />
+);
+
+// ─── Toast system ─────────────────────────────────────────────────────────
+let _toastId = 0;
+const _toastListeners = [];
+function _notifyToastListeners(toasts) {
+  _toastListeners.forEach((fn) => fn(toasts));
+}
+let _toasts = [];
+
+function showToast(message, type = "info", duration = 4000) {
+  const id = ++_toastId;
+  _toasts = [{ id, message, type }, ..._toasts].slice(0, 5);
+  _notifyToastListeners(_toasts);
+  setTimeout(() => {
+    _toasts = _toasts.filter((t) => t.id !== id);
+    _notifyToastListeners(_toasts);
+  }, duration);
+}
+
+const ToastContainer = () => {
+  const [toasts, setToasts] = useState([]);
+  useEffect(() => {
+    _toastListeners.push(setToasts);
+    return () => {
+      const idx = _toastListeners.indexOf(setToasts);
+      if (idx !== -1) _toastListeners.splice(idx, 1);
+    };
+  }, []);
+
+  if (!toasts.length) return null;
+  return (
+    <div className="toast-container" aria-live="polite" aria-atomic="false">
+      {toasts.map((t) => (
+        <div key={t.id} className={`toast toast-${t.type}`}>
+          {t.type === "success" && <Icon.CheckCircle className="w-4 h-4 shrink-0 text-emerald-500" />}
+          {t.type === "error" && <Icon.Target className="w-4 h-4 shrink-0 text-red-400" />}
+          <span>{t.message}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ─── Offline banner ───────────────────────────────────────────────────────
+const OfflineBanner = () => {
+  const [offline, setOffline] = useState(!navigator.onLine);
+  useEffect(() => {
+    const onOnline = () => setOffline(false);
+    const onOffline = () => setOffline(true);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+
+  if (!offline) return null;
+  return (
+    <div className="offline-banner" role="status">
+      Tidak ada koneksi internet — beberapa fitur mungkin tidak berfungsi.
+    </div>
+  );
+};
+
 window.Icon = Icon;
 window.MAPEL_META = MAPEL_META;
 window.pad2 = pad2;
 window.Logo = Logo;
 window.Nav = Nav;
 window.Footer = Footer;
+window.Skeleton = Skeleton;
+window.showToast = showToast;
+window.ToastContainer = ToastContainer;
+window.OfflineBanner = OfflineBanner;

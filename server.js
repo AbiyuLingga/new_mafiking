@@ -34,7 +34,12 @@ for (const migration of [
   "ALTER TABLE users ADD COLUMN fakultas TEXT DEFAULT ''",
   "ALTER TABLE users ADD COLUMN highest_streak INTEGER DEFAULT 0",
   "ALTER TABLE users ADD COLUMN last_play_date DATE",
-  "ALTER TABLE users ADD COLUMN badge_tier INTEGER DEFAULT 0"
+  "ALTER TABLE users ADD COLUMN badge_tier INTEGER DEFAULT 0",
+  "ALTER TABLE chapters ADD COLUMN mapel TEXT DEFAULT 'Matematika'",
+  "ALTER TABLE chapters ADD COLUMN semester INTEGER DEFAULT 1",
+  "ALTER TABLE chapters ADD COLUMN description TEXT DEFAULT ''",
+  "ALTER TABLE chapters ADD COLUMN est TEXT DEFAULT ''",
+  "ALTER TABLE chapters ADD COLUMN topics TEXT DEFAULT '[]'"
 ]) {
   try {
     db.exec(migration);
@@ -73,11 +78,10 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
       imgSrc: ["'self'", "data:", "https:"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
-      connectSrc: ["'self'"],
+      connectSrc: ["'self'", "https://unpkg.com"],
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
-      workerSrc: ["'self'", "blob:"],
-      upgradeInsecureRequests: []
+      workerSrc: ["'self'", "blob:"]
     }
   },
   crossOriginEmbedderPolicy: false
@@ -153,6 +157,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/quiz', require('./routes/quiz'));
 app.use('/api/progress', require('./routes/progress'));
+app.use('/api/admin/import', require('./routes/admin-import'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/payment', require('./routes/payment'));
 app.use('/api/correction', require('./routes/correction'));
@@ -171,6 +176,9 @@ const staticCache = {
 
 app.use('/assets', express.static(path.join(__dirname, 'assets'), staticCache));
 app.use('/src', express.static(path.join(__dirname, 'src'), staticCache));
+app.get('/SOP-DEEPSEEK-IMPORT-SOAL.md', (_req, res) => {
+  res.type('text/markdown; charset=utf-8').sendFile(path.join(__dirname, 'SOP-DEEPSEEK-IMPORT-SOAL.md'));
+});
 app.get('/tweaks-panel.jsx', (_req, res) => {
   res.type('text/babel').sendFile(path.join(__dirname, 'tweaks-panel.jsx'));
 });

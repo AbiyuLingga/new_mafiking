@@ -17,8 +17,11 @@ router.get('/chapters', (req, res) => {
 router.post('/chapters', (req, res) => {
     try {
         const db = req.app.locals.db;
-        const { title, icon, sort_order } = req.body;
-        const result = db.prepare('INSERT INTO chapters (title, icon, sort_order) VALUES (?, ?, ?)').run(xss(title), xss(icon || ''), sort_order || 0);
+        const { title, sort_order, mapel, semester, description, est, topics } = req.body;
+        const topicsJson = typeof topics === 'string' ? topics : JSON.stringify(Array.isArray(topics) ? topics : []);
+        const result = db.prepare(
+            'INSERT INTO chapters (title, icon, sort_order, mapel, semester, description, est, topics) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(xss(title), '', sort_order || 0, xss(mapel || 'Matematika'), Number(semester) || 1, xss(description || ''), xss(est || ''), topicsJson);
         res.json({ ok: true, id: result.lastInsertRowid });
     } catch (e) { console.error('POST /chapters error:', e); res.status(500).json({ error: e.message }); }
 });
@@ -26,8 +29,11 @@ router.post('/chapters', (req, res) => {
 router.put('/chapters/:id', (req, res) => {
     try {
         const db = req.app.locals.db;
-        const { title, icon, sort_order } = req.body;
-        db.prepare('UPDATE chapters SET title = ?, icon = ?, sort_order = ? WHERE id = ?').run(xss(title), xss(icon || ''), sort_order || 0, req.params.id);
+        const { title, sort_order, mapel, semester, description, est, topics } = req.body;
+        const topicsJson = typeof topics === 'string' ? topics : JSON.stringify(Array.isArray(topics) ? topics : []);
+        db.prepare(
+            'UPDATE chapters SET title = ?, icon = ?, sort_order = ?, mapel = ?, semester = ?, description = ?, est = ?, topics = ? WHERE id = ?'
+        ).run(xss(title), '', sort_order || 0, xss(mapel || 'Matematika'), Number(semester) || 1, xss(description || ''), xss(est || ''), topicsJson, req.params.id);
         res.json({ ok: true });
     } catch (e) { console.error('PUT /chapters error:', e); res.status(500).json({ error: e.message }); }
 });

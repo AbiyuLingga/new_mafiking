@@ -69,8 +69,14 @@ const Profile = ({ setRoute }) => {
           )}
 
           {loading ? (
-            <div className="card p-8 text-center text-ink/55 font-semibold">
-              Memuat raport...
+            <div className="grid gap-5" aria-busy="true" aria-label="Memuat raport">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[0,1,2,3].map((i) => <Skeleton key={i} className="h-24 w-full" />)}
+              </div>
+              <div className="grid lg:grid-cols-2 gap-5">
+                <Skeleton className="h-48 w-full" />
+                <Skeleton className="h-48 w-full" />
+              </div>
             </div>
           ) : (
             <div className="grid gap-5">
@@ -91,7 +97,9 @@ const Profile = ({ setRoute }) => {
                     {weaknesses.length ? weaknesses.map((tag) => (
                       <span key={tag} className="tag">{tag}</span>
                     )) : (
-                      <p className="text-sm text-ink/50">Belum ada kelemahan terdeteksi.</p>
+                      <p className="text-sm text-ink/55">
+                        Belum ada kelemahan terdeteksi — kerjakan latihan canvas untuk analisis mendalam.
+                      </p>
                     )}
                   </div>
                 </article>
@@ -107,7 +115,9 @@ const Profile = ({ setRoute }) => {
                         {question}
                       </li>
                     )) : (
-                      <li className="text-sm text-ink/50">Submit satu jawaban canvas untuk membuat rekomendasi.</li>
+                      <li className="text-sm text-ink/55">
+                        Submit satu jawaban canvas untuk membuat rekomendasi soal berikutnya.
+                      </li>
                     )}
                   </ol>
                 </article>

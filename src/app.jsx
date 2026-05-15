@@ -17,6 +17,14 @@ const App = () => {
   const [route, setRoute] = React.useState("lobby");
   const [practiceContext, setPracticeContext] = React.useState(null);
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [currentUser, setCurrentUser] = React.useState(null);
+  const [isAdmin, setIsAdmin] = React.useState(false);
+
+  React.useEffect(() => {
+    MafikingAPI.get("/api/auth/me")
+      .then((user) => setCurrentUser(user))
+      .catch(() => setCurrentUser(null));
+  }, []);
 
   const navigate = React.useCallback((next) => {
     if (next && typeof next === "object") {
@@ -53,22 +61,47 @@ const App = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-paper text-ink">
+      <OfflineBanner />
       {route !== "practice" && (
         <Nav route={route} setRoute={navigate} navStyle={tweaks.navStyle} gamified={route === "belajar" || route === "misi" || route === "profile"} />
       )}
 
       <main className="flex-1">
         <div data-screen-label={routeLabel(route)}>
-          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} />}
-          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} />}
+          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} />}
+          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} />}
           {route === "misi" && <Misi setRoute={navigate} tweaks={tweaks} />}
           {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} />}
           {route === "profile" && <Profile setRoute={navigate} />}
-          {route === "practice" && <Practice setRoute={navigate} context={practiceContext} />}
+          {route === "payment" && <Payment setRoute={navigate} currentUser={currentUser} />}
+          {route === "practice" && <Practice setRoute={navigate} context={practiceContext} isAdmin={isAdmin} />}
         </div>
       </main>
 
       {route === "lobby" && <Footer setRoute={navigate} />}
+
+      <ToastContainer />
+
+      <button
+        aria-label={isAdmin ? "Keluar mode admin" : "Masuk mode admin"}
+        title={isAdmin ? "Keluar mode admin" : "Masuk mode admin"}
+        onClick={() => setIsAdmin((v) => !v)}
+        type="button"
+        style={{
+          position: "fixed", bottom: 24, right: 24, zIndex: 8000,
+          width: 44, height: 44, borderRadius: "50%",
+          background: isAdmin ? "var(--yel)" : "#0b1326",
+          color: isAdmin ? "#0b1326" : "#fff",
+          border: "none", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: "0 4px 16px rgba(11,19,38,.3)",
+          transition: "background .2s, transform .15s",
+        }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </button>
 
       <TweaksPanel title="Tweaks">
         <TweakSection label="Navigasi cepat">
@@ -213,7 +246,8 @@ function routeLabel(r) {
     misi: "03 Misi Harian",
     tryout: "04 Tryout",
     profile: "05 Profil",
-    practice: "06 Latihan Pilgan",
+    payment: "06 Pembayaran",
+    practice: "07 Latihan",
   })[r] || r;
 }
 

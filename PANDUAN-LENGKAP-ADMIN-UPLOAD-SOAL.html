@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>Panduan Admin Upload Soal MAFIKING</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      color: #111827;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11pt;
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    h1 {
+      border-bottom: 3px solid #111827;
+      font-size: 24pt;
+      line-height: 1.15;
+      margin: 0 0 14px;
+      padding-bottom: 12px;
+    }
+
+    h2 {
+      border-bottom: 1px solid #d1d5db;
+      font-size: 15pt;
+      margin: 22px 0 9px;
+      padding-bottom: 5px;
+    }
+
+    h3 {
+      font-size: 12pt;
+      margin: 16px 0 6px;
+    }
+
+    p {
+      margin: 7px 0;
+    }
+
+    ul,
+    ol {
+      margin: 7px 0 12px 20px;
+      padding: 0;
+    }
+
+    li {
+      margin: 3px 0;
+    }
+
+    table {
+      border-collapse: collapse;
+      margin: 9px 0 14px;
+      width: 100%;
+    }
+
+    th,
+    td {
+      border: 1px solid #d1d5db;
+      padding: 7px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f3f4f6;
+      font-size: 9pt;
+    }
+
+    code,
+    pre {
+      font-family: "DejaVu Sans Mono", "Liberation Mono", Consolas, monospace;
+      font-size: 9pt;
+    }
+
+    code {
+      background: #f3f4f6;
+      border-radius: 4px;
+      padding: 1px 4px;
+    }
+
+    pre {
+      background: #f8fafc;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      color: #111827;
+      line-height: 1.45;
+      margin: 8px 0 14px;
+      padding: 11px 12px;
+      white-space: pre-wrap;
+    }
+
+    .subtitle {
+      color: #4b5563;
+      font-size: 11.5pt;
+      margin-bottom: 18px;
+    }
+
+    .note {
+      background: #f9fafb;
+      border: 1px solid #d1d5db;
+      border-left: 5px solid #111827;
+      border-radius: 8px;
+      margin: 10px 0 14px;
+      padding: 10px 12px;
+    }
+
+    .small {
+      color: #4b5563;
+      font-size: 9.5pt;
+    }
+
+    .checklist li {
+      list-style: none;
+      margin-left: -18px;
+      padding-left: 21px;
+      position: relative;
+    }
+
+    .checklist li::before {
+      border: 1.4px solid #111827;
+      border-radius: 3px;
+      content: "";
+      height: 10px;
+      left: 0;
+      position: absolute;
+      top: 5px;
+      width: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Panduan Admin Upload Soal MAFIKING</h1>
+  <p class="subtitle">
+    Panduan singkat untuk menyiapkan file soal, upload ke admin, cek hasil preview,
+    lalu menyimpan soal ke database.
+  </p>
+
+  <h2>1. Alur Singkat</h2>
+  <ol>
+    <li>Siapkan file soal dalam format PDF, DOCX, TXT, atau MD.</li>
+    <li>Pilih bab/subtopik tujuan di halaman admin.</li>
+    <li>Upload file atau tempel teks soal.</li>
+    <li>Cek preview hasil import.</li>
+    <li>Edit bagian yang salah.</li>
+    <li>Simpan ke database.</li>
+  </ol>
+
+  <div class="note">
+    <strong>Penting:</strong> hasil preview harus dicek dulu. Jangan langsung simpan
+    jika soal, kunci, opsi, atau pembahasan belum benar.
+  </div>
+
+  <h2>2. Format File</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Format</th>
+        <th>Catatan</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>PDF</td>
+        <td>Boleh scan atau export dokumen. Pastikan tidak buram.</td>
+      </tr>
+      <tr>
+        <td>DOCX</td>
+        <td>Paling aman jika soal masih bisa diedit di Word.</td>
+      </tr>
+      <tr>
+        <td>TXT / MD</td>
+        <td>Paling rapi untuk upload karena tidak bergantung OCR.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>3. Isi Minimal Setiap Soal</h2>
+  <ul>
+    <li><strong>Teks soal</strong>: pertanyaan utama.</li>
+    <li><strong>Jawaban atau kunci</strong>: sangat disarankan agar hasil lebih akurat.</li>
+    <li><strong>Pilihan jawaban</strong>: wajib untuk pilihan ganda.</li>
+    <li><strong>Pembahasan per step</strong>: opsional, tetapi lebih baik jika ada.</li>
+  </ul>
+
+  <h2>4. Format Pembahasan Per Step</h2>
+  <p>Jika menulis pembahasan, gunakan struktur per langkah seperti di web.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Isi</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>Title</code></td>
+        <td>Nama langkah singkat.</td>
+      </tr>
+      <tr>
+        <td><code>Content</code></td>
+        <td>Rumus atau operasi matematika langkah itu.</td>
+      </tr>
+      <tr>
+        <td><code>Why</code></td>
+        <td>Kenapa langkah ini dilakukan.</td>
+      </tr>
+      <tr>
+        <td><code>Intuition</code></td>
+        <td>Cara memahami langkah dengan bahasa sederhana.</td>
+      </tr>
+      <tr>
+        <td><code>Mistakes</code></td>
+        <td>Kesalahan umum siswa di langkah itu.</td>
+      </tr>
+      <tr>
+        <td><code>Mistake Result</code></td>
+        <td>Contoh hasil salah jika kesalahan itu terjadi. Boleh kosong jika tidak perlu.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <pre>Pembahasan:
+Step 1
+Title: Substitusi
+Content: u = x^2+1, maka du = 2x\,dx
+Why: Bentuk 2x\,dx cocok menjadi turunan dari x^2+1.
+Intuition: Kita mengganti bagian yang rumit menjadi satu variabel baru agar integral lebih sederhana.
+Mistakes: Jangan lupa mengganti dx bersama 2x menjadi du.
+Mistake Result: \int 2x u^3\,du
+
+Step 2
+Title: Integralkan bentuk baru
+Content: \int u^3\,du = \frac{u^4}{4}+C
+Why: Setelah substitusi, integral berubah menjadi aturan pangkat biasa.
+Intuition: Pangkat naik satu, lalu dibagi pangkat baru.
+Mistakes: Jangan membagi dengan pangkat lama.
+Mistake Result: \frac{u^4}{3}+C</pre>
+
+  <h2>5. Template Pilihan Ganda</h2>
+  <pre>Soal 1
+Nilai dari \int 2x(x^2+1)^3\,dx adalah ...
+
+Pilihan:
+A. \frac{(x^2+1)^4}{4} + C  BENAR
+B. \frac{(x^2+1)^3}{3} + C
+C. 2x \cdot \frac{(x^2+1)^4}{4} + C
+D. (x^2+1)^4 + C
+
+Pembahasan:
+Step 1
+Title: Substitusi
+Content: u = x^2+1, maka du = 2x\,dx
+Why: Bagian 2x\,dx adalah turunan dari x^2+1.
+Intuition: Ganti bagian dalam kurung menjadi u agar bentuknya sederhana.
+Mistakes: Jangan meninggalkan 2x setelah sudah diganti menjadi du.
+Mistake Result: \int 2x u^3\,du
+
+Step 2
+Title: Integralkan
+Content: \int u^3\,du = \frac{u^4}{4}+C
+Why: Ini sudah menjadi integral pangkat biasa.
+Intuition: Pangkat 3 naik menjadi 4, lalu dibagi 4.
+Mistakes: Jangan membagi dengan 3.
+Mistake Result: \frac{u^4}{3}+C
+
+Step 3
+Title: Substitusi balik
+Content: \frac{(x^2+1)^4}{4}+C
+Why: Jawaban harus kembali memakai variabel x.
+Intuition: Setelah selesai menghitung dengan u, kembalikan u ke bentuk awal.
+Mistakes: Jangan lupa mengganti u dengan x^2+1.
+Mistake Result: \frac{u^4}{4}+C</pre>
+
+  <h3>Aturan Pilihan Ganda</h3>
+  <ul>
+    <li>Gunakan minimal 4 opsi.</li>
+    <li>Tandai satu jawaban benar dengan <code>BENAR</code> atau <code>Kunci: A</code>.</li>
+    <li>Jangan masukkan pilihan jawaban ke dalam teks soal.</li>
+    <li>Pastikan hanya ada satu opsi yang benar.</li>
+  </ul>
+
+  <h2>6. Template Isian</h2>
+  <pre>Soal 2
+Tentukan turunan pertama dari f(x) = x^3 - 3x^2 + 5x - 2.
+
+Jawaban: 3x^2 - 6x + 5
+
+Pembahasan:
+Step 1
+Title: Turunkan setiap suku
+Content: \frac{d}{dx}(x^3)=3x^2,\quad \frac{d}{dx}(-3x^2)=-6x
+Why: Turunan polinom bisa dikerjakan suku per suku.
+Intuition: Setiap suku seperti bagian terpisah yang bisa diturunkan sendiri.
+Mistakes: Jangan lupa koefisien negatif pada -3x^2.
+Mistake Result: 3x^2 + 6x
+
+Step 2
+Title: Turunkan suku linear dan konstanta
+Content: \frac{d}{dx}(5x)=5,\quad \frac{d}{dx}(-2)=0
+Why: Turunan ax adalah a, dan turunan konstanta adalah 0.
+Intuition: Konstanta tidak berubah terhadap x, jadi turunannya nol.
+Mistakes: Jangan menulis turunan -2 sebagai -2.
+Mistake Result: 5 - 2
+
+Step 3
+Title: Gabungkan hasil
+Content: f'(x)=3x^2-6x+5
+Why: Semua hasil turunan suku digabung menjadi satu fungsi turunan.
+Intuition: Setelah tiap bagian selesai, susun kembali sesuai urutan pangkat.
+Mistakes: Jangan mengubah tanda saat menggabungkan.
+Mistake Result: 3x^2+6x+5</pre>
+
+  <h2>7. Penulisan Persamaan</h2>
+  <p>Gunakan LaTeX sederhana tanpa tanda <code>$</code>.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Maksud</th>
+        <th>Tulis</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Pecahan</td>
+        <td><code>\frac{1}{2}</code></td>
+      </tr>
+      <tr>
+        <td>Pangkat</td>
+        <td><code>x^2</code> atau <code>x^{2}</code></td>
+      </tr>
+      <tr>
+        <td>Akar</td>
+        <td><code>\sqrt{x^2 - 4}</code></td>
+      </tr>
+      <tr>
+        <td>Integral</td>
+        <td><code>\int x^2\,dx</code></td>
+      </tr>
+      <tr>
+        <td>Limit</td>
+        <td><code>\lim_{x \to 2} \frac{x^2-4}{x-2}</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>Untuk akar dan pecahan:</strong> pakai kurung kurawal agar bagian yang
+    tercakup jelas. Contoh benar: <code>\sqrt{x^2 - 4}</code>.
+  </div>
+
+  <h2>8. Aturan Urutan Soal</h2>
+  <p>
+    Soal hasil upload selalu ditambahkan ke urutan paling belakang pada subtopik tujuan.
+    Jika file upload dimulai dari <code>Soal 1</code>, sistem tetap tidak menimpa soal lama.
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Contoh</th>
+        <th>Hasil</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Subtopik sudah punya 20 soal. File baru berisi Soal 1 sampai Soal 5.</td>
+        <td>Soal baru masuk sebagai urutan 21 sampai 25.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>9. Yang Wajib Dicek Sebelum Simpan</h2>
+  <ul class="checklist">
+    <li>Teks soal sudah benar dan tidak tercampur pilihan/pembahasan.</li>
+    <li>Persamaan sudah rapi, terutama akar, pangkat, pecahan, integral, dan limit.</li>
+    <li>Jawaban akhir sudah benar.</li>
+    <li>Untuk pilihan ganda, tepat satu opsi benar.</li>
+    <li>Pembahasan memakai step dan fieldnya tidak tertukar.</li>
+    <li>Bab dan subtopik tujuan sudah benar.</li>
+  </ul>
+
+  <h2>10. Masalah Umum</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Masalah</th>
+        <th>Solusi</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>PDF buram atau miring.</td>
+        <td>Scan ulang atau pakai DOCX/TXT.</td>
+      </tr>
+      <tr>
+        <td>Akar tidak mencakup semua ekspresi.</td>
+        <td>Gunakan <code>\sqrt{...}</code>.</td>
+      </tr>
+      <tr>
+        <td>Kunci tidak terbaca.</td>
+        <td>Tambahkan <code>Kunci: A</code> atau tanda <code>BENAR</code>.</td>
+      </tr>
+      <tr>
+        <td>Opsi masuk ke teks soal.</td>
+        <td>Gunakan label <code>Pilihan:</code> dan tulis A, B, C, D di baris terpisah.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="small">
+    Ringkasnya: pisahkan soal, pilihan, kunci, dan pembahasan dengan jelas.
+    Cek preview sebelum simpan. Soal baru selalu masuk ke urutan paling belakang.
+  </p>
+</body>
+</html>

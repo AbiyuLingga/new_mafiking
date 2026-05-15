@@ -349,17 +349,15 @@
           {focusMode ? <TBIcon.Minimize /> : <TBIcon.Maximize />}
         </ToolButton>
 
-        {!focusMode ? (
-          <BrowserSafeButton
-            className={`${toolButtonBase} toolbar-submit-button`}
-            disabled={isSubmitting || submitDisabled}
-            label="Submit jawaban ke AI"
-            onPress={onSubmit}
-            title="Submit ke AI"
-          >
-            {isSubmitting ? <TBIcon.Spin /> : <span>Submit -&gt;</span>}
-          </BrowserSafeButton>
-        ) : null}
+        <BrowserSafeButton
+          className={`${toolButtonBase} toolbar-submit-button`}
+          disabled={isSubmitting || submitDisabled}
+          label="Submit jawaban ke AI"
+          onPress={onSubmit}
+          title={submitDisabled && focusMode ? "Tulis dulu di kanvas untuk submit" : "Submit ke AI"}
+        >
+          {isSubmitting ? <TBIcon.Spin /> : <span>Submit -&gt;</span>}
+        </BrowserSafeButton>
 
         {focusMode && focusActions ? (
           <div className="toolbar-focus-nav-edge is-right">

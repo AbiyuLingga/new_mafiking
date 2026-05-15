@@ -6,8 +6,13 @@ The active browser entry point is `MAFIKING.html`, served by `server.js`. The fr
 
 ## Current Status
 
-- UI shell: copied Mafiking static UI with tweaks panel.
-- Practice UI: multiple-choice first, with `Try Canvas` as the optional stylus/canvas path.
+- UI shell: copied Mafiking static UI with tweaks panel + full UX improvements.
+- Practice UI: segmented control (Pilgan | Kanvas), Submit always visible in focus mode, ResultModal with wrong-step visualization, XP toast on correct answers.
+- Lobby: auto-splits into `Landing` (marketing, for guest/`Tamu_*` users) vs `Dashboard` (logged-in users with greeting, continue card, progress stats).
+- Shared: global toast system (`showToast`), `Skeleton` loading states, `OfflineBanner`.
+- Payment: package selection → Duitku redirect → status polling page (`src/payment.jsx`).
+- Admin mode: shield toggle button (bottom-right corner). Pressing shield **auto-opens `AdminPanel`** (full CRUD modal). On Belajar page shows `AdminBelajarView` with DB-wired chapter CRUD (mapel, semester, description, topics per chapter). On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete; a floating `+` FAB adds new questions.
+- SOP: `SOP-AI-INPUT-SOAL.md` documents the general AI question-entry guide. `SOP-DEEPSEEK-IMPORT-SOAL.md` is the stricter prompt contract for admin file import via DeepSeek.
 - Backend: Express 5, SQLite through `better-sqlite3`, session auth, API routes.
 - Question bank: exported from `../Mafiking/db/database.sqlite` into `db/question-bank.json`.
 - Imported question data at time of writing: 2 chapters, 4 subtopics, 23 problems, 86 problem steps.
@@ -21,13 +26,13 @@ cd /home/abiyulinx/computing/king/new_mafiking
 npm install
 cp .env.example .env
 npm run import:questions
-PORT=3001 npm start
+npm run dev
 ```
 
 Open:
 
 ```text
-http://127.0.0.1:3001
+http://127.0.0.1:3000
 ```
 
 For another device on the same network, open the machine IP with the same port. The server binds to `0.0.0.0`.
@@ -42,6 +47,11 @@ Create `.env` from `.env.example`.
 | `SESSION_SECRET` | Yes for real use | Express session signing secret. |
 | `GEMINI_KEY_1` ... `GEMINI_KEY_20` | Required for AI correction | Gemini API keys used with fallback rotation. |
 | `GEMINI_MODELS` | No | Comma-separated model preference before built-in fallbacks. |
+| `DEEPSEEK_API_KEY` | Required for admin AI import | DeepSeek API key used only by the server-side admin import route. |
+| `DEEPSEEK_BASE_URL` | No | DeepSeek API base URL. Defaults to `https://api.deepseek.com`. |
+| `DEEPSEEK_MODEL` | No | DeepSeek chat model. Defaults to `deepseek-v4-pro`. |
+| `DEEPSEEK_MAX_TOKENS` | No | Max output tokens for import JSON. Defaults to `12000`. |
+| `DEEPSEEK_TIMEOUT_MS` | No | Import request timeout. Defaults to `90000`. |
 | `DUITKU_MERCHANT_CODE` | Required for payments | Duitku merchant code. |
 | `DUITKU_API_KEY` | Required for payments | Duitku API key. |
 | `DUITKU_CALLBACK_URL` | Required for deployed payments | Payment callback URL. |
@@ -58,9 +68,60 @@ Without Gemini keys, practice pages still open, but canvas evaluation endpoints 
 | `npm run dev` | Start Express with `node --watch`. |
 | `npm run build` | Run Vite build against `index.html`. This is a build check, not the active runtime path. |
 | `npm run check` | Run build plus Node syntax checks for server, correction route, and import/export scripts. |
+| `npm run test:admin-import` | Run focused tests for admin file-import validation helpers. |
 | `npm run export:questions` | Export question tables from the old Mafiking SQLite database into `db/question-bank.json`. |
 | `npm run import:questions` | Import `db/question-bank.json` into `db/database.sqlite`. |
 | `npm run import:questions -- --force` | Replace question tables even if existing progress/correction rows reference old problems. |
+
+## Admin Account
+
+A local admin user is pre-created in `db/database.sqlite`:
+
+```
+Username: admin
+Password: admin1234
+Role:     admin
+```
+
+To create additional admin users or promote a user:
+
+```bash
+node -e "
+const db = require('better-sqlite3')('./db/database.sqlite');
+db.prepare(\"UPDATE users SET role = 'admin' WHERE username = ?\").run('username');
+"
+```
+
+## Admin Mode (Frontend)
+
+The admin mode toggle does **not** require login — it is a testing convenience.
+
+- Tap the **shield button** (⛨) at the bottom-right corner of any page to enter admin mode (button turns yellow). This also **automatically opens `AdminPanel`** — the full CRUD modal for chapters, subtopics, problems, steps, and users.
+- Tap again to exit (button returns to black, panel closes).
+- While admin mode is active, a **floating `+` FAB** (bottom-right) reopens `AdminPanel` if it was closed.
+- Local development bypass: in non-production, `/api/admin/*` accepts localhost requests even when the current session is only an auto-guest. Set `LOCAL_ADMIN_MODE=false` to force real admin login again.
+
+**What changes in admin mode:**
+
+| Page | Admin behavior |
+| --- | --- |
+| Belajar | Chapter list replaced by `AdminBelajarView`: DB-wired CRUD — each chapter has ✏ Edit and ✕ Delete buttons, plus a "+ Tambah Bab Baru" row at bottom. Chapter form fields: title, mapel (Matematika/Fisika/Kimia), semester (1/2), garis besar isi (topics), estimated time, sort order. Changes persist to DB via `/api/admin/chapters`. |
+| Practice | A compact `Admin Soal` card deck appears above the question: drag short question cards to reorder, click a card to jump to it, use `+ Soal` to add, and `Hapus` to delete the active question. Clicking any question card (title area) still opens inline editing for question text and choices, while `AdminPanel` can edit full problem details and solution steps. |
+
+### Admin AI Import
+
+`AdminPanel` has an `Import AI` tab for bulk question entry:
+
+1. Choose the destination subtopic.
+2. Upload a PDF, DOCX, TXT, or MD file.
+3. Pick the import mode:
+   - `AI lengkap`: DeepSeek creates answer keys, options, and explanations.
+   - `Hybrid`: admin supplies answer keys, DeepSeek creates options and explanations.
+   - `Manual`: DeepSeek only splits/cleans questions; admin fills answers/options in the preview.
+4. Review and edit the draft cards.
+5. Click `Import ke List Soal` to insert the questions and steps into SQLite.
+
+The upload route is admin-only, keeps the file in memory, limits files to 10MB, and allowlists only PDF, DOCX, TXT, and MD.
 
 ## Question Bank Workflow
 
@@ -94,34 +155,38 @@ The import script refuses to replace question tables when user progress or corre
 |-- db/
 |   |-- schema.sql             # SQLite schema
 |   |-- question-bank.json     # Exported question bank
-|   `-- database.sqlite        # Local runtime DB, generated/ignored
+|   `-- database.sqlite        # Local runtime DB (NOT db/mafiking.db)
 |-- routes/
 |   |-- auth.js                # Register, login, logout, current user
 |   |-- quiz.js                # Chapters, subtopics, problems, full quiz payload
 |   |-- progress.js            # XP, streaks, progress, leaderboard
 |   |-- correction.js          # Gemini transcription, evaluation, profile summary
 |   |-- admin.js               # Admin CRUD for content/users
+|   |-- admin-import.js        # Admin DeepSeek draft/commit import from PDF/DOCX/TXT/MD
 |   `-- payment.js             # Duitku create/status/callback
 |-- middleware/
 |   |-- auth.js
 |   `-- admin.js
 |-- scripts/
+|   |-- test-admin-import.js   # Focused tests for admin import helpers
 |   |-- export-question-bank.js
 |   `-- import-question-bank.js
 |-- src/
-|   |-- app.jsx                # Static React router and tweaks defaults
-|   |-- shared.jsx             # Nav, footer, icons, shared UI primitives
-|   |-- belajar.jsx            # Static chapter cards and practice routing
-|   |-- practice.jsx           # Multiple-choice first practice, optional canvas mode
+|   |-- app.jsx                # Router, isAdmin toggle state, shield button, root render
+|   |-- shared.jsx             # Nav, footer, icons, Skeleton, showToast, ToastContainer, OfflineBanner
+|   |-- backend-api.jsx        # Fetch helper for same-origin API calls
+|   |-- lobby.jsx              # Landing (guest/marketing) + Dashboard (logged-in)
+|   |-- belajar.jsx            # Static chapter cards; admin branch to AdminBelajarView
+|   |-- practice.jsx           # Practice route: ChoiceView, CanvasView, ModeSegment, ResultModal
 |   |-- toolbar.jsx            # Canvas drawing toolbar and focus-mode actions
 |   |-- drawing-canvas.jsx     # Low-level canvas drawing surface
 |   |-- answer-board.jsx       # Stylus answer board wrapper
 |   |-- profile.jsx            # Profile/report view
-|   |-- backend-api.jsx        # Fetch helper for same-origin API calls
-|   |-- lobby.jsx
-|   |-- misi.jsx
-|   |-- tryout.jsx
-|   `-- styles.css
+|   |-- misi.jsx               # Daily mission screen
+|   |-- tryout.jsx             # Tryout screen
+|   |-- payment.jsx            # Payment package selection + Duitku redirect + status polling
+|   |-- admin.jsx              # Admin UI: AdminBelajarView, slide AdminPracticeBar, plug problem editor, CRUD modals
+|   `-- styles.css             # All CSS including admin styles appended at end
 |-- tweaks-panel.jsx
 |-- vite.config.js
 |-- tailwind.config.js
@@ -134,8 +199,13 @@ The import script refuses to replace question tables when user progress or corre
 
 1. Browser opens `/`.
 2. `server.js` sends `MAFIKING.html`.
-3. The HTML loads Tailwind CDN, React UMD, Babel standalone, then JSX files from `src/`.
+3. The HTML loads Tailwind CDN, React UMD, Babel standalone, then JSX files from `src/` in order.
 4. `src/app.jsx` mounts the in-browser React app into `#root`.
+
+### Lobby / Home
+
+- Guest (`Tamu_XXXX`) users see the `Landing` component: full marketing page.
+- Registered users see the `Dashboard` component: dynamic greeting, continue card (last chapter with progress > 0), XP/streak stats, mapel grid.
 
 ### Opening a Chapter
 
@@ -144,31 +214,39 @@ The import script refuses to replace question tables when user progress or corre
 3. `src/practice.jsx` calls `/api/quiz/init`.
 4. `chooseQuestionSource()` maps only supported static chapters to real backend questions.
 5. `Teknik Integrasi` loads all Integral subtopics with problems and starts in multiple-choice mode.
-6. Unsupported chapters show an empty-state message instead of incorrectly falling back to the first question.
+6. Unsupported chapters show an empty-state message with a "Pilih bab lain" CTA.
 
 ### Practice Modes
 
-- The global top navigation is hidden on the `practice` route; the practice page uses its own session bar.
-- Multiple choice is the default mode. The chapter title is centered as `Bab 7: Teknik Integrasi` and can be opened as a chapter switcher.
-- The multiple-choice card is intentionally narrow. Actions are `Sebelumnya`, `Hint`, and a right-side `Lewati` button that changes to `Cek Jawaban` after the user selects an option.
-- `Try Canvas` switches into canvas mode.
-- Canvas mode has `Kembali` on the left, `Try Pilgan` on the right, and `Lewati Soal` aligned to the right in the canvas question card.
-- Canvas focus/fullscreen mode keeps navigation inside the top drawing toolbar: left `< sebelumnya`, right `lewati >`; labels hide on narrow screens. The regular middle `Submit ->` toolbar button is hidden in focus mode, and the right edge action can become `Submit` after the user writes.
+- The global top navigation is hidden on the `practice` route.
+- **Pilgan (multiple choice)** is the default mode. A `ModeSegment` control (Pilgan | Kanvas) in the session bar lets users switch modes.
+- **Canvas mode:** user writes on the canvas; Submit button is always visible but disabled until the canvas is dirty (`boardDirty = true`).
+- After submitting, a `ResultModal` shows score badge, detected text, and wrong-step list with colored badges.
+- Correct answers trigger a "+10 XP" toast; level-up is shown via toast.
 
 ### Canvas Correction
 
-1. User enters canvas mode through `Try Canvas`.
+1. User enters canvas mode via `ModeSegment`.
 2. User writes on the canvas in `src/practice.jsx` / `src/answer-board.jsx`.
 3. Submit exports the canvas image as PNG data URL.
 4. Frontend posts to `POST /api/correction/evaluate`.
 5. Backend validates image size/type, calls Gemini with key/model fallback, normalizes the JSON response, stores a row in `correction_attempts`, then returns feedback.
-6. Frontend shows the correction modal and posts progress to `POST /api/progress/submit`.
+6. Frontend shows the ResultModal and posts progress to `POST /api/progress/submit`.
 
 ### Profile Report
 
 1. `src/profile.jsx` loads `/api/auth/me`, `/api/progress/stats`, and `/api/correction/attempts`.
 2. It posts attempts to `/api/correction/profile-summary`.
 3. Backend returns a Gemini-generated summary or local fallback summary.
+
+### Payment
+
+1. User navigates to `payment` route.
+2. Selects a package (Trial 7 hari Rp29k, Bulanan Rp99k, Semester Rp249k).
+3. Frontend posts to `POST /api/payment/create` → redirects to Duitku `paymentUrl`.
+4. On return, `?merchantOrderId=X` in URL triggers `PaymentStatus` component.
+5. Status is polled every 5s from `GET /api/payment/status/:merchantOrderId`.
+6. Shows pending / success / failed/timeout states.
 
 ## API Overview
 
@@ -189,7 +267,18 @@ All API routes except `/api/health` and `/api/payment/callback` require a sessio
 | `POST` | `/api/correction/transcribe` | Transcribe canvas image. |
 | `POST` | `/api/correction/evaluate` | Evaluate answer and store attempt. |
 | `POST` | `/api/correction/profile-summary` | Generate or fallback profile summary. |
-| `GET/POST/PUT/PATCH/DELETE` | `/api/admin/*` | Admin-only content/user management. |
+| `GET/POST` | `/api/admin/chapters` | List or create chapters (admin only). |
+| `PUT/DELETE` | `/api/admin/chapters/:id` | Update or delete chapter (admin only). |
+| `GET/POST` | `/api/admin/subtopics` | List or create subtopics (admin only). |
+| `PUT/DELETE` | `/api/admin/subtopics/:id` | Update or delete subtopic (admin only). |
+| `GET/POST` | `/api/admin/problems` | List or create problems (admin only). |
+| `PUT/DELETE` | `/api/admin/problems/:id` | Update or delete problem (admin only). |
+| `GET/POST` | `/api/admin/problems/:id/steps` | List or create steps (admin only). |
+| `PUT/DELETE` | `/api/admin/steps/:id` | Update or delete step (admin only). |
+| `GET` | `/api/admin/users` | List users (admin only). |
+| `PUT` | `/api/admin/users/:id/password` | Reset user password (admin only). |
+| `POST` | `/api/admin/import/draft` | Upload file and ask DeepSeek for a reviewable import draft (admin only). |
+| `POST` | `/api/admin/import/commit` | Insert reviewed draft questions and steps into SQLite (admin only). |
 | `POST` | `/api/payment/create` | Create Duitku invoice. |
 | `GET` | `/api/payment/status/:merchantOrderId` | Check payment status. |
 | `POST` | `/api/payment/callback` | Duitku server callback. |
@@ -197,16 +286,14 @@ All API routes except `/api/health` and `/api/payment/callback` require a sessio
 ## Development Notes
 
 - Preserve the copied UI unless a task explicitly asks for UI changes.
-- Do not convert `src/*.jsx` to module imports casually. Files rely on globals and load order from `MAFIKING.html`.
-- `src/app.jsx` owns the route state and tweaks defaults.
+- Do not convert `src/*.jsx` to module imports. Files rely on globals and load order from `MAFIKING.html`.
+- **Do not use IIFE `(function(){...})()`** in `src/*.jsx` files — variables inside are scoped and invisible to other scripts. Define components at top level.
+- `src/app.jsx` owns route state, tweaks defaults, and `isAdmin` toggle.
 - `src/app.jsx` intentionally does not render the global `Nav` while `route === "practice"`.
-- `src/belajar.jsx` owns static chapter cards. Backend question availability is separate from those static cards.
-- `src/belajar.jsx` exposes `window.chapterData` so the practice chapter switcher can use the same static chapter list.
-- `src/practice.jsx` owns the current strict chapter-to-question mapping and the choice/canvas mode state.
-- `src/toolbar.jsx`, `src/drawing-canvas.jsx`, and `src/answer-board.jsx` are part of the canvas practice surface and must keep their global script load order.
+- `src/belajar.jsx` loads chapter data from `/api/quiz/init` on mount and maps DB rows to display cards. `window.chapterData` is set here for use by practice.jsx. Static fallback is used while loading.
+- Admin mode in `belajar.jsx` shows `AdminBelajarView` — API-wired CRUD that persists to DB. Admin mode in `practice.jsx` enables inline click-to-edit on question cards and a compact admin question control for add/delete/reorder; `AdminPracticeBar` (separate bar) has been removed.
 - `server.js` applies SQLite schema on startup and includes inline migrations for older local DBs.
-- `db/database.sqlite` is local runtime state and should not be treated as source of truth.
-- `db/question-bank.json` is the portable source for seeded question content.
+- Correct DB file is `db/database.sqlite`. The file `db/mafiking.db` is unused/empty.
 - `npm run build` can print Vite warnings about non-module scripts. That is expected for the current static-Babel architecture as long as the command exits successfully.
 
 ## Verification
@@ -220,25 +307,31 @@ npm run check
 Useful manual smoke checks:
 
 ```bash
-curl -s http://127.0.0.1:3001/api/health
-curl -s http://127.0.0.1:3001/api/quiz/init
+curl -s http://127.0.0.1:3000/api/health
+curl -s http://127.0.0.1:3000/api/quiz/init
 ```
 
 Browser checks:
 
-- Open `/`.
-- Open `Belajar`.
-- Click `Teknik Integrasi`; it should open multiple-choice practice with 23 questions.
-- Click `Try Canvas`; it should open canvas mode. `Try Pilgan` should return to multiple choice.
-- In canvas focus mode, the drawing toolbar should show edge navigation and no middle `Submit ->` button.
-- Click an unsupported chapter such as `Bentuk Tak Tentu & Integral Tak Wajar`; it should show the empty state.
-- Open profile from the profile icon or login/profile entry point.
+- Open `/` — lobby loads (Landing for guest, Dashboard for registered user).
+- Shield button appears at bottom-right; pressing it turns yellow (admin mode).
+- Open `Belajar` in admin mode — numbered chapter list with ✏/✕ buttons; "+ Tambah Bab Baru" row at bottom. Changes persist to DB.
+- Open `Belajar` in normal mode — chapter cards render normally (no admin buttons).
+- Click `Teknik Integrasi` → practice opens with 23 questions in Pilgan mode.
+- In practice admin mode, confirm the `Admin Soal` card deck appears with short question cards, `+ Soal`, and `Hapus`; drag a card over another card to reorder, then hover/click a question title to edit the question inline.
+- `ModeSegment` (Pilgan | Kanvas) in session bar switches modes.
+- In Kanvas mode, Submit button is visible but disabled until drawing; after drawing it becomes active.
+- Submit correct answer → "+10 XP" toast appears.
+- Click an unsupported chapter → empty state with "Pilih bab lain" button.
+- Open profile from nav.
+- Open `payment` route → package selection renders.
 
 ## Known Gotchas
 
 - Active runtime is Express serving `MAFIKING.html`, not the `dist/` bundle.
 - The HTML loads React 18 UMD from CDN, while `package.json` includes React 19 for local tooling. Do not assume package React is what the browser runtime uses.
-- Auto-guest sessions create users for API requests. Clean local guest users when running repeated browser automation if needed.
-- Only Integral question data is currently imported. Static chapter cards for other subjects are placeholders until their question banks exist.
-- Practice starts in multiple-choice mode even though canvas correction is still available.
+- Auto-guest sessions create users for API requests. Guest names start with `Tamu_`.
+- Only Integral question data is currently imported. Static chapter cards for other subjects are placeholders.
+- Admin mode toggle requires no login — it is a testing convenience. Restrict in production.
 - Duitku routes point at sandbox base URL in code. Review payment environment and base URL before production use.
+- `db/mafiking.db` exists but is the wrong file — use `db/database.sqlite`.

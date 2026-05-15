@@ -1,6 +1,13 @@
 // MAFIKING Lobby — minimalist with 3 hero variants
 
-const Lobby = ({ setRoute, tweaks }) => {
+const Lobby = ({ setRoute, tweaks, currentUser }) => {
+  const isRegistered = currentUser && !currentUser.display_name?.startsWith("Tamu_");
+  if (isRegistered) return <Dashboard user={currentUser} setRoute={setRoute} tweaks={tweaks} />;
+  return <Landing setRoute={setRoute} tweaks={tweaks} />;
+};
+
+// ─── Landing (marketing, untuk anonymous/guest) ───────────────────────────
+const Landing = ({ setRoute, tweaks }) => {
   const heroLayout = tweaks.heroLayout || "split";
   return (
     <div>
@@ -14,6 +21,91 @@ const Lobby = ({ setRoute, tweaks }) => {
       <ProgressFeature />
       <Testimonials />
       <CTA setRoute={setRoute} tweaks={tweaks} />
+    </div>
+  );
+};
+
+// ─── Dashboard (untuk registered user yang sudah login) ───────────────────
+const Dashboard = ({ user, setRoute, tweaks }) => {
+  const { useState, useEffect } = React;
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    MafikingAPI.get("/api/progress/stats").then(setStats).catch(() => null);
+  }, []);
+
+  const hour = new Date().getHours();
+  const salam = hour < 10 ? "pagi" : hour < 15 ? "siang" : hour < 18 ? "sore" : "malam";
+  const firstName = (user.display_name || "Kawan").split(" ")[0];
+
+  const allChapters = (() => {
+    const cd = window.chapterData;
+    if (!cd) return [];
+    return Object.entries(cd).flatMap(([mapel, chs]) => chs.map((ch) => ({ ...ch, mapel })));
+  })();
+  const continueChapter = allChapters.find((ch) => ch.progress > 0) || allChapters[0];
+
+  return (
+    <div className="bg-paper">
+      <section>
+        <div className="max-w-6xl mx-auto px-6 md:px-8 pt-12 pb-6">
+          <p className="kicker mb-2">Dashboard</p>
+          <h1 className="font-display font-bold text-4xl md:text-5xl tracking-[-0.03em] leading-[1.05]">
+            Selamat {salam}, {firstName}.
+          </h1>
+        </div>
+      </section>
+
+      {continueChapter ? (
+        <section>
+          <div className="max-w-6xl mx-auto px-6 md:px-8 pb-8">
+            <div className="card pad-d flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="kicker mb-1">Lanjutkan belajar</p>
+                <h2 className="font-display font-bold text-xl tracking-[-0.02em]">
+                  Bab {continueChapter.num}: {continueChapter.title}
+                </h2>
+                <p className="text-ink/55 text-sm mt-1">{continueChapter.mapel} · {continueChapter.est}</p>
+                {continueChapter.progress > 0 ? (
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="bar bar-amber w-28 shrink-0"><div style={{ width: `${Math.round((continueChapter.progress / continueChapter.total) * 100)}%` }} /></div>
+                    <span className="text-xs text-ink/55">{continueChapter.progress}/{continueChapter.total} soal</span>
+                  </div>
+                ) : null}
+              </div>
+              <button
+                className="btn-ink shrink-0"
+                onClick={() => setRoute({ route: "practice", practice: continueChapter })}
+                type="button"
+              >
+                {continueChapter.progress > 0 ? "Lanjutkan" : "Mulai"} <Icon.Arrow />
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {stats ? (
+        <section>
+          <div className="max-w-6xl mx-auto px-6 md:px-8 pb-10">
+            <div className="flex flex-wrap items-center gap-3">
+              <button className="chip-streak" onClick={() => setRoute("misi")} type="button" title={`Streak ${stats.streak_days} hari`}>
+                <Icon.Star className="w-3.5 h-3.5" />
+                {stats.streak_days || 0} hari berturut
+              </button>
+              <div className="chip-level">
+                <span className="lvl-badge">L{user.level || 1}</span>
+                <span className="text-xs font-semibold text-ink/70">{stats.xp || 0} XP</span>
+              </div>
+              <div className="tag">
+                {stats.solvedProblems}/{stats.totalProblems} soal selesai
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <Mapel setRoute={setRoute} />
     </div>
   );
 };
@@ -246,7 +338,7 @@ const Mapel = ({ setRoute }) => {
                 <div className="w-12 h-12 rounded-2xl bg-ink/5 flex items-center justify-center mb-5">
                   <M.icon className="w-5 h-5" />
                 </div>
-                <div className="text-xs font-mono text-ink/40 mb-1">{M.code}</div>
+                <div className="text-xs font-mono text-ink/55 mb-1">{M.code}</div>
                 <h3 className="font-display font-bold text-2xl mb-2">{it.mapel}</h3>
                 <p className="text-ink/65 text-sm leading-relaxed flex-1">{it.desc}</p>
                 <div className="flex items-center justify-between mt-6 pt-4 border-t hairline">
@@ -271,7 +363,7 @@ const Method = () => (
           <div className="kicker mb-2">Metode</div>
           <h2 className="font-display font-bold text-4xl md:text-5xl tracking-[-0.03em] leading-[1.05]">
             Membentuk kebiasaan,<br/>
-            <span className="text-ink/40">bukan sekadar hafalan.</span>
+            <span className="text-ink/55">bukan sekadar hafalan.</span>
           </h2>
           <p className="text-ink/65 text-lg mt-6 max-w-md">
             Platform kami didesain untuk membangun intuisi matematis dan analitis yang bertahan lama — bukan hanya menyelesaikan PR.
@@ -284,7 +376,7 @@ const Method = () => (
             { n: "03", t: "Komunitas & mentor", d: "Diskusi, tanya PR, dan dapatkan bimbingan langsung dari mentor ITB." },
           ].map((f, i) => (
             <div key={f.n} className={`flex gap-6 py-6 ${i > 0 ? "border-t hairline" : ""}`}>
-              <div className="font-mono text-sm text-ink/40 shrink-0 w-8">{f.n}</div>
+              <div className="font-mono text-sm text-ink/55 shrink-0 w-8">{f.n}</div>
               <div className="flex-1">
                 <h3 className="font-display font-semibold text-xl mb-1">{f.t}</h3>
                 <p className="text-ink/60 leading-relaxed">{f.d}</p>
@@ -331,7 +423,7 @@ const ProgressFeature = () => (
               <div className="kicker text-xs">Laporan Pekan ini</div>
               <div className="font-semibold text-lg mt-0.5">Abiyyu L. · Sem. 1</div>
             </div>
-            <span className="tag" style={{background: "#dcfce7", borderColor: "transparent", color: "#15803d"}}>
+            <span className="tag tag-emerald">
               <span className="dot-active"></span> On track
             </span>
           </div>

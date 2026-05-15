@@ -23,7 +23,7 @@ const Misi = ({ setRoute, tweaks }) => {
               <div className="kicker mb-2">Misi Harian · Pekan 19</div>
               <h1 className="font-display font-bold text-4xl md:text-5xl tracking-[-0.03em] leading-[1.05]">
                 Lima menit hari ini,<br/>
-                <span className="text-ink/40">satu langkah lebih dekat.</span>
+                <span className="text-ink/55">satu langkah lebih dekat.</span>
               </h1>
               <p className="text-ink/65 text-lg mt-3 max-w-xl">
                 Selesaikan misi harian untuk menjaga runtunan dan mengumpulkan XP bonus.
@@ -256,7 +256,7 @@ const MissionMafikingLatihan = ({ timeline, setRoute }) => {
                     </span>
                     <button
                       onClick={() => setRoute("belajar")}
-                      className="flex-1 flex items-center justify-center gap-2 bg-[#0b1326] text-white px-5 py-3 rounded-xl font-bold hover:bg-gray-800 transition-all shadow-md group border border-gray-700 whitespace-nowrap"
+                      className="flex-1 flex items-center justify-center gap-2 bg-ink text-white px-5 py-3 rounded-xl font-bold hover:bg-gray-800 transition-all shadow-md group border border-gray-700 whitespace-nowrap"
                     >
                       Kerjakan
                       <Icon.Arrow className="w-4 h-4 transition-transform group-hover:translate-x-1" />
@@ -268,7 +268,7 @@ const MissionMafikingLatihan = ({ timeline, setRoute }) => {
                   <div className="w-full mt-2">
                     <button
                       onClick={() => setRoute("belajar")}
-                      className="w-full flex items-center justify-center gap-2 bg-[#0b1326] text-white px-4 py-2 rounded-xl font-bold hover:bg-gray-800 transition-all shadow-md"
+                      className="w-full flex items-center justify-center gap-2 bg-ink text-white px-4 py-2 rounded-xl font-bold hover:bg-gray-800 transition-all shadow-md"
                     >
                       Kerjakan
                     </button>
@@ -314,7 +314,7 @@ const MissionTimeline = ({ timeline, setRoute }) => (
               <div className="kicker mb-0.5">{isLocked ? "—" : m.mapel}</div>
               <h3 className="font-display font-bold text-xl mb-1.5 leading-tight">{m.target}</h3>
               {!isLocked && <p className="text-sm text-ink/70 leading-relaxed">{m.question}</p>}
-              {isLocked && <p className="text-xs text-ink/40">Terbuka pada {m.short}.</p>}
+              {isLocked && <p className="text-xs text-ink/55">Terbuka pada {m.short}.</p>}
               {isActive && (
                 <button onClick={() => setRoute("belajar")} className="btn-ink mt-4 !py-2.5 !px-5 text-sm">
                   Kerjakan <Icon.Arrow />
@@ -350,7 +350,7 @@ const MissionKanban = ({ timeline, setRoute }) => {
           <div key={m.day} className={`rounded-2xl p-4 border ${
             accent === "active" ? "border-transparent" : accent === "done" ? "bg-white hairline" : "bg-transparent hairline opacity-65"
           }`} style={accent === "active" ? { background: "var(--yel)" } : {}}>
-            <div className="text-xs font-mono text-ink/40 mb-1">{m.date}</div>
+            <div className="text-xs font-mono text-ink/55 mb-1">{m.date}</div>
             <div className="kicker mb-0.5">{m.status === "locked" ? "—" : m.mapel}</div>
             <div className="font-display font-bold text-lg leading-tight mb-2">{m.target}</div>
             {accent === "active" && (

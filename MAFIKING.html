@@ -4,9 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MAFIKING — Bimbel TPB ITB</title>
+  <meta name="description" content="Bimbingan Matematika, Fisika, dan Kimia dasar khusus mahasiswa TPB ITB. Modul terstruktur, latihan adaptif, dan koreksi AI." />
+  <meta name="theme-color" content="#0b1326" />
+  <meta property="og:title" content="MAFIKING — Bimbel TPB ITB" />
+  <meta property="og:description" content="Taklukkan TPB tanpa kecemasan, dengan struktur. Belajar Matematika, Fisika & Kimia bersama mentor IP 4,00." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" type="image/png" href="assets/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <link rel="stylesheet" href="src/styles.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -17,18 +24,27 @@
             ink: '#0b1326',
             paper: '#FAFAFA',
             yel: '#FFF44F',
+            tone: {
+              amber:   { bg: '#FEF3C7', fg: '#B45309' },
+              blue:    { bg: '#DBEAFE', fg: '#1D4ED8' },
+              emerald: { bg: '#D1FAE5', fg: '#047857' },
+            },
           },
           fontFamily: {
-            sans: ['Manrope', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-            display: ['"Space Grotesk"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
             mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
-          }
+          },
+          letterSpacing: {
+            'tight-1': '-0.02em',
+            'tight-2': '-0.03em',
+            'tight-3': '-0.04em',
+          },
         }
       }
     };
   </script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 </head>
 <body class="bg-paper text-ink antialiased">
@@ -46,6 +62,8 @@
   <script type="text/babel" data-presets="react" src="src/practice.jsx"></script>
   <script type="text/babel" data-presets="react" src="src/misi.jsx"></script>
   <script type="text/babel" data-presets="react" src="src/tryout.jsx"></script>
+  <script type="text/babel" data-presets="react" src="src/payment.jsx"></script>
+  <script type="text/babel" data-presets="react" src="src/admin.jsx"></script>
   <script type="text/babel" data-presets="react" src="src/app.jsx"></script>
 </body>
 </html>
