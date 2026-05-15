@@ -1,0 +1,549 @@
+# Architecture
+
+This document describes the current architecture of `new_mafiking`. It is intentionally descriptive, not aspirational.
+
+## System Overview
+
+`new_mafiking` combines:
+
+- A copied Mafiking static frontend.
+- An Express backend.
+- A local SQLite database.
+- A multiple-choice-first practice flow with optional stylus canvas mode.
+- Gemini-powered canvas correction.
+- Import/export scripts for question-bank portability.
+
+High-level runtime:
+
+```text
+Browser
+  |
+  | GET /
+  v
+Express server.js
+  |
+  | serves MAFIKING.html and static assets
+  v
+MAFIKING.html
+  |
+  | loads Tailwind CDN, React UMD, Babel, src/*.jsx scripts
+  v
+Static React app in browser
+  |
+  | same-origin fetch via MafikingAPI
+  v
+/api/* Express routes
+  |
+  | better-sqlite3
+  v
+db/database.sqlite
+  |
+  | optional Gemini/Duitku calls
+  v
+External services
+```
+
+## Runtime Entry Points
+
+### Server Entry
+
+File:
+
+```text
+server.js
+```
+
+Responsibilities:
+
+- Load `.env`.
+- Create `db/` if missing.
+- Open `db/database.sqlite` with `better-sqlite3`.
+- Enable SQLite WAL mode and foreign keys.
+- Execute `db/schema.sql`.
+- Apply inline compatibility migrations for older Mafiking local databases.
+- Configure Helmet CSP, request body limits, sessions, and rate limits.
+- Create guest users for API requests without a session.
+- Mount API routes.
+- Serve static assets and JSX.
+- Serve `MAFIKING.html` for app routes.
+
+### Frontend Entry
+
+File:
+
+```text
+MAFIKING.html
+```
+
+Responsibilities:
+
+- Load fonts.
+- Load `src/styles.css`.
+- Configure Tailwind CDN.
+- Load React 18 UMD, ReactDOM UMD, and Babel standalone.
+- Load `type="text/babel"` scripts in order.
+
+Script load order matters:
+
+```text
+tweaks-panel.jsx
+src/backend-api.jsx
+src/shared.jsx
+src/lobby.jsx
+src/belajar.jsx
+src/profile.jsx
+src/toolbar.jsx
+src/drawing-canvas.jsx
+src/answer-board.jsx
+src/practice.jsx
+src/misi.jsx
+src/tryout.jsx
+src/app.jsx
+```
+
+`src/app.jsx` must load last because it mounts the React root and expects previous components to exist globally.
+
+## Frontend Architecture
+
+The frontend is not module-based. Components are defined in browser global scope and exported as needed through `window.*`.
+
+### Main Files
+
+| File | Role |
+| --- | --- |
+| `src/app.jsx` | Route state, tweaks defaults, root render. |
+| `src/shared.jsx` | Navigation, footer, icons, shared components. |
+| `src/backend-api.jsx` | Same-origin `fetch` helper. |
+| `src/lobby.jsx` | Home/lobby screen. |
+| `src/belajar.jsx` | Static chapter cards, mapel selector, chapter-to-practice navigation. |
+| `src/practice.jsx` | Practice route, multiple-choice/canvas mode state, question-source mapping, correction submit. |
+| `src/toolbar.jsx` | Canvas drawing toolbar, eraser/lasso controls, focus-mode edge navigation. |
+| `src/drawing-canvas.jsx` | Low-level writable canvas surface. |
+| `src/answer-board.jsx` | Stylus answer board wrapper and canvas export surface. |
+| `src/profile.jsx` | Profile/report view using progress and correction APIs. |
+| `src/misi.jsx` | Daily mission screen. |
+| `src/tryout.jsx` | Tryout screen. |
+| `src/styles.css` | Local custom CSS and appended feature styles. |
+| `tweaks-panel.jsx` | Tweaks panel and persisted tweak state. |
+
+### Route Model
+
+`src/app.jsx` keeps a simple route string in React state:
+
+```text
+lobby
+belajar
+misi
+tryout
+profile
+practice
+```
+
+For practice navigation, `setRoute` can receive an object:
+
+```js
+{
+  route: "practice",
+  practice: { ...chapterCardContext, mapel }
+}
+```
+
+`src/app.jsx` stores `practice` as `practiceContext` and passes it into `Practice`.
+
+The global `Nav` is intentionally not rendered while `route === "practice"`. The practice route owns its own session bar and canvas toolbar so question work is not crowded by the main site header.
+
+### Tweaks
+
+Tweaks are controlled by `src/app.jsx` defaults and `tweaks-panel.jsx`.
+
+Current defaults:
+
+```json
+{
+  "heroLayout": "split",
+  "density": "normal",
+  "chapterCard": "soft",
+  "mapelSelector": "tabs",
+  "missionCard": "mafiking1",
+  "accentColor": "#FFF44F",
+  "cardRadius": "default",
+  "navStyle": "ghost",
+  "statsStyle": "strip",
+  "ctaStyle": "dark"
+}
+```
+
+### Practice Question Mapping
+
+`src/belajar.jsx` has static chapter card data for Matematika, Fisika, and Kimia.
+
+Backend question data is currently narrower:
+
+```text
+Integral
+  - u-Substitution: 9 problems
+  - Integration by Parts: 7 problems
+  - Trigonometric Integrals: 7 problems
+limit
+  - no problems
+```
+
+`src/practice.jsx` owns the mapping between static chapter cards and backend question sources.
+
+Important invariant:
+
+- `Teknik Integrasi` maps to all Integral subtopics with problems.
+- Unsupported chapters return no question source and show an empty state.
+- Unknown chapters must not silently fall back to the first available subtopic.
+
+### Practice UI Modes
+
+Practice starts in multiple-choice mode:
+
+```text
+Belajar chapter card
+  -> route: practice
+  -> mode: choice
+  -> ChoiceView
+```
+
+Multiple-choice behavior:
+
+- The question card is deliberately narrow and centered.
+- The chapter title is centered in the session bar as `Bab 7: Teknik Integrasi`.
+- `src/belajar.jsx` exposes `window.chapterData`; `src/practice.jsx` uses it for the chapter switcher.
+- The action row keeps `Sebelumnya` on the left, `Hint` in the center, and `Lewati` or `Cek Jawaban` on the right.
+- `Cek Jawaban` appears only after the user selects an option.
+- `Try Canvas` switches to canvas mode.
+
+Canvas behavior:
+
+- Canvas mode keeps a compact session bar with `Kembali` on the left and `Try Pilgan` on the right.
+- `Kembali` returns to the chapter list; `Try Pilgan` returns to multiple-choice mode.
+- The canvas question card keeps `Lewati Soal` aligned to the right.
+- Focus/fullscreen mode uses `focusActions` passed from `Practice` through `AnswerBoard` to `Toolbar`.
+- In focus mode, toolbar edge buttons show `< sebelumnya` and `lewati >` when there is room; CSS hides those labels on narrower screens.
+- In focus mode, the regular middle `Submit ->` toolbar button is hidden. The right edge button changes to `Submit` after the canvas is dirty.
+
+## Backend Architecture
+
+Backend is a single Express application with route modules.
+
+```text
+server.js
+  |-- routes/auth.js
+  |-- routes/quiz.js
+  |-- routes/progress.js
+  |-- routes/correction.js
+  |-- routes/admin.js
+  `-- routes/payment.js
+```
+
+### Middleware and Cross-Cutting Behavior
+
+| Concern | Location | Behavior |
+| --- | --- | --- |
+| Environment | `server.js` | Loads `.env` from project root. |
+| Database | `server.js` | Opens SQLite, applies schema and compatibility migrations. |
+| Security headers | `server.js` | Helmet with CSP that allows required CDN scripts/styles. |
+| Body limits | `server.js` | JSON limit `12mb`; URL encoded limit `100kb`. |
+| Sessions | `server.js` | `express-session`, 7-day cookie, `sameSite: strict`. |
+| Rate limits | `server.js` | Login, register, and correction route limits. |
+| Auth guard | `middleware/auth.js` | Requires `req.session.userId`. |
+| Admin guard | `middleware/admin.js` | Requires `req.session.role === "admin"`. |
+| Auto guest | `server.js` | Creates a guest user for most API requests without a session. |
+| Error handler | `server.js` | JSON errors; hides details in production. |
+
+### API Route Responsibilities
+
+#### `routes/auth.js`
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+
+Uses bcrypt for passwords, XSS sanitization for registration fields, route-level login lockout, and sessions for auth state.
+
+#### `routes/quiz.js`
+
+- `GET /api/quiz/chapters`
+- `GET /api/quiz/chapters/:id/subtopics`
+- `GET /api/quiz/init`
+- `GET /api/quiz/subtopics/:id/problems`
+- `GET /api/quiz/problems/:id`
+- `GET /api/quiz/subtopics/:id`
+- `GET /api/quiz/subtopics/:id/full`
+
+`/api/quiz/init` is the lightweight bootstrap call used by `src/practice.jsx` to discover available chapters, subtopics, and problem counts.
+
+#### `routes/progress.js`
+
+- `POST /api/progress/submit`
+- `GET /api/progress/me`
+- `GET /api/progress/stats`
+- `GET /api/progress/leaderboard`
+- `GET /api/progress/leaderboard/weekly`
+
+Computes XP, penalties, level, badge tier, streaks, solved counts, mastery, and leaderboards.
+
+#### `routes/correction.js`
+
+- `GET /api/correction/attempts`
+- `POST /api/correction/transcribe`
+- `POST /api/correction/evaluate`
+- `POST /api/correction/profile-summary`
+
+Core responsibilities:
+
+- Validate image MIME type and size.
+- Use up to 20 Gemini keys.
+- Try configured models plus defaults.
+- Retry only retryable Gemini overload/rate-limit errors.
+- Normalize evaluation/profile JSON.
+- Store correction attempts in SQLite.
+- Provide local fallback profile summaries when Gemini is unavailable.
+
+#### `routes/admin.js`
+
+Admin-only CRUD for:
+
+- Chapters.
+- Subtopics.
+- Problems.
+- Problem steps.
+- Users' passwords.
+
+This route requires both session auth and admin role.
+
+#### `routes/payment.js`
+
+Duitku sandbox integration:
+
+- Create invoice.
+- Check transaction status.
+- Verify callback signature.
+- Update `payments` table.
+
+The base URL is currently sandbox:
+
+```text
+https://api-sandbox.duitku.com/api
+```
+
+Review this before production.
+
+## Database Architecture
+
+Schema source:
+
+```text
+db/schema.sql
+```
+
+Runtime state:
+
+```text
+db/database.sqlite
+```
+
+Portable seed/source data:
+
+```text
+db/question-bank.json
+```
+
+### Tables
+
+| Table | Purpose |
+| --- | --- |
+| `users` | Login identity, role, XP, level, streak, profile fields. |
+| `chapters` | Top-level learning chapters. |
+| `subtopics` | Chapter subdivisions. |
+| `problems` | Questions, answer display, acceptable answers, type, options. |
+| `problem_steps` | Worked solution steps and mistake metadata. |
+| `payments` | Duitku invoice/status records. |
+| `user_progress` | Per-user per-problem attempts, solved state, XP. |
+| `correction_attempts` | Canvas correction outputs and normalized evaluation JSON. |
+
+### Key Relationships
+
+```text
+chapters 1 -> many subtopics
+subtopics 1 -> many problems
+problems 1 -> many problem_steps
+users 1 -> many user_progress
+users 1 -> many correction_attempts
+users 1 -> many payments
+problems 1 -> many user_progress
+problems 1 -> many correction_attempts, nullable on delete
+```
+
+### Startup Schema Behavior
+
+`server.js` runs `db/schema.sql` every startup. Because the schema uses `CREATE TABLE IF NOT EXISTS`, this is idempotent for table creation.
+
+After that, `server.js` runs several `ALTER TABLE ... ADD COLUMN` compatibility migrations in `try/catch`. Failed migrations are assumed to mean the column already exists.
+
+There is no versioned migration directory yet.
+
+## Data Flows
+
+### Page Load Flow
+
+```text
+GET /
+  -> server.js sends MAFIKING.html
+  -> browser loads CSS/CDN scripts/static JSX
+  -> src/app.jsx renders App
+```
+
+### Practice Load Flow
+
+```text
+Click chapter card in src/belajar.jsx
+  -> setRoute({ route: "practice", practice: context })
+  -> src/app.jsx passes context to Practice
+  -> Practice calls GET /api/quiz/init
+  -> chooseQuestionSource(init, context)
+  -> loadQuestionSource(questionSource)
+  -> GET /api/quiz/subtopics/:id/full for one or more subtopics
+  -> render multiple-choice practice
+  -> optionally switch to canvas practice through Try Canvas
+```
+
+### Canvas Evaluation Flow
+
+```text
+User opens Try Canvas
+  -> user writes on canvas
+  -> exportCanvasImage()
+  -> POST /api/correction/evaluate
+  -> validateImagePayload()
+  -> callGeminiWithFallback()
+  -> normalizeEvaluation()
+  -> INSERT correction_attempts
+  -> return evaluation
+  -> frontend opens result modal
+  -> POST /api/progress/submit
+```
+
+### Profile Report Flow
+
+```text
+Open profile
+  -> GET /api/auth/me
+  -> GET /api/progress/stats
+  -> GET /api/correction/attempts
+  -> POST /api/correction/profile-summary
+  -> render total answered, weaknesses, recommended questions
+```
+
+### Question Bank Export/Import Flow
+
+```text
+Old Mafiking SQLite DB
+  -> scripts/export-question-bank.js
+  -> db/question-bank.json
+  -> scripts/import-question-bank.js
+  -> db/database.sqlite
+```
+
+Export script reads only content tables:
+
+```text
+chapters
+subtopics
+problems
+problem_steps
+```
+
+Import script replaces those four tables in a transaction after checking whether existing progress/correction rows reference current problems.
+
+## Security and Safety Notes
+
+- Helmet CSP allows the current CDN-based frontend runtime. Tightening CSP requires changing the frontend delivery model first.
+- Session cookies are `httpOnly`, `sameSite: strict`, and `secure: auto`.
+- Login/register/correction are rate-limited.
+- Registration fields are sanitized with `xss`.
+- Admin routes require role check.
+- Gemini image input is limited to PNG, JPEG, WEBP, and 10,000,000 base64 characters.
+- Payment callbacks verify Duitku MD5 callback signatures.
+- `SESSION_SECRET` must be changed before real deployment.
+- Duitku production use requires switching the base URL and callback/return URLs deliberately.
+
+## Build and Tooling Architecture
+
+`package.json` includes Vite and React dependencies. Current command roles:
+
+- `npm start`: real app server.
+- `npm run dev`: real app server with watch mode.
+- `npm run build`: Vite build check for `index.html`.
+- `npm run check`: build plus Node syntax checks.
+
+Important: `npm run build` does not prove that `MAFIKING.html` bundled a production SPA. The real runtime still executes static JSX through Babel in the browser.
+
+## Known Limitations
+
+- The active frontend is not bundled for production.
+- React CDN runtime is React 18, while package dependencies include React 19.
+- There is no automated unit/integration test suite yet.
+- There is no versioned database migration system yet.
+- Static Belajar chapter cards outnumber imported backend question data.
+- Practice is multiple-choice-first; canvas correction is still available but no longer the default entry mode.
+- Auto-guest users can accumulate during browser/API testing.
+- Payment route uses sandbox URL by default in code.
+- Admin UI is not documented here as a separate browser page; only admin API routes exist in this project snapshot.
+
+## Extension Points
+
+### Add New Question Banks
+
+1. Export or create rows for `chapters`, `subtopics`, `problems`, and `problem_steps`.
+2. Update `db/question-bank.json`.
+3. Import into local DB.
+4. Update `src/practice.jsx` mapping if the new static chapter title should open the new backend data.
+5. Smoke-test the chapter in browser.
+
+### Add New Frontend Route
+
+1. Create `src/<route>.jsx`.
+2. Export the component globally if needed.
+3. Add the script to `MAFIKING.html` before `src/app.jsx`.
+4. Add route state/rendering in `src/app.jsx`.
+5. Keep visual style aligned with existing copied Mafiking UI.
+
+### Add New API Route
+
+1. Create or update `routes/<name>.js`.
+2. Mount it in `server.js`.
+3. Add auth/rate limiting if needed.
+4. Document the endpoint in `README.md`.
+5. Update this architecture file if the route changes data flow.
+
+### Change Schema
+
+1. Update `db/schema.sql`.
+2. Add a compatibility migration in `server.js` if existing local DBs need it.
+3. Update import/export scripts if content tables changed.
+4. Update `ARCHITECTURE.md` database section.
+5. Validate with `npm run check` and a fresh local DB if possible.
+
+## Operational Checklist
+
+Before handing off:
+
+```bash
+npm run check
+curl -s http://127.0.0.1:3001/api/health
+```
+
+Manual browser smoke:
+
+- Home loads.
+- Belajar loads.
+- `Teknik Integrasi` opens multiple-choice practice.
+- `Try Canvas` opens canvas practice, and `Try Pilgan` returns to multiple choice.
+- Canvas focus mode keeps navigation at toolbar edges and hides the middle submit button.
+- Unsupported chapter shows empty state.
+- Profile page opens.

@@ -15,7 +15,17 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 
 const App = () => {
   const [route, setRoute] = React.useState("lobby");
+  const [practiceContext, setPracticeContext] = React.useState(null);
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  const navigate = React.useCallback((next) => {
+    if (next && typeof next === "object") {
+      if (next.practice) setPracticeContext(next.practice);
+      setRoute(next.route || "lobby");
+      return;
+    }
+    setRoute(next);
+  }, []);
 
   // Density to <html>
   React.useEffect(() => {
@@ -43,18 +53,22 @@ const App = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-paper text-ink">
-      <Nav route={route} setRoute={setRoute} navStyle={tweaks.navStyle} gamified={route === "belajar" || route === "misi"} />
+      {route !== "practice" && (
+        <Nav route={route} setRoute={navigate} navStyle={tweaks.navStyle} gamified={route === "belajar" || route === "misi" || route === "profile"} />
+      )}
 
       <main className="flex-1">
         <div data-screen-label={routeLabel(route)}>
-          {route === "lobby" && <Lobby setRoute={setRoute} tweaks={tweaks} />}
-          {route === "belajar" && <Belajar setRoute={setRoute} tweaks={tweaks} />}
-          {route === "misi" && <Misi setRoute={setRoute} tweaks={tweaks} />}
-          {route === "tryout" && <Tryout setRoute={setRoute} tweaks={tweaks} />}
+          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} />}
+          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} />}
+          {route === "misi" && <Misi setRoute={navigate} tweaks={tweaks} />}
+          {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} />}
+          {route === "profile" && <Profile setRoute={navigate} />}
+          {route === "practice" && <Practice setRoute={navigate} context={practiceContext} />}
         </div>
       </main>
 
-      {route === "lobby" && <Footer setRoute={setRoute} />}
+      {route === "lobby" && <Footer setRoute={navigate} />}
 
       <TweaksPanel title="Tweaks">
         <TweakSection label="Navigasi cepat">
@@ -67,7 +81,7 @@ const App = () => {
             ].map(([id, label]) => (
               <button
                 key={id}
-                onClick={() => setRoute(id)}
+                onClick={() => navigate(id)}
                 className={`px-3 py-2 text-xs font-semibold rounded-lg border ${route === id ? "bg-ink text-white border-ink" : "bg-white border-ink/15 hover:border-ink/40"}`}
               >
                 {label}
@@ -198,6 +212,8 @@ function routeLabel(r) {
     belajar: "02 Belajar",
     misi: "03 Misi Harian",
     tryout: "04 Tryout",
+    profile: "05 Profil",
+    practice: "06 Latihan Pilgan",
   })[r] || r;
 }
 

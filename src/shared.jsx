@@ -119,6 +119,14 @@ const Icon = {
       <path d="M19 14l.7 2.1L22 17l-2.3.9L19 20l-.7-2.1L16 17l2.3-.9L19 14z" opacity=".5"/>
     </svg>
   ),
+  Bulb: ({ className = "w-4 h-4" }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18h6"/>
+      <path d="M10 22h4"/>
+      <path d="M8.6 14.6A6 6 0 1 1 15.4 14.6c-.8.6-1.4 1.5-1.4 2.4h-4c0-.9-.6-1.8-1.4-2.4z"/>
+      <path d="M12 2v1"/>
+    </svg>
+  ),
   Target: ({ className = "w-4 h-4" }) => (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
       <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>
@@ -191,7 +199,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false }) => {
         </button>
         <nav className="hidden md:flex items-center gap-1">
           {links.map((l) => {
-            const active = route === l.id;
+            const active = route !== "lobby" && route === l.id;
             return (
               <button
                 key={l.id}
@@ -221,14 +229,14 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false }) => {
               </div>
             </div>
           )}
-          {!gamified && <button className={`hidden md:inline-flex text-sm font-semibold px-4 py-2 ${isInk ? "text-white/70 hover:text-white" : "text-ink/70 hover:text-ink"}`}>Masuk</button>}
+          {!gamified && <button onClick={() => setRoute("profile")} className={`hidden md:inline-flex text-sm font-semibold px-4 py-2 ${isInk ? "text-white/70 hover:text-white" : "text-ink/70 hover:text-ink"}`}>Masuk</button>}
           {!gamified && (
             <button onClick={() => setRoute("belajar")} className={isInk ? "btn-yel !py-2.5 !px-5 text-sm" : "btn-ink !py-2.5 !px-5 text-sm"}>
               Coba Gratis
             </button>
           )}
           {gamified && (
-            <button className={`w-9 h-9 inline-flex items-center justify-center rounded-full border hairline ${isInk ? "text-white hover:bg-white/10" : "hover:bg-ink/5"}`} title="Profil">
+            <button onClick={() => setRoute("profile")} className={`w-9 h-9 inline-flex items-center justify-center rounded-full border hairline ${isInk ? "text-white hover:bg-white/10" : "hover:bg-ink/5"}`} title="Profil">
               <Icon.User className="w-4 h-4" />
             </button>
           )}

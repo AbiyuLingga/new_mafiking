@@ -18,14 +18,6 @@ const chapterData = {
   ],
 };
 
-// Render subtitle with **bold** markers
-const renderSub = (text) => {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((p, i) => p.startsWith("**") && p.endsWith("**")
-    ? <strong key={i} className="font-semibold text-ink">{p.slice(2, -2)}</strong>
-    : <span key={i}>{p}</span>);
-};
-
 const Belajar = ({ setRoute, tweaks }) => {
   const [mapel, setMapel] = useState("Matematika");
   const [semester, setSemester] = useState(1);
@@ -91,9 +83,9 @@ const Belajar = ({ setRoute, tweaks }) => {
 
 
           {/* Chapter cards — variant */}
-          {cardStyle === "numbered" && <ChaptersNumbered chapters={chapters} setRoute={setRoute} />}
+          {cardStyle === "numbered" && <ChaptersNumbered chapters={chapters} setRoute={setRoute} mapel={mapel} />}
           {cardStyle === "soft" && <ChaptersSoft chapters={chapters} setRoute={setRoute} mapel={mapel} />}
-          {cardStyle === "magazine" && <ChaptersMagazine chapters={chapters} setRoute={setRoute} />}
+          {cardStyle === "magazine" && <ChaptersMagazine chapters={chapters} setRoute={setRoute} mapel={mapel} />}
 
         </div>
       </section>
@@ -243,7 +235,7 @@ const MapelDropdown = ({ mapel, setMapel }) => (
 // ─── CHAPTER CARDS · 3 VARIANTS ───────────────────────────────────────────
 
 // Variant A — NUMBERED (editorial, angka bab besar di kiri, tanpa box)
-const ChaptersNumbered = ({ chapters, setRoute }) => (
+const ChaptersNumbered = ({ chapters, setRoute, mapel }) => (
   <div className="flex flex-col mapel-stagger">
     {chapters.map((c, i) => {
       const isActive = c.progress > 0;
@@ -251,7 +243,7 @@ const ChaptersNumbered = ({ chapters, setRoute }) => (
       return (
         <button
           key={c.id}
-          onClick={() => setRoute("misi")}
+          onClick={() => setRoute({ route: "practice", practice: { ...c, mapel } })}
           className={`group text-left flex gap-5 md:gap-8 py-7 -mx-2 px-2 rounded-xl transition-all hover:bg-ink/[0.018] ${i > 0 ? "border-t hairline" : ""}`}
         >
           <div className="font-display font-bold text-5xl md:text-7xl tnum text-ink/10 shrink-0 w-16 md:w-24 text-right leading-none mt-1">
@@ -263,7 +255,6 @@ const ChaptersNumbered = ({ chapters, setRoute }) => (
               <span className="text-xs text-ink/40 flex items-center gap-1"><Icon.Clock className="w-3 h-3" /> {c.est} · {c.total} soal</span>
             </div>
             <h3 className="font-display font-bold text-2xl md:text-3xl tracking-[-0.02em] leading-tight mb-1.5">{c.title}</h3>
-            <p className="text-sm text-ink/60 leading-relaxed">{c.sub}</p>
             {pct > 0 && (
               <div className="flex items-center gap-3 mt-4">
                 <div className="bar w-40"><div style={{ width: `${pct}%` }}></div></div>
@@ -291,7 +282,7 @@ const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
       return (
         <button
           key={c.id}
-          onClick={() => setRoute("misi")}
+          onClick={() => setRoute({ route: "practice", practice: { ...c, mapel } })}
           className={`text-left card-tone ${toneClass} p-6 group flex flex-col hover:-translate-y-1 transition-all`}
         >
           <div className="relative z-10 flex flex-col h-full">
@@ -299,8 +290,7 @@ const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
               <div className="font-display font-bold text-4xl tnum text-ink/75">{pad2(c.num)}</div>
               <span className="tag">{c.est}</span>
             </div>
-            <h3 className="font-display font-bold text-2xl leading-tight mb-2">{c.title}</h3>
-            <p className="text-ink/60 text-sm leading-relaxed mb-5 flex-1">{c.sub}</p>
+            <h3 className="font-display font-bold text-2xl leading-tight mb-5">{c.title}</h3>
 
             {c.topics.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-5">
@@ -332,7 +322,7 @@ const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
 };
 
 // Variant C — MAGAZINE (horizontal scroll, editorial full-bleed cards)
-const ChaptersMagazine = ({ chapters, setRoute }) => (
+const ChaptersMagazine = ({ chapters, setRoute, mapel }) => (
   <div className="flex gap-4 md:gap-5 overflow-x-auto hide-scrollbar pb-4 -mx-6 px-6 md:-mx-8 md:px-8 mapel-stagger">
     {chapters.map((c, i) => {
       const isActive = c.progress > 0;
@@ -341,7 +331,7 @@ const ChaptersMagazine = ({ chapters, setRoute }) => (
       return (
         <button
           key={c.id}
-          onClick={() => setRoute("misi")}
+          onClick={() => setRoute({ route: "practice", practice: { ...c, mapel } })}
           className={`shrink-0 text-left flex flex-col group hover:-translate-y-1 transition-all
             ${isHero ? "w-[340px] md:w-[420px] bg-ink text-white rounded-[var(--card-radius)] p-6 md:p-8" : "w-[260px] md:w-[300px] card pad-d"}`}
         >
@@ -355,8 +345,7 @@ const ChaptersMagazine = ({ chapters, setRoute }) => (
           </div>
           <div className="mt-5">
             <div className={`text-xs font-mono mb-1.5 ${isHero ? "text-white/40" : "text-ink/40"}`}>Bab {c.num} · {c.est}</div>
-            <h3 className={`font-display font-bold text-2xl tracking-[-0.02em] leading-tight mb-1.5 ${isHero ? "text-white" : ""}`}>{c.title}</h3>
-            <p className={`text-sm leading-relaxed ${isHero ? "text-white/60" : "text-ink/60"}`}>{c.sub}</p>
+            <h3 className={`font-display font-bold text-2xl tracking-[-0.02em] leading-tight ${isHero ? "text-white" : ""}`}>{c.title}</h3>
             {pct > 0 && (
               <div className="flex items-center gap-3 mt-4">
                 <div className={`bar flex-1`} style={isHero ? {"--tw-bg-opacity":"1"} : {}}>
@@ -380,3 +369,4 @@ const ChaptersMagazine = ({ chapters, setRoute }) => (
 
 window.Belajar = Belajar;
 window.StatBox = StatBox;
+window.chapterData = chapterData;
