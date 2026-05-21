@@ -52,9 +52,9 @@ router.post('/login', async (req, res) => {
         return res.status(401).json({ error: 'Username atau password salah' });
     }
 
-    // Beta mode: batasi akses hanya ke akun tertentu
+    // Beta mode: batasi akses hanya ke akun tertentu (admin selalu bisa masuk)
     const betaUser = process.env.BETA_USERNAME;
-    if (betaUser && user.username !== betaUser) {
+    if (betaUser && user.role !== 'admin' && user.username !== betaUser) {
         return res.status(401).json({ error: 'Username atau password salah' });
     }
 

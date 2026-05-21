@@ -1,5 +1,3 @@
-require('dotenv').config({ path: require('path').join(__dirname, '.env') });
-
 const express = require('express');
 const session = require('express-session');
 const helmet = require('helmet');
@@ -7,6 +5,17 @@ const path = require('path');
 const fs = require('fs');
 const rateLimit = require('express-rate-limit');
 const Database = require('better-sqlite3');
+const dotenv = require('dotenv');
+const bcrypt = require('bcrypt');
+
+const envResult = dotenv.config({ path: path.join(__dirname, '.env'), quiet: true });
+if (envResult.parsed) {
+  for (const [key, value] of Object.entries(envResult.parsed)) {
+    if (process.env[key] === undefined || String(process.env[key]).trim() === '') {
+      process.env[key] = value;
+    }
+  }
+}
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -39,7 +48,8 @@ for (const migration of [
   "ALTER TABLE chapters ADD COLUMN semester INTEGER DEFAULT 1",
   "ALTER TABLE chapters ADD COLUMN description TEXT DEFAULT ''",
   "ALTER TABLE chapters ADD COLUMN est TEXT DEFAULT ''",
-  "ALTER TABLE chapters ADD COLUMN topics TEXT DEFAULT '[]'"
+  "ALTER TABLE chapters ADD COLUMN topics TEXT DEFAULT '[]'",
+  "ALTER TABLE daily_missions ADD COLUMN release_date TEXT DEFAULT ''"
 ]) {
   try {
     db.exec(migration);
@@ -65,6 +75,82 @@ CREATE TABLE IF NOT EXISTS correction_attempts (
   evaluation_json TEXT NOT NULL DEFAULT '{}',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`);
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS practice_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  problem_id INTEGER REFERENCES problems(id) ON DELETE SET NULL,
+  mode TEXT NOT NULL DEFAULT 'choice',
+  correct INTEGER NOT NULL DEFAULT 0,
+  selected_answer TEXT NOT NULL DEFAULT '',
+  correct_answer TEXT NOT NULL DEFAULT '',
+  selected_choice_index INTEGER,
+  correct_choice_index INTEGER,
+  hints_used INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS profile_ai_refreshes (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  last_ai_refresh_at DATETIME NOT NULL
+)`);
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS daily_missions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  day INTEGER NOT NULL DEFAULT 1,
+  date_label TEXT NOT NULL DEFAULT '',
+  short_label TEXT NOT NULL DEFAULT '',
+  release_date TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'locked',
+  mapel TEXT NOT NULL DEFAULT '?',
+  target TEXT NOT NULL DEFAULT '',
+  question TEXT NOT NULL DEFAULT '',
+  xp INTEGER NOT NULL DEFAULT 150,
+  week_label TEXT DEFAULT 'Pekan 1',
+  sort_order INTEGER DEFAULT 0
+)`);
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS tryout_packages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  price TEXT NOT NULL DEFAULT 'Gratis',
+  original_price TEXT DEFAULT NULL,
+  badge TEXT DEFAULT '',
+  duration TEXT DEFAULT '60 mnt',
+  questions INTEGER DEFAULT 30,
+  features TEXT DEFAULT '[]',
+  tone TEXT DEFAULT 'default',
+  sort_order INTEGER DEFAULT 0
+)`);
+
+// Seed default missions if table is empty
+if (db.prepare('SELECT COUNT(*) as n FROM daily_missions').get().n === 0) {
+  const ins = db.prepare('INSERT INTO daily_missions (day, date_label, short_label, release_date, status, mapel, target, question, xp, week_label, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
+  [
+    [1,'Sen · 12 Mei','Sen','2026-05-12','completed','Matematika','Kalkulus Harian','Tentukan hasil dari ∫₀² 3x² dx.',150,'Pekan 19',1],
+    [2,'Sel · 13 Mei','Sel','2026-05-13','active','Kimia','Stoikiometri Harian','Setarakan persamaan reaksi redoks berikut: MnO₄⁻ + Fe²⁺ → Mn²⁺ + Fe³⁺ dalam suasana asam.',200,'Pekan 19',2],
+    [3,'Rab · 14 Mei','Rab','2026-05-14','locked','?','Misi Rahasia','Terbuka 14 Mei.',150,'Pekan 19',3],
+    [4,'Kam · 15 Mei','Kam','2026-05-15','locked','?','Misi Rahasia','Terbuka 15 Mei.',200,'Pekan 19',4],
+    [5,'Jum · 16 Mei','Jum','2026-05-16','locked','?','Misi Rahasia','Terbuka 16 Mei.',150,'Pekan 19',5],
+  ].forEach(r => ins.run(...r));
+}
+
+// Seed default tryout packages if table is empty
+if (db.prepare('SELECT COUNT(*) as n FROM tryout_packages').get().n === 0) {
+  const ins = db.prepare('INSERT INTO tryout_packages (title, description, price, original_price, badge, duration, questions, features, tone, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?)');
+  [
+    ['Tryout Bundling: Semester 1','Evaluasi lengkap Matematika, Fisika, dan Kimia untuk persiapan UAS.','Rp 50.000',null,'Populer','180 mnt',90,JSON.stringify(['3 Mata pelajaran dasar','Sistem CBT seperti UAS','Analisis butir soal AI','Pembahasan video eksklusif']),'default',1],
+    ['Tryout Premium: TPB Prep','Simulasi TPB ITB tingkat tinggi dengan arsip soal 5 tahun terakhir.','Rp 100.000','Rp 150.000','Terlengkap','240 mnt',120,JSON.stringify(['Prediksi akurasi tinggi','Konsultasi Zoom mentor','Skoring adaptif IRT','Sertifikat pencapaian']),'feature',2],
+    ['Tryout Gratis: Bab 1-2','Coba sistem CBT kami secara gratis untuk Kalkulus Dasar.','Gratis',null,'Promo','60 mnt',30,JSON.stringify(['1 mata pelajaran','Hasil keluar instan','Pembahasan teks dasar']),'default',3],
+  ].forEach(r => ins.run(...r));
+}
+
+ensureFixedAdminUser(db);
 
 app.locals.db = db;
 app.set('trust proxy', 1);
@@ -172,6 +258,84 @@ app.use((req, res, next) => {
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/quiz', require('./routes/quiz'));
+
+function currentJakartaDate() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+  }).formatToParts(new Date());
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${byType.year}-${byType.month}-${byType.day}`;
+}
+
+function isReleasedMission(row, today = currentJakartaDate()) {
+  const releaseDate = String(row.release_date || '').trim();
+  if (!releaseDate) return row.status !== 'locked';
+  return releaseDate <= today;
+}
+
+function effectiveMissionStatus(row, released) {
+  if (row.status === 'completed') return 'completed';
+  if (released) return 'active';
+  return 'locked';
+}
+
+function canReadMissionDrafts(req) {
+  if (req.session && req.session.role === 'admin') return true;
+  if (isProduction || process.env.LOCAL_ADMIN_MODE === 'false') return false;
+  const forwardedFor = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  const candidates = [req.ip, req.socket && req.socket.remoteAddress, forwardedFor].filter(Boolean);
+  return candidates.some((value) => (
+    value === '127.0.0.1' ||
+    value === '::1' ||
+    value === '::ffff:127.0.0.1'
+  ));
+}
+
+function serializeMissionForViewer(row, { canSeeDrafts = false } = {}) {
+  const released = isReleasedMission(row);
+  const effectiveStatus = effectiveMissionStatus(row, released);
+  if (canSeeDrafts) {
+    return {
+      ...row,
+      effective_status: effectiveStatus,
+      is_released: released,
+    };
+  }
+  if (released || row.status === 'completed') {
+    return {
+      ...row,
+      status: effectiveStatus,
+      effective_status: effectiveStatus,
+      is_released: released,
+    };
+  }
+  return {
+    ...row,
+    mapel: '?',
+    question: '',
+    status: 'locked',
+    effective_status: 'locked',
+    is_released: false,
+  };
+}
+
+app.get('/api/missions', (req, res) => {
+  try {
+    const wantsAdmin = req.query.admin === '1';
+    const canSeeDrafts = wantsAdmin && canReadMissionDrafts(req);
+    const rows = db.prepare('SELECT * FROM daily_missions ORDER BY sort_order, day').all();
+    res.json(rows.map((row) => serializeMissionForViewer(row, { canSeeDrafts })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/tryout-packages', (req, res) => {
+  try {
+    res.json(db.prepare('SELECT * FROM tryout_packages ORDER BY sort_order, id').all());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.use('/api/progress', require('./routes/progress'));
 app.use('/api/admin/import', require('./routes/admin-import'));
 app.use('/api/admin', require('./routes/admin'));
@@ -191,6 +355,7 @@ const staticCache = {
 };
 
 app.use('/assets', express.static(path.join(__dirname, 'assets'), staticCache));
+app.use('/video', express.static(path.join(__dirname, 'assets'), staticCache));
 app.use('/src', express.static(path.join(__dirname, 'src'), staticCache));
 app.get('/SOP-DEEPSEEK-IMPORT-SOAL.md', (req, res) => {
   if (!req.session?.role || req.session.role !== 'admin') {
@@ -220,3 +385,18 @@ app.use((err, _req, res, _next) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`new_mafiking server running on http://0.0.0.0:${PORT}`);
 });
+
+function ensureFixedAdminUser(database) {
+  const username = '123';
+  const passwordHash = bcrypt.hashSync('135', 10);
+  const existing = database.prepare('SELECT id FROM users WHERE username = ?').get(username);
+  if (existing) {
+    database.prepare(
+      "UPDATE users SET password_hash = ?, display_name = 'Admin 123', role = 'admin' WHERE id = ?"
+    ).run(passwordHash, existing.id);
+    return;
+  }
+  database.prepare(
+    "INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, 'Admin 123', 'admin')"
+  ).run(username, passwordHash);
+}

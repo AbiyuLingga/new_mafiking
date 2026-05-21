@@ -11,6 +11,7 @@ This document describes the current architecture of `new_mafiking`. It is intent
 - A local SQLite database.
 - A multiple-choice-first practice flow with optional stylus canvas mode.
 - Gemini-powered canvas correction.
+- Deterministic Purcell-aligned follow-up recommendations for profile reports.
 - Import/export scripts for question-bank portability.
 
 High-level runtime:
@@ -303,6 +304,10 @@ Core responsibilities:
 - Normalize evaluation/profile JSON.
 - Store correction attempts in SQLite.
 - Provide local fallback profile summaries when Gemini is unavailable.
+- Compute deterministic `recommendedItems` from local skill metadata and the Purcell-inspired reference bank; Gemini does not freely choose those follow-up questions.
+- Optionally use 9Router for profile narrative text only when `AI_PROFILE_PROVIDER=9router`; canvas OCR/evaluation still uses Gemini directly.
+- Rate-limit AI profile narrative refreshes to once per hour for normal users; admin `123`/`135` bypasses the cooldown.
+- Include summarized multiple-choice mistakes from `practice_attempts` as profile narrative evidence, without letting AI choose final catalog refs.
 
 #### `routes/admin.js`
 
@@ -351,6 +356,13 @@ Portable seed/source data:
 
 ```text
 db/question-bank.json
+```
+
+Recommendation metadata:
+
+```text
+data/recommendation-catalog.json
+docs/purcell-inspired-question-bank.md
 ```
 
 ### Tables
@@ -436,8 +448,39 @@ Open profile
   -> GET /api/progress/stats
   -> GET /api/correction/attempts
   -> POST /api/correction/profile-summary
-  -> render total answered, weaknesses, recommended questions
+  -> load up to 200 recent attempts for deterministic recommendations
+  -> compute skill need scores from recommendation attempt window
+  -> summarize recent multiple-choice mistakes from practice_attempts
+  -> skip AI narrative if normal user refreshed within the last 1 hour
+  -> send only 20 newest correction attempts plus MC evidence to the profile narrative provider
+  -> merge Gemini report text with deterministic recommendedItems
+  -> render total answered, weaknesses, recommended questions, catalog refs, difficulty, Purcell reference, and reason
 ```
+
+The recommendation formula is:
+
+```text
+need_score =
+  confidence * 100 * (
+    0.30 * wrong_frequency
+  + 0.25 * recency_error
+  + 0.20 * low_score
+  + 0.15 * prerequisite_gap
+  + 0.10 * attempt_pressure
+  )
+```
+
+`data/recommendation-catalog.json` owns official skill aliases, prerequisites, scoring weights, and difficulty gating. `docs/purcell-inspired-question-bank.md` owns the original Purcell-aligned question references used by the recommendation engine.
+
+Runtime recommendation selection must stay deterministic: Gemini can contribute `overallSummary` text, but `recommendedItems`, `recommendedQuestions`, and `skillNeedScores` are merged from `lib/recommendation-engine.js` so profile recommendations point at real catalog refs instead of invented items.
+
+The profile endpoint intentionally uses two attempt windows: `PROFILE_RECOMMENDATION_ATTEMPT_LIMIT = 200` for local recommendation stability and `PROFILE_AI_ATTEMPT_LIMIT = 20` for AI prompt cost/latency control. Multiple-choice evidence has its own `PROFILE_MC_ATTEMPT_LIMIT = 120` because it is summarized before reaching the AI prompt.
+
+AI narrative refreshes are recorded in `profile_ai_refreshes`. Normal users can refresh AI narrative text once per hour; admin account `123`/`135` bypasses the cooldown for testing and operations. When cooldown blocks the AI call or 9Router/Gemini fails, the endpoint still returns the deterministic local profile summary.
+
+When configured, 9Router is called through `lib/ai-profile-provider.js` against an OpenAI-compatible `/chat/completions` endpoint. 9Router failure does not break profile rendering; the endpoint falls back to the deterministic local summary. Production should use `NINEROUTER_MODELS` as a comma-separated allowlist of smoke-tested model IDs; `NINEROUTER_MODEL=auto` is supported but can hit providers with invalid tokens.
+
+Profile narrative providers must read `SOP-9ROUTER-PROFILE-SUMMARY.md` through `routes/correction.js` before producing summary JSON. This SOP is the source of truth for what the AI may infer and what it must leave to the deterministic recommendation engine.
 
 ### Question Bank Export/Import Flow
 
@@ -479,7 +522,7 @@ Import script replaces those four tables in a transaction after checking whether
 - `npm start`: real app server.
 - `npm run dev`: real app server with watch mode.
 - `npm run build`: Vite build check for `index.html`.
-- `npm run check`: build plus Node syntax checks.
+- `npm run check`: Node syntax checks plus focused admin-import and recommendation-engine tests.
 
 Important: `npm run build` does not prove that `MAFIKING.html` bundled a production SPA. The real runtime still executes static JSX through Babel in the browser.
 

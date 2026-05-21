@@ -1,5 +1,7 @@
 // Practice route — choice (multiple choice) default, optional canvas mode.
 
+const CANVAS_DEMO_VIDEO_SRC = "/assets/saas_demo_video.mp4";
+
 const Practice = ({ context, setRoute, isAdmin }) => {
   const boardRef = useRef(null);
   const [mode, setMode] = useState("choice"); // "choice" | "canvas"
@@ -13,7 +15,12 @@ const Practice = ({ context, setRoute, isAdmin }) => {
   const [boardDirty, setBoardDirty] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showResultModal, setShowResultModal] = useState(false);
+  const [ocrReview, setOcrReview] = useState(null);
   const [focusMode, setFocusMode] = useState(false);
+  const [showCanvasIntro, setShowCanvasIntro] = useState(true);
+
+  function dismissCanvasIntro() { setShowCanvasIntro(false); }
+  function openCanvasFromIntro() { dismissCanvasIntro(); switchMode("canvas"); }
 
   useEffect(() => {
     loadPractice();
@@ -25,6 +32,7 @@ const Practice = ({ context, setRoute, isAdmin }) => {
     setShowHint(false);
     setBoardDirty(false);
     setError("");
+    setOcrReview(null);
     setShowResultModal(false);
   }, [problemIndex, session?.subtopic?.id]);
 
@@ -38,6 +46,13 @@ const Practice = ({ context, setRoute, isAdmin }) => {
     try {
       setLoading(true);
       setError("");
+      // Admin preview: inline questions bypass API
+      if (context?.problems && Array.isArray(context.problems) && context.problems.length > 0) {
+        setSession({ problems: context.problems, subtopic: { title: context.title || "Preview", id: 0 } });
+        setProblemIndex(0);
+        setAttemptsByProblem({});
+        return;
+      }
       const init = await MafikingAPI.get("/api/quiz/init");
       const questionSource = chooseQuestionSource(init, context);
       if (!questionSource) {
@@ -114,25 +129,66 @@ const Practice = ({ context, setRoute, isAdmin }) => {
     setAttemptsByProblem((prev) => ({ ...prev, [problem.id]: attempt }));
     setError("");
 
-    if (isCorrect) showToast("+10 XP · Jawaban benar!", "success", 2500);
-    MafikingAPI.post("/api/progress/submit", {
-      correct: isCorrect, hintsUsed: showHint ? 1 : 0, problemId: problem.id,
-    }).then((res) => {
-      if (res && res.leveledUp) showToast(`Naik ke Level ${res.level}! 🎉`, "success", 5000);
-    }).catch(() => null);
+    if (isCorrect) showToast(context?.isPreview ? "Jawaban benar! (Mode preview)" : "+10 XP · Jawaban benar!", "success", 2500);
+    if (!context?.isPreview) {
+      MafikingAPI.post("/api/progress/submit", {
+        correct: isCorrect,
+        correctAnswer,
+        correctChoiceIndex: correctIndex,
+        hintsUsed: showHint ? 1 : 0,
+        mode: "choice",
+        problemId: problem.id,
+        selectedAnswer,
+        selectedChoiceIndex,
+      }).then((res) => {
+        if (res && res.leveledUp) showToast(`Naik ke Level ${res.level}! 🎉`, "success", 5000);
+      }).catch(() => null);
+    }
   }
 
   async function submitCanvas() {
     if (!problem) return;
+    if (context?.isPreview) { setError("Canvas correction tidak tersedia di mode preview."); return; }
     try {
       setError("");
       setShowResultModal(false);
+      setOcrReview(null);
       const imageBase64 = boardRef.current && boardRef.current.exportImage();
       if (!imageBase64 || !boardDirty) { setError("Tulis jawaban di canvas terlebih dulu."); return; }
+      const strokeSnapshot = boardRef.current && boardRef.current.exportSnapshot && boardRef.current.exportSnapshot();
+      setSubmitting(true);
+      const transcription = await MafikingAPI.post("/api/correction/transcribe", {
+        imageBase64,
+        mimeType: "image/png",
+        questionText: problem.question_display || problem.question_text,
+      });
+      setOcrReview({
+        ...transcription,
+        imageBase64,
+        strokeSnapshot,
+      });
+      showToast("Tulisan terbaca. Konfirmasi dulu sebelum dikoreksi.", "success");
+    } catch (caught) {
+      handleCorrectionError(caught);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function confirmCanvasTranscription() {
+    if (!problem || !ocrReview) return;
+    if (!ocrReview.detectedAnswerLatex) {
+      setError("Gemini belum menemukan teks jawaban yang bisa dikonfirmasi.");
+      return;
+    }
+    try {
+      setError("");
+      setShowResultModal(false);
       setSubmitting(true);
       const evaluation = await MafikingAPI.post("/api/correction/evaluate", {
+        confirmedAnswerLatex: ocrReview.detectedAnswerLatex,
         expectedAnswer: problem.answer_display,
-        imageBase64,
+        imageBase64: ocrReview.imageBase64,
         mimeType: "image/png",
         problemId: problem.id,
         questionId: problem.id,
@@ -141,34 +197,42 @@ const Practice = ({ context, setRoute, isAdmin }) => {
       });
       const attempt = {
         completedAt: new Date().toISOString(),
+        confirmedAnswerLatex: ocrReview.detectedAnswerLatex,
         evaluation: evaluation.evaluation,
         feedback: evaluation.feedback,
-        imageBase64,
+        imageBase64: ocrReview.imageBase64,
         mode: "canvas",
+        strokeSnapshot: ocrReview.strokeSnapshot,
       };
       setAttemptsByProblem((prev) => ({ ...prev, [problem.id]: attempt }));
       setBoardDirty(false);
+      setOcrReview(null);
       setShowResultModal(true);
       const isCorrect = Boolean(evaluation.evaluation?.isCorrect);
       if (isCorrect) showToast("Jawaban benar! Progress tersimpan.", "success");
       MafikingAPI.post("/api/progress/submit", {
         correct: isCorrect,
         hintsUsed: 0,
+        mode: "canvas",
         problemId: problem.id,
       }).catch(() => null);
     } catch (caught) {
-      const msg = caught.message || "";
-      if (msg.toLowerCase().includes("rate limit") || msg.includes("429")) {
-        showToast("Batas API tercapai — coba lagi dalam beberapa detik.", "error");
-      } else if (msg.toLowerCase().includes("api key")) {
-        showToast("Konfigurasi belum lengkap — koreksi tidak tersedia.", "error");
-      } else {
-        showToast("Koreksi gagal: " + msg, "error");
-      }
-      setError(msg);
+      handleCorrectionError(caught);
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleCorrectionError(caught) {
+    const msg = caught.message || "";
+    if (msg.toLowerCase().includes("rate limit") || msg.includes("429")) {
+      showToast("Batas API tercapai, coba lagi dalam beberapa detik.", "error");
+    } else if (msg.toLowerCase().includes("api key")) {
+      showToast("Konfigurasi belum lengkap, koreksi tidak tersedia.", "error");
+    } else {
+      showToast("Koreksi gagal: " + msg, "error");
+    }
+    setError(msg);
   }
 
   function switchMode(nextMode) {
@@ -176,6 +240,7 @@ const Practice = ({ context, setRoute, isAdmin }) => {
     if (mode === "canvas" && boardDirty && !window.confirm("Beralih mode akan mengosongkan canvas. Lanjut?")) return;
     setMode(nextMode);
     setBoardDirty(false);
+    setOcrReview(null);
     setShowResultModal(false);
     setFocusMode(false);
   }
@@ -185,6 +250,7 @@ const Practice = ({ context, setRoute, isAdmin }) => {
     if (mode === "canvas" && boardDirty && !window.confirm("Berpindah bab akan mengosongkan canvas. Lanjut?")) return;
     setMode("choice");
     setBoardDirty(false);
+    setOcrReview(null);
     setShowResultModal(false);
     setFocusMode(false);
     setRoute({ route: "practice", practice: { ...chapter, mapel: chapter.mapel || context?.mapel || "Matematika" } });
@@ -248,7 +314,10 @@ const Practice = ({ context, setRoute, isAdmin }) => {
         onMoveProblem={moveProblem}
         onProblemSelect={setProblemIndex}
         onReloadSession={loadPractice}
+        onCancelOcr={() => setOcrReview(null)}
+        onConfirmOcr={confirmCanvasTranscription}
         onSubmit={submitCanvas}
+        ocrReview={ocrReview}
         problem={problem}
         problemIndex={problemIndex}
         problems={session?.problems || []}
@@ -263,32 +332,47 @@ const Practice = ({ context, setRoute, isAdmin }) => {
   }
 
   return (
-    <ChoiceView
-      attempt={activeAttempt}
-      error={error}
-      isAdmin={isAdmin}
-      onBack={() => setRoute("belajar")}
-      onChoiceSelect={setSelectedChoiceIndex}
-      onHintToggle={() => setShowHint((v) => !v)}
-      onMoveProblem={moveProblem}
-      onProblemSelect={setProblemIndex}
-      onReloadSession={loadPractice}
-      onSubmit={submitChoice}
-      onSwitchCanvas={() => switchMode("canvas")}
-      onSwitchMode={switchMode}
-      problem={problem}
-      problemIndex={problemIndex}
-      problems={session?.problems || []}
-      selectedChoiceIndex={selectedChoiceIndex}
-      showHint={showHint}
-      totalProblems={totalProblems}
-      subtopicTitle={session?.subtopic?.title}
-      currentChapter={currentChapter}
-      availableChapters={availableChapters}
-      onChapterSelect={selectChapter}
-      getChoices={getChoices}
-      getCorrectChoiceIndex={getCorrectChoiceIndex}
-    />
+    <React.Fragment>
+      {context?.isPreview && (
+        <div style={{ background: '#0b1326', color: '#fff', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, fontWeight: 600, gap: 12 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ background: 'var(--yel)', color: '#0b1326', borderRadius: 6, padding: '2px 10px', fontSize: 11, fontWeight: 700, letterSpacing: '.04em' }}>PREVIEW</span>
+            Mode preview — soal belum tersimpan, XP tidak dihitung
+          </span>
+          <button onClick={() => setRoute("belajar")} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.25)', color: '#fff', borderRadius: 8, padding: '4px 14px', fontSize: 12, cursor: 'pointer', fontWeight: 600 }} type="button">
+            ← Kembali ke Import
+          </button>
+        </div>
+      )}
+      <ChoiceView
+        attempt={activeAttempt}
+        error={error}
+        isAdmin={isAdmin}
+        onBack={() => setRoute("belajar")}
+        onChoiceSelect={setSelectedChoiceIndex}
+        onHintToggle={() => setShowHint((v) => !v)}
+        onMoveProblem={moveProblem}
+        onProblemSelect={setProblemIndex}
+        onReloadSession={loadPractice}
+        onSubmit={submitChoice}
+        onSwitchMode={switchMode}
+        problem={problem}
+        problemIndex={problemIndex}
+        problems={session?.problems || []}
+        selectedChoiceIndex={selectedChoiceIndex}
+        showHint={showHint}
+        totalProblems={totalProblems}
+        subtopicTitle={session?.subtopic?.title}
+        currentChapter={currentChapter}
+        availableChapters={availableChapters}
+        onChapterSelect={selectChapter}
+        getChoices={getChoices}
+        getCorrectChoiceIndex={getCorrectChoiceIndex}
+        showCanvasIntro={showCanvasIntro}
+        onDismissCanvasIntro={dismissCanvasIntro}
+        onOpenCanvasFromIntro={openCanvasFromIntro}
+      />
+    </React.Fragment>
   );
 };
 
@@ -856,9 +940,10 @@ const ChapterSwitcher = ({ chapter, chapters, fallbackTitle, onSelect }) => {
 // ─── Choice (Pilgan) view ─────────────────────────────────────────────────
 const ChoiceView = ({
   attempt, error, isAdmin, onBack, onChoiceSelect, onHintToggle, onMoveProblem,
-      onReloadSession, onSubmit, onSwitchCanvas, onSwitchMode, problem, problemIndex, selectedChoiceIndex,
+      onReloadSession, onSubmit, onSwitchMode, problem, problemIndex, selectedChoiceIndex,
       problems, onProblemSelect, showHint, totalProblems, subtopicTitle, currentChapter, availableChapters,
   onChapterSelect, getChoices, getCorrectChoiceIndex,
+  showCanvasIntro, onDismissCanvasIntro, onOpenCanvasFromIntro,
 }) => {
   const rawChoices = getChoices(problem);
   const choices = isAdmin && !rawChoices.length ? ["", "", "", ""] : rawChoices;
@@ -914,6 +999,9 @@ const ChoiceView = ({
 
   return (
     <div className="mafiking-practice">
+      {showCanvasIntro && (
+        <CanvasIntroModal onDismiss={onDismissCanvasIntro} onOpenCanvas={onOpenCanvasFromIntro} />
+      )}
       <div className="mafiking-session-bar">
         <button className="mafiking-back-button" onClick={onBack} type="button">
           <Icon.ChevL className="w-4 h-4" />
@@ -1422,7 +1510,8 @@ const SolutionStepsPanel = ({ attempt, problem, isAdmin, onStepSaved }) => {
 // ─── Canvas view ──────────────────────────────────────────────────────────
 const CanvasView = ({
   attempt, boardDirty, boardRef, error, focusMode, isAdmin, onBackToChoice, onSwitchMode,
-  onBoardDirtyChange, onFocusModeToggle, onMoveProblem, onProblemSelect, onReloadSession, onSubmit, problem,
+  onBoardDirtyChange, onCancelOcr, onConfirmOcr, onFocusModeToggle, onMoveProblem, onProblemSelect,
+  onReloadSession, onSubmit, ocrReview, problem,
   problemIndex, problems, showResultModal, submitting, totalProblems, onCloseResult,
   subtopicTitle, setRoute,
 }) => {
@@ -1599,7 +1688,7 @@ const CanvasView = ({
         onDirtyChange={onBoardDirtyChange}
         onFocusModeToggle={onFocusModeToggle}
         onSubmit={onSubmit}
-        stickyQuestion={focusMode ? (
+        stickyQuestion={(
           <div className="canvas-board-question-card">
             <div className="mafiking-question-meta">
               <span>Soal {problemIndex + 1} dari {totalProblems}</span>
@@ -1612,13 +1701,13 @@ const CanvasView = ({
             </div>
             {error ? <div className="mafiking-error-box"><Icon.Target className="w-4 h-4" />{error}</div> : null}
           </div>
-        ) : null}
+        )}
       />
 
       {submitting && !focusMode ? (
         <section className="mafiking-loading-card">
-          <div className="mafiking-answer-heading">Mengevaluasi jawaban</div>
-          <p>Sedang membaca tulisan tangan dari canvas dan mengecek langkah pengerjaan.</p>
+          <div className="mafiking-answer-heading">{ocrReview ? "Mengevaluasi jawaban" : "Membaca tulisan canvas"}</div>
+          <p>{ocrReview ? "Gemini sedang mengecek langkah pengerjaan berdasarkan teks yang sudah dikonfirmasi." : "Gemini sedang mengubah tulisan tangan menjadi teks LaTeX untuk dikonfirmasi."}</p>
         </section>
       ) : null}
 
@@ -1632,6 +1721,15 @@ const CanvasView = ({
 
       {showResultModal && attempt ? (
         <ResultModal attempt={attempt} onClose={onCloseResult} />
+      ) : null}
+
+      {ocrReview ? (
+        <OcrConfirmModal
+          ocrReview={ocrReview}
+          onCancel={onCancelOcr}
+          onConfirm={onConfirmOcr}
+          submitting={submitting}
+        />
       ) : null}
     </div>
   );
@@ -2066,12 +2164,240 @@ function Eq({ value }) {
   });
 }
 
+const OcrConfirmModal = ({ ocrReview, onCancel, onConfirm, submitting }) => {
+  const confidence = Math.round(Math.max(0, Math.min(1, Number(ocrReview?.readingConfidence) || 0)) * 100);
+  const unclearParts = Array.isArray(ocrReview?.unclearParts) ? ocrReview.unclearParts.filter(Boolean) : [];
+
+  return (
+    <div className="canvas-result-modal-backdrop" role="presentation">
+      <article className="canvas-result-modal ocr-confirm-modal" aria-label="Konfirmasi tulisan canvas">
+        <button aria-label="Tutup konfirmasi tulisan" className="canvas-result-modal-close" disabled={submitting} onClick={onCancel} type="button">×</button>
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0 bg-blue-100 text-blue-700">
+            AI
+          </div>
+          <div>
+            <div className="kicker mb-0.5">Langkah 1</div>
+            <h2 className="font-display font-bold text-2xl leading-none">Konfirmasi tulisan terbaca</h2>
+          </div>
+        </div>
+
+        <div className="ocr-transcript-box">
+          <div className="ocr-transcript-label">Gemini membaca jawaban Anda sebagai:</div>
+          <div className="ocr-transcript-value">
+            <Eq value={ocrReview?.detectedAnswerLatex || "\\text{Belum terbaca jelas}"} />
+          </div>
+        </div>
+
+        <div className="ocr-meta-row">
+          <span>Keyakinan baca: {confidence}%</span>
+          {ocrReview?.needsUserConfirmation ? <span>Perlu konfirmasi user</span> : null}
+        </div>
+
+        {unclearParts.length ? (
+          <div className="ocr-unclear-box">
+            <div className="font-semibold text-sm mb-1">Bagian yang perlu dicek:</div>
+            <ul>
+              {unclearParts.map((part, idx) => <li key={idx}>{part}</li>)}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="canvas-result-actions">
+          <button className="mafiking-soft-button" disabled={submitting} onClick={onCancel} type="button">
+            Kembali ke canvas
+          </button>
+          <button className="mafiking-primary-button" disabled={submitting || !ocrReview?.detectedAnswerLatex} onClick={onConfirm} type="button">
+            {submitting ? "Mengoreksi..." : "Benar, lanjut koreksi"}
+          </button>
+        </div>
+      </article>
+    </div>
+  );
+};
+
+function normalizePercentBoxClient(box) {
+  if (!box || typeof box !== "object") return null;
+  const x = Math.max(0, Math.min(100, Number(box.x) || 0));
+  const y = Math.max(0, Math.min(100, Number(box.y) || 0));
+  const width = Math.max(0, Math.min(100 - x, Number(box.width) || 0));
+  const height = Math.max(0, Math.min(100 - y, Number(box.height) || 0));
+  if (width <= 0 || height <= 0) return null;
+  return { x, y, width, height };
+}
+
+function getRedlineTargets(evaluation) {
+  const direct = Array.isArray(evaluation?.redlineTargets) ? evaluation.redlineTargets : [];
+  const normalizedDirect = direct
+    .map((target) => ({ ...target, boxPercent: normalizePercentBoxClient(target.boxPercent) }))
+    .filter((target) => target.boxPercent);
+  if (normalizedDirect.length) return normalizedDirect;
+
+  const wrongSteps = Array.isArray(evaluation?.wrongSteps) ? evaluation.wrongSteps : [];
+  return wrongSteps
+    .map((step) => ({
+      boxPercent: normalizePercentBoxClient(step.wrongPartBoxPercent || step.wrongBoxPercent || step.combinedBoxPercent),
+      reasonLatex: step.issueLatex || step.issue || "",
+      severity: "error",
+      stepNumber: step.stepNumber || "",
+      targetTextLatex: step.studentStepLatex || step.studentStep || "",
+    }))
+    .filter((target) => target.boxPercent);
+}
+
+function percentBoxToCanvasRect(box, canvasSize) {
+  const width = Math.max(1, Number(canvasSize?.width) || 1);
+  const height = Math.max(1, Number(canvasSize?.height) || 1);
+  return {
+    height: (box.height / 100) * height,
+    width: (box.width / 100) * width,
+    x: (box.x / 100) * width,
+    y: (box.y / 100) * height,
+  };
+}
+
+function pointInRect(point, rect, padding = 0) {
+  return point.x >= rect.x - padding &&
+    point.x <= rect.x + rect.width + padding &&
+    point.y >= rect.y - padding &&
+    point.y <= rect.y + rect.height + padding;
+}
+
+function segmentTouchesRect(a, b, rect, padding) {
+  if (pointInRect(a, rect, padding) || pointInRect(b, rect, padding)) return true;
+  const steps = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 12));
+  for (let index = 1; index < steps; index += 1) {
+    const t = index / steps;
+    if (pointInRect({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, rect, padding)) return true;
+  }
+  return false;
+}
+
+function strokeTouchesRect(stroke, rect) {
+  const points = Array.isArray(stroke?.points) ? stroke.points : [];
+  if (!points.length) return false;
+  const padding = Math.max(6, Number(stroke.width) || 0);
+  if (points.length === 1) return pointInRect(points[0], rect, padding);
+  for (let index = 1; index < points.length; index += 1) {
+    if (segmentTouchesRect(points[index - 1], points[index], rect, padding)) return true;
+  }
+  return false;
+}
+
+function strokePath(stroke) {
+  const points = Array.isArray(stroke?.points) ? stroke.points : [];
+  if (!points.length) return "";
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y} L ${points[0].x + 0.01} ${points[0].y + 0.01}`;
+  let path = `M ${points[0].x} ${points[0].y}`;
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1];
+    const current = points[index];
+    const mid = { x: (previous.x + current.x) / 2, y: (previous.y + current.y) / 2 };
+    path += ` Q ${previous.x} ${previous.y} ${mid.x} ${mid.y}`;
+  }
+  const last = points[points.length - 1];
+  return `${path} L ${last.x} ${last.y}`;
+}
+
+const RedlinePreview = ({ attempt, targets }) => {
+  const snapshot = attempt?.strokeSnapshot;
+  const strokes = Array.isArray(snapshot?.strokes) ? snapshot.strokes : [];
+  const canvasSize = snapshot?.canvasSize || {};
+  const width = Math.max(1, Number(canvasSize.width) || 0);
+  const height = Math.max(1, Number(canvasSize.height) || 0);
+  const validTargets = targets
+    .map((target) => ({ ...target, rect: percentBoxToCanvasRect(target.boxPercent, { width, height }) }))
+    .filter((target) => target.rect.width > 0 && target.rect.height > 0);
+
+  if (strokes.length && width > 1 && height > 1) {
+    return (
+      <div className="redline-preview">
+        <svg className="redline-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Jawaban canvas dengan bagian salah berwarna merah">
+          <defs>
+            {validTargets.map((target, idx) => (
+              <clipPath id={`redline-clip-${idx}`} key={idx}>
+                <rect x={target.rect.x} y={target.rect.y} width={target.rect.width} height={target.rect.height} rx="8" />
+              </clipPath>
+            ))}
+          </defs>
+          <rect className="redline-page-bg" x="0" y="0" width={width} height={height} />
+          {strokes.map((stroke, idx) => {
+            const path = strokePath(stroke);
+            if (!path) return null;
+            return (
+              <path
+                d={path}
+                fill="none"
+                key={`stroke-${stroke.id || idx}`}
+                stroke={stroke.color || "#60a5fa"}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={Math.max(1, Number(stroke.width) || 8)}
+              />
+            );
+          })}
+          {validTargets.map((target, targetIndex) => (
+            <g clipPath={`url(#redline-clip-${targetIndex})`} key={`target-${targetIndex}`}>
+              {strokes.map((stroke, strokeIndex) => {
+                if (!strokeTouchesRect(stroke, target.rect)) return null;
+                const path = strokePath(stroke);
+                if (!path) return null;
+                return (
+                  <path
+                    d={path}
+                    fill="none"
+                    key={`red-${targetIndex}-${stroke.id || strokeIndex}`}
+                    stroke="#ef4444"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={Math.max(1, Number(stroke.width) || 8)}
+                  />
+                );
+              })}
+            </g>
+          ))}
+        </svg>
+      </div>
+    );
+  }
+
+  if (attempt?.imageBase64) {
+    return (
+      <div className="redline-preview">
+        <img alt="Jawaban canvas" className="redline-image" src={attempt.imageBase64} />
+        {validTargets.map((target, idx) => (
+          <span
+            aria-hidden="true"
+            className="redline-fallback-box"
+            key={idx}
+            style={{
+              height: `${target.boxPercent.height}%`,
+              left: `${target.boxPercent.x}%`,
+              top: `${target.boxPercent.y}%`,
+              width: `${target.boxPercent.width}%`,
+            }}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return null;
+};
+
 // ─── Result modal ─────────────────────────────────────────────────────────
 const ResultModal = ({ attempt, onClose }) => {
+  const [step, setStep] = useState("redline");
   const evaluation = attempt.evaluation || {};
   const wrongSteps = evaluation.wrongSteps || [];
   const score = Math.round(Number(evaluation.score) || 0);
   const isCorrect = Boolean(evaluation.isCorrect);
+  const detectedAnswer = evaluation.detectedAnswerLatex || attempt.confirmedAnswerLatex || evaluation.detectedAnswerText;
+  const feedback = evaluation.fullFeedbackLatex || attempt.feedback || evaluation.fullFeedback || "\\text{Koreksi selesai.}";
+  const redlineTargets = getRedlineTargets(evaluation);
+  const hasExplanation = wrongSteps.length || feedback;
+  const showRedlineFirst = !isCorrect && redlineTargets.length > 0;
+  const currentStep = showRedlineFirst ? step : "explanation";
 
   return (
     <div className="canvas-result-modal-backdrop" role="presentation">
@@ -2088,37 +2414,139 @@ const ResultModal = ({ attempt, onClose }) => {
           </div>
         </div>
 
-        {evaluation.detectedAnswerText ? (
-          <div className="bg-ink/[0.04] rounded-xl px-4 py-3 mb-4 text-sm">
-            <span className="font-semibold text-ink/60">Terbaca:</span> <Eq value={evaluation.detectedAnswerText} />
-          </div>
-        ) : null}
-
-        <p className="text-sm leading-relaxed mb-4"><Eq value={attempt.feedback || evaluation.fullFeedback || "Koreksi selesai."} /></p>
-
-        {wrongSteps.length ? (
-          <div>
-            <div className="kicker mb-2">Langkah yang perlu diperbaiki</div>
-            <div className="result-step-list">
-              {wrongSteps.map((step, idx) => (
-                <div className="result-step-card" key={idx}>
-                  <div className="flex items-start gap-3">
-                    <span className="inline-flex w-6 h-6 rounded-full bg-red-100 text-red-600 text-xs font-bold items-center justify-center shrink-0 mt-0.5">
-                      {step.stepNumber || idx + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold mb-1"><Eq value={step.issue} /></p>
-                      {step.hint ? <p className="text-xs text-ink/60">Petunjuk: <Eq value={step.hint} /></p> : null}
-                    </div>
-                  </div>
-                </div>
-              ))}
+        {currentStep === "redline" ? (
+          <React.Fragment>
+            <div className="kicker mb-2">Bagian salah ditandai merah</div>
+            <RedlinePreview attempt={attempt} targets={redlineTargets} />
+            <div className="canvas-result-actions">
+              <button className="mafiking-soft-button" onClick={onClose} type="button">Tutup</button>
+              <button className="mafiking-primary-button" disabled={!hasExplanation} onClick={() => setStep("explanation")} type="button">
+                Next
+              </button>
             </div>
-          </div>
-        ) : null}
+          </React.Fragment>
+        ) : (
+          <React.Fragment>
+            {detectedAnswer ? (
+              <div className="bg-ink/[0.04] rounded-xl px-4 py-3 mb-4 text-sm">
+                <span className="font-semibold text-ink/60">Terbaca:</span> <Eq value={detectedAnswer} />
+              </div>
+            ) : null}
+
+            <p className="text-sm leading-relaxed mb-4"><Eq value={feedback} /></p>
+
+            {wrongSteps.length ? (
+              <div>
+                <div className="kicker mb-2">Pembahasan bagian yang salah</div>
+                <div className="result-step-list">
+                  {wrongSteps.map((item, idx) => (
+                    <div className="result-step-card" key={idx}>
+                      <div className="flex items-start gap-3">
+                        <span className="inline-flex w-6 h-6 rounded-full bg-red-100 text-red-600 text-xs font-bold items-center justify-center shrink-0 mt-0.5">
+                          {item.stepNumber || idx + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          {item.studentStepLatex || item.studentStep ? (
+                            <p className="text-sm mb-1"><span className="font-semibold text-ink/60">Tulisan:</span> <Eq value={item.studentStepLatex || item.studentStep} /></p>
+                          ) : null}
+                          <p className="text-sm font-semibold mb-1"><Eq value={item.issueLatex || item.issue} /></p>
+                          {item.correctStepLatex ? <p className="text-sm mb-1"><span className="font-semibold text-ink/60">Seharusnya:</span> <Eq value={item.correctStepLatex} /></p> : null}
+                          {item.hintLatex || item.hint ? <p className="text-xs text-ink/60">Petunjuk: <Eq value={item.hintLatex || item.hint} /></p> : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="canvas-result-actions">
+              {showRedlineFirst ? <button className="mafiking-soft-button" onClick={() => setStep("redline")} type="button">Kembali</button> : <span />}
+              <button className="mafiking-primary-button" onClick={onClose} type="button">Selesai</button>
+            </div>
+          </React.Fragment>
+        )}
       </article>
     </div>
   );
 };
 
+// ─── Canvas intro modal ────────────────────────────────────────────────────
+const CanvasIntroModal = ({ onDismiss, onOpenCanvas }) => {
+  const demoVideoRef = useRef(null);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+
+  useEffect(() => {
+    const video = demoVideoRef.current;
+    if (!video) return;
+    video.muted = !soundEnabled;
+  }, [soundEnabled]);
+
+  async function toggleDemoSound() {
+    const video = demoVideoRef.current;
+    if (!video) return;
+    const nextEnabled = !soundEnabled;
+    video.muted = !nextEnabled;
+    try {
+      await video.play();
+      setSoundEnabled(nextEnabled);
+    } catch (_) {
+      video.muted = true;
+      setSoundEnabled(false);
+    }
+  }
+
+  return (
+    <div className="canvas-intro-backdrop" role="presentation">
+      <section
+        aria-labelledby="canvas-intro-title"
+        aria-modal="true"
+        className="canvas-intro-dialog"
+        role="dialog"
+      >
+        <button className="canvas-intro-close" onClick={onDismiss} aria-label="Tutup popup canvas" type="button">
+          <Icon.X className="w-4 h-4" />
+        </button>
+
+        <div className="canvas-demo-video" aria-label="Video demo mode canvas">
+          <video
+            autoPlay
+            className="canvas-demo-media"
+            muted
+            loop
+            playsInline
+            preload="auto"
+            ref={demoVideoRef}
+            src={CANVAS_DEMO_VIDEO_SRC}
+          />
+          <button
+            className="canvas-demo-sound-button"
+            onClick={toggleDemoSound}
+            type="button"
+            aria-label={soundEnabled ? "Matikan suara demo" : "Nyalakan suara demo"}
+          >
+            {soundEnabled ? (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+            )}
+            <span>{soundEnabled ? "Sound on" : "Sound off"}</span>
+          </button>
+        </div>
+
+        <div>
+          <p className="canvas-intro-eyebrow">Mode Canvas tersedia</p>
+          <h2 id="canvas-intro-title">Tulis di web langsung, biar AI koreksi coretanmu.</h2>
+        </div>
+
+        <div className="canvas-intro-actions">
+          <button className="canvas-intro-primary" onClick={onOpenCanvas} type="button">Coba Canvas Tab Sekarang</button>
+        </div>
+      </section>
+    </div>
+  );
+};
+
 window.Practice = Practice;
+window.renderMafikingMathHTML = renderMafikingMathHTML;
+

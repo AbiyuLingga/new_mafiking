@@ -35,8 +35,9 @@ const Icon = {
     </svg>
   ),
   Flame: ({ className = "w-4 h-4" }) => (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 2c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9z"/>
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8.5 14.5A4.5 4.5 0 0 0 12 22a7 7 0 0 0 7-7c0-4-3-7-5-10-.5 2.5-2 4-4 5.5-1.5 1.1-2 2.4-1.5 4z"/>
+      <path d="M11 17.5c0 1.4 1 2.5 2.3 2.5 1.5 0 2.7-1.2 2.7-2.7 0-1.6-1-2.7-2-4.1-.2 1.2-.9 2-1.9 2.8-.7.5-1.1 1-1.1 1.5z" fill="currentColor" stroke="none" opacity=".18"/>
     </svg>
   ),
   Star: ({ className = "w-4 h-4", filled = true }) => (
@@ -163,8 +164,17 @@ const Logo = ({ size = 32, inverted = false }) => (
   </div>
 );
 
+const StreakFlame = ({ className = "" }) => (
+  <img
+    src="/assets/flame.png"
+    alt=""
+    aria-hidden="true"
+    className={`streak-flame-img${className ? ` ${className}` : ""}`}
+  />
+);
+
 // ─── Top Nav ──────────────────────────────────────────────────────────────
-const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false }) => {
+const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn = false, onLogoClick }) => {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
@@ -182,6 +192,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false }) => {
 
   const isInk = navStyle === "ink";
   const isWhite = navStyle === "white";
+  const showPublicCtas = !gamified && !isLoggedIn;
 
   const headerCls = isInk
     ? "bg-ink text-white border-b border-white/10"
@@ -194,7 +205,14 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false }) => {
   return (
     <header className={`sticky top-0 z-40 transition-all ${headerCls}`}>
       <div className="max-w-6xl mx-auto px-6 md:px-8 flex items-center justify-between h-[72px]">
-        <button onClick={() => setRoute("lobby")} className="flex items-center">
+        <button onClick={() => {
+          if (typeof onLogoClick === 'function') {
+            onLogoClick();
+            return;
+          }
+          if (typeof window.__mafikingShowLanding === 'function') window.__mafikingShowLanding();
+          else setRoute("lobby");
+        }} className="flex items-center">
           <Logo size={32} inverted={isInk} />
         </button>
         <nav className="hidden md:flex items-center gap-1">
@@ -219,7 +237,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false }) => {
           {gamified && (
             <div className="flex items-center gap-2 mr-1">
               <button onClick={() => setRoute("misi")} className="chip-streak" title="Runtunan 12 hari">
-                <Icon.Flame className="w-4 h-4 text-amber-500" />
+                <StreakFlame />
                 <span className="tnum">12</span>
               </button>
               <div className="chip-level hidden lg:inline-flex" title="Level 4 · 60% menuju L5">
@@ -229,8 +247,8 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false }) => {
               </div>
             </div>
           )}
-          {!gamified && <button onClick={() => setRoute("profile")} className={`hidden md:inline-flex text-sm font-semibold px-4 py-2 ${isInk ? "text-white/70 hover:text-white" : "text-ink/70 hover:text-ink"}`}>Masuk</button>}
-          {!gamified && (
+          {showPublicCtas && <button onClick={() => setRoute("profile")} className={`hidden md:inline-flex text-sm font-semibold px-4 py-2 ${isInk ? "text-white/70 hover:text-white" : "text-ink/70 hover:text-ink"}`}>Masuk</button>}
+          {showPublicCtas && (
             <button onClick={() => setRoute("belajar")} className={isInk ? "btn-yel !py-2.5 !px-5 text-sm" : "btn-ink !py-2.5 !px-5 text-sm"}>
               Coba Gratis
             </button>

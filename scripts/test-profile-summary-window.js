@@ -1,0 +1,132 @@
+const assert = require('node:assert/strict');
+
+const correctionRouter = require('../routes/correction');
+
+const {
+  PROFILE_AI_ATTEMPT_LIMIT,
+  PROFILE_AI_REFRESH_COOLDOWN_MS,
+  PROFILE_RECOMMENDATION_ATTEMPT_LIMIT,
+  buildProfileAiEvidence,
+  canBypassProfileAiCooldown,
+  compactAttemptsForProfile,
+  chooseProfileAttemptSource,
+  getProfileAiRefreshState,
+  summarizeMultipleChoiceEvidence,
+} = correctionRouter._profileSummaryInternals;
+
+assert.equal(PROFILE_AI_ATTEMPT_LIMIT, 20);
+assert.equal(PROFILE_RECOMMENDATION_ATTEMPT_LIMIT, 200);
+assert.equal(PROFILE_AI_REFRESH_COOLDOWN_MS, 60 * 60 * 1000);
+assert.ok(PROFILE_RECOMMENDATION_ATTEMPT_LIMIT > PROFILE_AI_ATTEMPT_LIMIT);
+
+const attempts = Array.from({ length: 25 }, (_, index) => ({
+  completedAt: `2026-05-${String(20 - index).padStart(2, '0')}T00:00:00.000Z`,
+  questionText: `Soal ${index + 1}`,
+  score: 50,
+  isCorrect: false,
+  weaknessTags: ['chain rule'],
+}));
+
+const aiAttempts = compactAttemptsForProfile(attempts, PROFILE_AI_ATTEMPT_LIMIT);
+const recommendationAttempts = compactAttemptsForProfile(attempts, PROFILE_RECOMMENDATION_ATTEMPT_LIMIT);
+
+assert.equal(aiAttempts.length, 20);
+assert.equal(aiAttempts[0].nomor, 1);
+assert.equal(aiAttempts[19].questionText, 'Soal 20');
+assert.equal(recommendationAttempts.length, 25);
+
+const requestAttempts = attempts.slice(0, 50);
+const dbAttempts = attempts.concat(Array.from({ length: 175 }, (_, index) => ({
+  completedAt: `2026-01-${String((index % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
+  questionText: `DB Soal ${index + 1}`,
+  score: 70,
+  isCorrect: false,
+  weaknessTags: ['u substitution'],
+})));
+
+assert.equal(chooseProfileAttemptSource(dbAttempts, requestAttempts), dbAttempts);
+assert.equal(chooseProfileAttemptSource([], requestAttempts), requestAttempts);
+
+const now = new Date('2026-05-20T14:00:00.000Z');
+const ordinaryUser = { id: 7, username: 'mahasiswa', role: 'user' };
+const adminUser = { id: 8, username: '123', role: 'admin' };
+const refreshDb = {
+  prepare(sql) {
+    assert.match(sql, /profile_ai_refreshes/);
+    return {
+      get(userId) {
+        assert.equal(userId, ordinaryUser.id);
+        return { last_ai_refresh_at: '2026-05-20T13:30:00.000Z' };
+      }
+    };
+  }
+};
+
+assert.equal(canBypassProfileAiCooldown(ordinaryUser), false);
+assert.equal(canBypassProfileAiCooldown(adminUser), true);
+const blockedRefresh = getProfileAiRefreshState(refreshDb, ordinaryUser, now);
+assert.equal(blockedRefresh.allowed, false);
+assert.equal(blockedRefresh.remainingMs, 30 * 60 * 1000);
+assert.equal(blockedRefresh.availableAt, '2026-05-20T14:30:00.000Z');
+const adminRefresh = getProfileAiRefreshState(refreshDb, adminUser, now);
+assert.equal(adminRefresh.allowed, true);
+assert.equal(adminRefresh.bypass, true);
+
+const mcEvidence = summarizeMultipleChoiceEvidence([
+  {
+    answer_display: '4',
+    chapter_title: 'Turunan',
+    correct: 0,
+    correct_answer: '4',
+    correct_choice_index: 1,
+    created_at: '2026-05-20T13:59:00.000Z',
+    difficulty: 'Medium',
+    problem_id: 11,
+    question_display: '2 + 2 = ?',
+    selected_answer: '5',
+    selected_choice_index: 2,
+    subtopic_title: 'Aljabar Dasar'
+  },
+  {
+    chapter_title: 'Turunan',
+    correct: 1,
+    created_at: '2026-05-20T13:58:00.000Z',
+    difficulty: 'Medium',
+    problem_id: 12,
+    question_display: '1 + 1 = ?',
+    subtopic_title: 'Aljabar Dasar'
+  },
+  {
+    answer_display: '0',
+    chapter_title: 'Integral',
+    correct: 0,
+    correct_answer: '0',
+    correct_choice_index: 0,
+    created_at: '2026-05-20T13:57:00.000Z',
+    difficulty: 'Easy',
+    problem_id: 13,
+    question_display: 'sin 0 = ?',
+    selected_answer: '1',
+    selected_choice_index: 3,
+    subtopic_title: 'Trigonometri'
+  }
+]);
+
+assert.equal(mcEvidence.patterns.length, 2);
+assert.deepEqual(mcEvidence.patterns[0], {
+  chapter: 'Turunan',
+  difficulty: 'Medium',
+  subtopic: 'Aljabar Dasar',
+  totalAttempts: 2,
+  wrongAttempts: 1
+});
+assert.equal(mcEvidence.recentWrong.length, 2);
+assert.equal(mcEvidence.recentWrong[0].selectedAnswer, '5');
+assert.equal(mcEvidence.recentWrong[0].correctAnswer, '4');
+
+const aiEvidence = buildProfileAiEvidence({ aiAttempts, multipleChoiceEvidence: mcEvidence });
+assert.equal(aiEvidence.correctionAttempts.length, 20);
+assert.equal(aiEvidence.multipleChoiceEvidence.recentWrong.length, 2);
+assert.match(aiEvidence.instructions.multipleChoiceEvidence, /pilihan ganda/);
+
+console.log('profile summary window tests passed');

@@ -1,0 +1,483 @@
+{
+  "version": "2026-05-20.purcell-v1",
+  "questionSource": {
+    "kind": "markdown",
+    "path": "docs/purcell-inspired-question-bank.md",
+    "sourceAlignment": "Purcell/Varberg/Rigdon Calculus chapter and section topics",
+    "copyrightNote": "Original Mafiking questions inspired by Purcell topic coverage, not copied Purcell exercises."
+  },
+  "scoring": {
+    "recencyHalfLifeDays": 7,
+    "weights": {
+      "wrongFrequency": 0.3,
+      "recencyError": 0.25,
+      "lowScore": 0.2,
+      "prerequisiteGap": 0.15,
+      "attemptPressure": 0.1
+    },
+    "confidenceAttempts": 3
+  },
+  "difficultyPolicy": {
+    "superHardMinimumAverageScore": 80,
+    "superHardMaximumNeedScore": 75,
+    "superHardMinimumAttempts": 3,
+    "highNeedThreshold": 75,
+    "mediumNeedThreshold": 50
+  },
+  "defaultRecommendations": [
+    "Kerjakan 3 soal dasar limit atau turunan dan tulis alasan tiap langkah.",
+    "Ulangi satu soal yang salah, lalu bandingkan langkahmu dengan pembahasan.",
+    "Pilih satu soal sedang dari bab terakhir yang dipelajari dan jelaskan metode yang dipakai."
+  ],
+  "skills": [
+    {
+      "id": "algebra_precalculus",
+      "label": "Aljabar Pra-Kalkulus",
+      "chapter": "Preliminaries",
+      "prerequisites": [],
+      "aliases": [
+        "inequality manipulation",
+        "absolute value cases",
+        "interval notation",
+        "domain restrictions",
+        "square root domain",
+        "rational function domain",
+        "function composition",
+        "algebra expansion",
+        "substitution notation",
+        "absolute value equation",
+        "case analysis",
+        "extraneous checking"
+      ]
+    },
+    {
+      "id": "limit_algebra",
+      "label": "Limit Aljabar",
+      "chapter": "Limits",
+      "prerequisites": ["algebra_precalculus"],
+      "aliases": [
+        "factoring limits",
+        "removable discontinuity",
+        "zero over zero",
+        "dominant term",
+        "rational limit at infinity",
+        "degree comparison",
+        "one-sided limit",
+        "infinite limit",
+        "sign near asymptote"
+      ]
+    },
+    {
+      "id": "trigonometric_limits",
+      "label": "Limit Trigonometri",
+      "chapter": "Limits",
+      "prerequisites": ["limit_algebra"],
+      "aliases": [
+        "standard trig limit",
+        "angle scaling",
+        "sine limit",
+        "squeeze theorem",
+        "bounded oscillation",
+        "limit to zero"
+      ]
+    },
+    {
+      "id": "continuity_piecewise",
+      "label": "Kontinuitas Fungsi Sepotong",
+      "chapter": "Limits",
+      "prerequisites": ["limit_algebra"],
+      "aliases": [
+        "piecewise continuity",
+        "left limit",
+        "right limit",
+        "parameter solving"
+      ]
+    },
+    {
+      "id": "derivative_rules",
+      "label": "Menghitung Turunan Dasar",
+      "chapter": "The Derivative",
+      "prerequisites": ["algebra_precalculus"],
+      "aliases": [
+        "power rule",
+        "constant multiple",
+        "sum rule",
+        "quotient rule",
+        "algebra simplification",
+        "domain restriction"
+      ]
+    },
+    {
+      "id": "chain_rule",
+      "label": "Menerapkan Aturan Rantai",
+      "chapter": "The Derivative",
+      "prerequisites": ["derivative_rules"],
+      "aliases": [
+        "chain rule",
+        "aturan rantai",
+        "outer-inner function",
+        "composite derivative",
+        "chain relation",
+        "chain rule in FTC",
+        "inverse trig derivative",
+        "arctangent"
+      ]
+    },
+    {
+      "id": "implicit_differentiation",
+      "label": "Menurunkan Fungsi Implisit",
+      "chapter": "The Derivative",
+      "prerequisites": ["derivative_rules", "chain_rule"],
+      "aliases": [
+        "implicit differentiation",
+        "dy/dx isolation",
+        "isolasi variabel",
+        "product rule with y",
+        "logarithmic differentiation",
+        "product powers",
+        "domain awareness"
+      ]
+    },
+    {
+      "id": "related_rates",
+      "label": "Memodelkan Laju Terkait",
+      "chapter": "The Derivative",
+      "prerequisites": ["chain_rule", "geometry_modeling"],
+      "aliases": [
+        "related rates",
+        "cone volume",
+        "similar triangles"
+      ]
+    },
+    {
+      "id": "geometry_modeling",
+      "label": "Pemodelan Geometri dan Satuan",
+      "chapter": "Applications of the Derivative",
+      "prerequisites": ["algebra_precalculus"],
+      "aliases": [
+        "geometric modeling",
+        "units",
+        "constraint substitution",
+        "volume modeling",
+        "bounds"
+      ]
+    },
+    {
+      "id": "derivative_applications",
+      "label": "Menganalisis Grafik dengan Turunan",
+      "chapter": "Applications of the Derivative",
+      "prerequisites": ["derivative_rules"],
+      "aliases": [
+        "first derivative sign",
+        "second derivative",
+        "critical points",
+        "optimization modeling",
+        "area maximization",
+        "endpoint awareness",
+        "concavity intervals",
+        "inflection points",
+        "Newton method",
+        "root approximation",
+        "iteration formula"
+      ]
+    },
+    {
+      "id": "antiderivative_basics",
+      "label": "Menentukan Anti-Turunan dan Konstanta Integrasi",
+      "chapter": "The Definite Integral",
+      "prerequisites": ["derivative_rules"],
+      "aliases": [
+        "antiderivative",
+        "initial condition",
+        "constant of integration",
+        "konsep konstanta integrasi",
+        "konstanta integrasi"
+      ]
+    },
+    {
+      "id": "definite_integral",
+      "label": "Menghitung Integral Tentu",
+      "chapter": "The Definite Integral",
+      "prerequisites": ["antiderivative_basics"],
+      "aliases": [
+        "definite integral",
+        "net area",
+        "antiderivative evaluation",
+        "fundamental theorem",
+        "variable upper limit",
+        "average value",
+        "interval length",
+        "Simpson rule",
+        "numerical integration",
+        "step size",
+        "weighted sum"
+      ]
+    },
+    {
+      "id": "u_substitution",
+      "label": "Melakukan Substitusi u",
+      "chapter": "The Definite Integral",
+      "prerequisites": ["chain_rule", "antiderivative_basics"],
+      "aliases": [
+        "u substitution",
+        "substitusi u",
+        "changing bounds",
+        "definite integral substitution",
+        "algebra before integration",
+        "radical integral",
+        "log substitution"
+      ]
+    },
+    {
+      "id": "applications_of_integral",
+      "label": "Aplikasi Integral",
+      "chapter": "Applications of the Integral",
+      "prerequisites": ["definite_integral"],
+      "aliases": [
+        "area between curves",
+        "intersection points",
+        "top minus bottom",
+        "washer method",
+        "radius identification",
+        "volume of revolution",
+        "work integral",
+        "Hooke law",
+        "unit setup",
+        "applied integration",
+        "arc length",
+        "derivative inside integral",
+        "radical simplification",
+        "fluid force",
+        "pressure depth"
+      ]
+    },
+    {
+      "id": "transcendental_models",
+      "label": "Fungsi Transendental dan Model",
+      "chapter": "Transcendental Functions",
+      "prerequisites": ["chain_rule"],
+      "aliases": [
+        "exponential model",
+        "half life",
+        "log solving",
+        "parameter fitting",
+        "linear differential equation",
+        "integrating factor",
+        "initial value",
+        "logistic model",
+        "differential equation",
+        "carrying capacity",
+        "initial condition"
+      ]
+    },
+    {
+      "id": "integration_by_parts",
+      "label": "Integrasi Parsial",
+      "chapter": "Techniques of Integration",
+      "prerequisites": ["antiderivative_basics"],
+      "aliases": [
+        "integration by parts",
+        "LIATE choice",
+        "product integration"
+      ]
+    },
+    {
+      "id": "trig_integrals",
+      "label": "Integral Trigonometri",
+      "chapter": "Techniques of Integration",
+      "prerequisites": ["u_substitution"],
+      "aliases": [
+        "trig integral",
+        "odd power strategy",
+        "Pythagorean identity"
+      ]
+    },
+    {
+      "id": "partial_fractions",
+      "label": "Pecahan Parsial",
+      "chapter": "Techniques of Integration",
+      "prerequisites": ["algebra_precalculus", "u_substitution"],
+      "aliases": [
+        "partial fractions",
+        "linear factors",
+        "log absolute value"
+      ]
+    },
+    {
+      "id": "integration_strategy",
+      "label": "Strategi Integrasi",
+      "chapter": "Techniques of Integration",
+      "prerequisites": ["u_substitution", "integration_by_parts", "trig_integrals"],
+      "aliases": [
+        "integration strategy",
+        "substitution after algebra",
+        "recognizing structure",
+        "inverse trig integral",
+        "radical denominator",
+        "recognizing arcsine form"
+      ]
+    },
+    {
+      "id": "lhopital_improper",
+      "label": "L'Hopital dan Integral Tak Wajar",
+      "chapter": "Indeterminate Forms and Improper Integrals",
+      "prerequisites": ["limit_algebra", "definite_integral"],
+      "aliases": [
+        "L'Hopital rule",
+        "indeterminate form check",
+        "exponential limit",
+        "improper integral",
+        "convergence",
+        "limit of antiderivative",
+        "singular endpoint",
+        "p-integral",
+        "growth comparison",
+        "log versus power",
+        "infinite interval"
+      ]
+    },
+    {
+      "id": "series_sequences",
+      "label": "Barisan dan Deret",
+      "chapter": "Infinite Series",
+      "prerequisites": ["limit_algebra"],
+      "aliases": [
+        "sequence limit",
+        "rational sequence",
+        "series convergence",
+        "ratio test",
+        "factorial growth",
+        "alternating series",
+        "absolute convergence",
+        "conditional convergence",
+        "harmonic series",
+        "Maclaurin series",
+        "series substitution",
+        "approximation order",
+        "power series",
+        "radius of convergence",
+        "endpoint testing",
+        "alternating error bound",
+        "log approximation"
+      ]
+    },
+    {
+      "id": "parametric_polar_conics",
+      "label": "Parametrik, Polar, dan Konik",
+      "chapter": "Conics and Polar Coordinates",
+      "prerequisites": ["derivative_rules", "definite_integral"],
+      "aliases": [
+        "parametric derivative",
+        "dy/dx",
+        "polar area",
+        "theta bounds",
+        "squaring radius",
+        "ellipse standard form",
+        "center identification",
+        "semi-axis length",
+        "polar derivative",
+        "parametric slope",
+        "tangent line"
+      ]
+    },
+    {
+      "id": "vectors_space",
+      "label": "Vektor dan Geometri Ruang",
+      "chapter": "Geometry in Space and Vectors",
+      "prerequisites": ["algebra_precalculus"],
+      "aliases": [
+        "dot product",
+        "projection",
+        "vector magnitude",
+        "vector motion",
+        "velocity",
+        "acceleration",
+        "speed",
+        "interpretation",
+        "cross product",
+        "determinant setup",
+        "orthogonal vector",
+        "3D line equation",
+        "direction vector",
+        "parametric form"
+      ]
+    },
+    {
+      "id": "multivariable_derivatives",
+      "label": "Turunan Multivariabel",
+      "chapter": "Derivatives for Functions of Two or More Variables",
+      "prerequisites": ["derivative_rules", "vectors_space"],
+      "aliases": [
+        "partial derivative",
+        "holding variables constant",
+        "multivariable notation",
+        "gradient",
+        "directional derivative",
+        "unit vector",
+        "tangent plane",
+        "linearization"
+      ]
+    },
+    {
+      "id": "lagrange_constraints",
+      "label": "Optimasi Berkendala",
+      "chapter": "Derivatives for Functions of Two or More Variables",
+      "prerequisites": ["multivariable_derivatives", "derivative_applications"],
+      "aliases": [
+        "Lagrange multipliers",
+        "constraint optimization",
+        "multivariable modeling",
+        "constrained extrema",
+        "circle constraint",
+        "Lagrange intuition"
+      ]
+    },
+    {
+      "id": "multiple_integrals",
+      "label": "Integral Lipat",
+      "chapter": "Multiple Integrals",
+      "prerequisites": ["definite_integral", "multivariable_derivatives"],
+      "aliases": [
+        "double integral",
+        "iterated integral",
+        "rectangle region",
+        "polar double integral",
+        "Jacobian r",
+        "disk region",
+        "triple integral",
+        "cylindrical coordinates",
+        "change of variables",
+        "Jacobian",
+        "parallelogram region",
+        "surface area",
+        "surface over rectangle"
+      ]
+    },
+    {
+      "id": "vector_calculus",
+      "label": "Kalkulus Vektor",
+      "chapter": "Vector Calculus",
+      "prerequisites": ["multiple_integrals", "vectors_space"],
+      "aliases": [
+        "line integral",
+        "parametrization",
+        "vector field work",
+        "Green theorem",
+        "circulation",
+        "region orientation",
+        "partial derivatives",
+        "divergence theorem",
+        "flux",
+        "solid sphere",
+        "symmetry",
+        "conservative field",
+        "potential function",
+        "path independence",
+        "Stokes theorem",
+        "curl",
+        "disk surface",
+        "orientation"
+      ]
+    }
+  ]
+}

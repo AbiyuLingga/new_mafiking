@@ -330,18 +330,38 @@ Digunakan untuk membaca tulisan tangan saja tanpa evaluasi. Mengembalikan teks t
 
 ### POST /api/correction/profile-summary
 
-Membuat raport belajar dari riwayat koreksi user. Mengambil max 20 attempt terakhir dari DB, meringkasnya, lalu meminta AI membuat ringkasan dalam format:
+Membuat raport belajar dari riwayat koreksi user. Backend memakai dua window: maksimal 200 attempt terbaru untuk engine rekomendasi lokal, dan maksimal 20 attempt terbaru untuk prompt AI narasi. Response ringkasan berbentuk:
 
 ```json
 {
   "strengths": ["..."],
   "weaknesses": ["..."],
   "recommendedQuestions": ["...", "...", "..."],
+  "recommendedItems": [
+    {
+      "ref": "MF-PUR-0202",
+      "questionDisplay": "...",
+      "answerDisplay": "...",
+      "difficulty": "Medium",
+      "purcellReference": "Chapter 2, Section ...",
+      "skillIds": ["chain_rule"],
+      "reason": "..."
+    }
+  ],
+  "skillNeedScores": [
+    {
+      "skillId": "chain_rule",
+      "label": "Chain Rule",
+      "needScore": 72.5
+    }
+  ],
   "overallSummary": "..."
 }
 ```
 
-Jika tidak ada API key aktif → fallback ke `fallbackProfileFromAttempts()` yang menghitung tag paling sering muncul dari data lokal tanpa memanggil AI.
+Pemilihan item rekomendasi tidak diserahkan bebas ke AI. Backend menggabungkan ringkasan AI dengan output deterministik dari `lib/recommendation-engine.js`, berdasarkan `data/recommendation-catalog.json` dan `docs/purcell-inspired-question-bank.md`. `recommendedQuestions` tetap ada untuk kompatibilitas lama, sedangkan UI profil memakai `recommendedItems` saat tersedia.
+
+Jika tidak ada API key aktif → fallback memakai engine lokal yang menghitung kebutuhan skill dan memilih soal katalog tanpa memanggil AI.
 
 ### GET /api/correction/attempts
 

@@ -18,6 +18,7 @@ The active browser entry point is `MAFIKING.html`, served by `server.js`. The fr
 - Imported question data at time of writing: 2 chapters, 4 subtopics, 23 problems, 86 problem steps.
 - Available real practice bank: Integral only. The static Belajar UI has more chapter cards, but only `Teknik Integrasi` currently maps to real backend problems.
 - Canvas correction: calls Gemini when `GEMINI_KEY_1` or later keys are configured; profile summary has a fallback when keys are missing.
+- Recommendation engine: profile recommendations are deterministic from correction attempts plus `data/recommendation-catalog.json` (`2026-05-20.purcell-v1`) and `docs/purcell-inspired-question-bank.md`; Gemini may write the report text, but the selected follow-up questions come from the local engine.
 
 ## Quick Start
 
@@ -47,6 +48,13 @@ Create `.env` from `.env.example`.
 | `SESSION_SECRET` | Yes for real use | Express session signing secret. |
 | `GEMINI_KEY_1` ... `GEMINI_KEY_20` | Required for AI correction | Gemini API keys used with fallback rotation. |
 | `GEMINI_MODELS` | No | Comma-separated model preference before built-in fallbacks. |
+| `AI_PROFILE_PROVIDER` | No | `gemini` by default. Set `9router` to use 9Router only for profile narrative text. |
+| `NINEROUTER_BASE_URL` | Required if `AI_PROFILE_PROVIDER=9router` | 9Router OpenAI-compatible base URL, usually `http://127.0.0.1:20128/v1`. |
+| `NINEROUTER_API_KEY` | Required if `AI_PROFILE_PROVIDER=9router` | API key copied from the 9Router dashboard. Server-side only. |
+| `NINEROUTER_MODEL` | No | 9Router fallback model for profile narrative when `NINEROUTER_MODELS` is not set. |
+| `NINEROUTER_MODELS` | No | Comma-separated allowlist for round-robin. Use only models that pass smoke tests. Overrides `NINEROUTER_MODEL`. |
+| `NINEROUTER_MAX_TOKENS` | No | Max output tokens for profile narrative. Defaults to `1200`. |
+| `NINEROUTER_TIMEOUT_MS` | No | Timeout for profile narrative. Defaults to `60000`. |
 | `DEEPSEEK_API_KEY` | Required for admin AI import | DeepSeek API key used only by the server-side admin import route. |
 | `DEEPSEEK_BASE_URL` | No | DeepSeek API base URL. Defaults to `https://api.deepseek.com`. |
 | `DEEPSEEK_MODEL` | No | DeepSeek chat model. Defaults to `deepseek-v4-pro`. |
@@ -57,7 +65,17 @@ Create `.env` from `.env.example`.
 | `DUITKU_CALLBACK_URL` | Required for deployed payments | Payment callback URL. |
 | `DUITKU_RETURN_URL` | Required for deployed payments | Browser return URL after payment. |
 
-Without Gemini keys, practice pages still open, but canvas evaluation endpoints return an API-key error. The profile summary endpoint can still return a local fallback summary.
+Without Gemini keys, practice pages still open, but canvas evaluation endpoints return an API-key error. The profile summary endpoint can still return a local fallback summary. If `AI_PROFILE_PROVIDER=9router`, only profile narrative text uses 9Router; catalog recommendation items still come from the local deterministic engine.
+
+For 9Router model rotation, prefer a tested allowlist:
+
+```env
+AI_PROFILE_PROVIDER=9router
+NINEROUTER_MODEL=kr/claude-haiku-4.5
+NINEROUTER_MODELS=kr/auto,kr/claude-haiku-4.5,kr/deepseek-3.2,kr/qwen3-coder-next,kr/glm-5,kr/minimax-m2.5,kr/minimax-m2.1,ag/gemini-3-flash
+```
+
+`auto` is supported and fetches `GET /v1/models`, but it can hit providers with invalid tokens or unsuitable models. Use `NINEROUTER_MODELS` for production so profile summaries only rotate through verified working models.
 
 ## Commands
 
@@ -67,11 +85,21 @@ Without Gemini keys, practice pages still open, but canvas evaluation endpoints 
 | `PORT=3001 npm start` | Start on port 3001, useful when port 3000 is occupied. |
 | `npm run dev` | Start Express with `node --watch`. |
 | `npm run build` | Run Vite build against `index.html`. This is a build check, not the active runtime path. |
-| `npm run check` | Run build plus Node syntax checks for server, correction route, and import/export scripts. |
+| `npm run check` | Run Node syntax checks plus focused admin-import and recommendation-engine tests. |
 | `npm run test:admin-import` | Run focused tests for admin file-import validation helpers. |
+| `npm run test:recommendations` | Run focused tests for skill mapping, need-score formula, Purcell-inspired parsing, and recommendation difficulty gating. |
+| `npm run test:profile-summary` | Run focused tests for profile-summary attempt window splitting. |
+| `npm run test:ai-profile` | Run focused tests for the 9Router/OpenAI-compatible profile provider adapter. |
 | `npm run export:questions` | Export question tables from the old Mafiking SQLite database into `db/question-bank.json`. |
 | `npm run import:questions` | Import `db/question-bank.json` into `db/database.sqlite`. |
 | `npm run import:questions -- --force` | Replace question tables even if existing progress/correction rows reference old problems. |
+
+## Production Deployment
+
+Nevacloud production should run only this checkout from `/root/new_mafiking`.
+The canonical PM2 process and Nginx site name is `new_mafiking`; legacy
+process/site names such as `mafiking` and `new-mafiking` should be removed when
+deploying so `mafiking.com` cannot accidentally point at an older app process.
 
 ## Admin Account
 
@@ -156,6 +184,14 @@ The import script refuses to replace question tables when user progress or corre
 |   |-- schema.sql             # SQLite schema
 |   |-- question-bank.json     # Exported question bank
 |   `-- database.sqlite        # Local runtime DB (NOT db/mafiking.db)
+|-- data/
+|   `-- recommendation-catalog.json # Versioned skill aliases, prerequisites, scoring weights, difficulty policy
+|-- docs/
+|   `-- purcell-inspired-question-bank.md # Original Purcell-aligned reference questions for recommendations
+|-- lib/
+|   |-- admin-import.js        # Admin import normalization and DeepSeek helper logic
+|   `-- recommendation-engine.js # Deterministic weakness scoring and follow-up question picker
+|-- SOP-9ROUTER-PROFILE-SUMMARY.md # Required profile narrative prompt for 9Router/Gemini
 |-- routes/
 |   |-- auth.js                # Register, login, logout, current user
 |   |-- quiz.js                # Chapters, subtopics, problems, full quiz payload
@@ -169,6 +205,7 @@ The import script refuses to replace question tables when user progress or corre
 |   `-- admin.js
 |-- scripts/
 |   |-- test-admin-import.js   # Focused tests for admin import helpers
+|   |-- test-recommendation-engine.js
 |   |-- export-question-bank.js
 |   `-- import-question-bank.js
 |-- src/
@@ -237,7 +274,11 @@ The import script refuses to replace question tables when user progress or corre
 
 1. `src/profile.jsx` loads `/api/auth/me`, `/api/progress/stats`, and `/api/correction/attempts`.
 2. It posts attempts to `/api/correction/profile-summary`.
-3. Backend returns a Gemini-generated summary or local fallback summary.
+3. Backend computes deterministic skill need scores from up to 200 recent canvas correction attempts using wrong frequency, recency, low score, attempt pressure, and prerequisite gap.
+4. Backend adds recent multiple-choice evidence from `practice_attempts` so the narrative can mention repeated wrong subtopics, difficulty, selected answer, and correct answer.
+5. If the AI narrative cooldown allows it, backend sends only the 20 newest correction attempts plus summarized multiple-choice evidence to the configured profile provider.
+6. Normal users can refresh the AI narrative at most once per hour; admin user `123` with password `135` bypasses this cooldown.
+7. Backend returns `recommendedItems` from the Purcell-aligned local bank, `skillNeedScores` for debugging/explainability, and `recommendedQuestions` as a backward-compatible string list.
 
 ### Payment
 
@@ -324,6 +365,7 @@ Browser checks:
 - Submit correct answer → "+10 XP" toast appears.
 - Click an unsupported chapter → empty state with "Pilih bab lain" button.
 - Open profile from nav.
+- In profile, confirm "Rekomendasi Soal Latihan" can show catalog refs, difficulty, Purcell reference, target skill, and recommendation reason when correction attempts contain mapped weakness tags.
 - Open `payment` route → package selection renders.
 
 ## Known Gotchas

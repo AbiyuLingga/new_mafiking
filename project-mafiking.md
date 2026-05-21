@@ -15,7 +15,7 @@ metadata:
 
 ---
 
-## Current feature state (as of 2026-05-15)
+## Current feature state (as of 2026-05-20)
 
 ### Pages / routes
 | Route | Component | Status |
@@ -24,7 +24,7 @@ metadata:
 | `belajar` | `Belajar` | Done + admin mode |
 | `misi` | `Misi` | Done |
 | `tryout` | `Tryout` | Done |
-| `profile` | `Profile` | Done |
+| `profile` | `Profile` | Done + deterministic catalog recommendations |
 | `payment` | `Payment` + `PaymentStatus` | Done |
 | `practice` | `Practice` → `ChoiceView` / `CanvasView` | Done + slide admin add flow |
 
@@ -32,7 +32,7 @@ metadata:
 - Toggled by **shield button** (bottom-right corner, fixed) in `app.jsx`
 - State: `isAdmin` in `App` component, default `false`
 - When active: button turns yellow
-- **Belajar page:** shows `AdminBelajarView` (local-only, resets on refresh) — chapter list with ✏/✕ per bab, "+ Tambah Bab Baru" row at bottom
+- **Belajar page:** shows `AdminBelajarView` backed by DB admin APIs — chapter list with edit/delete per bab and "+ Tambah Bab Baru" row at bottom
 - **Practice page:** shows a slide-based `AdminPracticeBar` below each question. Existing soal are shown as slide cards, the final `+ Tambah Soal` card opens a plug-and-play add editor, and Edit Soal/Edit Langkah/Hapus still call the DB API.
 - No login required to enter admin mode (testing convenience)
 
@@ -44,6 +44,7 @@ metadata:
 - **OfflineBanner** in `app.jsx`
 - **Skeleton** loading states in practice and profile
 - **Payment flow:** `payment.jsx` polls Duitku, shows success/pending/failed states
+- **Profile recommendations:** `/api/correction/profile-summary` returns deterministic `recommendedItems` and `skillNeedScores` from the Purcell-aligned catalog; Gemini can write summary text but does not freely select follow-up questions.
 - **Design tokens:** `tone-icon-*`, `tag-emerald`, CSS vars for draw colors; Tailwind config extended with `tone.*` colors and `letterSpacing.tight-*`
 - **A11y:** `aria-label` on icon buttons, `text-ink/55` contrast fixes, focus rings
 
@@ -58,7 +59,7 @@ metadata:
 
 | File | Purpose |
 |---|---|
-| `admin.jsx` | Admin UI — `AdminBelajarView` (local), slide `AdminPracticeBar` (API), `AdminPlugProblemModal`, modals for chapters/subtopics/problems/steps/users, `AdminFloatButton` (unused), `AdminPanel` (unused in favor of inline) |
+| `admin.jsx` | Admin UI — DB-wired `AdminBelajarView`, compact `Admin Soal` card deck, inline question/choice/step editing, full `AdminPanel`, and AI import tabs |
 | `answer-board.jsx` | Canvas drawing board with toolbar |
 | `app.jsx` | Router, `isAdmin` toggle state, shield toggle button, passes props down |
 | `backend-api.jsx` | `MafikingAPI.get/post`, `parseApiResponse` |
@@ -68,7 +69,7 @@ metadata:
 | `misi.jsx` | Daily mission cards — 4 variants |
 | `payment.jsx` | Payment package selection + Duitku redirect + status polling |
 | `practice.jsx` | `Practice` → `ChoiceView` + `CanvasView`, `ResultModal`, `ModeSegment`, helpers |
-| `profile.jsx` | User stats, streak, level |
+| `profile.jsx` | User stats, streak, level, profile summary, and catalog-backed recommendation cards |
 | `shared.jsx` | `Nav`, `Footer`, `Icon`, `Skeleton`, `showToast`, `ToastContainer`, `OfflineBanner` |
 | `styles.css` | All CSS — design tokens, component classes, admin styles (appended at end) |
 | `toolbar.jsx` | Practice toolbar (submit, focus mode, undo/redo) |
@@ -78,4 +79,13 @@ metadata:
 ---
 
 ## Chapter data
-Static `chapterData` object in `belajar.jsx` (lines 3–19) — hardcoded, used for user display. Admin local mode copies this on mount and discards changes on refresh. DB chapters are separate (editable via `/api/admin/chapters`).
+Static `chapterData` object in `belajar.jsx` is still used as a display fallback/reference for copied UI cards. Admin chapter changes go through DB routes such as `/api/admin/chapters` and persist to `db/database.sqlite`.
+
+## Recommendation data
+
+- Catalog source: `data/recommendation-catalog.json`, version `2026-05-20.purcell-v1`.
+- Question source: `docs/purcell-inspired-question-bank.md`, original Mafiking questions aligned to Purcell/Varberg/Rigdon topic coverage.
+- Runtime engine: `lib/recommendation-engine.js`.
+- Optional profile narrative provider: `lib/ai-profile-provider.js` talks to 9Router when `AI_PROFILE_PROVIDER=9router`; `NINEROUTER_MODELS` round-robins through a smoke-tested allowlist.
+- API contract: `POST /api/correction/profile-summary` preserves `recommendedQuestions` and adds `recommendedItems` plus `skillNeedScores`; local recommendations can use up to 200 attempts while Gemini narrative uses 20 newest attempts.
+- Test command: `npm run test:recommendations` or full `npm run check`.

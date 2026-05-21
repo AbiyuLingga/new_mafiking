@@ -15,7 +15,7 @@ metadata:
 - Entry point served by Express: `MAFIKING.html` (not `index.html`)
 - JSX files are `<script type="text/babel" data-presets="react">` — Babel compiles in browser at runtime
 - `npm run dev` = `node --watch server.js`
-- `npm run check` = Vite build (syntax check only) + `node --check` on server files
+- `npm run check` = Node syntax checks plus focused admin-import and recommendation-engine tests
 
 ## Script load order in MAFIKING.html
 ```
@@ -54,7 +54,7 @@ Order matters — later files can use globals from earlier files.
 | `Skeleton` | `shared.jsx` | Loading shimmer component |
 | `Icon` | `shared.jsx` | SVG icon object (Arrow, ChevL, ChevD, Check, Clock, Bulb, Sparkles, Target, CheckCircle) |
 | `chapterData` | `belajar.jsx` | Static chapter data by mapel; also set as `window.chapterData` |
-| `AdminBelajarView` | `admin.jsx` | Inline admin chapter editor (local-only) |
+| `AdminBelajarView` | `admin.jsx` | DB-wired admin chapter editor |
 | `AdminPracticeBar` | `admin.jsx` | Slide-based per-question admin controls in practice |
 | `AdminPlugProblemModal` | `admin.jsx` | Plug-and-play add-soal modal opened from the final `+ Tambah Soal` slide |
 
@@ -63,6 +63,15 @@ Order matters — later files can use globals from earlier files.
 - Tables: `users`, `chapters`, `subtopics`, `problems`, `problem_steps`, `payments`, `user_progress`, `correction_attempts`
 - `users.role`: `'user'` (default) or `'admin'`
 - Auto-guest: server creates `Tamu_XXXX` users without login
+
+## Profile recommendation architecture
+- `data/recommendation-catalog.json` stores the versioned Purcell-aligned skill catalog, aliases, prerequisites, scoring weights, and difficulty policy.
+- `docs/purcell-inspired-question-bank.md` stores original Mafiking follow-up questions with refs such as `MF-PUR-0202`.
+- `lib/recommendation-engine.js` parses the catalog/bank, normalizes weakness tags, computes `skillNeedScores`, and selects `recommendedItems`.
+- `lib/ai-profile-provider.js` optionally calls 9Router's OpenAI-compatible chat endpoint for profile narrative text and can round-robin through `NINEROUTER_MODELS`.
+- `routes/correction.js` merges deterministic recommendation output into `/api/correction/profile-summary`; Gemini or 9Router may write narrative summary text but must not be the source of item selection.
+- Attempt windows are split: up to 200 recent attempts feed the local recommendation engine, while only 20 newest attempts are sent to Gemini for narrative text.
+- `src/profile.jsx` prefers `recommendedItems` and falls back to `recommendedQuestions` for older responses.
 
 ## Auth
 - Session-based (express-session)

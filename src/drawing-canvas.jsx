@@ -1049,6 +1049,18 @@ const { forwardRef: __dcForwardRef, useCallback: __dcUseCallback, useEffect: __d
       return mainCanvasRef.current ? mainCanvasRef.current.toDataURL('image/png') : '';
     }
 
+    function exportSnapshot() {
+      commitSelection(false);
+      const size = sizeRef.current || {};
+      return {
+        canvasSize: {
+          height: Math.round(size.cssHeight || 0),
+          width: Math.round(size.cssWidth || 0),
+        },
+        strokes: cloneStrokes(strokesRef.current).filter((stroke) => !stroke.erased && !stroke.erasing),
+      };
+    }
+
     function isPointInSelectionResizeHandle(point, selection) {
       if (!selection) return false;
       const handleLeft = selection.x + selection.width - SELECTION_HANDLE_SIZE / 2;
@@ -1065,7 +1077,7 @@ const { forwardRef: __dcForwardRef, useCallback: __dcUseCallback, useEffect: __d
     pushHistorySnapshotRef.current = pushHistorySnapshot;
 
     useImperativeHandle(ref, () => ({
-      clear: clearAll, commitSelection, exportImage, redo, undo,
+      clear: clearAll, commitSelection, exportImage, exportSnapshot, redo, undo,
     }));
 
     useEffect(() => {

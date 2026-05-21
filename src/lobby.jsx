@@ -1,10 +1,94 @@
 // MAFIKING Lobby — minimalist with 3 hero variants
 
-const Lobby = ({ setRoute, tweaks, currentUser }) => {
+const Lobby = ({ setRoute, tweaks, currentUser, forcePublicLanding = false }) => {
+  const { useState, useEffect, useCallback } = React;
+  const [phase, setPhase] = useState('dev'); // 'dev' | 'login'
+  const [unlockCount, setUnlockCount] = useState(0);
+  const [showLanding, setShowLanding] = useState(false);
+
+  // Ekspos fungsi ke Nav logo agar bisa trigger landing
+  useEffect(() => {
+    window.__mafikingShowLanding = () => setShowLanding(true);
+    return () => { delete window.__mafikingShowLanding; };
+  }, []);
+
+  const advanceDevGate = useCallback(() => {
+    setUnlockCount(n => {
+      const next = n + 1;
+      if (next >= 4) setPhase('login');
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (phase !== 'dev') return;
+      if (e.key === 'Enter') advanceDevGate();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [advanceDevGate, phase]);
+
   const isRegistered = currentUser && !currentUser.display_name?.startsWith("Tamu_");
-  if (isRegistered) return <Dashboard user={currentUser} setRoute={setRoute} tweaks={tweaks} />;
-  if (currentUser) return <LoginScreen />;
-  return null;
+  const shouldShowLanding = forcePublicLanding || showLanding;
+
+  useEffect(() => {
+    if (isRegistered && !shouldShowLanding) {
+      setRoute("belajar");
+    }
+  }, [isRegistered, shouldShowLanding, setRoute]);
+
+  if (isRegistered) {
+    if (shouldShowLanding) return (
+      <div>
+        <Landing setRoute={(r) => { setShowLanding(false); setRoute(r); }} tweaks={tweaks} />
+      </div>
+    );
+    return null;
+  }
+
+  if (!currentUser) return null;
+  if (phase === 'dev') return <DevScreen unlockCount={unlockCount} onUnlockAttempt={advanceDevGate} />;
+  return <LoginScreen />;
+};
+
+const DevScreen = ({ unlockCount, onUnlockAttempt }) => {
+  const dotsLeft = Math.max(0, 4 - unlockCount);
+  return (
+    <div onClick={onUnlockAttempt} style={{
+      backgroundColor: '#ffffff',
+      backgroundImage:
+        'linear-gradient(rgba(11,19,38,0.045) 1px, transparent 1px),' +
+        'linear-gradient(90deg, rgba(11,19,38,0.045) 1px, transparent 1px)',
+      backgroundSize: '40px 40px',
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'relative',
+      overflow: 'hidden',
+      userSelect: 'none',
+      cursor: 'pointer',
+    }}>
+      <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', padding: '0 24px' }}>
+        <img src="/assets/logo.png" alt="Mafiking" style={{ width: 56, height: 56, objectFit: 'contain', marginBottom: 24, opacity: 0.9 }} />
+        <h1 style={{
+          color: '#0b1326',
+          fontSize: 'clamp(28px, 6vw, 52px)',
+          fontWeight: 700,
+          letterSpacing: '-0.02em',
+          margin: '0 0 12px',
+          lineHeight: 1.1,
+        }}>
+          Under development
+        </h1>
+        <p style={{ color: 'rgba(11,19,38,0.4)', fontSize: 14, margin: 0 }}>
+          {'· '.repeat(dotsLeft).trim() || ''}
+        </p>
+      </div>
+    </div>
+  );
 };
 
 const LoginScreen = () => {
@@ -30,36 +114,27 @@ const LoginScreen = () => {
 
   return (
     <div style={{
-      background: '#0F172A',
+      backgroundColor: '#ffffff',
+      backgroundImage:
+        'linear-gradient(rgba(11,19,38,0.045) 1px, transparent 1px),' +
+        'linear-gradient(90deg, rgba(11,19,38,0.045) 1px, transparent 1px)',
+      backgroundSize: '40px 40px',
       minHeight: '100vh',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      position: 'relative',
       overflow: 'hidden',
       fontFamily: 'inherit',
     }}>
-      {/* Blobs */}
-      <div style={{
-        position: 'absolute', borderRadius: '50%', filter: 'blur(80px)', opacity: 0.5,
-        width: 400, height: 400, background: 'rgba(245,228,79,0.15)', top: -100, left: -100,
-      }} />
-      <div style={{
-        position: 'absolute', borderRadius: '50%', filter: 'blur(80px)', opacity: 0.5,
-        width: 500, height: 500, background: 'rgba(30,64,175,0.4)', bottom: -150, right: -100,
-      }} />
-
       {/* Card */}
       <div style={{
-        background: 'rgba(30,41,59,0.75)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        border: '1px solid rgba(255,255,255,0.1)',
+        background: '#ffffff',
+        border: '1px solid rgba(11,19,38,0.1)',
         borderRadius: 24,
         padding: 40,
         width: '100%',
         maxWidth: 420,
-        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+        boxShadow: '0 8px 40px rgba(11,19,38,0.08)',
         position: 'relative',
         zIndex: 10,
         margin: '0 16px',
@@ -67,13 +142,13 @@ const LoginScreen = () => {
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <img src="/assets/logo.png" alt="Mafiking" style={{ width: 60, height: 60, objectFit: 'contain', marginBottom: 10 }} />
-          <h1 style={{ fontSize: 28, color: '#FDF15B', letterSpacing: 1, margin: 0 }}>Mafiking</h1>
-          <p style={{ color: 'rgba(203,213,225,0.7)', fontSize: 13, marginTop: 6 }}>Bimbel TPB ITB</p>
+          <h1 style={{ fontSize: 28, color: '#0b1326', letterSpacing: '-0.01em', fontWeight: 700, margin: 0 }}>Mafiking</h1>
+          <p style={{ color: 'rgba(11,19,38,0.45)', fontSize: 13, marginTop: 6 }}>Bimbel TPB ITB</p>
         </div>
 
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', fontSize: 13, color: '#cbd5e1', marginBottom: 8 }}>Username</label>
+            <label style={{ display: 'block', fontSize: 13, color: 'rgba(11,19,38,0.65)', fontWeight: 500, marginBottom: 8 }}>Username</label>
             <input
               type="text"
               value={username}
@@ -82,17 +157,17 @@ const LoginScreen = () => {
               required
               autoFocus
               style={{
-                width: '100%', padding: '14px 16px', boxSizing: 'border-box',
-                background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 12, color: '#fff', fontSize: 15, outline: 'none',
+                width: '100%', padding: '13px 16px', boxSizing: 'border-box',
+                background: '#f8f8f8', border: '1px solid rgba(11,19,38,0.12)',
+                borderRadius: 12, color: '#0b1326', fontSize: 15, outline: 'none',
               }}
-              onFocus={e => e.target.style.borderColor = '#FDF15B'}
-              onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+              onFocus={e => e.target.style.borderColor = '#0b1326'}
+              onBlur={e => e.target.style.borderColor = 'rgba(11,19,38,0.12)'}
             />
           </div>
 
           <div style={{ marginBottom: 24 }}>
-            <label style={{ display: 'block', fontSize: 13, color: '#cbd5e1', marginBottom: 8 }}>Password</label>
+            <label style={{ display: 'block', fontSize: 13, color: 'rgba(11,19,38,0.65)', fontWeight: 500, marginBottom: 8 }}>Password</label>
             <input
               type="password"
               value={password}
@@ -100,12 +175,12 @@ const LoginScreen = () => {
               placeholder="••••••••"
               required
               style={{
-                width: '100%', padding: '14px 16px', boxSizing: 'border-box',
-                background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 12, color: '#fff', fontSize: 15, outline: 'none',
+                width: '100%', padding: '13px 16px', boxSizing: 'border-box',
+                background: '#f8f8f8', border: '1px solid rgba(11,19,38,0.12)',
+                borderRadius: 12, color: '#0b1326', fontSize: 15, outline: 'none',
               }}
-              onFocus={e => e.target.style.borderColor = '#FDF15B'}
-              onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+              onFocus={e => e.target.style.borderColor = '#0b1326'}
+              onBlur={e => e.target.style.borderColor = 'rgba(11,19,38,0.12)'}
             />
             {error && (
               <p style={{ color: '#ef4444', fontSize: 13, marginTop: 8, marginLeft: 4 }}>{error}</p>
@@ -117,11 +192,11 @@ const LoginScreen = () => {
             disabled={loading}
             style={{
               width: '100%', padding: 14,
-              background: loading ? 'rgba(253,241,91,0.5)' : 'linear-gradient(135deg,#FDF15B,#F5E44F)',
-              color: '#0F172A', border: 'none', borderRadius: 12,
-              fontSize: 16, fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer',
-              boxShadow: '0 4px 15px rgba(253,241,91,0.3)',
-              transition: 'transform 0.2s, box-shadow 0.2s',
+              background: loading ? 'rgba(11,19,38,0.4)' : '#0b1326',
+              color: '#FFF44F', border: 'none', borderRadius: 12,
+              fontSize: 16, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
+              letterSpacing: '-0.01em',
+              transition: 'opacity 0.15s',
             }}
           >
             {loading ? 'Masuk...' : 'Masuk'}
@@ -147,6 +222,7 @@ const Landing = ({ setRoute, tweaks }) => {
       <ProgressFeature />
       <Testimonials />
       <CTA setRoute={setRoute} tweaks={tweaks} />
+      <Footer setRoute={setRoute} />
     </div>
   );
 };
@@ -155,14 +231,27 @@ const Landing = ({ setRoute, tweaks }) => {
 const Dashboard = ({ user, setRoute, tweaks }) => {
   const { useState, useEffect } = React;
   const [stats, setStats] = useState(null);
+  const [correctionAttempts, setCorrectionAttempts] = useState([]);
+  const [profileSummary, setProfileSummary] = useState(null);
 
   useEffect(() => {
     MafikingAPI.get("/api/progress/stats").then(setStats).catch(() => null);
+    MafikingAPI.get("/api/correction/attempts")
+      .then((attempts) => {
+        const normalizedAttempts = Array.isArray(attempts) ? attempts : [];
+        setCorrectionAttempts(normalizedAttempts);
+        return MafikingAPI.post("/api/correction/profile-summary", { attempts: normalizedAttempts });
+      })
+      .then((data) => setProfileSummary(data?.summary || null))
+      .catch(() => null);
   }, []);
 
   const hour = new Date().getHours();
   const salam = hour < 10 ? "pagi" : hour < 15 ? "siang" : hour < 18 ? "sore" : "malam";
   const firstName = (user.display_name || "Kawan").split(" ")[0];
+  const level = user.level || stats?.level || 1;
+  const xp = stats?.xp || user.xp || 0;
+  const levelProgress = Math.min(100, xp % 100);
 
   const allChapters = (() => {
     const cd = window.chapterData;
@@ -173,65 +262,101 @@ const Dashboard = ({ user, setRoute, tweaks }) => {
 
   return (
     <div className="bg-paper">
-      <section>
-        <div className="max-w-6xl mx-auto px-6 md:px-8 pt-12 pb-6">
-          <p className="kicker mb-2">Dashboard</p>
-          <h1 className="font-display font-bold text-4xl md:text-5xl tracking-[-0.03em] leading-[1.05]">
-            Selamat {salam}, {firstName}.
-          </h1>
+      <section className="pt-12 pb-6">
+        <div className="max-w-6xl mx-auto px-6 md:px-8">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 pb-6 border-b hairline">
+            <div>
+              <p className="kicker mb-1.5">Dashboard</p>
+              <h1 className="font-display font-bold text-4xl md:text-5xl tracking-[-0.03em] leading-none mb-3">
+                Selamat {salam}, {firstName}.
+              </h1>
+              <p className="text-ink/65 text-sm md:text-base">Siap melanjutkan perjalanan akademismu di TPB ITB?</p>
+            </div>
+            {stats && (
+              <div className="flex flex-wrap items-center gap-3">
+                <button className="chip-streak" onClick={() => setRoute("misi")} type="button" title={`Streak ${stats.streak_days} hari`}>
+                  <StreakFlame />
+                  <span className="tnum">{stats.streak_days || 0}</span>
+                </button>
+                <div className="chip-level" title={`Level ${level} · ${xp} XP`}>
+                  <span className="lvl-badge">L{level}</span>
+                  <div className="lvl-bar"><div style={{ width: `${levelProgress}%` }}></div></div>
+                  <span className="text-[10px] font-mono text-ink/45 tnum">{xp} XP</span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
       {continueChapter ? (
-        <section>
-          <div className="max-w-6xl mx-auto px-6 md:px-8 pb-8">
-            <div className="card pad-d flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              <div className="flex-1 min-w-0">
-                <p className="kicker mb-1">Lanjutkan belajar</p>
-                <h2 className="font-display font-bold text-xl tracking-[-0.02em]">
+        <section className="pb-8">
+          <div className="max-w-6xl mx-auto px-6 md:px-8">
+            <div 
+              className="relative overflow-hidden rounded-[var(--card-radius)] p-6 md:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6"
+              style={{
+                background: "linear-gradient(135deg, #0b1326 0%, #15223e 100%)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                boxShadow: "0 20px 40px -15px rgba(11, 19, 38, 0.3)"
+              }}
+            >
+              {/* Subtle background glow */}
+              <div 
+                className="absolute w-[200px] h-[200px] rounded-full blur-[80px] pointer-events-none opacity-20"
+                style={{
+                  top: "-50px",
+                  right: "-20px",
+                  background: "var(--yel)"
+                }}
+              />
+              
+              <div className="relative z-10 flex-1 min-w-0">
+                <p className="text-xs uppercase tracking-widest font-semibold text-white/50 mb-2">Lanjutkan Belajar</p>
+                <h2 className="font-display font-bold text-2xl md:text-3xl tracking-[-0.025em] text-white">
                   Bab {continueChapter.num}: {continueChapter.title}
                 </h2>
-                <p className="text-ink/55 text-sm mt-1">{continueChapter.mapel} · {continueChapter.est}</p>
+                <p className="text-white/70 text-sm md:text-base mt-2 flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded bg-white/10 text-xs font-semibold uppercase">{continueChapter.mapel}</span>
+                  <span>Estimasi waktu: {continueChapter.est}</span>
+                </p>
                 {continueChapter.progress > 0 ? (
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className="bar bar-amber w-28 shrink-0"><div style={{ width: `${Math.round((continueChapter.progress / continueChapter.total) * 100)}%` }} /></div>
-                    <span className="text-xs text-ink/55">{continueChapter.progress}/{continueChapter.total} soal</span>
+                  <div className="flex items-center gap-3 mt-4">
+                    <div className="bar flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full rounded-full" 
+                        style={{ 
+                          width: `${Math.round((continueChapter.progress / continueChapter.total) * 100)}%`,
+                          background: "var(--yel)"
+                        }} 
+                      />
+                    </div>
+                    <span className="text-xs font-mono text-white/60 shrink-0 tnum">
+                      {continueChapter.progress} / {continueChapter.total} Soal Selesai ({Math.round((continueChapter.progress / continueChapter.total) * 100)}%)
+                    </span>
                   </div>
-                ) : null}
+                ) : (
+                  <p className="text-xs text-white/50 mt-3">Kamu belum memulai bab ini. Mari raih nilai A!</p>
+                )}
               </div>
               <button
-                className="btn-ink shrink-0"
+                className="btn-yel shrink-0 relative z-10 !py-3 !px-6 text-sm flex items-center gap-1.5"
                 onClick={() => setRoute({ route: "practice", practice: continueChapter })}
                 type="button"
               >
-                {continueChapter.progress > 0 ? "Lanjutkan" : "Mulai"} <Icon.Arrow />
+                {continueChapter.progress > 0 ? "Lanjutkan" : "Mulai"} <Icon.Arrow className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
         </section>
       ) : null}
 
-      {stats ? (
-        <section>
-          <div className="max-w-6xl mx-auto px-6 md:px-8 pb-10">
-            <div className="flex flex-wrap items-center gap-3">
-              <button className="chip-streak" onClick={() => setRoute("misi")} type="button" title={`Streak ${stats.streak_days} hari`}>
-                <Icon.Star className="w-3.5 h-3.5" />
-                {stats.streak_days || 0} hari berturut
-              </button>
-              <div className="chip-level">
-                <span className="lvl-badge">L{user.level || 1}</span>
-                <span className="text-xs font-semibold text-ink/70">{stats.xp || 0} XP</span>
-              </div>
-              <div className="tag">
-                {stats.solvedProblems}/{stats.totalProblems} soal selesai
-              </div>
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      <Mapel setRoute={setRoute} />
+      <StudyRecap
+        attempts={correctionAttempts}
+        stats={stats}
+        summary={profileSummary}
+        user={user}
+        setRoute={setRoute}
+      />
     </div>
   );
 };
@@ -264,10 +389,7 @@ const HeroSplit = ({ setRoute }) => (
           </div>
           <div className="flex items-center gap-6 mt-10 text-sm text-ink/55">
             <div className="flex items-center gap-2">
-              <Icon.CheckCircle className="w-4 h-4 text-emerald-600" /> Tanpa kartu kredit
-            </div>
-            <div className="flex items-center gap-2">
-              <Icon.CheckCircle className="w-4 h-4 text-emerald-600" /> Aktivasi langsung
+              <Icon.CheckCircle className="w-4 h-4 text-emerald-600" /> Aktivasi langsung di landing page
             </div>
           </div>
         </div>
@@ -279,8 +401,8 @@ const HeroSplit = ({ setRoute }) => (
                 <Icon.Star className="w-4 h-4" />
               </div>
               <div>
-                <div className="font-bold tnum">4,9 / 5</div>
-                <div className="text-xs text-ink/55">dari 2.500+ mahasiswa</div>
+                <div className="font-bold">Juara Internasional</div>
+                <div className="text-xs text-ink/55">Olimpiade Fisika</div>
               </div>
             </div>
             <div className="absolute -top-4 -right-4 card !p-4 flex items-center gap-3 bg-white">
@@ -432,6 +554,165 @@ const Stats = ({ tweaks = {} }) => {
     </section>
   );
 };
+
+// ─── Logged-in recap section ───────────────────────────────────────────────
+const StudyRecap = ({ attempts = [], stats, summary, user, setRoute }) => {
+  const weaknesses = dashboardCollectTags(attempts, "weaknessTags", summary?.weaknesses).slice(0, 5);
+  const recommendations = (summary?.recommendedQuestions || []).slice(0, 3);
+  const wrongAttempts = attempts
+    .filter((attempt) => attempt && (attempt.isCorrect === false || attempt.evaluation?.isCorrect === false))
+    .slice(0, 3);
+  const mistakeItems = wrongAttempts.length
+    ? wrongAttempts.map((attempt) => ({
+        title: attempt.questionText || "Jawaban canvas",
+        detail: dashboardCollectTags([attempt], "weaknessTags").join(", ") || "Perlu cek ulang langkah dan alasan jawaban.",
+      }))
+    : weaknesses.slice(0, 3).map((tag) => ({
+        title: tag,
+        detail: "Muncul sebagai pola yang perlu dikurangi di koreksi terakhir.",
+      }));
+  const visibleMistakes = mistakeItems.length ? mistakeItems : [
+    { title: "Belum ada kesalahan tercatat", detail: "Kirim satu jawaban canvas agar sistem bisa membaca pola salahmu." },
+  ];
+  const visibleRecommendations = recommendations.length ? recommendations : [
+    "Kerjakan satu soal sedang dengan langkah lengkap di canvas.",
+    "Ulangi soal terakhir, lalu bandingkan alasan tiap langkah.",
+    "Pilih satu bab yang belum dimulai dan kerjakan 3 soal pertama.",
+  ];
+  const patternItems = weaknesses.length ? weaknesses : ["Konsistensi langkah", "Justifikasi rumus", "Kerapian substitusi"];
+
+  const metrics = [
+    { label: "Soal selesai", value: `${stats?.solvedProblems || 0}/${stats?.totalProblems || 0}`, icon: Icon.Target },
+    { label: "Koreksi canvas", value: attempts.length, icon: Icon.CheckCircle },
+    { label: "XP", value: user?.xp || stats?.xp || 0, icon: Icon.Bolt },
+    { label: "Mastery", value: `${stats?.mastery || 0}%`, icon: Icon.Trophy },
+  ];
+
+  return (
+    <section className="sec-y">
+      <div className="max-w-6xl mx-auto px-6 md:px-8">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-8 gap-5">
+          <div>
+            <div className="kicker mb-2">Ringkasan Belajar</div>
+            <h2 className="font-display font-bold text-3xl md:text-4xl tracking-[-0.025em]">
+              Fokus berikutnya dari hasil latihanmu.
+            </h2>
+          </div>
+          <button onClick={() => setRoute("profile")} className="hidden md:inline-flex text-sm font-semibold items-center gap-1 hover:gap-2 transition-all">
+            Lihat raport lengkap <Icon.Arrow />
+          </button>
+        </div>
+
+        <div className="grid lg:grid-cols-12 gap-5">
+          <article className="lg:col-span-5 card pad-d bg-white">
+            <div className="flex items-center justify-between gap-4 mb-5">
+              <div>
+                <div className="kicker mb-1">Recap Kesalahan</div>
+                <h3 className="font-display font-bold text-2xl tracking-[-0.02em]">Yang perlu dibereskan.</h3>
+              </div>
+              <div className="w-11 h-11 rounded-2xl bg-red-50 text-red-600 border border-red-100 flex items-center justify-center shrink-0">
+                <Icon.Target className="w-5 h-5" />
+              </div>
+            </div>
+            <div className="grid gap-3">
+              {visibleMistakes.map((item, index) => (
+                <div key={`${item.title}-${index}`} className="rounded-2xl bg-ink/[0.025] border hairline p-4">
+                  <div className="text-xs font-mono text-ink/40 mb-1">0{index + 1}</div>
+                  <div className="font-semibold leading-snug line-clamp-2">{item.title}</div>
+                  <div className="text-sm text-ink/55 mt-1 leading-relaxed">{item.detail}</div>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="lg:col-span-4 card pad-d bg-white">
+            <div className="kicker mb-1">Rekomendasi Soal</div>
+            <h3 className="font-display font-bold text-2xl tracking-[-0.02em] mb-5">Latihan berikutnya.</h3>
+            <ol className="grid gap-3">
+              {visibleRecommendations.map((question, index) => (
+                <li key={`${question}-${index}`} className="flex gap-3 rounded-2xl border hairline p-4">
+                  <span className="w-7 h-7 rounded-full bg-ink text-white text-xs font-mono flex items-center justify-center shrink-0">{index + 1}</span>
+                  <span className="text-sm text-ink/70 leading-relaxed">{question}</span>
+                </li>
+              ))}
+            </ol>
+            <button onClick={() => setRoute("belajar")} className="btn-ink mt-5 w-full justify-center">
+              Mulai dari rekomendasi <Icon.Arrow />
+            </button>
+          </article>
+
+          <article className="lg:col-span-3 card pad-d bg-ink text-white overflow-hidden relative">
+            <div className="absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-30" style={{ background: "var(--yel)" }} />
+            <div className="relative">
+              <div className="kicker mb-1 !text-white/45">Pola Diperbaiki</div>
+              <h3 className="font-display font-bold text-2xl tracking-[-0.02em] mb-5">Prioritas minggu ini.</h3>
+              <div className="flex flex-wrap gap-2">
+                {patternItems.map((tag) => (
+                  <span key={tag} className="rounded-full bg-white/10 border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/80">{tag}</span>
+                ))}
+              </div>
+              <p className="text-sm text-white/60 leading-relaxed mt-6">
+                {summary?.overallSummary || "Belum ada ringkasan koreksi. Kerjakan latihan canvas untuk membuat pola belajar yang lebih presisi."}
+              </p>
+            </div>
+          </article>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+          {metrics.map((metric) => (
+            <div key={metric.label} className="rounded-2xl border hairline bg-white p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-ink/[0.035] flex items-center justify-center shrink-0">
+                <metric.icon className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-display font-bold text-2xl tnum truncate">{metric.value}</div>
+                <div className="text-[11px] text-ink/55 truncate">{metric.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+function dashboardCollectTags(attempts, key, fallback = []) {
+  const counts = new Map();
+  attempts.forEach((attempt) => {
+    const tags = attempt?.[key] || attempt?.evaluation?.[key] || [];
+    tags.forEach((tag) => {
+      const normalized = formatDashboardLearningLabel(tag);
+      if (normalized) counts.set(normalized, (counts.get(normalized) || 0) + 1);
+    });
+  });
+  const collected = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([tag]) => tag);
+  return collected.length ? collected : (Array.isArray(fallback) ? fallback.map(formatDashboardLearningLabel) : []);
+}
+
+function formatDashboardLearningLabel(label) {
+  const text = String(label || '').trim();
+  const key = text
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  const labels = {
+    turunan: 'Menghitung turunan',
+    'aturan turunan dasar': 'Menghitung turunan dasar',
+    'chain rule': 'Menerapkan aturan rantai',
+    'aturan rantai': 'Menerapkan aturan rantai',
+    'isolasi variabel': 'Mengisolasi variabel dalam persamaan',
+    'dy dx isolation': 'Mengisolasi dy/dx',
+    'konsep konstanta integrasi': 'Menentukan konstanta integrasi',
+    'constant of integration': 'Menentukan konstanta integrasi',
+    'anti turunan dasar': 'Menentukan anti-turunan',
+    'integral tentu': 'Menghitung integral tentu',
+    'substitusi u': 'Melakukan substitusi u',
+    'u substitution': 'Melakukan substitusi u',
+  };
+  return labels[key] || text;
+}
 
 // ─── Mapel section ────────────────────────────────────────────────────────
 const Mapel = ({ setRoute }) => {
@@ -650,8 +931,7 @@ const CTA = ({ setRoute, tweaks = {} }) => {
             </button>
           </div>
           <div className={`flex items-center justify-center gap-6 mt-7 text-sm ${isInk ? "text-white/60" : "text-ink/55"}`}>
-            <div className="flex items-center gap-2"><Icon.CheckCircle className="w-4 h-4" /> Akses langsung</div>
-            <div className="flex items-center gap-2"><Icon.CheckCircle className="w-4 h-4" /> Tanpa kartu kredit</div>
+            <div className="flex items-center gap-2"><Icon.CheckCircle className="w-4 h-4" /> Aktivasi langsung di landing page</div>
           </div>
         </div>
       </div>

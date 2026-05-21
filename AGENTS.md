@@ -54,6 +54,17 @@ scripts/import-question-bank.js
 db/question-bank.json
 ```
 
+For profile recommendation tasks, also inspect:
+
+```text
+data/recommendation-catalog.json
+docs/purcell-inspired-question-bank.md
+lib/recommendation-engine.js
+lib/ai-profile-provider.js
+scripts/test-recommendation-engine.js
+SOP-9ROUTER-PROFILE-SUMMARY.md
+```
+
 For visual/UI tasks, inspect the actual rendered page in a browser after changes.
 
 ## Runtime Facts
@@ -187,6 +198,7 @@ Rules:
 - Admin routes require both `isAuthenticated` and `isAdmin`.
 - `routes/correction.js` supports up to 20 Gemini keys: `GEMINI_KEY_1` through `GEMINI_KEY_20`.
 - Profile summary can fall back locally when Gemini keys are missing.
+- Profile recommendations are catalog-backed and deterministic. Preserve `recommendedItems`, `recommendedQuestions`, and `skillNeedScores` in `/api/correction/profile-summary`; Gemini or 9Router can write summary prose but should not choose follow-up question refs at runtime. Keep the larger local recommendation window separate from the smaller AI prompt window.
 
 ## Documentation Rules
 

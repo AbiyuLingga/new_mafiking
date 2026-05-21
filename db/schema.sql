@@ -58,6 +58,21 @@ CREATE TABLE IF NOT EXISTS problem_steps (
     mistake_result TEXT
 );
 
+CREATE TABLE IF NOT EXISTS daily_missions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    day INTEGER NOT NULL DEFAULT 1,
+    date_label TEXT NOT NULL DEFAULT '',
+    short_label TEXT NOT NULL DEFAULT '',
+    release_date TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'locked',
+    mapel TEXT NOT NULL DEFAULT '?',
+    target TEXT NOT NULL DEFAULT '',
+    question TEXT NOT NULL DEFAULT '',
+    xp INTEGER NOT NULL DEFAULT 150,
+    week_label TEXT DEFAULT 'Pekan 1',
+    sort_order INTEGER DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS payments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -83,6 +98,25 @@ CREATE TABLE IF NOT EXISTS user_progress (
     xp_earned INTEGER DEFAULT 0,
     solved_at DATETIME,
     UNIQUE(user_id, problem_id)
+);
+
+CREATE TABLE IF NOT EXISTS practice_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    problem_id INTEGER REFERENCES problems(id) ON DELETE SET NULL,
+    mode TEXT NOT NULL DEFAULT 'choice',
+    correct INTEGER NOT NULL DEFAULT 0,
+    selected_answer TEXT NOT NULL DEFAULT '',
+    correct_answer TEXT NOT NULL DEFAULT '',
+    selected_choice_index INTEGER,
+    correct_choice_index INTEGER,
+    hints_used INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS profile_ai_refreshes (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    last_ai_refresh_at DATETIME NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS correction_attempts (

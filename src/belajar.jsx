@@ -18,13 +18,31 @@ const chapterData = {
   ],
 };
 
+const BELAJAR_MAPELS = ["Matematika", "Fisika", "Kimia"];
+const BELAJAR_MAPEL_STORAGE_KEY = "mafiking:last-belajar-mapel";
+
+const getInitialBelajarMapel = () => {
+  try {
+    const saved = window.localStorage.getItem(BELAJAR_MAPEL_STORAGE_KEY);
+    if (BELAJAR_MAPELS.includes(saved)) return saved;
+  } catch (_) {}
+  return "Matematika";
+};
+
 const Belajar = ({ setRoute, tweaks, isAdmin }) => {
-  const [mapel, setMapel] = useState("Matematika");
+  const [mapel, setMapelState] = useState(getInitialBelajarMapel);
   const [semester, setSemester] = useState(1);
   const [dbInit, setDbInit] = useState(null);
 
   const cardStyle = tweaks.chapterCard || "list";
   const selectorStyle = tweaks.mapelSelector || "pills";
+  const setMapel = (nextMapel) => {
+    const safeMapel = BELAJAR_MAPELS.includes(nextMapel) ? nextMapel : "Matematika";
+    try {
+      window.localStorage.setItem(BELAJAR_MAPEL_STORAGE_KEY, safeMapel);
+    } catch (_) {}
+    setMapelState(safeMapel);
+  };
 
   function loadDbChapters() {
     MafikingAPI.get('/api/quiz/init').then(data => setDbInit(data)).catch(() => {});
@@ -184,20 +202,50 @@ const MapelSelector = ({ style, mapel, setMapel, semester, setSemester }) => {
   return <MapelDropdown mapel={mapel} setMapel={setMapel} semester={semester} setSemester={setSemester} />;
 };
 
+const mapelToneClasses = {
+  amber: {
+    activeButton: "bg-white text-ink border-transparent border-b-2 border-b-amber-500",
+    activePill: "bg-white text-ink border-transparent border-b-2 border-b-amber-500",
+    activeText: "text-ink",
+    activeUnderline: "bg-amber-500",
+    toneIcon: "tone-icon-amber",
+  },
+  blue: {
+    activeButton: "bg-white text-ink border-transparent border-b-2 border-b-blue-500",
+    activePill: "bg-white text-ink border-transparent border-b-2 border-b-blue-500",
+    activeText: "text-ink",
+    activeUnderline: "bg-blue-500",
+    toneIcon: "tone-icon-blue",
+  },
+  emerald: {
+    activeButton: "bg-white text-ink border-transparent border-b-2 border-b-emerald-500",
+    activePill: "bg-white text-ink border-transparent border-b-2 border-b-emerald-500",
+    activeText: "text-ink",
+    activeUnderline: "bg-emerald-500",
+    toneIcon: "tone-icon-emerald",
+  },
+};
+
+const getMapelTone = (mapelName) => {
+  const color = MAPEL_META[mapelName]?.color || "amber";
+  return mapelToneClasses[color] || mapelToneClasses.amber;
+};
+
 // Variant A — Sidebar (vertical nav)
 const MapelSidebar = ({ mapel, setMapel, semester, setSemester }) => (
   <section className="sticky top-[72px] z-30 border-y hairline bg-white/92 backdrop-blur-md">
     <div className="max-w-6xl mx-auto px-6 md:px-8">
       <div className="flex gap-0">
         <div className="border-r hairline py-5 pr-6 flex flex-col gap-1 min-w-[180px] md:min-w-[200px]">
-          {(["Matematika", "Fisika", "Kimia"]).map(m => {
+          {BELAJAR_MAPELS.map(m => {
             const M = MAPEL_META[m];
             const active = mapel === m;
+            const tone = getMapelTone(m);
             return (
               <button
                 key={m}
                 onClick={() => setMapel(m)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${active ? "bg-ink text-white" : "hover:bg-ink/5 text-ink/65 hover:text-ink"}`}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left border border-transparent transition-all ${active ? tone.activeButton : "hover:bg-ink/5 text-ink/65 hover:text-ink"}`}
               >
                 <M.icon className="w-4 h-4 shrink-0" />
                 <span className="font-semibold text-sm">{m}</span>
@@ -207,13 +255,13 @@ const MapelSidebar = ({ mapel, setMapel, semester, setSemester }) => (
           })}
         </div>
         <div className="flex-1 px-8 py-5 flex items-center">
-          {(() => { const M = MAPEL_META[mapel]; return (
+          {(() => { const M = MAPEL_META[mapel]; const tone = getMapelTone(mapel); return (
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-ink/5 flex items-center justify-center">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${tone.toneIcon}`}>
                 <M.icon className="w-6 h-6" />
               </div>
               <div>
-                <div className="font-display font-bold text-2xl">{mapel}</div>
+                <div className={`font-display font-bold text-2xl ${tone.activeText}`}>{mapel}</div>
                 <div className="text-sm text-ink/50">{M.code} · Semester {semester}</div>
               </div>
             </div>
@@ -229,17 +277,18 @@ const MapelTabs = ({ mapel, setMapel }) => (
   <section className="sticky top-[72px] z-30 bg-paper border-b hairline">
     <div className="max-w-6xl mx-auto px-6 md:px-8">
       <div className="flex gap-8 overflow-x-auto hide-scrollbar pt-5">
-        {(["Matematika", "Fisika", "Kimia"]).map(m => {
+        {BELAJAR_MAPELS.map(m => {
           const M = MAPEL_META[m];
           const active = mapel === m;
+          const tone = getMapelTone(m);
           return (
             <button
               key={m}
               onClick={() => setMapel(m)}
               className="text-left whitespace-nowrap relative pb-3"
             >
-              <div className={`font-display font-bold text-xl transition-colors duration-300 ${active ? "" : "text-ink/40"}`}>{m}</div>
-              {active && <div className="absolute left-0 right-0 -bottom-[1px] h-[2px] bg-amber-500"></div>}
+              <div className={`font-display font-bold text-xl transition-colors duration-300 ${active ? tone.activeText : "text-ink/40"}`}>{m}</div>
+              {active && <div className={`absolute left-0 right-0 -bottom-[1px] h-[2px] ${tone.activeUnderline}`}></div>}
             </button>
           );
         })}
@@ -252,12 +301,15 @@ const MapelTabs = ({ mapel, setMapel }) => (
 const MapelDropdown = ({ mapel, setMapel }) => (
   <section className="sticky top-[72px] z-30 border-y hairline bg-white/92 backdrop-blur-md">
     <div className="max-w-6xl mx-auto px-6 md:px-8 py-4 flex items-center gap-1">
-      {["Matematika", "Fisika", "Kimia"].map(m => (
-        <button key={m} onClick={() => setMapel(m)}
-          className={`px-4 py-2.5 rounded-full text-sm font-semibold border transition-all ${mapel === m ? "bg-ink text-white border-ink" : "border-transparent text-ink/55 hover:text-ink hover:border-ink/15"}`}>
-          {m}
-        </button>
-      ))}
+      {BELAJAR_MAPELS.map(m => {
+        const tone = getMapelTone(m);
+        return (
+          <button key={m} onClick={() => setMapel(m)}
+            className={`px-4 py-2.5 rounded-full text-sm font-semibold border transition-all ${mapel === m ? tone.activePill : "border-transparent text-ink/55 hover:text-ink hover:border-ink/15"}`}>
+            {m}
+          </button>
+        );
+      })}
     </div>
   </section>
 );
@@ -303,44 +355,96 @@ const ChaptersNumbered = ({ chapters, setRoute, mapel }) => (
 
 // Variant B — SOFT CARDS (3-col grid, soft shadow, photo placeholder)
 const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
-  const toneClass = { Matematika: "card-amber", Fisika: "card-blue", Kimia: "card-emerald" }[mapel] || "card-amber";
-  const barClass  = { Matematika: "bar-amber", Fisika: "bar-blue", Kimia: "bar-emerald" }[mapel] || "bar-amber";
+  const toneClass = { Matematika: "card-premium-amber", Fisika: "card-premium-blue", Kimia: "card-premium-emerald" }[mapel] || "card-premium-amber";
+  const glowColor = { Matematika: "glow-amber", Fisika: "glow-blue", Kimia: "glow-emerald" }[mapel] || "glow-amber";
+  const pillClass = { Matematika: "topic-pill-premium-amber", Fisika: "topic-pill-premium-blue", Kimia: "topic-pill-premium-emerald" }[mapel] || "topic-pill-premium-amber";
+  const barColor  = { Matematika: "bg-amber-500", Fisika: "bg-blue-500", Kimia: "bg-emerald-500" }[mapel] || "bg-amber-500";
+  const ctaClass  = { Matematika: "btn-premium-cta-amber", Fisika: "btn-premium-cta-blue", Kimia: "btn-premium-cta-emerald" }[mapel] || "btn-premium-cta-amber";
+
+  const M = MAPEL_META[mapel];
+  const SubjectIcon = M ? M.icon : null;
+
+  const renderTextWithBold = (text) => {
+    if (!text) return null;
+    const parts = text.split(/\*\*(.*?)\*\*/g);
+    return parts.map((part, i) => i % 2 === 1 ? <strong key={i} className="font-extrabold text-ink">{part}</strong> : part);
+  };
+
   return (
-  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5 mapel-stagger">
+  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mapel-stagger">
     {chapters.map(c => {
       const pct = (c.progress / c.total) * 100;
       return (
         <button
           key={c.id}
           onClick={() => setRoute({ route: "practice", practice: { ...c, mapel } })}
-          className={`text-left card-tone ${toneClass} p-6 group flex flex-col hover:-translate-y-1 transition-all`}
+          className={`text-left card-premium ${toneClass} p-6 group flex flex-col justify-between transition-all`}
         >
-          <div className="relative z-10 flex flex-col h-full">
-            <div className="flex items-center justify-between mb-5">
-              <div className="font-display font-bold text-4xl tnum text-ink/75">{pad2(c.num)}</div>
-              <span className="tag">{c.est}</span>
-            </div>
-            <h3 className="font-display font-bold text-2xl leading-tight mb-5">{c.title}</h3>
+          {/* Ambient Glows */}
+          <div className={`card-premium-glow glow-top-right ${glowColor}`} />
+          <div className={`card-premium-glow glow-bottom-left ${glowColor}`} />
+          {/* Dot Grid Background */}
+          <div className="card-grid-pattern" />
 
-            {c.topics.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-5">
+          {/* Top Row: Bab Info & Est */}
+          <div className="relative z-10 w-full flex flex-col h-full">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-bold tracking-widest uppercase bg-ink/5 text-ink/65 px-2.5 py-1 rounded-md border border-ink/5">
+                  Bab {pad2(c.num)}
+                </span>
+              </div>
+              {c.est && (
+                <div className="h-8 min-w-[3.75rem] px-2 rounded-lg bg-transparent flex items-center justify-center text-[10px] font-mono font-bold tracking-widest uppercase text-ink/60 border border-ink/5 group-hover:text-ink transition-all duration-300 animate-pulse-subtle">
+                  {c.est}
+                </div>
+              )}
+            </div>
+
+            {/* Chapter Title */}
+            <h3 className="font-display font-extrabold text-2xl text-ink leading-tight tracking-tight mb-3 group-hover:text-ink/80 transition-colors">
+              {c.title}
+            </h3>
+
+            {/* Chapter Subtitle (description) */}
+            {c.sub && (
+              <p className="text-xs text-ink/55 font-sans leading-relaxed mb-4 line-clamp-2">
+                {renderTextWithBold(c.sub)}
+              </p>
+            )}
+
+            {/* Topics Covered */}
+            {c.topics && c.topics.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-6">
                 {c.topics.slice(0, 3).map(t => (
-                  <span key={t} className="text-xs text-ink/55 bg-ink/5 px-2 py-1 rounded-md">{t}</span>
+                  <span key={t} className={`topic-pill-premium ${pillClass}`}>
+                    #{t}
+                  </span>
                 ))}
               </div>
             )}
 
-            <div className="pt-4 border-t hairline flex items-center justify-between">
+            {/* Divider & Footer (Progress / CTA) */}
+            <div className="mt-auto pt-4 border-t border-ink/5 flex items-center justify-between w-full">
               {pct > 0 ? (
-                <div className="flex items-center gap-2 flex-1 mr-3">
-                  <div className={`bar ${barClass} flex-1`}><div style={{ width: `${pct}%` }}></div></div>
-                  <span className="text-xs font-mono text-ink/50 tnum">{c.progress}/{c.total}</span>
+                <div className="flex flex-col gap-1.5 flex-1 mr-4">
+                  <div className="flex items-center justify-between text-[11px] font-mono font-bold text-ink/60">
+                    <span>{c.progress} / {c.total} Soal</span>
+                    <span>{Math.round(pct)}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-ink/5 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }}></div>
+                  </div>
                 </div>
               ) : (
-                <span className="text-xs font-mono text-ink/50">{c.total} soal</span>
+                <span className="text-xs font-mono font-bold text-ink/45">
+                  {c.total} soal latihan
+                </span>
               )}
-              <span className="btn-ink !py-2 !px-4 text-xs shrink-0">
-                Buka <Icon.Arrow className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+
+              <span className={`btn-premium-cta ${ctaClass} shrink-0`}>
+                Buka
+                <Icon.Arrow className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
               </span>
             </div>
           </div>

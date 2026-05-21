@@ -120,6 +120,7 @@
     useImperativeHandle(ref, () => ({
       clear: () => canvasRef.current && canvasRef.current.clear(),
       exportImage: () => (canvasRef.current && canvasRef.current.exportImage()) || '',
+      exportSnapshot: () => (canvasRef.current && canvasRef.current.exportSnapshot && canvasRef.current.exportSnapshot()) || null,
     }));
 
     const activeTemplate = PAGE_TEMPLATES.find((template) => template.id === pageTemplate) || PAGE_TEMPLATES[0];

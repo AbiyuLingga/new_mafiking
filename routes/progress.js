@@ -4,7 +4,16 @@ const router = express.Router();
 
 // POST /api/progress/submit — submit answer
 router.post('/submit', isAuthenticated, (req, res) => {
-    const { problemId, correct, hintsUsed } = req.body;
+    const {
+        problemId,
+        correct,
+        hintsUsed,
+        mode,
+        selectedAnswer,
+        correctAnswer,
+        selectedChoiceIndex,
+        correctChoiceIndex
+    } = req.body;
     const userId = req.session.userId;
     const db = req.app.locals.db;
 
@@ -17,6 +26,18 @@ router.post('/submit', isAuthenticated, (req, res) => {
     if (!problem) {
         return res.status(404).json({ error: 'Soal tidak ditemukan' });
     }
+
+    recordPracticeAttempt(db, {
+        correct,
+        correctAnswer,
+        correctChoiceIndex,
+        hintsUsed,
+        mode,
+        problemId,
+        selectedAnswer,
+        selectedChoiceIndex,
+        userId
+    });
 
     // Upsert progress
     const existing = db.prepare(
@@ -124,6 +145,45 @@ router.post('/submit', isAuthenticated, (req, res) => {
 
     res.json({ ok: true, xpEarned, xpPenalty, totalXp: user.xp, level: user.level, streakDays: user.streak_days, highestStreak: user.highest_streak });
 });
+
+function recordPracticeAttempt(db, {
+    correct,
+    correctAnswer,
+    correctChoiceIndex,
+    hintsUsed,
+    mode,
+    problemId,
+    selectedAnswer,
+    selectedChoiceIndex,
+    userId
+}) {
+    const normalizedMode = ['choice', 'canvas'].includes(String(mode || '').trim())
+        ? String(mode).trim()
+        : 'choice';
+    db.prepare(`
+        INSERT INTO practice_attempts (
+            user_id,
+            problem_id,
+            mode,
+            correct,
+            selected_answer,
+            correct_answer,
+            selected_choice_index,
+            correct_choice_index,
+            hints_used
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+        userId,
+        problemId,
+        normalizedMode,
+        correct ? 1 : 0,
+        String(selectedAnswer || ''),
+        String(correctAnswer || ''),
+        Number.isInteger(selectedChoiceIndex) ? selectedChoiceIndex : null,
+        Number.isInteger(correctChoiceIndex) ? correctChoiceIndex : null,
+        Math.max(0, Number(hintsUsed) || 0)
+    );
+}
 
 // GET /api/progress/me — all progress for current user
 router.get('/me', isAuthenticated, (req, res) => {

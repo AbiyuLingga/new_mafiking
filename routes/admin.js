@@ -188,6 +188,80 @@ router.delete('/steps/:id', (req, res) => {
     } catch (e) { console.error('DELETE /steps error:', e); res.status(500).json({ error: e.message }); }
 });
 
+// ===== DAILY MISSIONS =====
+router.get('/missions', (req, res) => {
+    try {
+        res.json(req.app.locals.db.prepare('SELECT * FROM daily_missions ORDER BY sort_order, day').all());
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/missions', (req, res) => {
+    try {
+        const db = req.app.locals.db;
+        const { day, date_label, short_label, release_date, status, mapel, target, question, xp, week_label, sort_order } = req.body;
+        const result = db.prepare(
+            'INSERT INTO daily_missions (day, date_label, short_label, release_date, status, mapel, target, question, xp, week_label, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+        ).run(Number(day)||1, xss(date_label||''), xss(short_label||''), xss(release_date||''), status||'locked', xss(mapel||'?'), xss(target||''), xss(question||''), Number(xp)||150, xss(week_label||'Pekan 1'), Number(sort_order)||0);
+        res.json({ ok: true, id: result.lastInsertRowid });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/missions/:id', (req, res) => {
+    try {
+        const db = req.app.locals.db;
+        const { day, date_label, short_label, release_date, status, mapel, target, question, xp, week_label, sort_order } = req.body;
+        db.prepare(
+            'UPDATE daily_missions SET day=?, date_label=?, short_label=?, release_date=?, status=?, mapel=?, target=?, question=?, xp=?, week_label=?, sort_order=? WHERE id=?'
+        ).run(Number(day)||1, xss(date_label||''), xss(short_label||''), xss(release_date||''), status||'locked', xss(mapel||'?'), xss(target||''), xss(question||''), Number(xp)||150, xss(week_label||'Pekan 1'), Number(sort_order)||0, req.params.id);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/missions/:id', (req, res) => {
+    try {
+        req.app.locals.db.prepare('DELETE FROM daily_missions WHERE id=?').run(req.params.id);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== TRYOUT PACKAGES =====
+router.get('/tryout-packages', (req, res) => {
+    try {
+        res.json(req.app.locals.db.prepare('SELECT * FROM tryout_packages ORDER BY sort_order, id').all());
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/tryout-packages', (req, res) => {
+    try {
+        const db = req.app.locals.db;
+        const { title, description, price, original_price, badge, duration, questions, features, tone, sort_order } = req.body;
+        const featuresJson = typeof features === 'string' ? features : JSON.stringify(Array.isArray(features) ? features : []);
+        const result = db.prepare(
+            'INSERT INTO tryout_packages (title, description, price, original_price, badge, duration, questions, features, tone, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?)'
+        ).run(xss(title||''), xss(description||''), xss(price||'Gratis'), original_price ? xss(original_price) : null, xss(badge||''), xss(duration||''), Number(questions)||0, featuresJson, tone||'default', Number(sort_order)||0);
+        res.json({ ok: true, id: result.lastInsertRowid });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/tryout-packages/:id', (req, res) => {
+    try {
+        const db = req.app.locals.db;
+        const { title, description, price, original_price, badge, duration, questions, features, tone, sort_order } = req.body;
+        const featuresJson = typeof features === 'string' ? features : JSON.stringify(Array.isArray(features) ? features : []);
+        db.prepare(
+            'UPDATE tryout_packages SET title=?, description=?, price=?, original_price=?, badge=?, duration=?, questions=?, features=?, tone=?, sort_order=? WHERE id=?'
+        ).run(xss(title||''), xss(description||''), xss(price||'Gratis'), original_price ? xss(original_price) : null, xss(badge||''), xss(duration||''), Number(questions)||0, featuresJson, tone||'default', Number(sort_order)||0, req.params.id);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/tryout-packages/:id', (req, res) => {
+    try {
+        req.app.locals.db.prepare('DELETE FROM tryout_packages WHERE id=?').run(req.params.id);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ===== USERS =====
 router.get('/users', (req, res) => {
     try {

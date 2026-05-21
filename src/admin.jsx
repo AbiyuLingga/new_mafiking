@@ -761,6 +761,116 @@ const AdminStepsModal = ({ problemId, questionText, onClose }) => {
   );
 };
 
+// ─── Import question preview (student-facing look) ───────────────────────────
+const ImportQuestionPreviewCard = ({ question, index, onChange, onRemove }) => {
+  const [expanded, setExpanded] = useAdminState(false);
+
+  const choices = question.question_type === 'mc'
+    ? (question.mc_options || []).filter(Boolean)
+    : [];
+
+  return (
+    <div className="mafiking-question-card" style={{ position: 'relative', marginBottom: 16 }}>
+      {/* Admin controls (top-right) */}
+      <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 6, zIndex: 2 }}>
+        <button
+          className={expanded ? 'admin-btn-primary' : 'admin-btn-ghost'}
+          style={{ fontSize: 11, padding: '3px 10px', minHeight: 'unset' }}
+          onClick={() => setExpanded(v => !v)}
+          type="button"
+        >{expanded ? 'Tutup Edit' : 'Edit'}</button>
+        <button
+          className="admin-btn-ghost"
+          style={{ fontSize: 11, padding: '3px 8px', color: '#ef4444', minHeight: 'unset' }}
+          onClick={onRemove}
+          type="button"
+        ><AdminIcon.Trash /></button>
+      </div>
+
+      {/* Question meta */}
+      <div className="mafiking-question-meta" style={{ paddingRight: 120 }}>
+        <span>Draft Soal {index + 1}</span>
+        <span className="mafiking-difficulty">{question.difficulty || 'Easy'}</span>
+      </div>
+
+      {/* Question text — rendered like student view */}
+      <p className="mafiking-question-title" style={{ marginTop: 8 }}>
+        {question.question_display
+          ? React.createElement(Eq, { value: question.question_display })
+          : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Soal belum diisi</span>
+        }
+      </p>
+
+      {/* Choices (MC) */}
+      {choices.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div className="mafiking-answer-heading">Pilihan Jawaban</div>
+          <div className="mafiking-choice-list">
+            {choices.map((choice, i) => (
+              <div
+                key={i}
+                className="mafiking-choice-option"
+                style={{ cursor: 'default', opacity: 0.85 }}
+              >
+                <span className="mafiking-choice-letter">{String.fromCharCode(65 + i)}</span>
+                <span className="mafiking-choice-text"><Eq value={choice} /></span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Answer (open) */}
+      {question.question_type !== 'mc' && question.answer_display && (
+        <div style={{ marginTop: 12 }}>
+          <div className="mafiking-answer-heading">Jawaban</div>
+          <div style={{ fontSize: 14, color: '#475569', padding: '8px 0' }}>
+            <Eq value={question.answer_display} />
+          </div>
+        </div>
+      )}
+
+      {/* Steps preview */}
+      {question.steps && question.steps.length > 0 && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #e2e8f0' }}>
+          <div className="kicker" style={{ marginBottom: 8 }}>Pembahasan ({question.steps.length} langkah)</div>
+          {question.steps.slice(0, 2).map((step, i) => (
+            <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 8, alignItems: 'flex-start' }}>
+              <span style={{ background: '#0b1326', color: '#fff', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 2 }}>{i + 1}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{step.title || `Langkah ${i + 1}`}</div>
+                {step.content && <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}><Eq value={step.content} /></div>}
+              </div>
+            </div>
+          ))}
+          {question.steps.length > 2 && (
+            <div style={{ fontSize: 12, color: '#94a3b8' }}>+ {question.steps.length - 2} langkah lainnya</div>
+          )}
+        </div>
+      )}
+
+      {/* Warnings */}
+      {question.warnings && question.warnings.length > 0 && (
+        <div style={{ marginTop: 10, padding: '8px 12px', background: '#fef3c7', borderRadius: 8, fontSize: 12, color: '#b45309' }}>
+          ⚠ {question.warnings.join(' · ')}
+        </div>
+      )}
+
+      {/* Inline edit form (collapsible) */}
+      {expanded && (
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: '2px dashed #e2e8f0' }}>
+          <AdminImportQuestionCard
+            index={index}
+            question={question}
+            onChange={onChange}
+            onRemove={onRemove}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── AI file import ──────────────────────────────────────────────────────────
 function normalizeImportQuestionForUi(question, idx) {
   return {
@@ -975,7 +1085,11 @@ const AdminAiImportPanel = ({ subtopics, selectedSubtopic, onSelectSubtopic, onI
 
   return (
     <div className="admin-import-panel">
-      <section className="admin-import-setup">
+      <div style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 10, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 16 }}>⚠</span>
+        <span>Fitur upload AI sedang dinonaktifkan sementara. Gunakan lagi nanti.</span>
+      </div>
+      <section className="admin-import-setup" style={{ opacity: 0.45, pointerEvents: 'none', userSelect: 'none' }}>
         <div className="admin-import-title-row">
           <div>
             <div className="kicker">Import Soal</div>
@@ -1036,7 +1150,6 @@ const AdminAiImportPanel = ({ subtopics, selectedSubtopic, onSelectSubtopic, onI
           </button>
         </div>
       </section>
-
       {source && (
         <div className="admin-import-source">
           <strong>{source.filename}</strong>
@@ -1052,16 +1165,41 @@ const AdminAiImportPanel = ({ subtopics, selectedSubtopic, onSelectSubtopic, onI
               <div className="kicker">Preview Draft</div>
               <h3>{draft.questions.length} soal siap direview</h3>
             </div>
-            <button className="admin-btn-primary" disabled={importing || draft.questions.length === 0} onClick={commitDraft} type="button">
-              {importing ? 'Mengimport…' : 'Import ke List Soal'}
-            </button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button
+                className="admin-btn-ghost"
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                onClick={() => {
+                  if (typeof window.__mafikingNavigate !== 'function') { showToast('Navigasi belum siap.', 'error'); return; }
+                  const problems = draft.questions.map((q, idx) => ({
+                    id: -(idx + 1),
+                    question_display: q.question_display || q.question_text || '',
+                    question_text: q.question_text || '',
+                    mc_options: Array.isArray(q.mc_options) ? q.mc_options.filter(Boolean) : [],
+                    answer_display: q.answer_display || '',
+                    acceptable_answers: q.acceptable_answers || [],
+                    steps: q.steps || [],
+                    difficulty: q.difficulty || 'Easy',
+                    question_type: q.question_type || 'open',
+                    sourceSubtopic: { title: 'Import Preview', id: 0 },
+                  }));
+                  window.__mafikingNavigate({ route: 'practice', practice: { title: 'Preview Import', problems, isPreview: true } });
+                }}
+                type="button"
+              >
+                <AdminIcon.Steps /> Preview di Halaman Soal
+              </button>
+              <button className="admin-btn-primary" disabled={importing || draft.questions.length === 0} onClick={commitDraft} type="button">
+                {importing ? 'Mengimport…' : 'Import ke List Soal'}
+              </button>
+            </div>
           </div>
           {draft.warnings && draft.warnings.length > 0 && (
             <p className="admin-import-warning">{draft.warnings.join(' · ')}</p>
           )}
           <div className="admin-import-question-list">
             {draft.questions.map((question, idx) => (
-              <AdminImportQuestionCard
+              <ImportQuestionPreviewCard
                 index={idx}
                 key={question.source_index || idx}
                 onChange={(nextQuestion) => updateQuestion(idx, nextQuestion)}

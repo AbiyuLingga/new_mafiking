@@ -13,11 +13,27 @@ const MafikingAPI = {
     const response = await fetch(path, {
       method: "POST",
       credentials: "same-origin",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+    });
+    return parseApiResponse(response);
+  },
+
+  async put(path, payload = {}) {
+    const response = await fetch(path, {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return parseApiResponse(response);
+  },
+
+  async del(path) {
+    const response = await fetch(path, {
+      method: "DELETE",
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
     });
     return parseApiResponse(response);
   },

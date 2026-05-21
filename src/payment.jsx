@@ -1,201 +1,471 @@
-// MAFIKING Payment — pilih paket, redirect ke Duitku, tampilkan status
+// MAFIKING Payment - checkout package, redirect to Duitku, show status.
 
 const PAKET_LIST = [
-  { id: "trial", label: "Trial 7 Hari", price: 29000, desc: "Akses semua modul + 7 hari koreksi AI tidak terbatas." },
-  { id: "bulanan", label: "Bulanan", price: 99000, desc: "Akses penuh selama 30 hari + leaderboard premium." },
-  { id: "semester", label: "Semester", price: 249000, desc: "Hemat 50% — akses 6 bulan + sesi tanya mentor." },
+  { id: "trial", label: "Trial 7 Hari", price: 29000, desc: "Akses semua modul + 7 hari koreksi AI tidak terbatas.", access: "7 hari" },
+  { id: "bulanan", label: "Bulanan", price: 99000, desc: "Akses penuh selama 30 hari + leaderboard premium.", access: "30 hari" },
+  { id: "semester", label: "Semester", price: 249000, desc: "Akses 6 bulan + sesi tanya mentor.", access: "6 bulan" },
 ];
 
-// ─── Payment page ─────────────────────────────────────────────────────────
-const Payment = ({ setRoute, currentUser }) => {
-  const { useState } = React;
-  const [selected, setSelected] = useState(null);
+function parsePrice(priceStr) {
+  if (typeof priceStr === "number") return Math.round(priceStr);
+  if (!priceStr || priceStr === "Gratis") return 0;
+  const clean = String(priceStr).replace(/[^0-9]/g, "");
+  return parseInt(clean, 10) || 0;
+}
+
+function formatRupiah(amount) {
+  return `Rp ${Number(amount || 0).toLocaleString("id-ID")}`;
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
+const Payment = ({ setRoute, currentUser, context }) => {
+  const { useState, useEffect, useMemo, useRef } = React;
+  const nameRef = useRef(null);
+  const emailRef = useRef(null);
+  const [selected, setSelected] = useState("bulanan");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [errors, setErrors] = useState({});
+
+  const isGuestUser = (user) => {
+    const displayName = user?.display_name || "";
+    const username = user?.username || "";
+    return displayName.startsWith("Tamu_") || username.startsWith("Tamu_");
+  };
+
+  const getInitialEmail = () => {
+    const username = currentUser?.username || "";
+    if (isGuestUser(currentUser)) return "";
+    if (username.includes("@")) return username;
+    return username ? `${username}@mafiking.com` : "";
+  };
+
+  const getInitialName = () => {
+    if (isGuestUser(currentUser)) return "";
+    return currentUser?.display_name || "";
+  };
+
+  const [email, setEmail] = useState(getInitialEmail);
+  const [name, setName] = useState(getInitialName);
+
+  useEffect(() => {
+    setEmail(getInitialEmail());
+    setName(getInitialName());
+  }, [currentUser]);
 
   const params = new URLSearchParams(window.location.search);
   const merchantOrderId = params.get("merchantOrderId");
+
+  const isTryoutCheckout = context && context.type === "tryout" && context.package;
+  const currentPkg = isTryoutCheckout ? context.package : null;
+  const selectedPackage = useMemo(() => {
+    if (isTryoutCheckout) {
+      return {
+        id: currentPkg.id,
+        label: currentPkg.title,
+        price: parsePrice(currentPkg.price),
+        desc: currentPkg.description,
+        access: currentPkg.duration,
+      };
+    }
+    return PAKET_LIST.find((paket) => paket.id === selected) || null;
+  }, [isTryoutCheckout, currentPkg, selected]);
+
+  const canPay = Boolean(selectedPackage) && !loading;
 
   if (merchantOrderId) {
     return <PaymentStatus merchantOrderId={merchantOrderId} setRoute={setRoute} />;
   }
 
+  function validateForm() {
+    const nextErrors = {};
+    if (!name.trim()) nextErrors.name = "Isi nama lengkap pembeli.";
+    if (!isValidEmail(email)) nextErrors.email = "Masukkan email aktif untuk invoice dan akses.";
+    if (!selectedPackage) nextErrors.form = "Pilih paket sebelum lanjut bayar.";
+    setErrors(nextErrors);
+
+    if (nextErrors.name) nameRef.current?.focus();
+    else if (nextErrors.email) emailRef.current?.focus();
+    return Object.keys(nextErrors).length === 0;
+  }
+
   async function handleBeli() {
-    if (!selected) return;
-    const paket = PAKET_LIST.find((p) => p.id === selected);
-    if (!paket) return;
+    if (!validateForm()) return;
+
     setLoading(true);
-    setError("");
+    setErrors({});
     try {
-      const res = await MafikingAPI.post("/api/payment/create", {
-        amount: paket.price,
-        productDetails: paket.label,
-        email: currentUser?.username || "mahasiswa@itb.ac.id",
-        name: currentUser?.display_name || "Mahasiswa",
-      });
+      const payload = isTryoutCheckout
+        ? {
+            purchaseType: "tryout",
+            tryoutPackageId: currentPkg.id,
+            email: email.trim(),
+            name: name.trim(),
+          }
+        : {
+            purchaseType: "subscription",
+            packageId: selectedPackage.id,
+            email: email.trim(),
+            name: name.trim(),
+          };
+
+      const res = await MafikingAPI.post("/api/payment/create", payload);
       if (res.paymentUrl) {
         window.location.href = res.paymentUrl;
       } else {
-        setError("Tidak mendapatkan URL pembayaran dari server.");
+        setErrors({ form: "Server belum mengirim URL pembayaran. Coba lagi." });
       }
     } catch (err) {
-      setError(err.message || "Gagal membuat pembayaran. Coba lagi.");
+      setErrors({ form: err.message || "Gagal membuat pembayaran. Coba lagi." });
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="bg-paper min-h-screen">
+    <div className="bg-paper min-h-screen pb-28 md:pb-0">
       <section>
         <div className="max-w-2xl mx-auto px-6 md:px-8 pt-12 pb-20">
-          <button className="mafiking-back-button mb-8" onClick={() => setRoute("lobby")} type="button">
+          <button className="mafiking-back-button mb-8 animate-fade-in" onClick={() => setRoute(isTryoutCheckout ? "tryout" : "lobby")} type="button">
             <Icon.ChevL className="w-4 h-4" />
             Kembali
           </button>
 
-          <div className="kicker mb-2">Pilih Paket</div>
-          <h1 className="font-display font-bold text-3xl md:text-4xl tracking-[-0.03em] leading-[1.05] mb-8">
-            Mulai belajar lebih serius.
-          </h1>
+          <div className="animate-fade-in">
+            <div className="kicker mb-2">{isTryoutCheckout ? "Checkout Tryout" : "Pilih Paket"}</div>
+            <h1 className="font-display font-bold text-3xl md:text-4xl tracking-[-0.03em] leading-[1.05] mb-3">
+              {isTryoutCheckout ? "Konfirmasi pembelian." : "Mulai belajar lebih serius."}
+            </h1>
+            <p className="text-sm md:text-base text-ink/60 leading-relaxed mb-8 max-w-xl">
+              Cek paket, isi kontak pembelian, lalu lanjut ke Duitku untuk QRIS atau transfer bank.
+            </p>
 
-          <div className="grid gap-3 mb-8">
-            {PAKET_LIST.map((paket) => {
-              const active = selected === paket.id;
-              return (
-                <button
-                  aria-pressed={active}
-                  className={`card pad-d text-left transition-all ${active ? "ring-2 ring-ink" : ""}`}
-                  key={paket.id}
-                  onClick={() => setSelected(paket.id)}
-                  type="button"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-display font-bold text-lg">{paket.label}</div>
-                      <div className="text-ink/60 text-sm mt-1">{paket.desc}</div>
+            {isTryoutCheckout ? (
+              <div className="card pad-d bg-white border hairline rounded-3xl p-6 mb-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-yel/10 rounded-bl-full flex items-center justify-center pointer-events-none">
+                  <Icon.Trophy className="w-6 h-6 text-ink/40 translate-x-3 -translate-y-3" />
+                </div>
+                <div className="relative z-10">
+                  <span className="tag-yel tag mb-3">Premium Tryout</span>
+                  <h3 className="font-display font-bold text-2xl tracking-[-0.02em] mt-2 text-ink">
+                    {currentPkg.title}
+                  </h3>
+                  <p className="text-ink/65 text-sm mt-2 leading-relaxed">
+                    {currentPkg.description}
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-4 mt-6 pt-5 border-t hairline">
+                    <div>
+                      <div className="text-xs text-ink/50">Durasi</div>
+                      <div className="font-display font-bold text-lg">{currentPkg.duration}</div>
                     </div>
-                    <div className="shrink-0 text-right">
-                      <div className="font-display font-bold text-xl tnum">
-                        Rp {paket.price.toLocaleString("id-ID")}
-                      </div>
+                    <div>
+                      <div className="text-xs text-ink/50">Jumlah Soal</div>
+                      <div className="font-display font-bold text-lg tnum">{currentPkg.questions} Soal</div>
                     </div>
                   </div>
-                </button>
-              );
-            })}
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-3 mb-6" role="radiogroup" aria-label="Pilih paket langganan">
+                {PAKET_LIST.map((paket) => {
+                  const active = selected === paket.id;
+                  return (
+                    <button
+                      aria-checked={active}
+                      className={`card pad-d text-left transition-all ${active ? "ring-2 ring-ink" : "hover:border-ink/25"}`}
+                      key={paket.id}
+                      onClick={() => {
+                        setSelected(paket.id);
+                        if (errors.form) setErrors((prev) => Object.assign({}, prev, { form: "" }));
+                      }}
+                      role="radio"
+                      type="button"
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="font-display font-bold text-lg">{paket.label}</div>
+                            {active ? <span className="tag tag-yel !text-[10px] !py-0.5">Dipilih</span> : null}
+                          </div>
+                          <div className="text-ink/60 text-sm mt-1">{paket.desc}</div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="font-display font-bold text-xl tnum">
+                            {formatRupiah(paket.price)}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="card pad-d bg-white border hairline rounded-3xl p-6 mb-6">
+              <h3 className="font-display font-bold text-lg mb-4">Informasi Kontak</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="admin-field-label block mb-1.5" htmlFor="payment-name">Nama lengkap</label>
+                  <input
+                    aria-describedby={errors.name ? "payment-name-error" : undefined}
+                    aria-invalid={errors.name ? "true" : "false"}
+                    autoComplete="name"
+                    className={`admin-input ${errors.name ? "is-error" : ""}`}
+                    id="payment-name"
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      if (errors.name) setErrors((prev) => Object.assign({}, prev, { name: "" }));
+                    }}
+                    placeholder="Nama lengkap pembeli"
+                    ref={nameRef}
+                    type="text"
+                    value={name}
+                  />
+                  {errors.name ? <p className="admin-field-error" id="payment-name-error">{errors.name}</p> : null}
+                </div>
+                <div>
+                  <label className="admin-field-label block mb-1.5" htmlFor="payment-email">Email pembelian</label>
+                  <input
+                    aria-describedby={errors.email ? "payment-email-error" : "payment-email-help"}
+                    aria-invalid={errors.email ? "true" : "false"}
+                    autoComplete="email"
+                    className={`admin-input ${errors.email ? "is-error" : ""}`}
+                    id="payment-email"
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (errors.email) setErrors((prev) => Object.assign({}, prev, { email: "" }));
+                    }}
+                    placeholder="nama@email.com"
+                    ref={emailRef}
+                    type="email"
+                    value={email}
+                  />
+                  {errors.email ? (
+                    <p className="admin-field-error" id="payment-email-error">{errors.email}</p>
+                  ) : (
+                    <p className="text-[11px] text-ink/45 mt-1.5" id="payment-email-help">Invoice dan instruksi akses dikirim ke email ini.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <OrderSummary selectedPackage={selectedPackage} isTryoutCheckout={isTryoutCheckout} />
           </div>
 
-          {error ? (
-            <div className="mafiking-error-box mb-4">
+          {errors.form ? (
+            <div className="mafiking-error-box mb-4" role="alert">
               <Icon.Target className="w-4 h-4" />
-              {error}
+              {errors.form}
             </div>
           ) : null}
 
           <button
-            className="mafiking-primary-button w-full justify-center"
-            disabled={!selected || loading}
+            className="mafiking-primary-button w-full justify-center group hidden md:inline-flex"
+            disabled={!canPay}
             onClick={handleBeli}
             type="button"
           >
-            {loading ? "Memproses..." : "Bayar Sekarang"} {!loading && <Icon.Arrow className="w-4 h-4" />}
+            {loading ? "Memproses..." : `Bayar ${selectedPackage ? formatRupiah(selectedPackage.price) : "Sekarang"}`}
+            {!loading && <Icon.Arrow className="w-4 h-4 transition-transform group-hover:translate-x-1" />}
           </button>
 
-          <p className="text-center text-xs text-ink/55 mt-4">
-            Pembayaran aman via Duitku (QRIS, transfer bank). Sandbox mode aktif.
-          </p>
+          <TrustNote />
         </div>
       </section>
-    </div>
-  );
-};
 
-// ─── Payment status (setelah redirect dari Duitku) ────────────────────────
-const PaymentStatus = ({ merchantOrderId, setRoute }) => {
-  const { useState, useEffect } = React;
-  const [status, setStatus] = useState("pending");
-  const [attempts, setAttempts] = useState(0);
-
-  useEffect(() => {
-    let timer = null;
-    function check() {
-      MafikingAPI.get(`/api/payment/status/${merchantOrderId}`)
-        .then((res) => {
-          if (res.statusCode === "00") {
-            setStatus("success");
-          } else if (res.statusCode === "01") {
-            setStatus("pending");
-            setAttempts((a) => a + 1);
-            if (attempts < 12) timer = setTimeout(check, 5000);
-            else setStatus("timeout");
-          } else {
-            setStatus("failed");
-          }
-        })
-        .catch(() => {
-          setStatus("error");
-        });
-    }
-    check();
-    return () => clearTimeout(timer);
-  }, [merchantOrderId]);
-
-  if (status === "pending") {
-    return (
-      <div className="bg-paper min-h-screen flex items-center justify-center">
-        <div className="card pad-d text-center max-w-sm mx-auto">
-          <div className="w-12 h-12 rounded-full bg-yel/40 flex items-center justify-center mx-auto mb-4">
-            <Icon.Clock className="w-6 h-6" />
-          </div>
-          <h2 className="font-display font-bold text-2xl mb-2">Menunggu Pembayaran</h2>
-          <p className="text-ink/60 text-sm mb-4">Selesaikan pembayaran di aplikasi atau ATM. Halaman ini akan otomatis diperbarui.</p>
-          <div className="flex items-center justify-center gap-2 text-xs text-ink/55">
-            <Icon.Sparkles className="w-3 h-3" />
-            Memeriksa status...
+      <div className="payment-mobile-cta md:hidden">
+        <div>
+          <div className="text-[11px] text-ink/50">Total</div>
+          <div className="font-display font-bold text-lg leading-tight tnum">
+            {selectedPackage ? formatRupiah(selectedPackage.price) : "Pilih paket"}
           </div>
         </div>
-      </div>
-    );
-  }
-
-  if (status === "success") {
-    return (
-      <div className="bg-paper min-h-screen flex items-center justify-center">
-        <div className="card pad-d text-center max-w-sm mx-auto">
-          <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
-            <Icon.CheckCircle className="w-6 h-6 text-emerald-600" />
-          </div>
-          <h2 className="font-display font-bold text-2xl mb-2">Pembayaran Berhasil!</h2>
-          <p className="text-ink/60 text-sm mb-6">Akses premium kamu sudah aktif. Selamat belajar!</p>
-          <button className="btn-ink w-full justify-center" onClick={() => setRoute("belajar")} type="button">
-            Mulai Belajar <Icon.Arrow />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-paper min-h-screen flex items-center justify-center">
-      <div className="card pad-d text-center max-w-sm mx-auto">
-        <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
-          <Icon.Target className="w-6 h-6 text-red-500" />
-        </div>
-        <h2 className="font-display font-bold text-2xl mb-2">
-          {status === "timeout" ? "Waktu Habis" : "Pembayaran Gagal"}
-        </h2>
-        <p className="text-ink/60 text-sm mb-6">
-          {status === "timeout"
-            ? "Status tidak dapat dikonfirmasi. Hubungi dukungan jika dana sudah terpotong."
-            : "Pembayaran tidak berhasil atau kadaluarsa."}
-        </p>
-        <button className="btn-ink w-full justify-center" onClick={() => setRoute("payment")} type="button">
-          Coba Lagi <Icon.Arrow />
+        <button
+          className="mafiking-primary-button justify-center group"
+          disabled={!canPay}
+          onClick={handleBeli}
+          type="button"
+        >
+          {loading ? "Memproses..." : "Bayar"}
+          {!loading && <Icon.Arrow className="w-4 h-4" />}
         </button>
       </div>
     </div>
   );
 };
+
+const OrderSummary = ({ selectedPackage, isTryoutCheckout }) => (
+  <div className="card bg-white border hairline rounded-3xl p-6 mb-6">
+    <div className="flex items-center justify-between gap-4 mb-4">
+      <h3 className="font-display font-bold text-lg">Ringkasan Pembayaran</h3>
+      <span className="tag">{isTryoutCheckout ? "Tryout" : "Langganan"}</span>
+    </div>
+    <div className="space-y-3 text-sm">
+      <div className="flex justify-between gap-4">
+        <span className="text-ink/55">Paket</span>
+        <span className="font-semibold text-right">{selectedPackage?.label || "Belum dipilih"}</span>
+      </div>
+      <div className="flex justify-between gap-4">
+        <span className="text-ink/55">Masa akses</span>
+        <span className="font-semibold text-right">{selectedPackage?.access || "-"}</span>
+      </div>
+      <div className="pt-3 border-t hairline flex justify-between gap-4 items-end">
+        <span className="font-semibold text-ink/65">Total bayar</span>
+        <span className="font-display font-bold text-2xl tnum">{selectedPackage ? formatRupiah(selectedPackage.price) : "-"}</span>
+      </div>
+    </div>
+  </div>
+);
+
+const TrustNote = () => (
+  <div className="text-center text-xs text-ink/55 mt-4 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
+    <span className="inline-flex items-center gap-1.5"><Icon.CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Dibayar via Duitku</span>
+    <span className="inline-flex items-center gap-1.5"><Icon.CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Akses aktif otomatis</span>
+  </div>
+);
+
+const PaymentStatus = ({ merchantOrderId, setRoute }) => {
+  const { useState, useEffect } = React;
+  const [status, setStatus] = useState("pending");
+  const [attempts, setAttempts] = useState(0);
+  const [payment, setPayment] = useState({ merchantOrderId });
+  const [errorMessage, setErrorMessage] = useState("");
+
+  function leaveStatus(nextRoute) {
+    window.history.replaceState(null, "", window.location.pathname);
+    setRoute(nextRoute);
+  }
+
+  useEffect(() => {
+    let timer = null;
+    let cancelled = false;
+    let nextAttempts = 0;
+
+    function check() {
+      MafikingAPI.get(`/api/payment/status/${merchantOrderId}`)
+        .then((res) => {
+          if (cancelled) return;
+          setPayment(res);
+          if (res.status === "SUCCESS") {
+            setStatus("success");
+          } else if (res.status === "PENDING") {
+            nextAttempts += 1;
+            setAttempts(nextAttempts);
+            setStatus("pending");
+            if (nextAttempts < 12) timer = setTimeout(check, 5000);
+            else setStatus("timeout");
+          } else {
+            setStatus("failed");
+          }
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setErrorMessage(err.message || "Status pembayaran belum bisa dicek.");
+          setStatus("error");
+        });
+    }
+
+    check();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [merchantOrderId]);
+
+  const productDetails = payment.productDetails || "Pesanan Mafiking";
+  const amount = payment.amount ? formatRupiah(payment.amount) : "";
+  const isTryout = !["Trial 7 Hari", "Bulanan", "Semester"].includes(productDetails);
+
+  if (status === "pending") {
+    return (
+      <PaymentStatusShell tone="pending" icon={<Icon.Clock className="w-6 h-6 text-ink" />}>
+        <h2 className="font-display font-bold text-2xl mb-2">Menunggu Pembayaran</h2>
+        <p className="text-ink/60 text-sm mb-5">Selesaikan pembayaran di Duitku. Halaman ini mengecek status otomatis.</p>
+        <StatusDetail productDetails={productDetails} amount={amount} merchantOrderId={merchantOrderId} />
+        <div className="flex items-center justify-center gap-2 text-xs text-ink/55 mt-5">
+          <Icon.Sparkles className="w-3 h-3 animate-spin" />
+          Memeriksa status, percobaan {attempts || 1}/12
+        </div>
+      </PaymentStatusShell>
+    );
+  }
+
+  if (status === "success") {
+    return (
+      <PaymentStatusShell tone="success" icon={<Icon.CheckCircle className="w-6 h-6 text-emerald-600" />}>
+        <h2 className="font-display font-bold text-2xl mb-2">Pembayaran Berhasil</h2>
+        <p className="text-ink/60 text-sm mb-5">Akses sudah aktif untuk pesanan ini.</p>
+        <StatusDetail productDetails={productDetails} amount={amount} merchantOrderId={merchantOrderId} />
+        <button className="btn-ink w-full justify-center group mt-6" onClick={() => leaveStatus(isTryout ? "tryout" : "belajar")} type="button">
+          {isTryout ? "Ke Halaman Tryout" : "Mulai Belajar"} <Icon.Arrow className="transition-transform group-hover:translate-x-1" />
+        </button>
+      </PaymentStatusShell>
+    );
+  }
+
+  const title = status === "timeout" ? "Status Belum Terkonfirmasi" : status === "error" ? "Status Tidak Terbaca" : "Pembayaran Gagal";
+  const message = status === "timeout"
+    ? "Kalau dana sudah terpotong, simpan Order ID dan hubungi admin."
+    : status === "error"
+      ? errorMessage
+      : "Pembayaran tidak berhasil atau sudah kedaluwarsa.";
+
+  return (
+    <PaymentStatusShell tone="failed" icon={<Icon.Target className="w-6 h-6 text-red-500" />}>
+      <h2 className="font-display font-bold text-2xl mb-2">{title}</h2>
+      <p className="text-ink/60 text-sm mb-5">{message}</p>
+      <StatusDetail productDetails={productDetails} amount={amount} merchantOrderId={merchantOrderId} />
+      <div className="grid gap-3 mt-6">
+        <button className="btn-ink w-full justify-center" onClick={() => window.location.reload()} type="button">
+          Cek Ulang Status <Icon.Arrow />
+        </button>
+        <button className="btn-ghost w-full justify-center" onClick={() => leaveStatus("tryout")} type="button">
+          Kembali ke Tryout
+        </button>
+      </div>
+    </PaymentStatusShell>
+  );
+};
+
+const PaymentStatusShell = ({ tone, icon, children }) => {
+  const toneClass = {
+    pending: "bg-yel/40",
+    success: "bg-emerald-100",
+    failed: "bg-red-50",
+  }[tone] || "bg-yel/40";
+
+  return (
+    <div className="bg-paper min-h-screen flex items-center justify-center animate-fade-in px-6 py-12">
+      <div className="card pad-d text-center max-w-md w-full mx-auto shadow-xl">
+        <div className={`w-12 h-12 rounded-full ${toneClass} flex items-center justify-center mx-auto mb-4`}>
+          {icon}
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+const StatusDetail = ({ productDetails, amount, merchantOrderId }) => (
+  <div className="rounded-2xl border hairline bg-ink/[0.025] p-4 text-left text-sm space-y-3">
+    <div className="flex justify-between gap-4">
+      <span className="text-ink/50">Paket</span>
+      <span className="font-semibold text-right">{productDetails}</span>
+    </div>
+    {amount ? (
+      <div className="flex justify-between gap-4">
+        <span className="text-ink/50">Total</span>
+        <span className="font-semibold tnum">{amount}</span>
+      </div>
+    ) : null}
+    <div className="flex justify-between gap-4">
+      <span className="text-ink/50">Order ID</span>
+      <span className="font-mono text-xs text-right break-all">{merchantOrderId}</span>
+    </div>
+  </div>
+);
 
 window.Payment = Payment;

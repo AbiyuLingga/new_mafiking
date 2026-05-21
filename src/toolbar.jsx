@@ -94,8 +94,12 @@
     'border-white/10 bg-white/5 text-neutral-200 hover:border-white/20 hover:bg-white/10';
 
   function BrowserSafeButton(props) {
-    const { children, disabled = false, label, onPress, title = label, ...buttonProps } = props;
-    const { ['aria-label']: ariaLabel, ...restButtonProps } = buttonProps;
+    const children = props.children;
+    const disabled = props.disabled || false;
+    const label = props.label;
+    const onPress = props.onPress;
+    const title = props.title || label;
+    const ariaLabel = props['aria-label'];
     const pointerIdRef = useRef(null);
     const suppressClickRef = useRef(false);
 
@@ -131,14 +135,18 @@
 
     return (
       <button
-        {...restButtonProps}
+        aria-expanded={props['aria-expanded']}
+        aria-haspopup={props['aria-haspopup']}
         aria-label={label != null ? label : ariaLabel}
+        aria-pressed={props['aria-pressed']}
+        className={props.className}
         disabled={disabled}
         onClick={handleClick}
         onContextMenu={(event) => event.preventDefault()}
         onPointerCancel={stopPointerPress}
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
+        style={props.style}
         title={title}
         type="button"
       >
