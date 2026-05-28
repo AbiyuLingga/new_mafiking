@@ -42,29 +42,47 @@ function Invoke-BashDeploy {
     throw "Gagal mengubah path repo Windows ke path Bash untuk $RunnerName."
   }
 
-  $assignments = @(
-    Get-OptionalEnvAssignment "APP_NAME"
-    Get-OptionalEnvAssignment "APP_PORT"
-    Get-OptionalEnvAssignment "REMOTE_DIR"
-    Get-OptionalEnvAssignment "DEPLOY_DB"
-  ) | Where-Object { $_ }
+  Write-Host "Menjalankan deploy lewat $RunnerName..."
+  $deployScript = "$repoPath/deploy.sh"
+  & $BashExecutable @BashBaseArgs $deployScript $ServerIp $Username
+  exit $LASTEXITCODE
+}
 
-  $envPrefix = ""
-  if ($assignments.Count -gt 0) {
-    $envPrefix = ($assignments -join " ") + " "
+function Test-BashRunner {
+  param(
+    [string]$BashExecutable,
+    [string[]]$BashBaseArgs = @()
+  )
+
+  & $BashExecutable @BashBaseArgs -lc "command -v bash >/dev/null" *> $null
+  return $LASTEXITCODE -eq 0
+}
+
+function Get-GitBashCandidates {
+  $candidates = @()
+
+  $pathBash = Get-Command bash.exe -ErrorAction SilentlyContinue
+  if ($pathBash -and $pathBash.Source -like "*\Git\*") {
+    $candidates += $pathBash.Source
   }
 
-  $script = @(
-    "cd $(Quote-BashValue $repoPath)"
-    "command -v ssh >/dev/null || { echo ""Command 'ssh' belum tersedia di $RunnerName.""; exit 127; }"
-    "command -v rsync >/dev/null || { echo ""Command 'rsync' belum tersedia di $RunnerName.""; exit 127; }"
-    "command -v npm >/dev/null || { echo ""Command 'npm' belum tersedia di $RunnerName.""; exit 127; }"
-    "${envPrefix}./deploy.sh $(Quote-BashValue $ServerIp) $(Quote-BashValue $Username)"
-  ) -join " && "
+  $git = Get-Command git.exe -ErrorAction SilentlyContinue
+  if ($git) {
+    $gitRoot = Split-Path -Parent (Split-Path -Parent $git.Source)
+    $candidates += Join-Path $gitRoot "bin\bash.exe"
+    $candidates += Join-Path $gitRoot "usr\bin\bash.exe"
+  }
 
-  Write-Host "Menjalankan deploy lewat $RunnerName..."
-  & $BashExecutable @BashBaseArgs -lc $script
-  exit $LASTEXITCODE
+  $candidates += Join-Path $env:ProgramFiles "Git\bin\bash.exe"
+  $candidates += Join-Path $env:ProgramFiles "Git\usr\bin\bash.exe"
+
+  $programFilesX86 = ${env:ProgramFiles(x86)}
+  if (-not [string]::IsNullOrWhiteSpace($programFilesX86)) {
+    $candidates += Join-Path $programFilesX86 "Git\bin\bash.exe"
+    $candidates += Join-Path $programFilesX86 "Git\usr\bin\bash.exe"
+  }
+
+  $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique
 }
 
 $repoRoot = $PSScriptRoot
@@ -78,21 +96,26 @@ if (-not (Test-Path -LiteralPath $deploySh)) {
 }
 
 $wsl = Get-Command wsl.exe -ErrorAction SilentlyContinue
-if ($wsl) {
+if ($wsl -and (Test-BashRunner -BashExecutable $wsl.Source -BashBaseArgs @("bash"))) {
   $escapedRepoRoot = $repoRoot -replace "\\", "\\"
   Invoke-BashDeploy `
     -BashExecutable $wsl.Source `
     -BashBaseArgs @("bash") `
     -RepoPathCommand "wslpath -a $(Quote-BashValue $escapedRepoRoot)" `
     -RunnerName "WSL"
+} elseif ($wsl) {
+  Write-Host "WSL ditemukan, tetapi belum siap dipakai. Mencoba Git Bash..."
 }
 
-$bash = Get-Command bash.exe -ErrorAction SilentlyContinue
-if ($bash) {
+$gitBashCandidates = @(Get-GitBashCandidates)
+$gitBash = $gitBashCandidates | Where-Object { Test-BashRunner -BashExecutable $_ } | Select-Object -First 1
+if ($gitBash) {
   Invoke-BashDeploy `
-    -BashExecutable $bash.Source `
+    -BashExecutable $gitBash `
     -RepoPathCommand "cygpath -u $(Quote-BashValue $repoRoot)" `
     -RunnerName "Git Bash"
+} elseif ($gitBashCandidates.Count -gt 0) {
+  Write-Host "Git Bash ditemukan, tetapi tidak bisa menjalankan Bash command."
 }
 
 Write-Error @"
