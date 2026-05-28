@@ -101,6 +101,43 @@ The canonical PM2 process and Nginx site name is `new_mafiking`; legacy
 process/site names such as `mafiking` and `new-mafiking` should be removed when
 deploying so `mafiking.com` cannot accidentally point at an older app process.
 
+Deploy from Linux, WSL, or Git Bash:
+
+```bash
+./deploy.sh 202.155.94.210 root
+```
+
+Deploy from Windows PowerShell:
+
+```powershell
+.\deploy.ps1 202.155.94.210 root
+```
+
+`deploy.ps1` is a wrapper that runs the same `deploy.sh` through WSL first, then
+Git Bash if WSL is unavailable. The Bash environment must have `ssh`, `rsync`,
+and `npm`.
+
+If PowerShell blocks local scripts, run it with a one-time execution-policy
+bypass:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy.ps1 202.155.94.210 root
+```
+
+To overwrite the server database during deploy, set `DEPLOY_DB=1`.
+
+Linux, WSL, or Git Bash:
+
+```bash
+DEPLOY_DB=1 ./deploy.sh 202.155.94.210 root
+```
+
+Windows PowerShell:
+
+```powershell
+$env:DEPLOY_DB = "1"; .\deploy.ps1 202.155.94.210 root
+```
+
 ## Admin Account
 
 A local admin user is pre-created in `db/database.sqlite`:

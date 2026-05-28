@@ -2,8 +2,11 @@
 #
 # Deploy new_mafiking ke VPS Nevacloud.
 #
-# Cara pakai:
+# Cara pakai Linux / WSL / Git Bash:
 #   ./deploy.sh 202.155.94.210 root
+#
+# Cara pakai Windows PowerShell:
+#   .\deploy.ps1 202.155.94.210 root
 #
 # Catatan:
 # - .env lokal tidak dikirim. Jika .env server belum ada, script membuat .env
