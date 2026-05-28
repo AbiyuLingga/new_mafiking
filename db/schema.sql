@@ -116,7 +116,8 @@ CREATE TABLE IF NOT EXISTS practice_attempts (
 
 CREATE TABLE IF NOT EXISTS profile_ai_refreshes (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    last_ai_refresh_at DATETIME NOT NULL
+    last_ai_refresh_at DATETIME NOT NULL,
+    cached_summary TEXT
 );
 
 CREATE TABLE IF NOT EXISTS correction_attempts (

@@ -264,7 +264,7 @@ button:focus-visible, a:focus-visible {
 .offline-banner {
   background: #fef3c7;
   border-bottom: 1px solid #fde68a;
-  color: #92400e;
+  color: #0b1326;
   font-size: 13px;
   font-weight: 600;
   padding: 10px 24px;
@@ -1140,6 +1140,11 @@ button:focus-visible, a:focus-visible {
 .eq-katex-line {
   display: block;
   margin: 0.2em 0;
+}
+
+.math-narrative {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .mafiking-question-title .eq-katex,

@@ -1,6 +1,6 @@
 // Profile/report route. Uses the original Mafiking visual language.
 
-const Profile = ({ setRoute }) => {
+const Profile = ({ setRoute, isAdmin = false }) => {
   const { useState, useEffect } = React;
   const [loading, setLoading] = useState(true);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -11,7 +11,7 @@ const Profile = ({ setRoute }) => {
   const [summary, setSummary] = useState(null);
   const [aiRefresh, setAiRefresh] = useState(null);
 
-  const loadProfile = async () => {
+  const loadProfile = async (forceRefresh = false) => {
     try {
       setLoading(true);
       setSummaryLoading(false);
@@ -35,6 +35,7 @@ const Profile = ({ setRoute }) => {
       try {
         const profileSummary = await MafikingAPI.post("/api/correction/profile-summary", {
           attempts: correctionAttempts,
+          forceRefresh
         });
         setSummary(profileSummary.summary);
         setAiRefresh(profileSummary.aiRefresh || null);
@@ -50,42 +51,69 @@ const Profile = ({ setRoute }) => {
   };
 
   useEffect(() => {
-    loadProfile();
+    loadProfile(false);
   }, []);
 
-  const weaknesses = summary?.weaknesses?.length
+  const weaknesses = limitLearningTags(summary?.weaknesses?.length
     ? summary.weaknesses.map(formatLearningLabel)
-    : collectTags(attempts, "weaknessTags");
+    : collectTags(attempts, "weaknessTags"));
 
-  const strengths = summary?.strengths?.length
+  const strengths = limitLearningTags(summary?.strengths?.length
     ? summary.strengths.map(formatLearningLabel)
-    : collectTags(attempts, "strengthTags");
+    : collectTags(attempts, "strengthTags"));
 
   const recommendations = summary?.recommendedQuestions || [];
   const recommendedItems = Array.isArray(summary?.recommendedItems) ? summary.recommendedItems : [];
-  const recommendationRows = recommendedItems.length
+  const dataRecommendationRows = recommendedItems.length
     ? recommendedItems.map((item) => ({
-        ref: item.ref || "",
-        questionDisplay: item.questionDisplay || item.questionText || "",
-        questionText: item.questionText || "",
-        answerDisplay: item.answerDisplay || "",
-        difficulty: item.difficulty || "",
-        purcellReference: item.purcellReference || "",
-        reason: item.reason || "",
-        storyProblem: Boolean(item.storyProblem),
-        targetSkill: item.targetSkill?.label || "",
-      }))
+      ref: item.ref || "",
+      questionDisplay: item.questionDisplay || item.questionText || "",
+      questionText: item.questionText || "",
+      answerDisplay: item.answerDisplay || "",
+      difficulty: item.difficulty || "",
+      purcellReference: item.purcellReference || "",
+      reason: item.reason || "",
+      storyProblem: Boolean(item.storyProblem),
+      targetSkill: item.targetSkill?.label || "",
+    }))
     : recommendations.map((question) => ({
-        ref: "",
-        questionDisplay: question,
-        questionText: "",
-        answerDisplay: "",
-        difficulty: "",
-        purcellReference: "",
-        reason: "",
-        storyProblem: false,
-        targetSkill: "",
-      }));
+      ref: "",
+      questionDisplay: question,
+      questionText: "",
+      answerDisplay: "",
+      difficulty: "",
+      purcellReference: "",
+      reason: "",
+      storyProblem: false,
+      targetSkill: "",
+    }));
+  const adminPreviewRecommendationRows = [
+    {
+      ref: "",
+      questionDisplay: "Tentukan dy/dx dari x² + y² = 25.",
+      questionText: "Tentukan dy/dx dari x² + y² = 25.",
+      answerDisplay: "dy/dx = -x/y",
+      difficulty: "Medium",
+      purcellReference: "Turunan Implisit",
+      reason: "",
+      storyProblem: false,
+      targetSkill: "Turunan Implisit",
+    },
+    {
+      ref: "",
+      questionDisplay: "Hitung ∫ x eˣ dx.",
+      questionText: "Hitung integral x e^x dx.",
+      answerDisplay: "x eˣ - eˣ + C",
+      difficulty: "Medium",
+      purcellReference: "Integrasi Parsial",
+      reason: "",
+      storyProblem: false,
+      targetSkill: "Integrasi Parsial",
+    },
+  ];
+  const recommendationRows = dataRecommendationRows.length
+    ? dataRecommendationRows
+    : (isAdmin ? adminPreviewRecommendationRows : []);
 
   function formatDate(isoString) {
     if (!isoString) return "";
@@ -128,7 +156,6 @@ const Profile = ({ setRoute }) => {
         <div className="max-w-6xl mx-auto px-6 md:px-8">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b hairline pb-6">
             <div>
-              <p className="kicker mb-1.5">Profil Belajar</p>
               <h1 className="font-display font-bold text-4xl md:text-5xl tracking-[-0.03em] leading-none mb-3">
                 Raport Belajar
               </h1>
@@ -140,7 +167,7 @@ const Profile = ({ setRoute }) => {
               <button onClick={() => setRoute("belajar")} className="btn-ink !py-2.5 !px-5 text-sm">
                 Kembali Belajar
               </button>
-              <button onClick={loadProfile} className="btn-ghost !py-2.5 !px-5 text-sm">
+              <button onClick={() => loadProfile(true)} className="btn-ghost !py-2.5 !px-5 text-sm">
                 Refresh
               </button>
             </div>
@@ -224,7 +251,6 @@ const Profile = ({ setRoute }) => {
               {/* Rekomendasi Soal */}
               <div className="card p-6 ple" style={{ animationDelay: "160ms" }}>
                 <div className="flex items-center gap-2.5 mb-2">
-                  <div className="ps w-8 h-8 rounded-lg" />
                   <div className="ps h-5 w-48 rounded" />
                 </div>
                 <div className="ps h-3 w-72 rounded mb-6" />
@@ -273,55 +299,9 @@ const Profile = ({ setRoute }) => {
             </div>
           ) : (
             <div className="grid gap-8">
-              {/* Metrics Grid */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="card p-5 flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-ink/5 text-ink">
-                    <Icon.Target className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Total Soal</p>
-                    <h3 className="font-display font-bold text-2xl mt-0.5">{stats?.solvedProblems || 0}</h3>
-                    <p className="text-[10px] text-ink/55 mt-0.5">{attempts.length} evaluasi canvas</p>
-                  </div>
-                </div>
-
-                <div className="card p-5 flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-ink/5 text-ink">
-                    <Icon.Bolt className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Total XP</p>
-                    <h3 className="font-display font-bold text-2xl mt-0.5">{user?.xp || stats?.xp || 0}</h3>
-                    <p className="text-[10px] text-ink/55 mt-0.5">Level {user?.level || stats?.level || 1}</p>
-                  </div>
-                </div>
-
-                <div className="card p-5 flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-ink/5 text-ink">
-                    <Icon.Flame className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Runtunan</p>
-                    <h3 className="font-display font-bold text-2xl mt-0.5">{user?.streak_days || stats?.streak_days || 0}</h3>
-                    <p className="text-[10px] text-ink/55 mt-0.5">hari berturut</p>
-                  </div>
-                </div>
-
-                <div className="card p-5 flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-ink/5 text-ink">
-                    <Icon.Trophy className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Mastery</p>
-                    <h3 className="font-display font-bold text-2xl mt-0.5">{stats?.mastery || 0}%</h3>
-                    <p className="text-[10px] text-ink/55 mt-0.5">dari {stats?.totalProblems || 0} soal</p>
-                  </div>
-                </div>
-              </div>
 
               {/* AI Evaluation Box */}
-              <div 
+              <div
                 className="relative overflow-hidden rounded-[var(--card-radius)] p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6"
                 style={{
                   background: "linear-gradient(135deg, #0b1326 0%, #15223e 100%)",
@@ -329,7 +309,7 @@ const Profile = ({ setRoute }) => {
                   boxShadow: "0 20px 40px -15px rgba(11, 19, 38, 0.3)"
                 }}
               >
-                <div 
+                <div
                   className="absolute w-[250px] h-[250px] rounded-full blur-[90px] pointer-events-none opacity-20"
                   style={{
                     bottom: "-60px",
@@ -337,7 +317,7 @@ const Profile = ({ setRoute }) => {
                     background: "var(--yel)"
                   }}
                 />
-                
+
                 <div className="relative z-10 flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-[10px] uppercase tracking-widest font-semibold text-white/50">AI Tutor Assessment</span>
@@ -345,7 +325,7 @@ const Profile = ({ setRoute }) => {
                       <span className="flex items-center gap-1.5 text-[10px] font-semibold text-amber-300">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
                           style={{ animation: "spin 1s linear infinite" }}>
-                          <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                          <path d="M21 12a9 9 0 11-6.219-8.56" />
                         </svg>
                         Menganalisis...
                       </span>
@@ -354,7 +334,7 @@ const Profile = ({ setRoute }) => {
                     )}
                   </div>
                   <h2 className="font-display font-bold text-2xl md:text-3xl tracking-[-0.025em] text-white">
-                    Evaluasi Belajar AI
+                    Evaluasi Belajar
                   </h2>
                   {summaryLoading ? (
                     <div className="mt-3 space-y-2">
@@ -379,12 +359,12 @@ const Profile = ({ setRoute }) => {
                     </div>
                   ) : (
                     <p className="text-white/80 text-sm md:text-base mt-3 leading-relaxed max-w-3xl whitespace-pre-wrap">
-                      {summary?.overallSummary || "AI sedang mengumpulkan data latihan Anda. Kerjakan latihan di canvas untuk memetakan perkembangan belajarmu secara instan."}
+                      {summary?.overallSummary || "AI sedang mengumpulkan data latihan Anda. Kerjakan latihan di canvas untuk evaluasi kesalahan lebih mendalam."}
                     </p>
                   )}
                 </div>
-                
-                <button 
+
+                <button
                   onClick={() => setRoute("belajar")}
                   className="btn-yel shrink-0 relative z-10 !py-3 !px-6 text-sm flex items-center gap-1.5"
                 >
@@ -440,19 +420,16 @@ const Profile = ({ setRoute }) => {
               {/* Recommended Questions */}
               <div className="card p-6">
                 <div className="flex items-center gap-2.5 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-700 flex items-center justify-center">
-                    <Icon.Bolt className="w-4 h-4" />
-                  </div>
                   <h3 className="font-display font-bold text-xl tracking-[-0.015em]">Rekomendasi Soal Latihan</h3>
                   {summaryLoading && (
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
                       className="ml-1 text-amber-500" style={{ animation: "spin 1s linear infinite", flexShrink: 0 }}>
-                      <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                      <path d="M21 12a9 9 0 11-6.219-8.56" />
                     </svg>
                   )}
                 </div>
-                <p className="text-xs text-ink/50 mb-5">Rekomendasi berdasarkan weakness kamu</p>
-                
+                <p className="text-xs text-ink/50 mb-5">Rekomendasi soal berdasarkan kelemahan kamu</p>
+
                 {summaryLoading ? (
                   <div className="grid gap-3">
                     {[0, 1, 2].map((i) => (
@@ -472,72 +449,60 @@ const Profile = ({ setRoute }) => {
                 ) : recommendationRows.length ? (
                   <div className="grid gap-3">
                     {recommendationRows.map((item, index) => {
-                      const metaParts = [
-                        item.ref,
-                        item.difficulty,
-                        item.storyProblem ? "Soal cerita" : "",
-                        item.purcellReference,
-                        item.targetSkill ? `Target: ${item.targetSkill}` : "",
-                      ].filter(Boolean);
-
                       return (
-                      <div key={item.ref || index} className="rounded-xl border border-ink/5 bg-ink/[0.02] p-4 flex items-start gap-4 hover:bg-ink/[0.04] transition-all justify-between">
-                        <div className="flex items-start gap-3 min-w-0">
-                          <span className="text-xs font-mono font-bold text-ink/35 mt-0.5">#{index + 1}</span>
-                          <div className="min-w-0">
-                            {metaParts.length ? (
-                              <p className="text-[10px] uppercase tracking-wider font-bold text-ink/35 mb-1">
-                                {metaParts.join(" · ")}
+                        <div key={item.ref || index} className="rounded-xl border border-ink/5 bg-ink/[0.02] p-4 flex items-start gap-4 hover:bg-ink/[0.04] transition-all justify-between">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <span className="text-xs font-mono font-bold text-ink/35 mt-0.5">#{index + 1}</span>
+                            <div className="min-w-0">
+                              {item.targetSkill ? (
+                                <p className="text-[10px] uppercase tracking-wider font-bold text-ink/35 mb-1">
+                                  Weakness: {item.targetSkill}
+                                </p>
+                              ) : null}
+                              <p className="text-sm font-medium text-ink/80 leading-relaxed whitespace-pre-wrap">
+                                {item.questionDisplay || ''}
                               </p>
-                            ) : null}
-                            <p 
-                              className="text-sm font-medium text-ink/80 leading-relaxed font-mono whitespace-pre-wrap"
-                              dangerouslySetInnerHTML={{
-                                __html: window.renderMafikingMathHTML 
-                                  ? window.renderMafikingMathHTML(item.questionDisplay || '') 
-                                  : (item.questionDisplay || '')
-                              }}
-                            />                            {item.reason ? (
-                              <p className="text-xs text-ink/50 mt-2 leading-relaxed">{item.reason}</p>
-                            ) : null}
+                              {item.reason ? (
+                                <p className="text-xs text-ink/50 mt-2 leading-relaxed">{item.reason}</p>
+                              ) : null}
+                            </div>
                           </div>
+                          <button
+                            onClick={() => {
+                              if (item.ref) {
+                                setRoute({
+                                  route: "practice",
+                                  practice: {
+                                    title: item.targetSkill ? `Weakness: ${item.targetSkill}` : "Latihan AI",
+                                    mapel: "Matematika",
+                                    problems: [{
+                                      id: item.ref,
+                                      question_display: item.questionDisplay,
+                                      question_text: item.questionText,
+                                      answer_display: item.answerDisplay,
+                                      question_type: item.questionType || "open",
+                                      difficulty: item.difficulty,
+                                      mc_options: item.mcOptions || "[]",
+                                      acceptable_answers: item.acceptableAnswers || "[]"
+                                    }]
+                                  }
+                                });
+                              } else {
+                                setRoute("belajar");
+                              }
+                            }}
+                            className="btn-ink !py-1.5 !px-3.5 text-xs shrink-0 flex items-center gap-1"
+                          >
+                            Mulai <Icon.Arrow className="w-3 h-3" />
+                          </button>
                         </div>
-                        <button 
-                          onClick={() => {
-                            if (item.ref) {
-                              setRoute({
-                                route: "practice",
-                                practice: {
-                                  title: item.targetSkill ? `Target: ${item.targetSkill}` : "Latihan AI",
-                                  mapel: "Matematika",
-                                  problems: [{
-                                    id: item.ref,
-                                    question_display: item.questionDisplay,
-                                    question_text: item.questionText,
-                                    answer_display: item.answerDisplay,
-                                    question_type: "open",
-                                    difficulty: item.difficulty,
-                                    mc_options: "[]",
-                                    acceptable_answers: "[]"
-                                  }]
-                                }
-                              });
-                            } else {
-                              setRoute("belajar");
-                            }
-                          }}
-                          className="btn-ink !py-1.5 !px-3.5 text-xs shrink-0 flex items-center gap-1"
-                        >
-                          Mulai <Icon.Arrow className="w-3 h-3" />
-                        </button>
-                      </div>
                       );
                     })}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-dashed border-ink/15 p-6 text-center">
-                    <p className="text-sm text-ink/50">Submit satu jawaban canvas untuk mendapatkan rekomendasi soal berikutnya.</p>
-                    <button 
+                    <p className="text-sm text-ink/50">Belum ada rekomendasi soal yang bisa ditampilkan.</p>
+                    <button
                       onClick={() => setRoute("belajar")}
                       className="btn-ink mt-3 !py-2 !px-4 text-xs"
                     >
@@ -550,7 +515,7 @@ const Profile = ({ setRoute }) => {
               {/* Recent Canvas History */}
               <div className="card overflow-hidden">
                 <div className="px-6 py-4 border-b hairline flex items-center justify-between">
-                  <h3 className="font-display font-bold text-lg">Riwayat Koreksi Canvas</h3>
+                  <h3 className="font-display font-bold text-lg">History Kesalahan Canvas</h3>
                   <span className="text-xs font-semibold text-ink/45">{attempts.length} pengerjaan terakhir</span>
                 </div>
                 {attempts.length ? (
@@ -559,14 +524,13 @@ const Profile = ({ setRoute }) => {
                       <div key={att.id} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-ink/[0.01] transition-colors">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${
-                              att.isCorrect ? "bg-emerald-50/60 text-ink/65 border-emerald-900/10" : "bg-rose-50/60 text-ink/65 border-rose-900/10"
-                            }`}>
+                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${att.isCorrect ? "bg-emerald-50/60 text-ink/65 border-emerald-900/10" : "bg-rose-50/60 text-ink/65 border-rose-900/10"
+                              }`}>
                               {att.isCorrect ? "Benar" : "Perlu Perbaikan"}
                             </span>
                             <span className="text-xs font-mono text-ink/40">{formatDate(att.completedAt)}</span>
                           </div>
-                          <h4 
+                          <h4
                             className="font-display font-semibold text-base mt-2 truncate text-ink"
                             dangerouslySetInnerHTML={{
                               __html: window.renderMafikingMathHTML && att.questionText
@@ -580,15 +544,14 @@ const Profile = ({ setRoute }) => {
                           {att.score !== undefined && (
                             <div className="text-right">
                               <span className="text-[10px] text-ink/40 block uppercase font-bold">Skor</span>
-                              <span className={`font-display font-bold text-xl ${
-                                att.score >= 80 ? "text-emerald-600" : att.score >= 50 ? "text-amber-600" : "text-rose-600"
-                              }`}>
+                              <span className={`font-display font-bold text-xl ${att.score >= 80 ? "text-emerald-600" : att.score >= 50 ? "text-amber-600" : "text-rose-600"
+                                }`}>
                                 {att.score}/100
                               </span>
                             </div>
                           )}
-                          <button 
-                            onClick={() => setRoute("belajar")} 
+                          <button
+                            onClick={() => setRoute("belajar")}
                             className="btn-ghost !py-1.5 !px-3 text-xs"
                           >
                             Latihan Lagi
@@ -622,7 +585,11 @@ function collectTags(attempts, key) {
   return Array.from(counts.entries())
     .sort((a, b) => b[1] - a[1])
     .map(([tag]) => tag)
-    .slice(0, 6);
+    .slice(0, 5);
+}
+
+function limitLearningTags(tags) {
+  return Array.from(new Set(Array.isArray(tags) ? tags.filter(Boolean) : [])).slice(0, 5);
 }
 
 function CorrectionIssueSummary({ attempt }) {

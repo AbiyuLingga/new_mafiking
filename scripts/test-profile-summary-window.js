@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const correctionRouter = require('../routes/correction');
 
 const {
+  MAX_LEARNING_TAGS,
   PROFILE_AI_ATTEMPT_LIMIT,
   PROFILE_AI_REFRESH_COOLDOWN_MS,
   PROFILE_RECOMMENDATION_ATTEMPT_LIMIT,
@@ -11,13 +12,39 @@ const {
   compactAttemptsForProfile,
   chooseProfileAttemptSource,
   getProfileAiRefreshState,
+  normalizeLearningTags,
   summarizeMultipleChoiceEvidence,
 } = correctionRouter._profileSummaryInternals;
 
+const {
+  normalizeTranscription,
+  safeTranscriptionParse,
+} = correctionRouter._correctionInternals;
+
+assert.equal(MAX_LEARNING_TAGS, 5);
 assert.equal(PROFILE_AI_ATTEMPT_LIMIT, 20);
 assert.equal(PROFILE_RECOMMENDATION_ATTEMPT_LIMIT, 200);
 assert.equal(PROFILE_AI_REFRESH_COOLDOWN_MS, 60 * 60 * 1000);
 assert.ok(PROFILE_RECOMMENDATION_ATTEMPT_LIMIT > PROFILE_AI_ATTEMPT_LIMIT);
+
+assert.deepEqual(
+  normalizeLearningTags([
+    'chain rule',
+    'u substitution',
+    'chain rule',
+    'definite integral',
+    'limits',
+    'derivative',
+    'series'
+  ]),
+  [
+    'Menerapkan aturan rantai',
+    'Melakukan substitusi u',
+    'Integral',
+    'Limit',
+    'Diferensial'
+  ]
+);
 
 const attempts = Array.from({ length: 25 }, (_, index) => ({
   completedAt: `2026-05-${String(20 - index).padStart(2, '0')}T00:00:00.000Z`,
@@ -55,8 +82,10 @@ const refreshDb = {
     assert.match(sql, /profile_ai_refreshes/);
     return {
       get(userId) {
-        assert.equal(userId, ordinaryUser.id);
-        return { last_ai_refresh_at: '2026-05-20T13:30:00.000Z' };
+        if (userId === ordinaryUser.id) {
+          return { last_ai_refresh_at: '2026-05-20T13:30:00.000Z' };
+        }
+        return null;
       }
     };
   }
@@ -128,5 +157,34 @@ const aiEvidence = buildProfileAiEvidence({ aiAttempts, multipleChoiceEvidence: 
 assert.equal(aiEvidence.correctionAttempts.length, 20);
 assert.equal(aiEvidence.multipleChoiceEvidence.recentWrong.length, 2);
 assert.match(aiEvidence.instructions.multipleChoiceEvidence, /pilihan ganda/);
+
+assert.deepEqual(
+  normalizeTranscription(
+    safeTranscriptionParse('{"detectedAnswerLatex":"1+1=3","readingConfidence":0.91,"unclearParts":[],"needsUserConfirmation":true}'),
+    ''
+  ),
+  {
+    detectedAnswerLatex: '1+1=3',
+    needsUserConfirmation: true,
+    readingConfidence: 0.91,
+    unclearParts: []
+  }
+);
+
+assert.equal(
+  normalizeTranscription(
+    safeTranscriptionParse('"{\\"detectedAnswerLatex\\":\\"x^2+1\\",\\"readingConfidence\\":0.8,\\"unclearParts\\":[],\\"needsUserConfirmation\\":true}"'),
+    ''
+  ).detectedAnswerLatex,
+  'x^2+1'
+);
+
+assert.equal(
+  normalizeTranscription(
+    safeTranscriptionParse('Gemini OCR result: {"detectedAnswerLatex":"\\\\frac{1}{2}","readingConfidence":0.7,"unclearParts":[],"needsUserConfirmation":true}'),
+    ''
+  ).detectedAnswerLatex,
+  '\\frac{1}{2}'
+);
 
 console.log('profile summary window tests passed');

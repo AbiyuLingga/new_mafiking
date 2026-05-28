@@ -1,6 +1,6 @@
 // MAFIKING Lobby — minimalist with 3 hero variants
 
-const Lobby = ({ setRoute, tweaks, currentUser, forcePublicLanding = false }) => {
+const Lobby = ({ setRoute, tweaks, currentUser, forcePublicLanding = false, isAdmin = false }) => {
   const { useState, useEffect, useCallback } = React;
   const [phase, setPhase] = useState('dev'); // 'dev' | 'login'
   const [unlockCount, setUnlockCount] = useState(0);
@@ -38,12 +38,15 @@ const Lobby = ({ setRoute, tweaks, currentUser, forcePublicLanding = false }) =>
     }
   }, [isRegistered, shouldShowLanding, setRoute]);
 
-  if (isRegistered) {
-    if (shouldShowLanding) return (
+  if (shouldShowLanding) {
+    return (
       <div>
-        <Landing setRoute={(r) => { setShowLanding(false); setRoute(r); }} tweaks={tweaks} />
+        <Landing setRoute={(r) => { setShowLanding(false); setRoute(r); }} tweaks={tweaks} isAdmin={isAdmin} />
       </div>
     );
+  }
+
+  if (isRegistered) {
     return null;
   }
 
@@ -208,7 +211,7 @@ const LoginScreen = () => {
 };
 
 // ─── Landing (marketing, untuk anonymous/guest) ───────────────────────────
-const Landing = ({ setRoute, tweaks }) => {
+const Landing = ({ setRoute, tweaks, isAdmin = false }) => {
   const heroLayout = tweaks.heroLayout || "split";
   return (
     <div>
@@ -218,8 +221,8 @@ const Landing = ({ setRoute, tweaks }) => {
 
       <Stats tweaks={tweaks} />
       <Mapel setRoute={setRoute} />
-      <Method />
-      <ProgressFeature />
+      <UniqueFeatures setRoute={setRoute} isAdmin={isAdmin} />
+      <VideoDemo />
       <Testimonials />
       <CTA setRoute={setRoute} tweaks={tweaks} />
       <Footer setRoute={setRoute} />
@@ -932,6 +935,278 @@ const CTA = ({ setRoute, tweaks = {} }) => {
           </div>
           <div className={`flex items-center justify-center gap-6 mt-7 text-sm ${isInk ? "text-white/60" : "text-ink/55"}`}>
             <div className="flex items-center gap-2"><Icon.CheckCircle className="w-4 h-4" /> Aktivasi langsung di landing page</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ─── Fitur Unggulan (compact grid) ────────────────────────────────────────
+
+const FeatureCard = ({ title, desc, children, span = 1 }) => (
+  <div
+    className={`bg-white rounded-2xl border hairline overflow-hidden flex flex-col ${span === 2 ? 'md:col-span-2' : ''}`}
+    style={{ boxShadow: '0 4px 24px -6px rgba(11,19,38,0.06)' }}
+  >
+    {/* Visual area */}
+    <div className="relative overflow-hidden bg-paper border-b hairline" style={{ minHeight: 200 }}>
+      {children}
+    </div>
+    {/* Text */}
+    <div className="p-5">
+      <h3 className="font-display font-bold text-base md:text-lg tracking-tight text-ink mb-1.5">{title}</h3>
+      <p className="text-ink/55 text-sm leading-relaxed">{desc}</p>
+    </div>
+  </div>
+);
+
+const UniqueFeatures = ({ setRoute, isAdmin = false }) => (
+  <section className="sec-y bg-paper border-t border-b hairline">
+    <div className="max-w-6xl mx-auto px-6 md:px-8">
+      {/* Section Header */}
+      <div className="text-center mb-12 max-w-3xl mx-auto">
+        <span className="kicker mb-3 block">Mengapa Mafiking Berbeda?</span>
+        <h2 className="font-display font-bold text-3xl md:text-5xl tracking-[-0.03em] leading-tight text-ink mb-4">
+          Fitur terlengkap & terintegrasi AI
+        </h2>
+        <p className="text-ink/55 text-base md:text-lg leading-relaxed">
+          Platform belajar pertama untuk TPB ITB yang fokus pada pembentukan intuisi dan penanganan kelemahan secara personal.
+        </p>
+      </div>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        {/* Rekomendasi */}
+        <FeatureCard
+          title="Rekomendasi Belajar"
+          desc="AI memetakan kelemahanmu dan merekomendasikan porsi latihan yang sesuai."
+        >
+          <div className="p-4 h-full">
+            <div className="card bg-white p-4 h-full flex flex-col">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-700 flex items-center justify-center shrink-0">
+                  <Icon.Bolt className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-display font-bold text-base tracking-[-0.015em] text-ink">Rekomendasi Soal Latihan</h4>
+                  <p className="text-xs text-ink/50">Berdasarkan kelemahan utama</p>
+                </div>
+              </div>
+              {isAdmin ? (
+                <div className="grid grid-cols-2 gap-2.5 flex-1">
+                  {[
+                    {
+                      skill: "dy/dx dari x² + y² = 25",
+                      action: "Turunan implisit",
+                      tone: "bg-rose-50/60 border-rose-900/10"
+                    },
+                    {
+                      skill: "∫ x eˣ dx",
+                      action: "Integrasi parsial",
+                      tone: "bg-amber-50/60 border-amber-900/10"
+                    }
+                  ].map((item, index) => (
+                    <div key={item.skill} className={`rounded-xl border ${item.tone} p-3 flex flex-col justify-between min-w-0`}>
+                      <div>
+                        <span className="text-xs font-mono font-bold text-ink/35">#{index + 1}</span>
+                        <p className="font-display font-bold text-sm text-ink leading-tight mt-1">{item.skill}</p>
+                        <p className="text-xs text-ink/55 leading-snug mt-1">{item.action}</p>
+                      </div>
+                      <button className="btn-ink !py-1.5 !px-2.5 text-[10px] mt-3 w-full justify-center flex items-center gap-1" type="button">
+                        Mulai <Icon.Arrow className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-ink/15 bg-ink/[0.02] p-4 flex-1 flex flex-col justify-center">
+                  <p className="font-display font-bold text-sm text-ink">Rekomendasi muncul setelah latihan.</p>
+                  <p className="text-xs text-ink/55 leading-snug mt-1">Data contoh hanya ditampilkan di mode admin.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </FeatureCard>
+
+        {/* Riwayat Kesalahan */}
+        <FeatureCard
+          title="Riwayat Kesalahan"
+          desc="Semua soal salah terarsip otomatis. Ulangi kapan saja sampai benar."
+        >
+          <div className="p-4 h-full">
+            <div className="card bg-white overflow-hidden h-full">
+              <div className="px-4 py-3 border-b hairline flex items-center justify-between">
+                <h4 className="font-display font-bold text-base text-ink">History Kesalahan Canvas</h4>
+                <span className="text-xs font-semibold text-ink/45">Prioritas</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5 p-3">
+                {[
+                  {
+                    status: "Perlu Perbaikan",
+                    title: "Integral Substitusi",
+                    issue: "Ulangi konsep",
+                    score: "45/100",
+                    tone: "text-rose-600"
+                  },
+                  {
+                    status: "Perlu Perbaikan",
+                    title: "Turunan Komposisi",
+                    issue: "Perkuat aturan rantai",
+                    score: "60/100",
+                    tone: "text-amber-600"
+                  }
+                ].map((item) => (
+                  <div key={item.title} className="rounded-xl border border-ink/5 bg-ink/[0.02] p-3 min-w-0">
+                    <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border bg-rose-50/60 text-ink/65 border-rose-900/10">
+                      {item.status}
+                    </span>
+                    <h5 className="font-display font-bold text-sm mt-2 text-ink leading-tight">{item.title}</h5>
+                    <p className="text-xs text-ink/55 leading-snug mt-1">{item.issue}</p>
+                    <div className="flex items-end justify-between gap-2 mt-3">
+                      <div>
+                        <span className="text-[9px] text-ink/40 block uppercase font-bold">Skor</span>
+                        <span className={`font-display font-bold text-base ${item.tone}`}>{item.score}</span>
+                      </div>
+                      <button className="btn-ghost !py-1.5 !px-2.5 text-[10px]" type="button">Ulangi</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </FeatureCard>
+
+        {/* Tryout */}
+        <FeatureCard
+          title="Simulasi Tryout CBT"
+          desc="Tryout berwaktu yang menyimulasikan UTS/UAS TPB ITB dengan evaluasi instan."
+        >
+          <div className="flex flex-col h-full">
+            <div className="bg-ink text-white px-3 py-1.5 flex items-center justify-between text-[9px] font-mono">
+              <span>Tryout UTS Kalkulus 1A</span>
+              <span className="text-yel font-bold flex items-center gap-1">
+                <Icon.Clock className="w-3 h-3"/>
+                01:24:12
+              </span>
+            </div>
+            <div className="flex-1 grid grid-cols-12 gap-0">
+              <div className="col-span-8 p-3 flex flex-col justify-between border-r border-ink/5">
+                <div className="space-y-1.5">
+                  <div className="text-[8px] font-mono font-bold text-ink/35">SOAL 6 / 15</div>
+                  <div className="text-[11px] font-semibold text-ink">Tentukan nilai dari limit:</div>
+                  <div className="font-serif italic text-[11px] text-center bg-white py-1.5 rounded border border-ink/5">
+                    lim (x → 0) [ sin(2x) / x ]
+                  </div>
+                  <div className="space-y-1">
+                    <div className="border border-ink/10 rounded p-1 text-[9px] flex items-center gap-1"><span className="w-3 h-3 rounded-full border border-ink/15 flex items-center justify-center text-[7px]">A</span>0</div>
+                    <div className="border border-ink/10 rounded p-1 text-[9px] flex items-center gap-1"><span className="w-3 h-3 rounded-full border border-ink/15 flex items-center justify-center text-[7px]">B</span>1</div>
+                    <div className="border border-ink bg-yel/10 rounded p-1 text-[9px] font-bold flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-ink text-yel flex items-center justify-center text-[7px]">C</span>2</div>
+                  </div>
+                </div>
+              </div>
+              <div className="col-span-4 p-2 bg-paper flex flex-col justify-between">
+                <div>
+                  <div className="text-[7px] font-bold text-ink/35 uppercase font-mono mb-1">CBT</div>
+                  <div className="grid grid-cols-3 gap-0.5">
+                    {[
+                      {n:1,c:'bg-emerald-600 text-white'},{n:2,c:'bg-emerald-600 text-white'},{n:3,c:'bg-emerald-600 text-white'},
+                      {n:4,c:'bg-amber-400 text-ink'},{n:5,c:'bg-emerald-600 text-white'},{n:6,c:'bg-ink text-white'},
+                      {n:7,c:'bg-white border hairline text-ink/40'},{n:8,c:'bg-white border hairline text-ink/40'},{n:9,c:'bg-white border hairline text-ink/40'},
+                    ].map(i=><div key={i.n} className={`aspect-square rounded text-[7px] font-semibold flex items-center justify-center ${i.c}`}>{i.n}</div>)}
+                  </div>
+                </div>
+                <button className="w-full bg-emerald-600 text-white text-[7px] font-bold py-0.5 rounded mt-1">Selesai</button>
+              </div>
+            </div>
+          </div>
+        </FeatureCard>
+      </div>
+    </div>
+  </section>
+);
+
+const VideoDemo = () => {
+  const videoRef = React.useRef(null);
+  const [soundEnabled, setSoundEnabled] = React.useState(false);
+
+  React.useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      video.muted = !soundEnabled;
+    }
+  }, [soundEnabled]);
+
+  const toggleSound = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const nextEnabled = !soundEnabled;
+    video.muted = !nextEnabled;
+    try {
+      await video.play();
+      setSoundEnabled(nextEnabled);
+    } catch (_) {
+      video.muted = true;
+      setSoundEnabled(false);
+    }
+  };
+
+  return (
+    <section className="sec-y text-white" style={{ backgroundColor: '#0b1326' }}>
+      <div className="max-w-4xl mx-auto px-6 md:px-8 text-center">
+        {/* Header */}
+        <div className="mb-10">
+          <span className="kicker mb-3 block text-white/45">Tonton Dulu, Baru Yakin!</span>
+          <h2 className="font-display font-bold text-3xl md:text-4xl tracking-[-0.025em] leading-tight text-white mb-4">
+            Lihat langsung demo fitur canvas & koreksi AI
+          </h2>
+          <p className="text-white/60 text-sm md:text-base max-w-xl mx-auto">
+            Pelajari bagaimana coretan tanganmu dianalisis, dievaluasi baris demi baris, dan diberi skor secara instan oleh kecerdasan buatan.
+          </p>
+        </div>
+
+        {/* Video Player Frame */}
+        <div 
+          className="relative rounded-[1.25rem] overflow-hidden border border-white/5 bg-slate-950 aspect-[16/9] shadow-2xl max-w-3xl mx-auto"
+        >
+          <video 
+            ref={videoRef}
+            src="/assets/saas_demo_video.mp4"
+            autoPlay 
+            muted
+            loop 
+            playsInline
+            className="w-full h-full object-cover"
+          />
+
+          {/* Sound Toggle Overlay Button */}
+          <button 
+            onClick={toggleSound}
+            className="absolute top-4 left-4 bg-white/90 hover:bg-white text-ink font-bold text-xs py-1.5 px-3 rounded-full shadow-lg flex items-center gap-1.5 z-10 transition-colors"
+            type="button"
+            aria-label={soundEnabled ? "Matikan suara demo" : "Nyalakan suara demo"}
+          >
+            {soundEnabled ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+            )}
+            <span className="font-mono text-[10px]">{soundEnabled ? "SOUND ON" : "SOUND OFF"}</span>
+          </button>
+        </div>
+
+        {/* Quick process layout below the video */}
+        <div className="flex flex-wrap items-center justify-center gap-6 md:gap-12 mt-12 text-sm text-white/50">
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold text-yel">1</span>
+            <span>Tulis penyelesaian bebas</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold text-yel">2</span>
+            <span>AI koreksi per baris secara instan</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold text-yel">3</span>
+            <span>Rekomendasi materi otomatis</span>
           </div>
         </div>
       </div>

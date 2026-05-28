@@ -392,7 +392,7 @@ const OfflineBanner = () => {
   if (!offline) return null;
   return (
     <div className="offline-banner" role="status">
-      Tidak ada koneksi internet — beberapa fitur mungkin tidak berfungsi.
+      Tidak ada koneksi internet
     </div>
   );
 };

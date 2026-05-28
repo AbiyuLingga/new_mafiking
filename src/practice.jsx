@@ -91,7 +91,7 @@ const Practice = ({ context, setRoute, isAdmin }) => {
         const parsed = JSON.parse(p.mc_options);
         if (Array.isArray(parsed) && parsed.length) return parsed;
       }
-    } catch (_) {}
+    } catch (_) { }
     return buildGeneratedChoices(p, session?.problems || []);
   }
 
@@ -153,18 +153,24 @@ const Practice = ({ context, setRoute, isAdmin }) => {
       setError("");
       setShowResultModal(false);
       setOcrReview(null);
-      const imageBase64 = boardRef.current && boardRef.current.exportImage();
+      const imageBase64 = boardRef.current && boardRef.current.exportImage({
+        maxDimension: 900,
+        mimeType: "image/webp",
+        quality: 0.82,
+      });
       if (!imageBase64 || !boardDirty) { setError("Tulis jawaban di canvas terlebih dulu."); return; }
+      const imageMimeType = getDataUrlMimeType(imageBase64) || "image/png";
       const strokeSnapshot = boardRef.current && boardRef.current.exportSnapshot && boardRef.current.exportSnapshot();
       setSubmitting(true);
       const transcription = await MafikingAPI.post("/api/correction/transcribe", {
         imageBase64,
-        mimeType: "image/png",
+        mimeType: imageMimeType,
         questionText: problem.question_display || problem.question_text,
       });
       setOcrReview({
         ...transcription,
         imageBase64,
+        imageMimeType,
         strokeSnapshot,
       });
       showToast("Tulisan terbaca. Konfirmasi dulu sebelum dikoreksi.", "success");
@@ -189,7 +195,7 @@ const Practice = ({ context, setRoute, isAdmin }) => {
         confirmedAnswerLatex: ocrReview.detectedAnswerLatex,
         expectedAnswer: problem.answer_display,
         imageBase64: ocrReview.imageBase64,
-        mimeType: "image/png",
+        mimeType: ocrReview.imageMimeType || getDataUrlMimeType(ocrReview.imageBase64) || "image/png",
         problemId: problem.id,
         questionId: problem.id,
         questionText: problem.question_display || problem.question_text,
@@ -618,7 +624,7 @@ const AdminQuestionControls = ({
     };
     try {
       event.currentTarget.setPointerCapture?.(event.pointerId);
-    } catch (_) {}
+    } catch (_) { }
   }
 
   function movePointerReorder(event) {
@@ -648,7 +654,7 @@ const AdminQuestionControls = ({
     pointerDragRef.current = null;
     try {
       event.currentTarget.releasePointerCapture?.(event.pointerId);
-    } catch (_) {}
+    } catch (_) { }
     if (!state.dragging) return;
     suppressClickRef.current = true;
     const dropIndex = Number.isInteger(state.dropIndex) ? state.dropIndex : getPointerDropIndex(event.clientX, event.clientY);
@@ -940,8 +946,8 @@ const ChapterSwitcher = ({ chapter, chapters, fallbackTitle, onSelect }) => {
 // ─── Choice (Pilgan) view ─────────────────────────────────────────────────
 const ChoiceView = ({
   attempt, error, isAdmin, onBack, onChoiceSelect, onHintToggle, onMoveProblem,
-      onReloadSession, onSubmit, onSwitchMode, problem, problemIndex, selectedChoiceIndex,
-      problems, onProblemSelect, showHint, totalProblems, subtopicTitle, currentChapter, availableChapters,
+  onReloadSession, onSubmit, onSwitchMode, problem, problemIndex, selectedChoiceIndex,
+  problems, onProblemSelect, showHint, totalProblems, subtopicTitle, currentChapter, availableChapters,
   onChapterSelect, getChoices, getCorrectChoiceIndex,
   showCanvasIntro, onDismissCanvasIntro, onOpenCanvasFromIntro,
 }) => {
@@ -1022,240 +1028,229 @@ const ChoiceView = ({
 
       <div className={isAdmin ? "mafiking-admin-practice-layout" : "mafiking-practice-main"}>
         <main className="mafiking-practice-main">
-      <section className="mafiking-question-card">
-        {isAdmin ? (
-          <AdminQuestionControls
-            compact
-            problem={problem}
-            problems={problems}
-            problemIndex={problemIndex}
-            onProblemSelect={onProblemSelect}
-            onReloadSession={onReloadSession}
-          />
-        ) : null}
+          <section className="mafiking-question-card">
+            {isAdmin ? (
+              <AdminQuestionControls
+                compact
+                problem={problem}
+                problems={problems}
+                problemIndex={problemIndex}
+                onProblemSelect={onProblemSelect}
+                onReloadSession={onReloadSession}
+              />
+            ) : null}
 
-        <div className="mafiking-question-meta">
-          <span>Soal {problemIndex + 1} dari {totalProblems}</span>
-          {isAdmin ? (
-            <select
-              aria-label="Tingkat kesulitan"
-              className="admin-difficulty-select"
-              disabled={adminSaving}
-              value={problem.difficulty || "Easy"}
-              onChange={(event) => saveProblem({ difficulty: event.target.value })}
-            >
-              <option value="Easy">Easy</option>
-              <option value="Medium">Medium</option>
-              <option value="Hard">Hard</option>
-            </select>
-          ) : (
-            <span className="mafiking-difficulty">{problem.difficulty || "Medium"}</span>
-          )}
-        </div>
-
-        <div className="mafiking-progress-dots" aria-hidden="true">
-          {Array.from({ length: totalProblems }).map((_, idx) => (
-            <span className={idx === problemIndex ? "is-current" : ""} key={idx} />
-          ))}
-        </div>
-
-        {isAdmin && qDraft !== null ? (
-          <div className="admin-inline-edit">
-            <textarea
-              className="admin-inline-textarea"
-              value={qDraft}
-              onChange={e => setQDraft(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Escape') setQDraft(null); }}
-              rows={3}
-              autoFocus
-            />
-            <div className="admin-inline-actions">
-              <button onClick={() => setQDraft(null)} className="admin-btn-ghost" type="button">Batal</button>
-              <button
-                onClick={async () => { if (await saveProblem({ question_display: qDraft, question_text: qDraft })) setQDraft(null); }}
-                disabled={adminSaving}
-                className="admin-btn-primary"
-                type="button"
-              >{adminSaving ? 'Menyimpan…' : 'Simpan'}</button>
+            <div className="mafiking-question-meta">
+              <span>Soal {problemIndex + 1} dari {totalProblems}</span>
+              {isAdmin ? (
+                <select
+                  aria-label="Tingkat kesulitan"
+                  className="admin-difficulty-select"
+                  disabled={adminSaving}
+                  value={problem.difficulty || "Easy"}
+                  onChange={(event) => saveProblem({ difficulty: event.target.value })}
+                >
+                  <option value="Easy">Easy</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Hard">Hard</option>
+                </select>
+              ) : (
+                <span className="mafiking-difficulty">{problem.difficulty || "Medium"}</span>
+              )}
             </div>
-          </div>
-        ) : (
+
+            <div className="mafiking-progress-dots" aria-hidden="true">
+              {Array.from({ length: totalProblems }).map((_, idx) => (
+                <span className={idx === problemIndex ? "is-current" : ""} key={idx} />
+              ))}
+            </div>
+
+            {isAdmin && qDraft !== null ? (
+              <div className="admin-inline-edit">
+                <textarea
+                  className="admin-inline-textarea"
+                  value={qDraft}
+                  onChange={e => setQDraft(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Escape') setQDraft(null); }}
+                  rows={3}
+                  autoFocus
+                />
+                <div className="admin-inline-actions">
+                  <button onClick={() => setQDraft(null)} className="admin-btn-ghost" type="button">Batal</button>
+                  <button
+                    onClick={async () => { if (await saveProblem({ question_display: qDraft, question_text: qDraft })) setQDraft(null); }}
+                    disabled={adminSaving}
+                    className="admin-btn-primary"
+                    type="button"
+                  >{adminSaving ? 'Menyimpan…' : 'Simpan'}</button>
+                </div>
+              </div>
+            ) : (
               <div
-            className={isAdmin ? 'admin-question-editable' : ''}
-            onClick={isAdmin ? () => setQDraft(questionText) : undefined}
-            title={isAdmin ? 'Klik untuk edit soal' : undefined}
-          >
-            <p className={`mafiking-question-title ${isAdmin && !questionText ? "is-admin-empty" : ""}`}>
-              {questionText ? React.createElement(Eq, { value: questionText }) : "Klik untuk isi soal / angka"}
-            </p>
-            {isAdmin && (
-              <div className="admin-question-edit-hint">
-                <AdminIcon.Pencil /> Klik untuk edit soal
+                className={isAdmin ? 'admin-question-editable' : ''}
+                onClick={isAdmin ? () => setQDraft(questionText) : undefined}
+                title={isAdmin ? 'Klik untuk edit soal' : undefined}
+              >
+                <p className={`mafiking-question-title ${isAdmin && !questionText ? "is-admin-empty" : ""}`}>
+                  {questionText ? React.createElement(Eq, { value: questionText }) : "Klik untuk isi soal / angka"}
+                </p>
+                {isAdmin && (
+                  <div className="admin-question-edit-hint">
+                    <AdminIcon.Pencil /> Klik untuk edit soal
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        <div className="mafiking-answer-heading">
-          {isAdmin ? 'Opsi Jawaban — klik untuk edit, ✓ untuk tandai benar' : 'Jawaban Anda'}
-        </div>
-        {choices.length ? (
-          <div className="mafiking-choice-list">
-            {choices.map((choice, idx) => {
-              const selected = selectedChoiceIndex === idx;
-              const isAnswerCorrect = idx === correctIndex;
-              const wrongSelected = isAnswered && selected && !isAnswerCorrect;
+            <div className="mafiking-answer-heading">
+              {isAdmin ? 'Opsi Jawaban — klik untuk edit, ✓ untuk tandai benar' : 'Jawaban Anda'}
+            </div>
+            {choices.length ? (
+              <div className="mafiking-choice-list">
+                {choices.map((choice, idx) => {
+                  const selected = selectedChoiceIndex === idx;
+                  const isAnswerCorrect = idx === correctIndex;
+                  const wrongSelected = isAnswered && selected && !isAnswerCorrect;
 
-              if (isAdmin && editingChoice && editingChoice.idx === idx) {
-                return (
-                  <div key={idx} className="admin-choice-edit-row">
-                    <span className="mafiking-choice-letter">{String.fromCharCode(65 + idx)}</span>
-                    <input
-                      className="admin-inline-input"
-                      value={editingChoice.value}
-                      onChange={e => setEditingChoice({ ...editingChoice, value: e.target.value })}
-                      onKeyDown={e => {
-                        if (e.key === 'Escape') setEditingChoice(null);
-                        if (e.key === 'Enter') {
-                          const nc = choices.map((c, i) => i === idx ? editingChoice.value : c);
-                          saveProblem({
-                            mc_options: nc,
-                            question_type: 'mc',
-                            answer_display: idx === correctIndex ? editingChoice.value : problem.answer_display,
-                          }).then(ok => ok && setEditingChoice(null));
-                        }
-                      }}
-                      autoFocus
-                    />
+                  if (isAdmin && editingChoice && editingChoice.idx === idx) {
+                    return (
+                      <div key={idx} className="admin-choice-edit-row">
+                        <span className="mafiking-choice-letter">{String.fromCharCode(65 + idx)}</span>
+                        <input
+                          className="admin-inline-input"
+                          value={editingChoice.value}
+                          onChange={e => setEditingChoice({ ...editingChoice, value: e.target.value })}
+                          onKeyDown={e => {
+                            if (e.key === 'Escape') setEditingChoice(null);
+                            if (e.key === 'Enter') {
+                              const nc = choices.map((c, i) => i === idx ? editingChoice.value : c);
+                              saveProblem({
+                                mc_options: nc,
+                                question_type: 'mc',
+                                answer_display: idx === correctIndex ? editingChoice.value : problem.answer_display,
+                              }).then(ok => ok && setEditingChoice(null));
+                            }
+                          }}
+                          autoFocus
+                        />
+                        <button
+                          onClick={async () => {
+                            const nc = choices.map((c, i) => i === idx ? editingChoice.value : c);
+                            if (await saveProblem({
+                              mc_options: nc,
+                              answer_display: editingChoice.value,
+                              acceptable_answers: [editingChoice.value].filter(Boolean),
+                              question_type: 'mc',
+                            })) setEditingChoice(null);
+                          }}
+                          className="admin-correct-btn"
+                          title="Tandai sebagai jawaban benar"
+                          type="button"
+                        >✓ Benar</button>
+                        <button
+                          onClick={async () => {
+                            const nc = choices.map((c, i) => i === idx ? editingChoice.value : c);
+                            if (await saveProblem({
+                              mc_options: nc,
+                              question_type: 'mc',
+                              answer_display: idx === correctIndex ? editingChoice.value : problem.answer_display,
+                            })) setEditingChoice(null);
+                          }}
+                          disabled={adminSaving}
+                          className="admin-btn-primary"
+                          type="button"
+                        >{adminSaving ? '…' : 'Simpan'}</button>
+                        <button onClick={() => setEditingChoice(null)} className="admin-btn-ghost" type="button">✕</button>
+                      </div>
+                    );
+                  }
+
+                  return (
                     <button
-                      onClick={async () => {
-                        const nc = choices.map((c, i) => i === idx ? editingChoice.value : c);
-                        if (await saveProblem({
-                          mc_options: nc,
-                          answer_display: editingChoice.value,
-                          acceptable_answers: [editingChoice.value].filter(Boolean),
-                          question_type: 'mc',
-                        })) setEditingChoice(null);
-                      }}
-                      className="admin-correct-btn"
-                      title="Tandai sebagai jawaban benar"
+                      className={`mafiking-choice-option${isAdmin ? ' admin-choice-editable' : ''}`}
+                      data-correct={isAnswerCorrect && (isAdmin || isAnswered) ? "true" : undefined}
+                      data-selected={!isAdmin && selected ? "true" : undefined}
+                      data-wrong={!isAdmin && wrongSelected ? "true" : undefined}
+                      disabled={!isAdmin && isAnswered}
+                      key={idx}
+                      onClick={() => isAdmin ? setEditingChoice({ idx, value: choice }) : onChoiceSelect(idx)}
                       type="button"
-                    >✓ Benar</button>
-                    <button
-                      onClick={async () => {
-                        const nc = choices.map((c, i) => i === idx ? editingChoice.value : c);
-                        if (await saveProblem({
-                          mc_options: nc,
-                          question_type: 'mc',
-                          answer_display: idx === correctIndex ? editingChoice.value : problem.answer_display,
-                        })) setEditingChoice(null);
-                      }}
-                      disabled={adminSaving}
-                      className="admin-btn-primary"
-                      type="button"
-                    >{adminSaving ? '…' : 'Simpan'}</button>
-                    <button onClick={() => setEditingChoice(null)} className="admin-btn-ghost" type="button">✕</button>
-                  </div>
-                );
-              }
+                    >
+                      <span className="mafiking-choice-letter">{String.fromCharCode(65 + idx)}</span>
+                      <span className={isAdmin && !choice ? "admin-choice-empty" : ""}>
+                        {choice ? React.createElement(Eq, { value: choice }) : "Klik untuk isi pilihan"}
+                      </span>
+                      {isAdmin && isAnswerCorrect ? <span className="admin-correct-marker">✓ Benar</span> : null}
+                      {!isAdmin && isAnswered && isAnswerCorrect ? <Icon.Check className="w-5 h-5" /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mafiking-error-box" style={{ marginTop: 8 }}>
+                <Icon.Target className="w-4 h-4" />
+                Soal ini belum punya pilihan jawaban. Coba mode Canvas.
+              </div>
+            )}
 
-              return (
-                <button
-                  className={`mafiking-choice-option${isAdmin ? ' admin-choice-editable' : ''}`}
-                  data-correct={isAnswerCorrect && (isAdmin || isAnswered) ? "true" : undefined}
-                  data-selected={!isAdmin && selected ? "true" : undefined}
-                  data-wrong={!isAdmin && wrongSelected ? "true" : undefined}
-                  disabled={!isAdmin && isAnswered}
-                  key={idx}
-                  onClick={() => isAdmin ? setEditingChoice({ idx, value: choice }) : onChoiceSelect(idx)}
-                  type="button"
-                >
-                  <span className="mafiking-choice-letter">{String.fromCharCode(65 + idx)}</span>
-                  <span className={isAdmin && !choice ? "admin-choice-empty" : ""}>
-                    {choice ? React.createElement(Eq, { value: choice }) : "Klik untuk isi pilihan"}
-                  </span>
-                  {isAdmin && isAnswerCorrect ? <span className="admin-correct-marker">✓ Benar</span> : null}
-                  {!isAdmin && isAnswered && isAnswerCorrect ? <Icon.Check className="w-5 h-5" /> : null}
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="mafiking-error-box" style={{ marginTop: 8 }}>
-            <Icon.Target className="w-4 h-4" />
-            Soal ini belum punya pilihan jawaban. Coba mode Canvas.
-          </div>
-        )}
+            {showHint && !isAnswered && firstStep ? (
+              <div className="mafiking-hint-box">
+                <strong>Petunjuk:</strong> <Eq value={firstStep.title || ""} />. <Eq value={firstStep.why || firstStep.intuition || firstStep.body || firstStep.description || ""} />
+              </div>
+            ) : null}
 
-        {showHint && !isAnswered && firstStep ? (
-          <div className="mafiking-hint-box">
-            <strong>Petunjuk:</strong> <Eq value={firstStep.title || ""} />. <Eq value={firstStep.why || firstStep.intuition || firstStep.body || firstStep.description || ""} />
-          </div>
-        ) : null}
+            {error ? (
+              <div className="mafiking-error-box">
+                <Icon.Target className="w-4 h-4" />
+                {error}
+              </div>
+            ) : null}
+          </section>
 
-        {isAnswered ? (
-          <div className={isCorrect ? "mafiking-answer-result is-correct" : "mafiking-answer-result is-wrong"}>
-            {isCorrect ? "Jawaban benar. Kunci langkah sudah terbuka." : (
-              React.createElement(React.Fragment, null,
-                "Belum tepat. Jawaban benar: ",
-                React.createElement(Eq, { value: correctIndex >= 0 ? choices[correctIndex] : (problem.answer_display || "—") })
-              )
+          <div className="mafiking-action-row">
+            <button
+              className="mafiking-soft-button mafiking-action-left"
+              disabled={problemIndex === 0}
+              onClick={() => onMoveProblem(-1)}
+              type="button"
+            >
+              <Icon.ChevL className="w-4 h-4" />
+              Sebelumnya
+            </button>
+            <button className="mafiking-soft-button mafiking-action-center" onClick={onHintToggle} type="button">
+              <Icon.Bulb className="w-4 h-4" />
+              Hint
+            </button>
+            {canSubmitChoice ? (
+              <button
+                className="mafiking-primary-button mafiking-action-right"
+                onClick={onSubmit}
+                type="button"
+              >
+                Cek Jawaban
+              </button>
+            ) : (
+              <button
+                className="mafiking-soft-button mafiking-action-right"
+                disabled={problemIndex >= totalProblems - 1}
+                onClick={() => onMoveProblem(1)}
+                type="button"
+              >
+                Lewati
+                <Icon.Arrow className="w-4 h-4" />
+              </button>
             )}
           </div>
-        ) : null}
 
-        {error ? (
-          <div className="mafiking-error-box">
-            <Icon.Target className="w-4 h-4" />
-            {error}
-          </div>
-        ) : null}
-      </section>
+          <SolutionStepsPanel attempt={attempt} problem={problem} isAdmin={isAdmin} onStepSaved={onReloadSession} />
 
-      <div className="mafiking-action-row">
-        <button
-          className="mafiking-soft-button mafiking-action-left"
-          disabled={problemIndex === 0}
-          onClick={() => onMoveProblem(-1)}
-          type="button"
-        >
-          <Icon.ChevL className="w-4 h-4" />
-          Sebelumnya
-        </button>
-        <button className="mafiking-soft-button mafiking-action-center" onClick={onHintToggle} type="button">
-          <Icon.Bulb className="w-4 h-4" />
-          Hint
-        </button>
-        {canSubmitChoice ? (
-          <button
-            className="mafiking-primary-button mafiking-action-right"
-            onClick={onSubmit}
-            type="button"
-          >
-            Cek Jawaban
-          </button>
-        ) : (
-        <button
-          className="mafiking-soft-button mafiking-action-right"
-          disabled={problemIndex >= totalProblems - 1}
-          onClick={() => onMoveProblem(1)}
-          type="button"
-        >
-          Lewati
-          <Icon.Arrow className="w-4 h-4" />
-        </button>
-        )}
-      </div>
-
-      <SolutionStepsPanel attempt={attempt} problem={problem} isAdmin={isAdmin} onStepSaved={onReloadSession} />
-
-      {isAdmin && (
-        <div className="admin-problem-footer">
-          <button onClick={adminDeleteProblem} className="admin-btn-ghost" style={{ color: '#ef4444' }} type="button">
-            Hapus Soal Ini
-          </button>
-        </div>
-      )}
+          {isAdmin && (
+            <div className="admin-problem-footer">
+              <button onClick={adminDeleteProblem} className="admin-btn-ghost" style={{ color: '#ef4444' }} type="button">
+                Hapus Soal Ini
+              </button>
+            </div>
+          )}
         </main>
         {isAdmin ? (
           <aside className="mafiking-admin-question-sidebar" aria-label="Urutan soal admin">
@@ -1414,7 +1409,6 @@ const SolutionStepsPanel = ({ attempt, problem, isAdmin, onStepSaved }) => {
     <section className="mafiking-solution-card">
       <div className="mafiking-solution-header">
         <div className="mafiking-solution-title">
-          <span className="mafiking-bulb"><Icon.Sparkles className="w-4 h-4" /></span>
           <h2>Langkah Penyelesaian</h2>
         </div>
         <div className="mafiking-step-header-actions">
@@ -1822,6 +1816,10 @@ function normalizeAnswerText(value) {
     .replace(/[^0-9a-z+\-*/=().,]/g, "");
 }
 
+function getDataUrlMimeType(dataUrl) {
+  return String(dataUrl || "").match(/^data:([^;]+);base64,/)?.[1] || "";
+}
+
 function topicAliases(term) {
   const aliases = [];
   if (term.includes("substitusi")) aliases.push("u sub", "u substitution");
@@ -1899,17 +1897,17 @@ function renderEquation(value) {
 
   // 3. spacing
   t = t.replace(/\\,/g, " ").replace(/\\;/g, " ").replace(/\\!/g, "")
-       .replace(/\\quad/g, "  ").replace(/\\qquad/g, "   ");
+    .replace(/\\quad/g, "  ").replace(/\\qquad/g, "   ");
 
   // 4. subscripts BEFORE fracs (so _n inside \dfrac doesn't break regex)
   t = t.replace(/_\s*\{([^}]+)\}/g, (_, s) => toSubscript(s))
-       .replace(/_([0-9a-zA-Z])/g, (_, s) => toSubscript(s));
+    .replace(/_([0-9a-zA-Z])/g, (_, s) => toSubscript(s));
 
   // 5. superscripts BEFORE fracs (so ^{3x} inside \dfrac doesn't break regex)
   t = t.replace(/\^\s*\{([^}]+)\}/g, (_, e) => toSuperscript(e))
-       .replace(/\^\s*\(([^)]+)\)/g, (_, e) => toSuperscript(`(${e})`))
-       .replace(/\^\s*([+-]?\d+[a-z]*)/g, (_, e) => toSuperscript(e))
-       .replace(/\^\s*([a-zA-Z])\b/g, (_, e) => toSuperscript(e));
+    .replace(/\^\s*\(([^)]+)\)/g, (_, e) => toSuperscript(`(${e})`))
+    .replace(/\^\s*([+-]?\d+[a-z]*)/g, (_, e) => toSuperscript(e))
+    .replace(/\^\s*([a-zA-Z])\b/g, (_, e) => toSuperscript(e));
 
   // 6. functions & operators (before fracs so \sin inside \dfrac is clean)
   t = t
@@ -2022,12 +2020,16 @@ function renderKatexToString(latex, displayMode = false) {
   if (typeof katex === "undefined" || !katex || typeof katex.renderToString !== "function") {
     throw new Error("KaTeX belum tersedia");
   }
-  return katex.renderToString(latex, {
+  const html = katex.renderToString(latex, {
     displayMode,
     throwOnError: false,
     strict: "ignore",
     trust: false,
   });
+  if (/katex-error/.test(html)) {
+    throw new Error("KaTeX gagal merender input");
+  }
+  return html;
 }
 
 const ALIGN_WRAP_RE = /^\{\\(raggedright|centering|raggedleft)\s([\s\S]+)\}$/;
@@ -2080,13 +2082,13 @@ function renderEquationHTML(value) {
   t = t.replace(/\\\[|\\\]/g, "").replace(/\$\$/g, "").replace(/\$/g, "");
   t = t.replace(/\\(?:text|mathrm|mathbf|mathit|mathsf|boldsymbol|mbox|intertext|underbrace|overbrace)\{([^}]+)\}/g, "$1");
   t = t.replace(/\\,/g, " ").replace(/\\;/g, " ").replace(/\\!/g, "")
-       .replace(/\\quad/g, "  ").replace(/\\qquad/g, "   ");
+    .replace(/\\quad/g, "  ").replace(/\\qquad/g, "   ");
   t = t.replace(/_\s*\{([^}]+)\}/g, (_, s) => toSubscript(s))
-       .replace(/_([0-9a-zA-Z])/g, (_, s) => toSubscript(s));
+    .replace(/_([0-9a-zA-Z])/g, (_, s) => toSubscript(s));
   t = t.replace(/\^\s*\{([^}]+)\}/g, (_, e) => toSuperscript(e))
-       .replace(/\^\s*\(([^)]+)\)/g, (_, e) => toSuperscript(`(${e})`))
-       .replace(/\^\s*([+-]?\d+[a-z]*)/g, (_, e) => toSuperscript(e))
-       .replace(/\^\s*([a-zA-Z])\b/g, (_, e) => toSuperscript(e));
+    .replace(/\^\s*\(([^)]+)\)/g, (_, e) => toSuperscript(`(${e})`))
+    .replace(/\^\s*([+-]?\d+[a-z]*)/g, (_, e) => toSuperscript(e))
+    .replace(/\^\s*([a-zA-Z])\b/g, (_, e) => toSuperscript(e));
   t = t
     .replace(/\\arcsin/g, "arcsin").replace(/\\arccos/g, "arccos").replace(/\\arctan/g, "arctan")
     .replace(/\\sinh/g, "sinh").replace(/\\cosh/g, "cosh").replace(/\\tanh/g, "tanh")
@@ -2164,6 +2166,22 @@ function Eq({ value }) {
   });
 }
 
+function renderNarrativeHTML(plain, latex) {
+  let text = String(plain || "").trim();
+  if (!text) text = String(latex || "").trim();
+  if (/\\[a-zA-Z]+|[{}]/.test(text)) {
+    text = renderEquation(text);
+  }
+  return escapeHtml(text).replace(/\n/g, "<br>");
+}
+
+function MathNarrative({ plain, latex }) {
+  return React.createElement("span", {
+    className: "math-narrative",
+    dangerouslySetInnerHTML: { __html: renderNarrativeHTML(plain, latex) }
+  });
+}
+
 const OcrConfirmModal = ({ ocrReview, onCancel, onConfirm, submitting }) => {
   const confidence = Math.round(Math.max(0, Math.min(1, Number(ocrReview?.readingConfidence) || 0)) * 100);
   const unclearParts = Array.isArray(ocrReview?.unclearParts) ? ocrReview.unclearParts.filter(Boolean) : [];
@@ -2226,17 +2244,48 @@ function normalizePercentBoxClient(box) {
   return { x, y, width, height };
 }
 
+function expandPercentBoxClient(box, amount = 2.5) {
+  const normalized = normalizePercentBoxClient(box);
+  if (!normalized) return null;
+  const x = Math.max(0, normalized.x - amount);
+  const y = Math.max(0, normalized.y - amount);
+  const right = Math.min(100, normalized.x + normalized.width + amount);
+  const bottom = Math.min(100, normalized.y + normalized.height + amount);
+  return { x, y, width: Math.max(0, right - x), height: Math.max(0, bottom - y) };
+}
+
+function getStepRedlineBox(step) {
+  return normalizePercentBoxClient(step?.combinedBoxPercent || step?.wrongBoxPercent || step?.wrongPartBoxPercent);
+}
+
+function findMatchingWrongStep(target, wrongSteps) {
+  const targetStep = String(target?.stepNumber || "").trim();
+  if (targetStep) {
+    const byStep = wrongSteps.find((step) => String(step?.stepNumber || "").trim() === targetStep);
+    if (byStep) return byStep;
+  }
+  const targetText = normalizeAnswerText(target?.targetTextLatex || "");
+  if (!targetText) return null;
+  return wrongSteps.find((step) => {
+    const stepText = normalizeAnswerText(step?.studentStepLatex || step?.studentStep || "");
+    return stepText && (stepText.includes(targetText) || targetText.includes(stepText));
+  }) || null;
+}
+
 function getRedlineTargets(evaluation) {
   const direct = Array.isArray(evaluation?.redlineTargets) ? evaluation.redlineTargets : [];
+  const wrongSteps = Array.isArray(evaluation?.wrongSteps) ? evaluation.wrongSteps : [];
   const normalizedDirect = direct
-    .map((target) => ({ ...target, boxPercent: normalizePercentBoxClient(target.boxPercent) }))
+    .map((target) => {
+      const stepBox = getStepRedlineBox(findMatchingWrongStep(target, wrongSteps));
+      return { ...target, boxPercent: expandPercentBoxClient(stepBox || target.boxPercent, stepBox ? 1.5 : 2.5) };
+    })
     .filter((target) => target.boxPercent);
   if (normalizedDirect.length) return normalizedDirect;
 
-  const wrongSteps = Array.isArray(evaluation?.wrongSteps) ? evaluation.wrongSteps : [];
   return wrongSteps
     .map((step) => ({
-      boxPercent: normalizePercentBoxClient(step.wrongPartBoxPercent || step.wrongBoxPercent || step.combinedBoxPercent),
+      boxPercent: expandPercentBoxClient(getStepRedlineBox(step), 1.5),
       reasonLatex: step.issueLatex || step.issue || "",
       severity: "error",
       stepNumber: step.stepNumber || "",
@@ -2276,7 +2325,7 @@ function segmentTouchesRect(a, b, rect, padding) {
 function strokeTouchesRect(stroke, rect) {
   const points = Array.isArray(stroke?.points) ? stroke.points : [];
   if (!points.length) return false;
-  const padding = Math.max(6, Number(stroke.width) || 0);
+  const padding = Math.max(14, (Number(stroke.width) || 0) * 1.8);
   if (points.length === 1) return pointInRect(points[0], rect, padding);
   for (let index = 1; index < points.length; index += 1) {
     if (segmentTouchesRect(points[index - 1], points[index], rect, padding)) return true;
@@ -2308,18 +2357,17 @@ const RedlinePreview = ({ attempt, targets }) => {
   const validTargets = targets
     .map((target) => ({ ...target, rect: percentBoxToCanvasRect(target.boxPercent, { width, height }) }))
     .filter((target) => target.rect.width > 0 && target.rect.height > 0);
+  const redStrokeIds = new Set();
+  strokes.forEach((stroke, strokeIndex) => {
+    if (validTargets.some((target) => strokeTouchesRect(stroke, target.rect))) {
+      redStrokeIds.add(stroke.id ?? `idx-${strokeIndex}`);
+    }
+  });
 
   if (strokes.length && width > 1 && height > 1) {
     return (
       <div className="redline-preview">
         <svg className="redline-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Jawaban canvas dengan bagian salah berwarna merah">
-          <defs>
-            {validTargets.map((target, idx) => (
-              <clipPath id={`redline-clip-${idx}`} key={idx}>
-                <rect x={target.rect.x} y={target.rect.y} width={target.rect.width} height={target.rect.height} rx="8" />
-              </clipPath>
-            ))}
-          </defs>
           <rect className="redline-page-bg" x="0" y="0" width={width} height={height} />
           {strokes.map((stroke, idx) => {
             const path = strokePath(stroke);
@@ -2336,26 +2384,23 @@ const RedlinePreview = ({ attempt, targets }) => {
               />
             );
           })}
-          {validTargets.map((target, targetIndex) => (
-            <g clipPath={`url(#redline-clip-${targetIndex})`} key={`target-${targetIndex}`}>
-              {strokes.map((stroke, strokeIndex) => {
-                if (!strokeTouchesRect(stroke, target.rect)) return null;
-                const path = strokePath(stroke);
-                if (!path) return null;
-                return (
-                  <path
-                    d={path}
-                    fill="none"
-                    key={`red-${targetIndex}-${stroke.id || strokeIndex}`}
-                    stroke="#ef4444"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={Math.max(1, Number(stroke.width) || 8)}
-                  />
-                );
-              })}
-            </g>
-          ))}
+          {strokes.map((stroke, strokeIndex) => {
+            const strokeKey = stroke.id ?? `idx-${strokeIndex}`;
+            if (!redStrokeIds.has(strokeKey)) return null;
+            const path = strokePath(stroke);
+            if (!path) return null;
+            return (
+              <path
+                d={path}
+                fill="none"
+                key={`red-${strokeKey}`}
+                stroke="#ef4444"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={Math.max(1, Number(stroke.width) || 8)}
+              />
+            );
+          })}
         </svg>
       </div>
     );
@@ -2393,9 +2438,10 @@ const ResultModal = ({ attempt, onClose }) => {
   const score = Math.round(Number(evaluation.score) || 0);
   const isCorrect = Boolean(evaluation.isCorrect);
   const detectedAnswer = evaluation.detectedAnswerLatex || attempt.confirmedAnswerLatex || evaluation.detectedAnswerText;
-  const feedback = evaluation.fullFeedbackLatex || attempt.feedback || evaluation.fullFeedback || "\\text{Koreksi selesai.}";
+  const feedbackLatex = evaluation.fullFeedbackLatex || "";
+  const feedbackPlain = evaluation.fullFeedbackPlain || attempt.feedback || evaluation.fullFeedback || "";
   const redlineTargets = getRedlineTargets(evaluation);
-  const hasExplanation = wrongSteps.length || feedback;
+  const hasExplanation = wrongSteps.length || feedbackPlain || feedbackLatex;
   const showRedlineFirst = !isCorrect && redlineTargets.length > 0;
   const currentStep = showRedlineFirst ? step : "explanation";
 
@@ -2433,7 +2479,11 @@ const ResultModal = ({ attempt, onClose }) => {
               </div>
             ) : null}
 
-            <p className="text-sm leading-relaxed mb-4"><Eq value={feedback} /></p>
+            {feedbackPlain || feedbackLatex ? (
+              <p className="text-sm leading-relaxed mb-4">
+                <MathNarrative plain={feedbackPlain} latex={feedbackLatex} />
+              </p>
+            ) : null}
 
             {wrongSteps.length ? (
               <div>
@@ -2449,9 +2499,15 @@ const ResultModal = ({ attempt, onClose }) => {
                           {item.studentStepLatex || item.studentStep ? (
                             <p className="text-sm mb-1"><span className="font-semibold text-ink/60">Tulisan:</span> <Eq value={item.studentStepLatex || item.studentStep} /></p>
                           ) : null}
-                          <p className="text-sm font-semibold mb-1"><Eq value={item.issueLatex || item.issue} /></p>
+                          <p className="text-sm font-semibold mb-1">
+                            <MathNarrative plain={item.issuePlain || item.issue} latex={item.issueLatex} />
+                          </p>
                           {item.correctStepLatex ? <p className="text-sm mb-1"><span className="font-semibold text-ink/60">Seharusnya:</span> <Eq value={item.correctStepLatex} /></p> : null}
-                          {item.hintLatex || item.hint ? <p className="text-xs text-ink/60">Petunjuk: <Eq value={item.hintLatex || item.hint} /></p> : null}
+                          {item.hintPlain || item.hintLatex || item.hint ? (
+                            <p className="text-xs text-ink/60">
+                              Petunjuk: <MathNarrative plain={item.hintPlain || item.hint} latex={item.hintLatex} />
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -2526,9 +2582,9 @@ const CanvasIntroModal = ({ onDismiss, onOpenCanvas }) => {
             aria-label={soundEnabled ? "Matikan suara demo" : "Nyalakan suara demo"}
           >
             {soundEnabled ? (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /></svg>
             ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg>
             )}
             <span>{soundEnabled ? "Sound on" : "Sound off"}</span>
           </button>
@@ -2549,4 +2605,3 @@ const CanvasIntroModal = ({ onDismiss, onOpenCanvas }) => {
 
 window.Practice = Practice;
 window.renderMafikingMathHTML = renderMafikingMathHTML;
-

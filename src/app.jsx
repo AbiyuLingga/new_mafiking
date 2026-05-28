@@ -44,6 +44,9 @@ const App = () => {
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const hasOrder = params.has("merchantOrderId");
+    if (params.get("landing") === "true") {
+      setForcePublicLanding(true);
+    }
 
     MafikingAPI.get("/api/auth/me")
       .then((user) => {
@@ -120,11 +123,11 @@ const App = () => {
 
       <main className="flex-1">
         <div data-screen-label={routeLabel(route)}>
-          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} forcePublicLanding={forcePublicLanding} />}
+          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} forcePublicLanding={forcePublicLanding} isAdmin={isAdmin || isAdminAccount} />}
           {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} />}
           {route === "misi" && <ScreenErrorBoundary><Misi setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} /></ScreenErrorBoundary>}
           {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} />}
-          {route === "profile" && <Profile setRoute={navigate} />}
+          {route === "profile" && <Profile setRoute={navigate} isAdmin={isAdmin || isAdminAccount} />}
           {route === "payment" && <Payment setRoute={navigate} currentUser={currentUser} context={paymentContext} />}
           {route === "practice" && <Practice setRoute={navigate} context={practiceContext} isAdmin={isAdmin} />}
         </div>

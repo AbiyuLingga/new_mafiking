@@ -21,6 +21,11 @@ Bagian coretan yang salah harus dirender ulang sebagai coretan merah.
 4. Frontend bertanggung jawab mengubah warna coretan user menjadi merah.
 5. Semua hasil teks yang akan ditampilkan ke user harus berupa LaTeX.
 6. Teks biasa di dalam LaTeX wajib memakai `\text{...}`.
+7. Redline harus menandai unit visual yang utuh. Jangan menargetkan setengah
+   huruf/angka atau potongan kecil dari satu karakter.
+8. Jika kesalahan terjadi pada transisi perhitungan, tandai seluruh ekspresi
+   transisi yang salah. Contoh: untuk `1+1=3`, target merah adalah `1+1=3`,
+   bukan hanya `3`.
 
 Contoh benar:
 
@@ -536,4 +541,3 @@ Implementasi yang benar harus mengikuti urutan ini:
 6. Tampilkan pembahasan lengkap setelah user klik `Next`.
 7. Pastikan semua teks hasil Gemini yang tampil ke user berupa LaTeX dengan
    teks biasa dibungkus `\text{...}`.
-

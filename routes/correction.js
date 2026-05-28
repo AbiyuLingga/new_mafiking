@@ -12,25 +12,29 @@ const router = express.Router();
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const MAX_BASE64_CHARS = 10_000_000;
+const GEMINI_FLASH_LITE_MODEL = 'gemini-3.1-flash-lite';
 const TRANSCRIBE_MODELS = [
-  'gemini-2.5-flash-lite',
+  GEMINI_FLASH_LITE_MODEL,
 ];
 const EVALUATE_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.5-flash-lite',
+  GEMINI_FLASH_LITE_MODEL,
 ];
-const PROFILE_MODELS = EVALUATE_MODELS;
+const PROFILE_MODELS = [
+  GEMINI_FLASH_LITE_MODEL,
+];
 const PROFILE_AI_ATTEMPT_LIMIT = 20;
 const PROFILE_RECOMMENDATION_ATTEMPT_LIMIT = 200;
 const PROFILE_AI_REFRESH_COOLDOWN_MS = 60 * 60 * 1000;
 const PROFILE_MC_ATTEMPT_LIMIT = 120;
-const CANVAS_REDLINE_SOP = readCanvasRedlineSop();
+const MAX_LEARNING_TAGS = 5;
+const TRANSCRIBE_MAX_OUTPUT_TOKENS = 512;
+const EVALUATE_MAX_OUTPUT_TOKENS = 2600;
 const PROFILE_NARRATIVE_SOP = readProfileNarrativeSop();
 
 const TRANSCRIBE_SYSTEM_PROMPT = [
-  'Kamu wajib membaca dan mengikuti SOP Gemini Canvas Redline berikut sebelum menjawab.',
-  CANVAS_REDLINE_SOP,
-  'Tugas saat ini hanya OCR/transkripsi canvas.',
+  'Kamu adalah sistem OCR matematika untuk tulisan tangan siswa.',
+  'Tugas saat ini hanya transkripsi canvas.',
+  'Baca isi gambar dari atas ke bawah dan ubah ke LaTeX ringkas.',
   'Jangan mengoreksi jawaban, jangan memperbaiki langkah salah, dan jangan memberi skor.',
   'Balas hanya JSON valid sesuai schema.',
   'Semua field yang berisi teks untuk user harus berupa LaTeX.',
@@ -38,21 +42,27 @@ const TRANSCRIBE_SYSTEM_PROMPT = [
 ].join('\n\n');
 
 const EVALUATE_SYSTEM_PROMPT = [
-  'Kamu wajib membaca dan mengikuti SOP Gemini Canvas Redline berikut sebelum menjawab.',
-  CANVAS_REDLINE_SOP,
+  'Kamu adalah guru matematika yang teliti dan ringkas.',
   'Tugas saat ini adalah mengevaluasi jawaban canvas yang transkripsinya sudah dikonfirmasi user.',
   'Gunakan confirmedAnswerLatex sebagai teks utama dan gambar canvas sebagai bukti visual.',
   'Jika teks dan gambar tidak konsisten, set needsResubmission true.',
   'Jika ada kesalahan, isi wrongSteps dan redlineTargets agar frontend dapat mengubah coretan salah menjadi merah.',
+  'redlineTargets wajib menandai seluruh transisi/baris yang menjadi salah, bukan hanya token kecil. Contoh: jika siswa menulis 1+1=3, targetTextLatex dan boxPercent harus mencakup seluruh 1+1=3.',
+  'Jika kesalahan terjadi karena hasil sebelum/sesudah transisi tidak konsisten, jadikan combinedBoxPercent area dari ekspresi lengkap yang harus dikoreksi.',
+  'Maksimal 5 wrongSteps dan 5 redlineTargets. Pilih kesalahan utama, tetapi beri pembahasan yang cukup jelas.',
+  'Untuk setiap wrongStep, isi issuePlain dan hintPlain masing-masing 1-2 kalimat pendek yang konkret.',
   'Jangan mengembalikan Markdown, HTML, atau code fence.',
   'Balas hanya JSON valid sesuai schema.',
-  'Semua field yang berisi teks untuk user harus berupa LaTeX.',
-  'Semua teks biasa di dalam LaTeX wajib memakai \\text{...}.'
+  'strengthTags dan weaknessTags masing-masing maksimal 5 tag; pilih yang paling utama.',
+  'Field berakhiran Latex harus berisi LaTeX yang pendek dan valid.',
+  'Field berakhiran Plain harus berisi Bahasa Indonesia biasa tanpa Markdown, tanpa HTML, dan tanpa command LaTeX seperti \\text atau \\frac.',
+  'Jangan menggabungkan narasi panjang menjadi satu ekspresi LaTeX; narasi panjang masuk ke fullFeedbackPlain, issuePlain, dan hintPlain.'
 ].join(' ');
 
 const PROFILE_SYSTEM_PROMPT = [
   'Kamu wajib membaca dan mengikuti SOP 9Router Profile Summary berikut sebelum menjawab.',
   PROFILE_NARRATIVE_SOP,
+  'strengths dan weaknesses masing-masing maksimal 5 tag; pilih yang paling utama.',
   'Balas hanya JSON valid sesuai schema: strengths, weaknesses, recommendedQuestions, overallSummary. Jangan Markdown, jangan code fence, jangan properti tambahan.'
 ].join('\n\n');
 
@@ -66,6 +76,7 @@ const EVALUATION_SCHEMA = {
     needsResubmission: { type: 'boolean' },
     wrongSteps: {
       type: 'array',
+      maxItems: 5,
       items: {
         type: 'object',
         properties: {
@@ -73,11 +84,15 @@ const EVALUATION_SCHEMA = {
           previousStep: { type: 'string' },
           studentStep: { type: 'string' },
           studentStepLatex: { type: 'string' },
+          studentStepPlain: { type: 'string' },
           correctStepLatex: { type: 'string' },
+          correctStepPlain: { type: 'string' },
           issue: { type: 'string' },
           issueLatex: { type: 'string' },
+          issuePlain: { type: 'string' },
           hint: { type: 'string' },
           hintLatex: { type: 'string' },
+          hintPlain: { type: 'string' },
           wrongPartBoxPercent: boxSchema(),
           wrongBoxPercent: boxSchema(),
           combinedBoxPercent: boxSchema()
@@ -97,13 +112,20 @@ const EVALUATION_SCHEMA = {
     },
     redlineTargets: {
       type: 'array',
+      maxItems: 5,
       items: {
         type: 'object',
         properties: {
           stepNumber: { type: 'string' },
-          targetTextLatex: { type: 'string' },
+          targetTextLatex: {
+            type: 'string',
+            description: 'Seluruh ekspresi/baris yang harus berubah merah, bukan hanya karakter terakhir yang salah.'
+          },
           reasonLatex: { type: 'string' },
-          boxPercent: boxSchema(),
+          boxPercent: {
+            ...boxSchema(),
+            description: 'Area persen yang mencakup seluruh ekspresi/baris salah. Untuk 1+1=3, kotak harus mencakup 1+1=3 penuh.'
+          },
           severity: { type: 'string' }
         },
         required: ['stepNumber', 'targetTextLatex', 'reasonLatex', 'boxPercent', 'severity']
@@ -111,8 +133,9 @@ const EVALUATION_SCHEMA = {
     },
     fullFeedback: { type: 'string' },
     fullFeedbackLatex: { type: 'string' },
-    strengthTags: { type: 'array', items: { type: 'string' } },
-    weaknessTags: { type: 'array', items: { type: 'string' } }
+    fullFeedbackPlain: { type: 'string' },
+    strengthTags: { type: 'array', items: { type: 'string' }, maxItems: MAX_LEARNING_TAGS },
+    weaknessTags: { type: 'array', items: { type: 'string' }, maxItems: MAX_LEARNING_TAGS }
   },
   required: [
     'isCorrect',
@@ -143,8 +166,8 @@ const TRANSCRIPTION_SCHEMA = {
 const PROFILE_SCHEMA = {
   type: 'object',
   properties: {
-    strengths: { type: 'array', items: { type: 'string' } },
-    weaknesses: { type: 'array', items: { type: 'string' } },
+    strengths: { type: 'array', items: { type: 'string' }, maxItems: MAX_LEARNING_TAGS },
+    weaknesses: { type: 'array', items: { type: 'string' }, maxItems: MAX_LEARNING_TAGS },
     recommendedQuestions: { type: 'array', items: { type: 'string' }, minItems: 3, maxItems: 5 },
     overallSummary: { type: 'string' }
   },
@@ -161,20 +184,6 @@ function boxSchema() {
       height: { type: 'number', minimum: 0, maximum: 100 }
     }
   };
-}
-
-function readCanvasRedlineSop() {
-  try {
-    return fs.readFileSync(path.join(__dirname, '..', 'SOP-GEMINI-CANVAS-REDLINE.md'), 'utf8');
-  } catch {
-    return [
-      'SOP Gemini Canvas Redline:',
-      'OCR harus terjadi sebelum evaluasi.',
-      'User harus mengonfirmasi transkripsi.',
-      'Semua teks user-facing harus LaTeX dan teks biasa wajib memakai \\text{...}.',
-      'Gemini mengembalikan redlineTargets; frontend yang mengubah warna stroke menjadi merah.'
-    ].join('\n');
-  }
 }
 
 function readProfileNarrativeSop() {
@@ -249,17 +258,65 @@ function isRetryableGeminiError(error) {
   );
 }
 
-function safeJsonParse(text, fallback) {
-  const cleaned = String(text || '')
+const JSON_PARSE_FAILED = Symbol('json-parse-failed');
+
+function cleanJsonText(text) {
+  return String(text || '')
     .trim()
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/i, '')
     .trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    return fallback(cleaned);
+}
+
+function extractJsonObjectText(text) {
+  const cleaned = cleanJsonText(text);
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start < 0 || end <= start) return '';
+  return cleaned.slice(start, end + 1);
+}
+
+function parseJsonCandidate(candidate) {
+  let current = candidate;
+  for (let depth = 0; depth < 3; depth += 1) {
+    try {
+      const parsed = JSON.parse(current);
+      if (typeof parsed !== 'string') return parsed;
+      current = parsed.trim();
+    } catch {
+      return JSON_PARSE_FAILED;
+    }
   }
+  return JSON_PARSE_FAILED;
+}
+
+function safeJsonParse(text, fallback) {
+  const cleaned = cleanJsonText(text);
+  const candidates = [cleaned, extractJsonObjectText(cleaned)].filter(Boolean);
+  for (const candidate of candidates) {
+    const parsed = parseJsonCandidate(candidate);
+    if (parsed !== JSON_PARSE_FAILED) return parsed;
+  }
+  return fallback(cleaned);
+}
+
+function fallbackTranscriptionFromText(text) {
+  const cleaned = cleanJsonText(text);
+  const detectedMatch = cleaned.match(/"detectedAnswerLatex"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  if (detectedMatch) {
+    try {
+      return { detectedAnswerLatex: JSON.parse(`"${detectedMatch[1]}"`) };
+    } catch {
+      return { detectedAnswerLatex: detectedMatch[1] };
+    }
+  }
+  return { detectedAnswerLatex: cleaned };
+}
+
+function safeTranscriptionParse(text) {
+  const parsed = safeJsonParse(text, fallbackTranscriptionFromText);
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+  return fallbackTranscriptionFromText(text);
 }
 
 function clampScore(value) {
@@ -277,6 +334,60 @@ function normalizeBoolean(value) {
 function normalizeStringArray(value) {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 12);
+}
+
+function stripLatexToPlain(value) {
+  let text = String(value || '').trim();
+  if (!text) return '';
+
+  text = text
+    .replace(/\\\[|\\\]/g, '')
+    .replace(/\$\$/g, '')
+    .replace(/^\s*\$|\$\s*$/g, '');
+
+  for (let i = 0; i < 6; i += 1) {
+    const next = text
+      .replace(/\\(?:text|mathrm|mathbf|mathit|mathsf|mbox)\{([^{}]*)\}/g, '$1')
+      .replace(/\\(?:dfrac|tfrac|frac)\{([^{}]+)\}\{([^{}]+)\}/g, '($1)/($2)')
+      .replace(/\\sqrt\{([^{}]+)\}/g, 'sqrt($1)');
+    if (next === text) break;
+    text = next;
+  }
+
+  text = text
+    .replace(/\\,/g, ' ')
+    .replace(/\\;/g, ' ')
+    .replace(/\\!/g, '')
+    .replace(/\\quad|\\qquad/g, ' ')
+    .replace(/\\cdot/g, '·')
+    .replace(/\\times/g, '×')
+    .replace(/\\div/g, '÷')
+    .replace(/\\leq?/g, '≤')
+    .replace(/\\geq?/g, '≥')
+    .replace(/\\neq|\\ne/g, '≠')
+    .replace(/\\approx/g, '≈')
+    .replace(/\\int/g, '∫')
+    .replace(/\\infty/g, '∞')
+    .replace(/\\ln/g, 'ln')
+    .replace(/\\sin/g, 'sin')
+    .replace(/\\cos/g, 'cos')
+    .replace(/\\tan/g, 'tan')
+    .replace(/\\log/g, 'log')
+    .replace(/\\[a-zA-Z]+\{([^{}]*)\}/g, '$1')
+    .replace(/\\[a-zA-Z]+/g, '')
+    .replace(/[{}]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return text;
+}
+
+function normalizeLearningTags(value, limit = MAX_LEARNING_TAGS) {
+  return Array.from(new Set(
+    normalizeStringArray(value)
+      .map(formatLearningSkillLabel)
+      .filter(Boolean)
+  )).slice(0, limit);
 }
 
 function normalizeTranscription(raw, sourceText) {
@@ -308,15 +419,19 @@ function normalizeEvaluation(raw, sourceText) {
   const isCorrect = normalizeBoolean(raw.isCorrect);
   const wrongSteps = Array.isArray(raw.wrongSteps) ? raw.wrongSteps.map((step) => ({
     combinedBoxPercent: normalizeBox(step.combinedBoxPercent),
-    hint: String(step.hint || ''),
+    hint: String(step.hintPlain || step.hint || stripLatexToPlain(step.hintLatex) || ''),
     hintLatex: String(step.hintLatex || step.hint || ''),
-    issue: String(step.issue || ''),
+    hintPlain: String(step.hintPlain || stripLatexToPlain(step.hint || step.hintLatex) || ''),
+    issue: String(step.issuePlain || step.issue || stripLatexToPlain(step.issueLatex) || ''),
     issueLatex: String(step.issueLatex || step.issue || ''),
+    issuePlain: String(step.issuePlain || stripLatexToPlain(step.issue || step.issueLatex) || ''),
     previousStep: String(step.previousStep || ''),
     stepNumber: String(step.stepNumber || ''),
-    studentStep: String(step.studentStep || ''),
+    studentStep: String(step.studentStepPlain || step.studentStep || stripLatexToPlain(step.studentStepLatex) || ''),
     studentStepLatex: String(step.studentStepLatex || step.studentStep || ''),
+    studentStepPlain: String(step.studentStepPlain || stripLatexToPlain(step.studentStep || step.studentStepLatex) || ''),
     correctStepLatex: String(step.correctStepLatex || ''),
+    correctStepPlain: String(step.correctStepPlain || stripLatexToPlain(step.correctStepLatex) || ''),
     wrongBoxPercent: normalizeBox(step.wrongBoxPercent),
     wrongPartBoxPercent: normalizeBox(step.wrongPartBoxPercent)
   })) : [];
@@ -328,19 +443,26 @@ function normalizeEvaluation(raw, sourceText) {
     targetTextLatex: String(target.targetTextLatex || '')
   })) : [];
   const fullFeedbackLatex = String(raw.fullFeedbackLatex || raw.fullFeedback || sourceText || 'Koreksi selesai, tetapi respons AI belum rapi.');
+  const fullFeedbackPlain = String(
+    raw.fullFeedbackPlain ||
+    raw.fullFeedbackText ||
+    stripLatexToPlain(raw.fullFeedback || fullFeedbackLatex) ||
+    'Koreksi selesai.'
+  );
 
   return {
     detectedAnswerText: String(raw.detectedAnswerText || ''),
     detectedAnswerLatex: String(raw.detectedAnswerLatex || raw.detectedAnswerText || ''),
-    fullFeedback: String(raw.fullFeedback || fullFeedbackLatex),
+    fullFeedback: fullFeedbackPlain,
     fullFeedbackLatex,
+    fullFeedbackPlain,
     isCorrect,
     needsResubmission: normalizeBoolean(raw.needsResubmission),
     raw: sourceText,
     redlineTargets,
     score: raw.score == null && isCorrect ? 100 : clampScore(raw.score),
-    strengthTags: normalizeStringArray(raw.strengthTags).map(formatLearningSkillLabel),
-    weaknessTags: normalizeStringArray(raw.weaknessTags).map(formatLearningSkillLabel),
+    strengthTags: normalizeLearningTags(raw.strengthTags),
+    weaknessTags: normalizeLearningTags(raw.weaknessTags),
     wrongSteps
   };
 }
@@ -351,8 +473,17 @@ function normalizeProfileSummary(raw, sourceText) {
     recommendedItems: normalizeRecommendedItems(raw.recommendedItems),
     recommendedQuestions: normalizeStringArray(raw.recommendedQuestions).slice(0, 5),
     skillNeedScores: normalizeSkillNeedScores(raw.skillNeedScores),
-    strengths: normalizeStringArray(raw.strengths).map(formatLearningSkillLabel),
-    weaknesses: normalizeStringArray(raw.weaknesses).map(formatLearningSkillLabel)
+    strengths: normalizeLearningTags(raw.strengths),
+    weaknesses: normalizeLearningTags(raw.weaknesses)
+  };
+}
+
+function limitProfileSummaryTags(summary) {
+  if (!summary || typeof summary !== 'object') return summary;
+  return {
+    ...summary,
+    strengths: normalizeLearningTags(summary.strengths),
+    weaknesses: normalizeLearningTags(summary.weaknesses)
   };
 }
 
@@ -403,7 +534,7 @@ function normalizeSkillNeedScores(value) {
   }).filter((score) => score && score.skillId).slice(0, 8);
 }
 
-async function callGeminiWithFallback({ models, parts, schema, systemInstruction }) {
+async function callGeminiWithFallback({ maxOutputTokens, models, parts, schema, systemInstruction }) {
   const keys = getGeminiKeys();
   const attempts = [];
 
@@ -420,18 +551,21 @@ async function callGeminiWithFallback({ models, parts, schema, systemInstruction
     for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
       const ai = new GoogleGenAI({ apiKey: keys[keyIndex] });
       try {
+        const startedAt = Date.now();
         const response = await ai.models.generateContent({
           model,
           contents: [{ role: 'user', parts }],
           config: {
+            ...(maxOutputTokens ? { maxOutputTokens } : {}),
             responseJsonSchema: schema,
             responseMimeType: 'application/json',
-            systemInstruction
+            systemInstruction,
+            temperature: 0.1
           }
         });
 
         const text = typeof response.text === 'function' ? response.text() : response.text;
-        return { keyIndex: keyIndex + 1, modelUsed: model, text: String(text || '') };
+        return { durationMs: Date.now() - startedAt, keyIndex: keyIndex + 1, modelUsed: model, text: String(text || '') };
       } catch (error) {
         lastError = error;
         attempts.push({
@@ -573,8 +707,8 @@ function compactAttemptsForProfile(attempts, limit = attempts.length) {
       questionText: String(attempt.questionText || ''),
       score: clampScore(attempt.score ?? evaluation.score),
       isCorrect: normalizeBoolean(attempt.isCorrect ?? evaluation.isCorrect),
-      strengthTags: normalizeStringArray(attempt.strengthTags || evaluation.strengthTags).map(formatLearningSkillLabel),
-      weaknessTags: normalizeStringArray(attempt.weaknessTags || evaluation.weaknessTags).map(formatLearningSkillLabel),
+      strengthTags: normalizeLearningTags(attempt.strengthTags || evaluation.strengthTags),
+      weaknessTags: normalizeLearningTags(attempt.weaknessTags || evaluation.weaknessTags),
       wrongIssues: Array.isArray(evaluation.wrongSteps)
         ? evaluation.wrongSteps.map((step) => String(step.issue || '')).filter(Boolean)
         : []
@@ -596,16 +730,18 @@ function canBypassProfileAiCooldown(user) {
 
 function getProfileAiRefreshState(db, user, now = new Date()) {
   if (!user?.id) {
-    return { allowed: false, bypass: false, remainingMs: PROFILE_AI_REFRESH_COOLDOWN_MS, availableAt: null };
+    return { allowed: false, bypass: false, remainingMs: PROFILE_AI_REFRESH_COOLDOWN_MS, availableAt: null, cachedSummary: null };
   }
+
+  const row = db.prepare('SELECT last_ai_refresh_at, cached_summary FROM profile_ai_refreshes WHERE user_id = ?').get(user.id);
+  const cachedSummary = row?.cached_summary ? safeJsonParse(row.cached_summary, () => null) : null;
 
   if (canBypassProfileAiCooldown(user)) {
-    return { allowed: true, bypass: true, remainingMs: 0, availableAt: null };
+    return { allowed: true, bypass: true, remainingMs: 0, availableAt: null, cachedSummary };
   }
 
-  const row = db.prepare('SELECT last_ai_refresh_at FROM profile_ai_refreshes WHERE user_id = ?').get(user.id);
   if (!row?.last_ai_refresh_at) {
-    return { allowed: true, bypass: false, remainingMs: 0, availableAt: null };
+    return { allowed: true, bypass: false, remainingMs: 0, availableAt: null, cachedSummary };
   }
 
   const lastAt = new Date(row.last_ai_refresh_at);
@@ -615,16 +751,19 @@ function getProfileAiRefreshState(db, user, now = new Date()) {
     allowed: remainingMs <= 0,
     bypass: false,
     remainingMs: Math.max(0, remainingMs),
-    availableAt: availableAt.toISOString()
+    availableAt: availableAt.toISOString(),
+    cachedSummary
   };
 }
 
-function recordProfileAiRefresh(db, userId, now = new Date()) {
+function recordProfileAiRefresh(db, userId, summary, now = new Date()) {
   db.prepare(`
-    INSERT INTO profile_ai_refreshes (user_id, last_ai_refresh_at)
-    VALUES (?, ?)
-    ON CONFLICT(user_id) DO UPDATE SET last_ai_refresh_at = excluded.last_ai_refresh_at
-  `).run(userId, now.toISOString());
+    INSERT INTO profile_ai_refreshes (user_id, last_ai_refresh_at, cached_summary)
+    VALUES (?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      last_ai_refresh_at = excluded.last_ai_refresh_at,
+      cached_summary = excluded.cached_summary
+  `).run(userId, now.toISOString(), summary ? JSON.stringify(summary) : null);
 }
 
 function loadMultipleChoiceEvidence(db, userId, limit = PROFILE_MC_ATTEMPT_LIMIT) {
@@ -744,6 +883,7 @@ router.post('/transcribe', isAuthenticated, async (req, res) => {
     if (!cleanBase64) return res.status(400).json({ error: 'imageBase64 wajib dikirim.' });
 
     const result = await callGeminiWithFallback({
+      maxOutputTokens: TRANSCRIBE_MAX_OUTPUT_TOKENS,
       models: getGeminiModels(TRANSCRIBE_MODELS),
       schema: TRANSCRIPTION_SCHEMA,
       systemInstruction: TRANSCRIBE_SYSTEM_PROMPT,
@@ -759,8 +899,8 @@ router.post('/transcribe', isAuthenticated, async (req, res) => {
       ]
     });
 
-    const parsed = safeJsonParse(result.text, (text) => ({ detectedAnswerLatex: text }));
-    res.json({ ...normalizeTranscription(parsed, result.text), keyIndex: result.keyIndex, modelUsed: result.modelUsed });
+    const parsed = safeTranscriptionParse(result.text);
+    res.json({ ...normalizeTranscription(parsed, result.text), durationMs: result.durationMs, keyIndex: result.keyIndex, modelUsed: result.modelUsed });
   } catch (error) {
     res.status(error.status ?? error.response?.status ?? 500).json({
       error: error.message || 'Gagal membaca gambar.',
@@ -812,6 +952,7 @@ router.post('/evaluate', isAuthenticated, async (req, res) => {
     }
 
     const result = await callGeminiWithFallback({
+      maxOutputTokens: EVALUATE_MAX_OUTPUT_TOKENS,
       models: getGeminiModels(EVALUATE_MODELS),
       schema: EVALUATION_SCHEMA,
       systemInstruction: EVALUATE_SYSTEM_PROMPT,
@@ -846,6 +987,7 @@ router.post('/evaluate', isAuthenticated, async (req, res) => {
     res.json({
       evaluation,
       feedback,
+      durationMs: result.durationMs,
       keyIndex: result.keyIndex,
       modelUsed: result.modelUsed
     });
@@ -884,36 +1026,49 @@ router.post('/profile-summary', isAuthenticated, async (req, res) => {
     const recommendationAttempts = compactAttemptsForProfile(attempts, PROFILE_RECOMMENDATION_ATTEMPT_LIMIT);
     const aiAttempts = compactAttemptsForProfile(attempts, PROFILE_AI_ATTEMPT_LIMIT);
     const deterministicSummary = buildDeterministicProfileSummary(recommendationAttempts);
+    const forceRefresh = Boolean(req.body?.forceRefresh);
     const refreshState = getProfileAiRefreshState(db, user, new Date());
-    const aiEvidence = buildProfileAiEvidence({ aiAttempts, multipleChoiceEvidence });
+
+    if (!refreshState.allowed && !forceRefresh && refreshState.cachedSummary) {
+      return res.json({
+        aiRefresh: serializeProfileAiRefreshState(refreshState, false),
+        summary: limitProfileSummaryTags(refreshState.cachedSummary)
+      });
+    }
+
+    const shouldCallAi = refreshState.allowed || forceRefresh;
 
     let result = null;
-    if (refreshState.allowed) {
+    if (shouldCallAi) {
       try {
+        const aiEvidence = buildProfileAiEvidence({ aiAttempts, multipleChoiceEvidence });
         result = await callProfileNarrativeSummary(aiEvidence);
-        if (result && !refreshState.bypass) {
-          recordProfileAiRefresh(db, req.session.userId, new Date());
-        }
       } catch (error) {
         console.warn('Profile AI narrative provider failed:', error.message);
       }
     }
 
+    let summary;
     if (!result) {
-      return res.json({
-        aiRefresh: serializeProfileAiRefreshState(refreshState, false),
-        summary: deterministicSummary || fallbackProfileFromAttempts(recommendationAttempts)
-      });
+      let finalSummary = deterministicSummary || fallbackProfileFromAttempts(recommendationAttempts);
+      summary = limitProfileSummaryTags(enrichWithDbProblems(db, req.session.userId, attempts, multipleChoiceEvidence, finalSummary));
+    } else {
+      const parsed = safeJsonParse(result.text, (overallSummary) => ({ overallSummary }));
+      let merged = mergeProfileSummaries(normalizeProfileSummary(parsed, result.text), deterministicSummary);
+      summary = limitProfileSummaryTags(enrichWithDbProblems(db, req.session.userId, attempts, multipleChoiceEvidence, merged));
     }
 
-    const parsed = safeJsonParse(result.text, (overallSummary) => ({ overallSummary }));
-    const summary = mergeProfileSummaries(normalizeProfileSummary(parsed, result.text), deterministicSummary);
+    if (shouldCallAi || !refreshState.cachedSummary) {
+      recordProfileAiRefresh(db, req.session.userId, summary, new Date());
+      refreshState.remainingMs = PROFILE_AI_REFRESH_COOLDOWN_MS;
+      refreshState.availableAt = new Date(Date.now() + PROFILE_AI_REFRESH_COOLDOWN_MS).toISOString();
+    }
 
     res.json({
       aiRefresh: serializeProfileAiRefreshState(refreshState, true),
-      keyIndex: result.keyIndex,
-      modelUsed: result.modelUsed,
-      provider: result.provider,
+      keyIndex: result?.keyIndex,
+      modelUsed: result?.modelUsed,
+      provider: result?.provider,
       summary
     });
   } catch (error) {
@@ -924,8 +1079,122 @@ router.post('/profile-summary', isAuthenticated, async (req, res) => {
   }
 });
 
+function enrichWithDbProblems(db, userId, attempts, multipleChoiceEvidence, summary) {
+  if (!summary) return summary;
+
+  const wrongProblemIds = attempts
+    .filter(a => a.isCorrect === false || (a.score != null && a.score < 80))
+    .map(a => a.problemId)
+    .filter(Boolean);
+
+  if (multipleChoiceEvidence && multipleChoiceEvidence.recentWrong) {
+    multipleChoiceEvidence.recentWrong.forEach(r => {
+      if (r.problemId) wrongProblemIds.push(r.problemId);
+    });
+  }
+
+  let subtopicIds = [];
+  if (wrongProblemIds.length > 0) {
+    const placeholders = wrongProblemIds.map(() => '?').join(',');
+    const subtopics = db.prepare(`SELECT DISTINCT subtopic_id FROM problems WHERE id IN (${placeholders})`).all(...wrongProblemIds);
+    subtopicIds = subtopics.map(r => r.subtopic_id).filter(Boolean);
+  }
+
+  if (subtopicIds.length === 0) {
+    const randomSubtopics = db.prepare(`SELECT id FROM subtopics ORDER BY RANDOM() LIMIT 3`).all();
+    subtopicIds = randomSubtopics.map(r => r.id);
+  }
+
+  const realProblems = [];
+  const fetchedIds = new Set();
+
+  for (const subtopicId of subtopicIds) {
+    if (realProblems.length >= 3) break;
+    const problem = db.prepare(`
+      SELECT p.*, s.title as subtopic_title
+      FROM problems p
+      LEFT JOIN subtopics s ON s.id = p.subtopic_id
+      WHERE p.subtopic_id = ?
+        AND p.id NOT IN (
+          SELECT problem_id FROM correction_attempts WHERE user_id = ? AND is_correct = 1
+        )
+      ORDER BY RANDOM()
+      LIMIT 1
+    `).get(subtopicId, userId);
+
+    if (problem && !fetchedIds.has(problem.id)) {
+      fetchedIds.add(problem.id);
+      realProblems.push(problem);
+    }
+  }
+
+  if (realProblems.length < 3 && subtopicIds.length > 0) {
+     const needed = 3 - realProblems.length;
+     const placeholders = subtopicIds.map(() => '?').join(',');
+     const extraProblems = db.prepare(`
+        SELECT p.*, s.title as subtopic_title
+        FROM problems p
+        LEFT JOIN subtopics s ON s.id = p.subtopic_id
+        WHERE p.subtopic_id IN (${placeholders})
+        ORDER BY RANDOM()
+        LIMIT ?
+     `).all(...subtopicIds, needed);
+     for (const p of extraProblems) {
+       if (realProblems.length >= 3) break;
+       if (!fetchedIds.has(p.id)) {
+         fetchedIds.add(p.id);
+         realProblems.push(p);
+       }
+     }
+  }
+
+  if (realProblems.length === 0) {
+    const randomProblems = db.prepare(`
+        SELECT p.*, s.title as subtopic_title
+        FROM problems p
+        LEFT JOIN subtopics s ON s.id = p.subtopic_id
+        ORDER BY RANDOM()
+        LIMIT 3
+    `).all();
+    for (const p of randomProblems) {
+       if (!fetchedIds.has(p.id)) {
+         fetchedIds.add(p.id);
+         realProblems.push(p);
+       }
+    }
+  }
+
+  if (realProblems.length > 0) {
+    summary.recommendedItems = realProblems.map((p, i) => {
+       const skillLabel = formatLearningSkillLabel(p.subtopic_title || 'General');
+       // ensure the weakness is also in the weakness card
+       if (skillLabel && (!summary.weaknesses || !summary.weaknesses.includes(skillLabel))) {
+         if (!summary.weaknesses) summary.weaknesses = [];
+         summary.weaknesses.push(skillLabel);
+       }
+       return {
+          ref: p.id.toString(),
+          questionDisplay: p.question_display,
+          questionText: p.question_text,
+          answerDisplay: p.answer_display,
+          difficulty: p.difficulty || 'Medium',
+          purcellReference: p.subtopic_title || 'General',
+          reason: "Dipilih berdasarkan riwayat kesalahanmu pada topik " + (p.subtopic_title || "ini") + ".",
+          storyProblem: p.question_type === 'story',
+          targetSkill: skillLabel,
+          questionType: p.question_type,
+          mcOptions: p.mc_options,
+          acceptableAnswers: p.acceptable_answers
+       };
+    });
+  }
+
+  return summary;
+}
+
 module.exports = router;
 module.exports._profileSummaryInternals = {
+  MAX_LEARNING_TAGS,
   PROFILE_AI_ATTEMPT_LIMIT,
   PROFILE_AI_REFRESH_COOLDOWN_MS,
   PROFILE_MC_ATTEMPT_LIMIT,
@@ -936,5 +1205,13 @@ module.exports._profileSummaryInternals = {
   chooseProfileAttemptSource,
   getProfileAiRefreshState,
   loadRecentCorrectionAttempts,
+  normalizeLearningTags,
   summarizeMultipleChoiceEvidence
+};
+module.exports._correctionInternals = {
+  normalizeEvaluation,
+  normalizeTranscription,
+  safeJsonParse,
+  safeTranscriptionParse,
+  stripLatexToPlain
 };

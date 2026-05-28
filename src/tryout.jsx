@@ -231,28 +231,6 @@ const Tryout = ({ setRoute, isAdmin }) => {
         </section>
       )}
 
-      <section className="sec-y bg-white border-t hairline">
-        <div className="max-w-6xl mx-auto px-6 md:px-8">
-          <div className="mb-10">
-            <div className="kicker mb-2">Bagaimana Arena bekerja</div>
-            <h2 className="font-display font-bold text-3xl md:text-4xl tracking-[-0.025em]">Tiga langkah, satu nilai.</h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { n: "01", t: "Pilih edisi", d: "Setiap tryout dirancang sebagai simulasi UAS atau TPB. Pilih sesuai jadwal ujianmu." },
-              { n: "02", t: "Kerjakan CBT", d: "Antarmuka identik dengan sistem ujian kampus — termasuk timer dan navigasi soal." },
-              { n: "03", t: "Analisis & bahasan", d: "Hasil dianalisis per-butir oleh AI. Setiap butir dilengkapi video pembahasan." },
-            ].map(s => (
-              <div key={s.n} className="flex flex-col">
-                <div className="text-xs font-mono text-ink/45 mb-2">{s.n}</div>
-                <h3 className="font-display font-bold text-xl mb-2">{s.t}</h3>
-                <p className="text-ink/60 text-sm leading-relaxed">{s.d}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {editPkg && (
         <TryoutEditModal
           pkg={editPkg}

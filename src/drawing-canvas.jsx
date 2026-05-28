@@ -171,6 +171,14 @@ const { forwardRef: __dcForwardRef, useCallback: __dcUseCallback, useEffect: __d
     return Math.abs(fromSize.cssWidth - toSize.cssWidth) >= 1 || Math.abs(fromSize.cssHeight - toSize.cssHeight) >= 1;
   }
 
+  function getElementLayoutSize(element) {
+    const rect = element ? element.getBoundingClientRect() : null;
+    return {
+      cssHeight: Math.max(1, Math.round((element && element.clientHeight) || (rect && rect.height) || 1)),
+      cssWidth: Math.max(1, Math.round((element && element.clientWidth) || (rect && rect.width) || 1)),
+    };
+  }
+
   function scaleStroke(stroke, scaleX, scaleY, lineScale) {
     return {
       ...stroke,
@@ -355,6 +363,18 @@ const { forwardRef: __dcForwardRef, useCallback: __dcUseCallback, useEffect: __d
       qualityResizePendingRef.current = false;
       pointTransformRef.current = null;
       resizeCanvasesRef.current && resizeCanvasesRef.current();
+    }
+
+    function ensureCanvasLayoutSize() {
+      const container = containerRef.current;
+      if (!container) return;
+      const nextSize = getElementLayoutSize(container);
+      const currentSize = sizeRef.current || {};
+      if (hasSizeChanged(currentSize, nextSize)) {
+        resizeCanvasesRef.current && resizeCanvasesRef.current();
+      } else {
+        pointTransformRef.current = null;
+      }
     }
 
     function downgradeCanvasQuality() {
@@ -1044,9 +1064,31 @@ const { forwardRef: __dcForwardRef, useCallback: __dcUseCallback, useEffect: __d
       onDirtyChangeRef.current && onDirtyChangeRef.current(false);
     }
 
-    function exportImage() {
+    function exportImage(options = {}) {
       commitSelection(false);
-      return mainCanvasRef.current ? mainCanvasRef.current.toDataURL('image/png') : '';
+      const canvas = mainCanvasRef.current;
+      if (!canvas) return '';
+
+      const mimeType = options.mimeType || 'image/png';
+      const quality = Number.isFinite(options.quality) ? options.quality : undefined;
+      const maxDimension = Number(options.maxDimension) || 0;
+      const sourceWidth = Math.max(1, canvas.width);
+      const sourceHeight = Math.max(1, canvas.height);
+      const scale = maxDimension > 0 ? Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight)) : 1;
+
+      if (scale >= 1 && mimeType === 'image/png') return canvas.toDataURL('image/png');
+
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = Math.max(1, Math.round(sourceWidth * scale));
+      exportCanvas.height = Math.max(1, Math.round(sourceHeight * scale));
+      const ctx = exportCanvas.getContext('2d');
+      if (!ctx) return canvas.toDataURL('image/png');
+      ctx.fillStyle = '#fffdf0';
+      ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+      ctx.drawImage(canvas, 0, 0, exportCanvas.width, exportCanvas.height);
+
+      const dataUrl = exportCanvas.toDataURL(mimeType, quality);
+      return dataUrl.startsWith(`data:${mimeType}`) ? dataUrl : exportCanvas.toDataURL('image/png');
     }
 
     function exportSnapshot() {
@@ -1088,9 +1130,7 @@ const { forwardRef: __dcForwardRef, useCallback: __dcUseCallback, useEffect: __d
 
       const resizeCanvases = () => {
         const previousSize = sizeRef.current;
-        const rect = container.getBoundingClientRect();
-        const cssWidth = Math.max(1, Math.round(rect.width));
-        const cssHeight = Math.max(1, Math.round(rect.height));
+        const { cssHeight, cssWidth } = getElementLayoutSize(container);
         const nextSize = { cssHeight, cssWidth };
         const dpr = getCanvasDpr(cssWidth, cssHeight, qualityProfileRef.current);
         const oldCanvas = document.createElement('canvas');
@@ -1148,6 +1188,7 @@ const { forwardRef: __dcForwardRef, useCallback: __dcUseCallback, useEffect: __d
     function handlePointerDown(event) {
       event.preventDefault();
       markStylusEraserIntent(event.nativeEvent);
+      ensureCanvasLayoutSize();
       refreshPointTransform();
       const canvas = mainCanvasRef.current;
       if (!canvas) return;

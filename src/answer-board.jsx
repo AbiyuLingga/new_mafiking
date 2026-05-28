@@ -119,7 +119,7 @@
 
     useImperativeHandle(ref, () => ({
       clear: () => canvasRef.current && canvasRef.current.clear(),
-      exportImage: () => (canvasRef.current && canvasRef.current.exportImage()) || '',
+      exportImage: (options) => (canvasRef.current && canvasRef.current.exportImage(options)) || '',
       exportSnapshot: () => (canvasRef.current && canvasRef.current.exportSnapshot && canvasRef.current.exportSnapshot()) || null,
     }));
 
