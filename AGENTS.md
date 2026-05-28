@@ -75,6 +75,7 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - `src/*.jsx` files use global symbols and assign components to `window.*`.
 - `src/app.jsx` owns route state and tweaks defaults.
 - `src/backend-api.jsx` is the same-origin API helper.
+- `src/admin-monitoring.jsx` is the admin user/access and Gemini usage monitoring panel. It must load before `src/admin.jsx` in `MAFIKING.html` because `admin.jsx` renders `window.AdminMonitoringPanel`.
 - The global `Nav` is intentionally not rendered on the `practice` route; practice owns its own compact session bars/toolbars.
 - `db/database.sqlite` is generated local runtime state.
 - `db/question-bank.json` is the portable seeded question-bank source.
@@ -196,6 +197,9 @@ Rules:
 - Most API routes require `req.session.userId`.
 - `server.js` creates a guest user for API requests that lack a session, except `/api/health` and `/api/payment/callback`.
 - Admin routes require both `isAuthenticated` and `isAdmin`.
+- Admin monitoring uses `GET /api/admin/dashboard-data`, `POST /api/admin/users/:id/reset-password`, `POST /api/admin/users/:id/grant-access`, and `POST /api/admin/users/:id/role`. Keep those endpoints admin-only and validate user IDs/access payloads.
+- The admin shield is frontend-visible only for `currentUser.role === "admin"`; do not expose it to every user. Admin mode adds an `Admin Panel` button to the top nav for reopening the modal.
+- Gemini token usage is observational data in `ai_token_usage`, written by `lib/log-token-usage.js`. Logging failures must not break correction/transcription/profile AI requests.
 - `routes/correction.js` supports up to 20 Gemini keys: `GEMINI_KEY_1` through `GEMINI_KEY_20`.
 - Profile summary can fall back locally when Gemini keys are missing.
 - Profile recommendations are catalog-backed and deterministic. Preserve `recommendedItems`, `recommendedQuestions`, and `skillNeedScores` in `/api/correction/profile-summary`; Gemini or 9Router can write summary prose but should not choose follow-up question refs at runtime. Keep the larger local recommendation window separate from the smaller AI prompt window.

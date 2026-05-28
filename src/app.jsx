@@ -36,6 +36,7 @@ const App = () => {
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [currentUser, setCurrentUser] = React.useState(null);
   const [isAdmin, setIsAdmin] = React.useState(false);
+  const [adminPanelOpen, setAdminPanelOpen] = React.useState(false);
   const [forcePublicLanding, setForcePublicLanding] = React.useState(false);
   const isGuest = currentUser && currentUser.display_name?.startsWith("Tamu_");
   const isLoggedIn = currentUser && !isGuest;
@@ -75,11 +76,18 @@ const App = () => {
       return;
     }
     setPaymentContext(null);
-    setForcePublicLanding(false);
+    setForcePublicLanding(next === "lobby");
     setRoute(next);
   }, []);
 
   React.useEffect(() => { window.__mafikingNavigate = navigate; }, [navigate]);
+
+  React.useEffect(() => {
+    if (!isAdminAccount) {
+      setIsAdmin(false);
+      setAdminPanelOpen(false);
+    }
+  }, [isAdminAccount]);
 
   const handleLogoClick = React.useCallback(() => {
     if (isAdminAccount || isAdmin) {
@@ -118,7 +126,16 @@ const App = () => {
     <div className="min-h-screen flex flex-col bg-paper text-ink">
       <OfflineBanner />
       {route !== "practice" && isLoggedIn && (
-        <Nav route={route} setRoute={navigate} navStyle={tweaks.navStyle} gamified={route === "belajar" || route === "misi" || route === "profile" || route === "tryout"} isLoggedIn={isLoggedIn} onLogoClick={handleLogoClick} />
+        <Nav
+          route={route}
+          setRoute={navigate}
+          navStyle={tweaks.navStyle}
+          gamified={route === "belajar" || route === "misi" || route === "profile" || route === "tryout"}
+          isLoggedIn={isLoggedIn}
+          isAdminMode={isAdmin}
+          onLogoClick={handleLogoClick}
+          onAdminPanelOpen={() => setAdminPanelOpen(true)}
+        />
       )}
 
       <main className="flex-1">
@@ -135,11 +152,15 @@ const App = () => {
 
       <ToastContainer />
 
-      {route !== "payment" && (
+      {route !== "payment" && isAdminAccount && (
         <button
           aria-label={isAdmin ? "Keluar mode admin" : "Masuk mode admin"}
           title={isAdmin ? "Keluar mode admin" : "Masuk mode admin"}
-          onClick={() => setIsAdmin((v) => !v)}
+          onClick={() => setIsAdmin((v) => {
+            const next = !v;
+            setAdminPanelOpen(next);
+            return next;
+          })}
           type="button"
           style={{
             position: "fixed", bottom: 24, right: 24, zIndex: 8000,
@@ -156,6 +177,10 @@ const App = () => {
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
           </svg>
         </button>
+      )}
+
+      {isAdmin && adminPanelOpen && window.AdminPanel && (
+        React.createElement(window.AdminPanel, { onClose: () => setAdminPanelOpen(false) })
       )}
 
       <TweaksPanel title="Tweaks">

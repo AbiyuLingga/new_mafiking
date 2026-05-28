@@ -136,3 +136,26 @@ CREATE TABLE IF NOT EXISTS correction_attempts (
     evaluation_json TEXT NOT NULL DEFAULT '{}',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS user_access_grants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    access_type TEXT NOT NULL,
+    access_value TEXT NOT NULL,
+    granted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_access_grants_user_id
+    ON user_access_grants (user_id);
+
+CREATE TABLE IF NOT EXISTS ai_token_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    key_name TEXT NOT NULL,
+    tokens_used INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_token_usage_provider_key
+    ON ai_token_usage (provider, key_name);

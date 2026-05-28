@@ -11,7 +11,7 @@ The active browser entry point is `MAFIKING.html`, served by `server.js`. The fr
 - Lobby: auto-splits into `Landing` (marketing, for guest/`Tamu_*` users) vs `Dashboard` (logged-in users with greeting, continue card, progress stats).
 - Shared: global toast system (`showToast`), `Skeleton` loading states, `OfflineBanner`.
 - Payment: package selection → Duitku redirect → status polling page (`src/payment.jsx`).
-- Admin mode: shield toggle button (bottom-right corner). Pressing shield **auto-opens `AdminPanel`** (full CRUD modal). On Belajar page shows `AdminBelajarView` with DB-wired chapter CRUD (mapel, semester, description, topics per chapter). On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete; a floating `+` FAB adds new questions.
+- Admin mode: role-gated shield toggle button (bottom-right corner). Pressing shield enables admin mode and opens `AdminPanel`; the top nav then shows an `Admin Panel` button to reopen it. On Belajar page shows `AdminBelajarView` with DB-wired chapter CRUD (mapel, semester, description, topics per chapter). On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete. The admin modal also has `Users & Token Monitoring` for user access grants, password reset, role grants, and Gemini usage visibility.
 - SOP: `SOP-AI-INPUT-SOAL.md` documents the general AI question-entry guide. `SOP-DEEPSEEK-IMPORT-SOAL.md` is the stricter prompt contract for admin file import via DeepSeek.
 - Backend: Express 5, SQLite through `better-sqlite3`, session auth, API routes.
 - Question bank: exported from `../Mafiking/db/database.sqlite` into `db/question-bank.json`.
@@ -48,6 +48,8 @@ Create `.env` from `.env.example`.
 | `SESSION_SECRET` | Yes for real use | Express session signing secret. |
 | `GEMINI_KEY_1` ... `GEMINI_KEY_20` | Required for AI correction | Gemini API keys used with fallback rotation. |
 | `GEMINI_MODELS` | No | Comma-separated model preference before built-in fallbacks. |
+| `GEMINI_REQUEST_DAILY_LIMIT` | No | Admin monitoring request limit display per Gemini key. Defaults to `1500`. |
+| `GEMINI_TOKEN_DAILY_LIMIT` | No | Admin monitoring token limit display per Gemini key. Defaults to `1000000`. |
 | `AI_PROFILE_PROVIDER` | No | `gemini` by default. Set `9router` to use 9Router only for profile narrative text. |
 | `NINEROUTER_BASE_URL` | Required if `AI_PROFILE_PROVIDER=9router` | 9Router OpenAI-compatible base URL, usually `http://127.0.0.1:20128/v1`. |
 | `NINEROUTER_API_KEY` | Required if `AI_PROFILE_PROVIDER=9router` | API key copied from the 9Router dashboard. Server-side only. |
@@ -122,12 +124,13 @@ db.prepare(\"UPDATE users SET role = 'admin' WHERE username = ?\").run('username
 
 ## Admin Mode (Frontend)
 
-The admin mode toggle does **not** require login — it is a testing convenience.
+The admin mode toggle is visible only to users whose `role` is `admin`.
 
 - Tap the **shield button** (⛨) at the bottom-right corner of any page to enter admin mode (button turns yellow). This also **automatically opens `AdminPanel`** — the full CRUD modal for chapters, subtopics, problems, steps, and users.
 - Tap again to exit (button returns to black, panel closes).
-- While admin mode is active, a **floating `+` FAB** (bottom-right) reopens `AdminPanel` if it was closed.
+- While admin mode is active, the top nav shows an **Admin Panel** button to reopen the modal if it was closed.
 - Local development bypass: in non-production, `/api/admin/*` accepts localhost requests even when the current session is only an auto-guest. Set `LOCAL_ADMIN_MODE=false` to force real admin login again.
+- `Users & Token Monitoring` lists users, manual access grants, one-click password reset to `123456`, role controls for Admin Panel access, and 20 Gemini key cards with request/token usage for the current UTC day.
 
 **What changes in admin mode:**
 
@@ -190,6 +193,7 @@ The import script refuses to replace question tables when user progress or corre
 |   `-- purcell-inspired-question-bank.md # Original Purcell-aligned reference questions for recommendations
 |-- lib/
 |   |-- admin-import.js        # Admin import normalization and DeepSeek helper logic
+|   |-- log-token-usage.js     # Non-blocking AI token usage logger
 |   `-- recommendation-engine.js # Deterministic weakness scoring and follow-up question picker
 |-- SOP-9ROUTER-PROFILE-SUMMARY.md # Required profile narrative prompt for 9Router/Gemini
 |-- routes/
@@ -222,6 +226,7 @@ The import script refuses to replace question tables when user progress or corre
 |   |-- misi.jsx               # Daily mission screen
 |   |-- tryout.jsx             # Tryout screen
 |   |-- payment.jsx            # Payment package selection + Duitku redirect + status polling
+|   |-- admin-monitoring.jsx   # Admin user/access and Gemini usage monitoring tab
 |   |-- admin.jsx              # Admin UI: AdminBelajarView, slide AdminPracticeBar, plug problem editor, CRUD modals
 |   `-- styles.css             # All CSS including admin styles appended at end
 |-- tweaks-panel.jsx
@@ -267,7 +272,7 @@ The import script refuses to replace question tables when user progress or corre
 2. User writes on the canvas in `src/practice.jsx` / `src/answer-board.jsx`.
 3. Submit exports the canvas image as PNG data URL.
 4. Frontend posts to `POST /api/correction/evaluate`.
-5. Backend validates image size/type, calls Gemini with key/model fallback, normalizes the JSON response, stores a row in `correction_attempts`, then returns feedback.
+5. Backend validates image size/type, calls Gemini with key/model fallback, logs successful token usage in `ai_token_usage`, normalizes the JSON response, stores a row in `correction_attempts`, then returns feedback.
 6. Frontend shows the ResultModal and posts progress to `POST /api/progress/submit`.
 
 ### Profile Report
@@ -318,6 +323,10 @@ All API routes except `/api/health` and `/api/payment/callback` require a sessio
 | `PUT/DELETE` | `/api/admin/steps/:id` | Update or delete step (admin only). |
 | `GET` | `/api/admin/users` | List users (admin only). |
 | `PUT` | `/api/admin/users/:id/password` | Reset user password (admin only). |
+| `GET` | `/api/admin/dashboard-data` | Combined user/access and Gemini usage dashboard data (admin only). |
+| `POST` | `/api/admin/users/:id/reset-password` | Reset a user password to `123456` (admin only). |
+| `POST` | `/api/admin/users/:id/grant-access` | Add a manual user access grant (admin only). |
+| `POST` | `/api/admin/users/:id/role` | Promote or demote Admin Panel access by setting user role (admin only). |
 | `POST` | `/api/admin/import/draft` | Upload file and ask DeepSeek for a reviewable import draft (admin only). |
 | `POST` | `/api/admin/import/commit` | Insert reviewed draft questions and steps into SQLite (admin only). |
 | `POST` | `/api/payment/create` | Create Duitku invoice. |
@@ -355,7 +364,8 @@ curl -s http://127.0.0.1:3000/api/quiz/init
 Browser checks:
 
 - Open `/` — lobby loads (Landing for guest, Dashboard for registered user).
-- Shield button appears at bottom-right; pressing it turns yellow (admin mode).
+- Log in as an admin; shield button appears at bottom-right. Pressing it turns yellow and opens Admin Panel.
+- In `AdminPanel`, open `Users & Token Monitoring` and confirm the user table plus 20 Gemini cards render.
 - Open `Belajar` in admin mode — numbered chapter list with ✏/✕ buttons; "+ Tambah Bab Baru" row at bottom. Changes persist to DB.
 - Open `Belajar` in normal mode — chapter cards render normally (no admin buttons).
 - Click `Teknik Integrasi` → practice opens with 23 questions in Pilgan mode.
@@ -374,6 +384,7 @@ Browser checks:
 - The HTML loads React 18 UMD from CDN, while `package.json` includes React 19 for local tooling. Do not assume package React is what the browser runtime uses.
 - Auto-guest sessions create users for API requests. Guest names start with `Tamu_`.
 - Only Integral question data is currently imported. Static chapter cards for other subjects are placeholders.
-- Admin mode toggle requires no login — it is a testing convenience. Restrict in production.
+- Admin shield visibility is role-gated in the frontend, and admin APIs remain protected by backend middleware. Local development still has localhost admin API bypass unless `LOCAL_ADMIN_MODE=false`.
+- Gemini token "remaining" values are monitoring estimates from configured daily limits, not a live Google quota lookup.
 - Duitku routes point at sandbox base URL in code. Review payment environment and base URL before production use.
 - `db/mafiking.db` exists but is the wrong file — use `db/database.sqlite`.

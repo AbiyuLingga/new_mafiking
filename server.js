@@ -49,7 +49,9 @@ for (const migration of [
   "ALTER TABLE chapters ADD COLUMN description TEXT DEFAULT ''",
   "ALTER TABLE chapters ADD COLUMN est TEXT DEFAULT ''",
   "ALTER TABLE chapters ADD COLUMN topics TEXT DEFAULT '[]'",
-  "ALTER TABLE daily_missions ADD COLUMN release_date TEXT DEFAULT ''"
+  "ALTER TABLE daily_missions ADD COLUMN release_date TEXT DEFAULT ''",
+  "ALTER TABLE ai_token_usage ADD COLUMN tokens_used INTEGER DEFAULT 0",
+  "ALTER TABLE ai_token_usage ADD COLUMN created_at DATETIME"
 ]) {
   try {
     db.exec(migration);
@@ -57,6 +59,42 @@ for (const migration of [
     // Column already exists.
   }
 }
+
+try {
+  db.exec(`
+    UPDATE ai_token_usage
+    SET tokens_used = COALESCE(tokens_used, total_tokens, 0)
+    WHERE tokens_used IS NULL OR tokens_used = 0
+  `);
+} catch (_) {
+  try {
+    db.exec(`
+      UPDATE ai_token_usage
+      SET tokens_used = COALESCE(tokens_used, 0)
+      WHERE tokens_used IS NULL
+    `);
+  } catch (_) {}
+}
+
+try {
+  db.exec(`
+    UPDATE ai_token_usage
+    SET created_at = COALESCE(created_at, used_at, CURRENT_TIMESTAMP)
+    WHERE created_at IS NULL OR created_at = ''
+  `);
+} catch (_) {
+  try {
+    db.exec(`
+      UPDATE ai_token_usage
+      SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP)
+      WHERE created_at IS NULL OR created_at = ''
+    `);
+  } catch (_) {}
+}
+
+try {
+  db.exec('CREATE INDEX IF NOT EXISTS idx_ai_token_usage_provider_key_created ON ai_token_usage (provider, key_name, created_at)');
+} catch (_) {}
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS correction_attempts (

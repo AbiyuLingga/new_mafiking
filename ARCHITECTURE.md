@@ -99,6 +99,9 @@ src/answer-board.jsx
 src/practice.jsx
 src/misi.jsx
 src/tryout.jsx
+src/payment.jsx
+src/admin-monitoring.jsx
+src/admin.jsx
 src/app.jsx
 ```
 
@@ -124,6 +127,9 @@ The frontend is not module-based. Components are defined in browser global scope
 | `src/profile.jsx` | Profile/report view using progress and correction APIs. |
 | `src/misi.jsx` | Daily mission screen. |
 | `src/tryout.jsx` | Tryout screen. |
+| `src/payment.jsx` | Payment package selection and status polling. |
+| `src/admin-monitoring.jsx` | Admin user/access and Gemini usage monitoring tab, exported as `window.AdminMonitoringPanel`. |
+| `src/admin.jsx` | Admin modal, content CRUD, import tab, users tab, and monitoring tab shell. |
 | `src/styles.css` | Local custom CSS and appended feature styles. |
 | `tweaks-panel.jsx` | Tweaks panel and persisted tweak state. |
 
@@ -303,6 +309,7 @@ Core responsibilities:
 - Retry only retryable Gemini overload/rate-limit errors.
 - Normalize evaluation/profile JSON.
 - Store correction attempts in SQLite.
+- Log successful Gemini token usage to `ai_token_usage` without blocking the request.
 - Provide local fallback profile summaries when Gemini is unavailable.
 - Compute deterministic `recommendedItems` from local skill metadata and the Purcell-inspired reference bank; Gemini does not freely choose those follow-up questions.
 - Optionally use 9Router for profile narrative text only when `AI_PROFILE_PROVIDER=9router`; canvas OCR/evaluation still uses Gemini directly.
@@ -318,6 +325,9 @@ Admin-only CRUD for:
 - Problems.
 - Problem steps.
 - Users' passwords.
+- Dashboard data for user progress/access grants and Gemini usage.
+- Manual user access grants.
+- Admin role promotion/demotion for controlling who sees the admin shield and Admin Panel entry.
 
 This route requires both session auth and admin role.
 
@@ -377,6 +387,8 @@ docs/purcell-inspired-question-bank.md
 | `payments` | Duitku invoice/status records. |
 | `user_progress` | Per-user per-problem attempts, solved state, XP. |
 | `correction_attempts` | Canvas correction outputs and normalized evaluation JSON. |
+| `user_access_grants` | Manual admin grants such as tryout or subscription access. |
+| `ai_token_usage` | Successful AI provider token usage for admin monitoring. |
 
 ### Key Relationships
 
@@ -386,6 +398,7 @@ subtopics 1 -> many problems
 problems 1 -> many problem_steps
 users 1 -> many user_progress
 users 1 -> many correction_attempts
+users 1 -> many user_access_grants
 users 1 -> many payments
 problems 1 -> many user_progress
 problems 1 -> many correction_attempts, nullable on delete
@@ -433,6 +446,7 @@ User opens Try Canvas
   -> POST /api/correction/evaluate
   -> validateImagePayload()
   -> callGeminiWithFallback()
+  -> logTokenUsage()
   -> normalizeEvaluation()
   -> INSERT correction_attempts
   -> return evaluation
@@ -510,6 +524,8 @@ Import script replaces those four tables in a transaction after checking whether
 - Login/register/correction are rate-limited.
 - Registration fields are sanitized with `xss`.
 - Admin routes require role check.
+- Admin monitoring endpoints validate user IDs/access payloads and use parameterized SQL.
+- The frontend only renders the admin shield for `currentUser.role === "admin"`; backend middleware remains the real authorization boundary.
 - Gemini image input is limited to PNG, JPEG, WEBP, and 10,000,000 base64 characters.
 - Payment callbacks verify Duitku MD5 callback signatures.
 - `SESSION_SECRET` must be changed before real deployment.
@@ -536,7 +552,7 @@ Important: `npm run build` does not prove that `MAFIKING.html` bundled a product
 - Practice is multiple-choice-first; canvas correction is still available but no longer the default entry mode.
 - Auto-guest users can accumulate during browser/API testing.
 - Payment route uses sandbox URL by default in code.
-- Admin UI is not documented here as a separate browser page; only admin API routes exist in this project snapshot.
+- Admin monitoring reads token usage from local logging only; it does not query Google live quota APIs.
 
 ## Extension Points
 

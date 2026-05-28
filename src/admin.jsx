@@ -1372,8 +1372,8 @@ const AdminPanel = ({ onClose }) => {
 
   return (
     <AdminModal title="Admin Panel" onClose={onClose} wide>
-      <div className="flex gap-1 mb-5 pb-3" style={{ borderBottom: '1px solid rgba(11,19,38,.08)' }}>
-        {[['chapters', 'Bab & Subtopik'], ['problems', 'Soal'], ['import', 'Import AI'], ['users', 'Pengguna']].map(function(pair) {
+      <div className="flex flex-wrap gap-1 mb-5 pb-3" style={{ borderBottom: '1px solid rgba(11,19,38,.08)' }}>
+        {[['chapters', 'Bab & Subtopik'], ['problems', 'Soal'], ['import', 'Import AI'], ['users', 'Pengguna'], ['monitoring', 'Users & Token Monitoring']].map(function(pair) {
           const id = pair[0]; const label = pair[1];
           return (
             <button
@@ -1389,6 +1389,10 @@ const AdminPanel = ({ onClose }) => {
 
       {loading ? (
         <div className="flex flex-col gap-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+      ) : tab === 'monitoring' ? (
+        window.AdminMonitoringPanel ? React.createElement(window.AdminMonitoringPanel) : (
+          <div className="admin-step-edit">Panel monitoring belum siap dimuat.</div>
+        )
       ) : tab === 'users' ? (
         <AdminUsersPanel />
       ) : tab === 'import' ? (
@@ -1529,6 +1533,8 @@ const AdminPanel = ({ onClose }) => {
     </AdminModal>
   );
 };
+
+window.AdminPanel = AdminPanel;
 
 // ─── Practice inline bar ──────────────────────────────────────────────────────
 const AdminPracticeBar = ({ problem, problems, problemIndex, onProblemSelect, onProblemSaved, onProblemDeleted }) => {
