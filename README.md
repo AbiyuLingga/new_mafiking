@@ -11,7 +11,7 @@ The active browser entry point is `MAFIKING.html`, served by `server.js`. The fr
 - Lobby: auto-splits into `Landing` (marketing, for guest/`Tamu_*` users) vs `Dashboard` (logged-in users with greeting, continue card, progress stats).
 - Shared: global toast system (`showToast`), `Skeleton` loading states, `OfflineBanner`.
 - Payment: package selection → Duitku redirect → status polling page (`src/payment.jsx`).
-- Admin mode: role-gated shield toggle button (bottom-right corner). Pressing shield enables admin mode and opens `AdminPanel`; the top nav then shows an `Admin Panel` button to reopen it. On Belajar page shows `AdminBelajarView` with DB-wired chapter CRUD (mapel, semester, description, topics per chapter). On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete. The admin modal also has `Users & Token Monitoring` for user access grants, password reset, role grants, and Gemini usage visibility.
+- Admin mode: role-gated shield toggle button (bottom-right corner). Pressing shield enables admin mode; the top nav then shows an `Admin Panel` entry that opens the full admin page. On Belajar page shows `AdminBelajarView` with DB-wired chapter CRUD (mapel, semester, description, topics per chapter). On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete. The admin page also has `Users & Token Monitoring` for user access grants, password reset, role grants, and Gemini usage visibility.
 - SOP: `SOP-AI-INPUT-SOAL.md` documents the general AI question-entry guide. `SOP-DEEPSEEK-IMPORT-SOAL.md` is the stricter prompt contract for admin file import via DeepSeek.
 - Backend: Express 5, SQLite through `better-sqlite3`, session auth, API routes.
 - Question bank: exported from `../Mafiking/db/database.sqlite` into `db/question-bank.json`.
@@ -126,9 +126,9 @@ db.prepare(\"UPDATE users SET role = 'admin' WHERE username = ?\").run('username
 
 The admin mode toggle is visible only to users whose `role` is `admin`.
 
-- Tap the **shield button** (⛨) at the bottom-right corner of any page to enter admin mode (button turns yellow). This also **automatically opens `AdminPanel`** — the full CRUD modal for chapters, subtopics, problems, steps, and users.
-- Tap again to exit (button returns to black, panel closes).
-- While admin mode is active, the top nav shows an **Admin Panel** button to reopen the modal if it was closed.
+- Tap the **shield button** (⛨) at the bottom-right corner of any page to enter admin mode (button turns yellow). This does not open a popup by itself; use the top-nav `Admin Panel` button to enter the admin page.
+- Tap again to exit (button returns to black). If you are on the Admin Panel page, exiting returns you to Belajar.
+- While admin mode is active, the top nav shows an **Admin Panel** button. Click it to open the dedicated Admin Panel page.
 - Local development bypass: in non-production, `/api/admin/*` accepts localhost requests even when the current session is only an auto-guest. Set `LOCAL_ADMIN_MODE=false` to force real admin login again.
 - `Users & Token Monitoring` lists users, manual access grants, one-click password reset to `123456`, role controls for Admin Panel access, and 20 Gemini key cards with request/token usage for the current UTC day.
 
@@ -137,11 +137,11 @@ The admin mode toggle is visible only to users whose `role` is `admin`.
 | Page | Admin behavior |
 | --- | --- |
 | Belajar | Chapter list replaced by `AdminBelajarView`: DB-wired CRUD — each chapter has ✏ Edit and ✕ Delete buttons, plus a "+ Tambah Bab Baru" row at bottom. Chapter form fields: title, mapel (Matematika/Fisika/Kimia), semester (1/2), garis besar isi (topics), estimated time, sort order. Changes persist to DB via `/api/admin/chapters`. |
-| Practice | A compact `Admin Soal` card deck appears above the question: drag short question cards to reorder, click a card to jump to it, use `+ Soal` to add, and `Hapus` to delete the active question. Clicking any question card (title area) still opens inline editing for question text and choices, while `AdminPanel` can edit full problem details and solution steps. |
+| Practice | A compact `Admin Soal` card deck appears above the question: drag short question cards to reorder, click a card to jump to it, use `+ Soal` to add, and `Hapus` to delete the active question. Clicking any question card (title area) still opens inline editing for question text and choices, while the Admin Panel page can edit full problem details and solution steps. |
 
 ### Admin AI Import
 
-`AdminPanel` has an `Import AI` tab for bulk question entry:
+The Admin Panel page has an `Import AI` tab for bulk question entry:
 
 1. Choose the destination subtopic.
 2. Upload a PDF, DOCX, TXT, or MD file.
@@ -364,8 +364,8 @@ curl -s http://127.0.0.1:3000/api/quiz/init
 Browser checks:
 
 - Open `/` — lobby loads (Landing for guest, Dashboard for registered user).
-- Log in as an admin; shield button appears at bottom-right. Pressing it turns yellow and opens Admin Panel.
-- In `AdminPanel`, open `Users & Token Monitoring` and confirm the user table plus 20 Gemini cards render.
+- Log in as an admin; shield button appears at bottom-right. Pressing it turns yellow and adds `Admin Panel` to the top nav.
+- Click `Admin Panel`, open `Users & Token Monitoring`, and confirm the user table plus 20 Gemini cards render.
 - Open `Belajar` in admin mode — numbered chapter list with ✏/✕ buttons; "+ Tambah Bab Baru" row at bottom. Changes persist to DB.
 - Open `Belajar` in normal mode — chapter cards render normally (no admin buttons).
 - Click `Teknik Integrasi` → practice opens with 23 questions in Pilgan mode.

@@ -84,7 +84,7 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 
 Do:
 
-- Keep route names consistent with `src/app.jsx`: `lobby`, `belajar`, `misi`, `tryout`, `profile`, `practice`.
+- Keep route names consistent with `src/app.jsx`: `lobby`, `belajar`, `misi`, `tryout`, `admin`, `profile`, `practice`.
 - Keep script order in `MAFIKING.html` valid when adding frontend files.
 - Export browser components/functions on `window` when they must be used by later scripts.
 - Use existing utility classes, card styles, icon globals, and layout patterns.
@@ -198,7 +198,7 @@ Rules:
 - `server.js` creates a guest user for API requests that lack a session, except `/api/health` and `/api/payment/callback`.
 - Admin routes require both `isAuthenticated` and `isAdmin`.
 - Admin monitoring uses `GET /api/admin/dashboard-data`, `POST /api/admin/users/:id/reset-password`, `POST /api/admin/users/:id/grant-access`, and `POST /api/admin/users/:id/role`. Keep those endpoints admin-only and validate user IDs/access payloads.
-- The admin shield is frontend-visible only for `currentUser.role === "admin"`; do not expose it to every user. Admin mode adds an `Admin Panel` button to the top nav for reopening the modal.
+- The admin shield is frontend-visible only for `currentUser.role === "admin"`; do not expose it to every user. Admin mode adds an `Admin Panel` button to the top nav, and that button navigates to the dedicated `admin` route/page.
 - Gemini token usage is observational data in `ai_token_usage`, written by `lib/log-token-usage.js`. Logging failures must not break correction/transcription/profile AI requests.
 - `routes/correction.js` supports up to 20 Gemini keys: `GEMINI_KEY_1` through `GEMINI_KEY_20`.
 - Profile summary can fall back locally when Gemini keys are missing.

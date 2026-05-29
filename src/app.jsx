@@ -36,7 +36,6 @@ const App = () => {
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [currentUser, setCurrentUser] = React.useState(null);
   const [isAdmin, setIsAdmin] = React.useState(false);
-  const [adminPanelOpen, setAdminPanelOpen] = React.useState(false);
   const [forcePublicLanding, setForcePublicLanding] = React.useState(false);
   const isGuest = currentUser && currentUser.display_name?.startsWith("Tamu_");
   const isLoggedIn = currentUser && !isGuest;
@@ -85,9 +84,11 @@ const App = () => {
   React.useEffect(() => {
     if (!isAdminAccount) {
       setIsAdmin(false);
-      setAdminPanelOpen(false);
+      if (route === "admin") {
+        navigate({ route: "lobby", publicLanding: true });
+      }
     }
-  }, [isAdminAccount]);
+  }, [isAdminAccount, navigate, route]);
 
   const handleLogoClick = React.useCallback(() => {
     if (isAdminAccount || isAdmin) {
@@ -130,11 +131,11 @@ const App = () => {
           route={route}
           setRoute={navigate}
           navStyle={tweaks.navStyle}
-          gamified={route === "belajar" || route === "misi" || route === "profile" || route === "tryout"}
+          gamified={route === "belajar" || route === "misi" || route === "profile" || route === "tryout" || route === "admin"}
           isLoggedIn={isLoggedIn}
           isAdminMode={isAdmin}
           onLogoClick={handleLogoClick}
-          onAdminPanelOpen={() => setAdminPanelOpen(true)}
+          onAdminPanelOpen={() => navigate("admin")}
         />
       )}
 
@@ -144,6 +145,7 @@ const App = () => {
           {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} />}
           {route === "misi" && <ScreenErrorBoundary><Misi setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} /></ScreenErrorBoundary>}
           {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} />}
+          {route === "admin" && isAdminAccount && isAdmin && window.AdminPage && React.createElement(window.AdminPage, { setRoute: navigate })}
           {route === "profile" && <Profile setRoute={navigate} isAdmin={isAdmin || isAdminAccount} />}
           {route === "payment" && <Payment setRoute={navigate} currentUser={currentUser} context={paymentContext} />}
           {route === "practice" && <Practice setRoute={navigate} context={practiceContext} isAdmin={isAdmin} />}
@@ -158,7 +160,7 @@ const App = () => {
           title={isAdmin ? "Keluar mode admin" : "Masuk mode admin"}
           onClick={() => setIsAdmin((v) => {
             const next = !v;
-            setAdminPanelOpen(next);
+            if (!next && route === "admin") navigate("belajar");
             return next;
           })}
           type="button"
@@ -177,10 +179,6 @@ const App = () => {
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
           </svg>
         </button>
-      )}
-
-      {isAdmin && adminPanelOpen && window.AdminPanel && (
-        React.createElement(window.AdminPanel, { onClose: () => setAdminPanelOpen(false) })
       )}
 
       <TweaksPanel title="Tweaks">
@@ -325,9 +323,10 @@ function routeLabel(r) {
     belajar: "02 Belajar",
     misi: "03 Misi Harian",
     tryout: "04 Tryout",
-    profile: "05 Profil",
-    payment: "06 Pembayaran",
-    practice: "07 Latihan",
+    admin: "05 Admin Panel",
+    profile: "06 Profil",
+    payment: "07 Pembayaran",
+    practice: "08 Latihan",
   })[r] || r;
 }
 

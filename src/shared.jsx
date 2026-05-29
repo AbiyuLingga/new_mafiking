@@ -245,7 +245,9 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
           {isAdminMode && (
             <button
               onClick={onAdminPanelOpen}
-              className="relative px-4 py-2 text-[14px] font-semibold rounded-full transition-colors bg-yel text-ink hover:bg-yel/80"
+              className={`relative px-4 py-2 text-[14px] font-semibold rounded-full transition-colors ${
+                route === "admin" ? "bg-ink text-amber-300" : "bg-yel text-ink hover:bg-yel/80"
+              }`}
               type="button"
             >
               Admin Panel
@@ -290,7 +292,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
             </button>
           ))}
           {isAdminMode && (
-            <button onClick={() => { if (typeof onAdminPanelOpen === 'function') onAdminPanelOpen(); setMenuOpen(false); }} className={`text-left px-4 py-3 font-semibold rounded-xl ${isInk ? "bg-yel text-ink" : "bg-yel text-ink"}`} type="button">
+            <button onClick={() => { if (typeof onAdminPanelOpen === 'function') onAdminPanelOpen(); setMenuOpen(false); }} className={`text-left px-4 py-3 font-semibold rounded-xl ${route === "admin" ? "bg-ink text-amber-300" : "bg-yel text-ink"}`} type="button">
               Admin Panel
             </button>
           )}

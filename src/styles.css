@@ -2574,6 +2574,14 @@ button:focus-visible, a:focus-visible {
   flex: 1;
 }
 
+.admin-page-shell {
+  background: #fff;
+  border: 1px solid rgba(11,19,38,.08);
+  border-radius: 20px;
+  padding: 20px 24px 24px;
+  overflow-x: auto;
+}
+
 .admin-close-btn {
   width: 32px;
   height: 32px;

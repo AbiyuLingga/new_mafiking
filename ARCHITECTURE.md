@@ -129,7 +129,7 @@ The frontend is not module-based. Components are defined in browser global scope
 | `src/tryout.jsx` | Tryout screen. |
 | `src/payment.jsx` | Payment package selection and status polling. |
 | `src/admin-monitoring.jsx` | Admin user/access and Gemini usage monitoring tab, exported as `window.AdminMonitoringPanel`. |
-| `src/admin.jsx` | Admin modal, content CRUD, import tab, users tab, and monitoring tab shell. |
+| `src/admin.jsx` | Admin page/modal shell, content CRUD, import tab, users tab, and monitoring tab shell. |
 | `src/styles.css` | Local custom CSS and appended feature styles. |
 | `tweaks-panel.jsx` | Tweaks panel and persisted tweak state. |
 
@@ -142,6 +142,7 @@ lobby
 belajar
 misi
 tryout
+admin
 profile
 practice
 ```
@@ -327,7 +328,7 @@ Admin-only CRUD for:
 - Users' passwords.
 - Dashboard data for user progress/access grants and Gemini usage.
 - Manual user access grants.
-- Admin role promotion/demotion for controlling who sees the admin shield and Admin Panel entry.
+- Admin role promotion/demotion for controlling who sees the admin shield and Admin Panel page entry.
 
 This route requires both session auth and admin role.
 
@@ -525,7 +526,7 @@ Import script replaces those four tables in a transaction after checking whether
 - Registration fields are sanitized with `xss`.
 - Admin routes require role check.
 - Admin monitoring endpoints validate user IDs/access payloads and use parameterized SQL.
-- The frontend only renders the admin shield for `currentUser.role === "admin"`; backend middleware remains the real authorization boundary.
+- The frontend only renders the admin shield for `currentUser.role === "admin"`; shield activation adds an Admin Panel route entry, while backend middleware remains the real authorization boundary.
 - Gemini image input is limited to PNG, JPEG, WEBP, and 10,000,000 base64 characters.
 - Payment callbacks verify Duitku MD5 callback signatures.
 - `SESSION_SECRET` must be changed before real deployment.

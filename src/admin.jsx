@@ -1282,7 +1282,7 @@ const AdminUsersPanel = () => {
 };
 
 // ─── Full admin panel ─────────────────────────────────────────────────────────
-const AdminPanel = ({ onClose }) => {
+const AdminPanelContent = () => {
   const [tab, setTab] = useAdminState('chapters');
   const [chapters, setChapters] = useAdminState([]);
   const [subtopics, setSubtopics] = useAdminState([]);
@@ -1371,7 +1371,7 @@ const AdminPanel = ({ onClose }) => {
   }
 
   return (
-    <AdminModal title="Admin Panel" onClose={onClose} wide>
+    <div className="admin-panel-content">
       <div className="flex flex-wrap gap-1 mb-5 pb-3" style={{ borderBottom: '1px solid rgba(11,19,38,.08)' }}>
         {[['chapters', 'Bab & Subtopik'], ['problems', 'Soal'], ['import', 'Import AI'], ['users', 'Pengguna'], ['monitoring', 'Users & Token Monitoring']].map(function(pair) {
           const id = pair[0]; const label = pair[1];
@@ -1530,11 +1530,35 @@ const AdminPanel = ({ onClose }) => {
       {modal && modal.type === 'steps' && (
         <AdminStepsModal problemId={modal.target.id} questionText={modal.target.question_display} onClose={() => setModal(null)} />
       )}
-    </AdminModal>
+    </div>
   );
 };
 
+const AdminPanel = ({ onClose }) => (
+  <AdminModal title="Admin Panel" onClose={onClose} wide>
+    <AdminPanelContent />
+  </AdminModal>
+);
+
+const AdminPage = ({ setRoute }) => (
+  <section className="max-w-6xl mx-auto px-6 md:px-8 py-10 md:py-12">
+    <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-7">
+      <div>
+        <p className="kicker mb-2">Admin</p>
+        <h1 className="font-display font-bold text-4xl md:text-5xl leading-tight">Admin Panel</h1>
+      </div>
+      <button className="admin-btn-ghost" onClick={() => setRoute("belajar")} type="button">
+        Kembali ke belajar
+      </button>
+    </div>
+    <div className="admin-page-shell">
+      <AdminPanelContent />
+    </div>
+  </section>
+);
+
 window.AdminPanel = AdminPanel;
+window.AdminPage = AdminPage;
 
 // ─── Practice inline bar ──────────────────────────────────────────────────────
 const AdminPracticeBar = ({ problem, problems, problemIndex, onProblemSelect, onProblemSaved, onProblemDeleted }) => {
