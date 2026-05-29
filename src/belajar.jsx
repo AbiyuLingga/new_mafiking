@@ -18,7 +18,7 @@ const chapterData = {
   ],
 };
 
-const BELAJAR_MAPELS = ["Matematika", "Fisika", "Kimia"];
+const BELAJAR_MAPELS = ["Try Out", "Matematika", "Fisika", "Kimia"];
 const BELAJAR_MAPEL_STORAGE_KEY = "mafiking:last-belajar-mapel";
 
 const getInitialBelajarMapel = () => {
@@ -26,10 +26,10 @@ const getInitialBelajarMapel = () => {
     const saved = window.localStorage.getItem(BELAJAR_MAPEL_STORAGE_KEY);
     if (BELAJAR_MAPELS.includes(saved)) return saved;
   } catch (_) {}
-  return "Matematika";
+  return "Try Out";
 };
 
-const Belajar = ({ setRoute, tweaks, isAdmin }) => {
+const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, initialSection = null }) => {
   const [mapel, setMapelState] = useState(getInitialBelajarMapel);
   const [semester, setSemester] = useState(1);
   const [dbInit, setDbInit] = useState(null);
@@ -49,6 +49,11 @@ const Belajar = ({ setRoute, tweaks, isAdmin }) => {
   }
 
   useEffect(() => { loadDbChapters(); }, []);
+  useEffect(() => {
+    if (initialSection && BELAJAR_MAPELS.includes(initialSection)) {
+      setMapel(initialSection);
+    }
+  }, [initialSection]);
 
   const problemCounts = (dbInit && dbInit.problemCounts) || {};
   const rawDbChapters = dbInit ? (dbInit.chapters || []).map((c, idx) => ({
@@ -67,10 +72,25 @@ const Belajar = ({ setRoute, tweaks, isAdmin }) => {
   })) : null;
 
   const useDb = rawDbChapters !== null;
-  const allMapelChapters = useDb
+  const allMapelChapters = mapel === "Try Out"
+    ? []
+    : useDb
     ? rawDbChapters.filter(c => c.mapel === mapel)
     : (chapterData[mapel] || []);
   const chapters = allMapelChapters.filter(c => c.semester === semester);
+  const openChapter = (chapter) => {
+    const practiceContext = { ...chapter, mapel };
+    if (!isLoggedIn && !isAdmin) {
+      showToast("Masuk atau sign up dulu untuk membuka materi ini.", "error");
+      setRoute({
+        route: "lobby",
+        authMode: "login",
+        authRedirect: { route: "practice", practice: practiceContext },
+      });
+      return;
+    }
+    setRoute({ route: "practice", practice: practiceContext });
+  };
 
   return (
     <div className="bg-paper">
@@ -78,9 +98,9 @@ const Belajar = ({ setRoute, tweaks, isAdmin }) => {
       <section>
         <div className="max-w-6xl mx-auto px-6 md:px-8 pt-12 pb-8">
           <div>
-            <SemesterKicker semester={semester} setSemester={setSemester} />
+            {mapel !== "Try Out" && <SemesterKicker semester={semester} setSemester={setSemester} />}
             <h1 className="font-display font-bold text-4xl md:text-5xl tracking-[-0.03em] leading-[1.05]">
-              Selamat pagi, Abiyyu.
+              Selamat datang pejuang IP 4.0
             </h1>
           </div>
         </div>
@@ -91,8 +111,11 @@ const Belajar = ({ setRoute, tweaks, isAdmin }) => {
 
       {/* Main content */}
       <section>
-        <div key={mapel} className="max-w-6xl mx-auto px-6 md:px-8 py-10">
+        <div key={mapel} className={`max-w-6xl mx-auto px-6 md:px-8 py-10 ${mapel === "Try Out" ? "tryout-entry-pop" : ""}`}>
           {(() => {
+            if (mapel === "Try Out") {
+              return <TryoutFreePanel setRoute={setRoute} isLoggedIn={isLoggedIn} />;
+            }
             const totalSoal = chapters.reduce((s, c) => s + c.total, 0);
             const doneSoal  = chapters.reduce((s, c) => s + c.progress, 0);
             const inProgress = chapters.filter(c => c.progress > 0).length;
@@ -126,9 +149,9 @@ const Belajar = ({ setRoute, tweaks, isAdmin }) => {
             <AdminBelajarView setRoute={setRoute} mapel={mapel} chapters={allMapelChapters} onChaptersChanged={loadDbChapters} />
           ) : (
             <React.Fragment>
-              {cardStyle === "numbered" && <ChaptersNumbered chapters={chapters} setRoute={setRoute} mapel={mapel} />}
-              {cardStyle === "soft" && <ChaptersSoft chapters={chapters} setRoute={setRoute} mapel={mapel} />}
-              {cardStyle === "magazine" && <ChaptersMagazine chapters={chapters} setRoute={setRoute} mapel={mapel} />}
+              {cardStyle === "numbered" && <ChaptersNumbered chapters={chapters} onOpenChapter={openChapter} mapel={mapel} />}
+              {cardStyle === "soft" && <ChaptersSoft chapters={chapters} onOpenChapter={openChapter} mapel={mapel} />}
+              {cardStyle === "magazine" && <ChaptersMagazine chapters={chapters} onOpenChapter={openChapter} mapel={mapel} />}
             </React.Fragment>
           )}
 
@@ -317,7 +340,110 @@ const MapelDropdown = ({ mapel, setMapel }) => (
 // ─── CHAPTER CARDS · 3 VARIANTS ───────────────────────────────────────────
 
 // Variant A — NUMBERED (editorial, angka bab besar di kiri, tanpa box)
-const ChaptersNumbered = ({ chapters, setRoute, mapel }) => (
+const TryoutFreePanel = ({ setRoute, isLoggedIn }) => {
+  const [packages, setPackages] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    MafikingAPI.get('/api/tryout-packages')
+      .then((data) => {
+        if (cancelled) return;
+        const items = Array.isArray(data) ? data : [];
+        setPackages(items.filter((pkg) => String(pkg.price || '').toLowerCase() === 'gratis' || String(pkg.title || '').toLowerCase().includes('gratis')));
+      })
+      .catch(() => {
+        if (!cancelled) setPackages([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const freePackage = packages[0] || {
+    title: "Try Out Gratis: Bab 1-2",
+    description: "Paket gratis untuk mencoba alur latihan Mafiking sebelum memilih paket penuh.",
+    duration: "45 mnt",
+    questions: 23,
+  };
+
+  const startFreeTryout = () => {
+    setRoute({
+      route: "practice",
+      practice: {
+        id: 1,
+        num: 1,
+        title: "Teknik Integrasi",
+        mapel: "Matematika",
+        semester: 1,
+        est: freePackage.duration || "45 mnt",
+        total: Number(freePackage.questions || 23),
+        progress: 0,
+        topics: ["Try Out Gratis", "Integral", "Pembahasan setelah login"],
+        freeTryout: true,
+        packageTitle: freePackage.title,
+      },
+    });
+  };
+
+  const openDiscussion = () => {
+    if (!isLoggedIn) {
+      showToast("Masuk atau sign up dulu untuk melihat pembahasan try out gratis.", "error");
+      setRoute({
+        route: "lobby",
+        authMode: "login",
+        authRedirect: { route: "belajar", section: "Try Out" },
+      });
+      return;
+    }
+    startFreeTryout();
+  };
+
+  return (
+    <div className="max-w-4xl">
+      <div>
+        <div className="relative overflow-hidden rounded-[var(--card-radius)] bg-ink p-7 md:p-9 text-white">
+          <div className="absolute right-0 top-0 h-40 w-40 rounded-bl-full bg-white/5" />
+          <div className="relative z-10">
+            <span className="tag-yel tag mb-5">Gratis</span>
+            <h2 className="font-display text-3xl md:text-4xl font-bold leading-tight">
+              {loading ? "Memuat Try Out Gratis..." : freePackage.title}
+            </h2>
+            <p className="mt-4 max-w-2xl text-sm md:text-base leading-relaxed text-white/65">
+              {freePackage.description || "Coba paket gratis terlebih dahulu. Pembahasan lengkap terbuka setelah login atau sign up."}
+            </p>
+            <div className="mt-7 grid grid-cols-3 gap-3 max-w-lg">
+              <div className="rounded-2xl bg-white/8 p-4">
+                <div className="text-xs text-white/50">Soal</div>
+                <div className="mt-1 font-display text-2xl font-bold tnum">{freePackage.questions || 23}</div>
+              </div>
+              <div className="rounded-2xl bg-white/8 p-4">
+                <div className="text-xs text-white/50">Waktu</div>
+                <div className="mt-1 font-display text-2xl font-bold">{freePackage.duration || "45 mnt"}</div>
+              </div>
+              <div className="rounded-2xl bg-white/8 p-4">
+                <div className="text-xs text-white/50">Akses</div>
+                <div className="mt-1 font-display text-2xl font-bold">Free</div>
+              </div>
+            </div>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <button onClick={startFreeTryout} className="btn-yel !py-3 !px-5" type="button">
+                Mulai Try Out <Icon.Arrow />
+              </button>
+              <button onClick={openDiscussion} className="rounded-full border border-white/20 px-5 py-3 text-sm font-bold text-white hover:bg-white/10" type="button">
+                Lihat Pembahasan
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ChaptersNumbered = ({ chapters, onOpenChapter, mapel }) => (
   <div className="flex flex-col mapel-stagger">
     {chapters.map((c, i) => {
       const isActive = c.progress > 0;
@@ -325,7 +451,7 @@ const ChaptersNumbered = ({ chapters, setRoute, mapel }) => (
       return (
         <button
           key={c.id}
-          onClick={() => setRoute({ route: "practice", practice: { ...c, mapel } })}
+          onClick={() => onOpenChapter(c)}
           className={`group text-left flex gap-5 md:gap-8 py-7 -mx-2 px-2 rounded-xl transition-all hover:bg-ink/[0.018] ${i > 0 ? "border-t hairline" : ""}`}
         >
           <div className="font-display font-bold text-5xl md:text-7xl tnum text-ink/10 shrink-0 w-16 md:w-24 text-right leading-none mt-1">
@@ -354,7 +480,7 @@ const ChaptersNumbered = ({ chapters, setRoute, mapel }) => (
 );
 
 // Variant B — SOFT CARDS (3-col grid, soft shadow, photo placeholder)
-const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
+const ChaptersSoft = ({ chapters, onOpenChapter, mapel }) => {
   const toneClass = { Matematika: "card-premium-amber", Fisika: "card-premium-blue", Kimia: "card-premium-emerald" }[mapel] || "card-premium-amber";
   const glowColor = { Matematika: "glow-amber", Fisika: "glow-blue", Kimia: "glow-emerald" }[mapel] || "glow-amber";
   const pillClass = { Matematika: "topic-pill-premium-amber", Fisika: "topic-pill-premium-blue", Kimia: "topic-pill-premium-emerald" }[mapel] || "topic-pill-premium-amber";
@@ -377,7 +503,7 @@ const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
       return (
         <button
           key={c.id}
-          onClick={() => setRoute({ route: "practice", practice: { ...c, mapel } })}
+          onClick={() => onOpenChapter(c)}
           className={`text-left card-premium ${toneClass} p-6 group flex flex-col justify-between transition-all`}
         >
           {/* Ambient Glows */}
@@ -456,7 +582,7 @@ const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
 };
 
 // Variant C — MAGAZINE (horizontal scroll, editorial full-bleed cards)
-const ChaptersMagazine = ({ chapters, setRoute, mapel }) => (
+const ChaptersMagazine = ({ chapters, onOpenChapter, mapel }) => (
   <div className="flex gap-4 md:gap-5 overflow-x-auto hide-scrollbar pb-4 -mx-6 px-6 md:-mx-8 md:px-8 mapel-stagger">
     {chapters.map((c, i) => {
       const isActive = c.progress > 0;
@@ -465,7 +591,7 @@ const ChaptersMagazine = ({ chapters, setRoute, mapel }) => (
       return (
         <button
           key={c.id}
-          onClick={() => setRoute({ route: "practice", practice: { ...c, mapel } })}
+          onClick={() => onOpenChapter(c)}
           className={`shrink-0 text-left flex flex-col group hover:-translate-y-1 transition-all
             ${isHero ? "w-[340px] md:w-[420px] bg-ink text-white rounded-[var(--card-radius)] p-6 md:p-8" : "w-[260px] md:w-[300px] card pad-d"}`}
         >

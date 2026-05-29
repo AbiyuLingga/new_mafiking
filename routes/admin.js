@@ -1,10 +1,115 @@
 const express = require('express');
+const bcrypt = require('bcrypt');
+const fs = require('fs');
+const multer = require('multer');
+const path = require('path');
 const xss = require('xss');
 const { isAuthenticated } = require('../middleware/auth');
 const { isAdmin } = require('../middleware/admin');
 const router = express.Router();
 
 router.use(isAuthenticated, isAdmin);
+
+const ACCESS_TYPES = new Set(['tryout', 'subscription', 'package', 'manual']);
+const USER_ROLES = new Set(['admin', 'user']);
+const DEFAULT_ADMIN_RESET_PASSWORD = '123456';
+const LANDING_MEDIA_DIR = path.join(__dirname, '..', 'assets', 'landing');
+const LANDING_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
+const LANDING_MEDIA_SLOTS = {
+    promo_image: { label: 'Promo popup', mediaType: 'image' },
+    feature_image_1: { label: 'Gambar fitur 1', mediaType: 'image' },
+    feature_image_2: { label: 'Gambar fitur 2', mediaType: 'image' },
+    feature_image_3: { label: 'Gambar fitur tryout', mediaType: 'image' },
+    demo_video: { label: 'Video demo canvas', mediaType: 'video' }
+};
+const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm']);
+const uploadLandingMedia = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: LANDING_MEDIA_MAX_BYTES,
+        files: 1,
+        fields: 4,
+        fieldSize: 20 * 1024
+    }
+});
+
+function parsePositiveId(value) {
+    const id = Number(value);
+    return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function normalizeAccessType(value) {
+    const accessType = String(value || '').trim().toLowerCase();
+    return ACCESS_TYPES.has(accessType) ? accessType : null;
+}
+
+function normalizeAccessValue(value) {
+    const accessValue = String(value || '').trim();
+    if (!accessValue || accessValue.length > 120) return null;
+    return accessValue;
+}
+
+function readUser(db, userId) {
+    return db.prepare('SELECT id, username, display_name, role, xp, level, streak_days, last_active, created_at FROM users WHERE id = ?').get(userId);
+}
+
+function rowsByUserId(rows) {
+    return rows.reduce((acc, row) => {
+        const key = String(row.user_id);
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(row);
+        return acc;
+    }, {});
+}
+
+function rowMapByUserId(rows) {
+    return rows.reduce((acc, row) => {
+        acc[String(row.user_id)] = row;
+        return acc;
+    }, {});
+}
+
+function getLandingSlot(value) {
+    const slot = String(value || '').trim();
+    return LANDING_MEDIA_SLOTS[slot] ? slot : null;
+}
+
+function getSafeMediaExtension(file, mediaType) {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const imageExts = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+    const videoExts = new Set(['.mp4', '.webm']);
+    if (mediaType === 'image' && imageExts.has(ext)) return ext === '.jpeg' ? '.jpg' : ext;
+    if (mediaType === 'video' && videoExts.has(ext)) return ext;
+    if (file.mimetype === 'image/jpeg') return '.jpg';
+    if (file.mimetype === 'image/png') return '.png';
+    if (file.mimetype === 'image/webp') return '.webp';
+    if (file.mimetype === 'image/gif') return '.gif';
+    if (file.mimetype === 'video/mp4') return '.mp4';
+    if (file.mimetype === 'video/webm') return '.webm';
+    return null;
+}
+
+function deleteLocalLandingFile(url) {
+    const normalized = String(url || '');
+    if (!normalized.startsWith('/assets/landing/')) return;
+    const basename = path.basename(normalized);
+    const resolved = path.resolve(LANDING_MEDIA_DIR, basename);
+    if (!resolved.startsWith(path.resolve(LANDING_MEDIA_DIR))) return;
+    try {
+        fs.unlinkSync(resolved);
+    } catch (_) {}
+}
+
+function landingUploadSingle(req, res, next) {
+    uploadLandingMedia.single('media')(req, res, (err) => {
+        if (!err) return next();
+        const message = err.code === 'LIMIT_FILE_SIZE'
+            ? 'Ukuran file maksimal 50MB.'
+            : (err.message || 'Upload media gagal.');
+        res.status(400).json({ error: message });
+    });
+}
 
 // ===== CHAPTERS =====
 router.get('/chapters', (req, res) => {
@@ -262,7 +367,215 @@ router.delete('/tryout-packages/:id', (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ===== LANDING MEDIA =====
+router.get('/landing-media', (req, res) => {
+    try {
+        const db = req.app.locals.db;
+        const rows = db.prepare(`
+            SELECT slot, media_type, url, original_name, mime_type, size_bytes, updated_at
+            FROM landing_media
+            ORDER BY slot
+        `).all();
+        res.json({
+            slots: LANDING_MEDIA_SLOTS,
+            media: rows.reduce((acc, row) => {
+                acc[row.slot] = row;
+                return acc;
+            }, {})
+        });
+    } catch (e) {
+        console.error('GET /landing-media error:', e);
+        res.status(500).json({ error: 'Gagal memuat media landing page.' });
+    }
+});
+
+router.post('/landing-media', landingUploadSingle, (req, res) => {
+    try {
+        const slot = getLandingSlot(req.body.slot);
+        if (!slot) return res.status(400).json({ error: 'Slot media tidak valid.' });
+        if (!req.file) return res.status(400).json({ error: 'File media wajib diunggah.' });
+
+        const expected = LANDING_MEDIA_SLOTS[slot];
+        const mimeType = String(req.file.mimetype || '').toLowerCase();
+        const validMime = expected.mediaType === 'image'
+            ? IMAGE_MIME_TYPES.has(mimeType)
+            : VIDEO_MIME_TYPES.has(mimeType);
+        if (!validMime) {
+            return res.status(400).json({
+                error: expected.mediaType === 'image'
+                    ? 'Slot ini hanya menerima JPG, PNG, WEBP, atau GIF.'
+                    : 'Slot ini hanya menerima MP4 atau WEBM.'
+            });
+        }
+
+        const ext = getSafeMediaExtension(req.file, expected.mediaType);
+        if (!ext) return res.status(400).json({ error: 'Ekstensi file tidak didukung.' });
+
+        fs.mkdirSync(LANDING_MEDIA_DIR, { recursive: true });
+        const previous = req.app.locals.db.prepare('SELECT url FROM landing_media WHERE slot = ?').get(slot);
+        const filename = `${slot}-${Date.now()}${ext}`;
+        const targetPath = path.join(LANDING_MEDIA_DIR, filename);
+        fs.writeFileSync(targetPath, req.file.buffer);
+        const url = `/assets/landing/${filename}`;
+
+        req.app.locals.db.prepare(`
+            INSERT INTO landing_media (slot, media_type, url, original_name, mime_type, size_bytes, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(slot) DO UPDATE SET
+                media_type = excluded.media_type,
+                url = excluded.url,
+                original_name = excluded.original_name,
+                mime_type = excluded.mime_type,
+                size_bytes = excluded.size_bytes,
+                updated_at = CURRENT_TIMESTAMP
+        `).run(
+            slot,
+            expected.mediaType,
+            url,
+            xss(req.file.originalname || ''),
+            mimeType,
+            Number(req.file.size) || 0
+        );
+
+        if (previous && previous.url !== url) deleteLocalLandingFile(previous.url);
+        res.json({ ok: true, slot, media_type: expected.mediaType, url });
+    } catch (e) {
+        console.error('POST /landing-media error:', e);
+        res.status(500).json({ error: 'Gagal menyimpan media landing page.' });
+    }
+});
+
+router.delete('/landing-media/:slot', (req, res) => {
+    try {
+        const slot = getLandingSlot(req.params.slot);
+        if (!slot) return res.status(400).json({ error: 'Slot media tidak valid.' });
+        const db = req.app.locals.db;
+        const existing = db.prepare('SELECT url FROM landing_media WHERE slot = ?').get(slot);
+        db.prepare('DELETE FROM landing_media WHERE slot = ?').run(slot);
+        if (existing) deleteLocalLandingFile(existing.url);
+        res.json({ ok: true, slot });
+    } catch (e) {
+        console.error('DELETE /landing-media error:', e);
+        res.status(500).json({ error: 'Gagal menghapus media landing page.' });
+    }
+});
+
 // ===== USERS =====
+router.get('/dashboard-data', (req, res) => {
+    try {
+        const db = req.app.locals.db;
+        const users = db.prepare(`
+            SELECT id, username, display_name, role, xp, level, streak_days, last_active, created_at
+            FROM users
+            ORDER BY id
+        `).all();
+
+        const grantsByUser = rowsByUserId(db.prepare(`
+            SELECT id, user_id, access_type, access_value, granted_at
+            FROM user_access_grants
+            ORDER BY granted_at DESC, id DESC
+        `).all());
+
+        const progressByUser = rowMapByUserId(db.prepare(`
+            SELECT
+                user_id,
+                COUNT(*) AS progress_rows,
+                SUM(CASE WHEN solved = 1 THEN 1 ELSE 0 END) AS solved_count,
+                COALESCE(SUM(attempts), 0) AS total_attempts,
+                COALESCE(SUM(xp_earned), 0) AS xp_earned
+            FROM user_progress
+            GROUP BY user_id
+        `).all());
+
+        const practiceByUser = rowMapByUserId(db.prepare(`
+            SELECT
+                user_id,
+                COUNT(*) AS attempt_count,
+                SUM(CASE WHEN correct = 1 THEN 1 ELSE 0 END) AS correct_count
+            FROM practice_attempts
+            GROUP BY user_id
+        `).all());
+
+        const correctionsByUser = rowMapByUserId(db.prepare(`
+            SELECT
+                user_id,
+                COUNT(*) AS correction_count,
+                ROUND(AVG(score), 1) AS average_score,
+                MAX(created_at) AS last_correction_at
+            FROM correction_attempts
+            GROUP BY user_id
+        `).all());
+
+        const geminiUsageByKey = db.prepare(`
+            SELECT
+                key_name,
+                COUNT(*) AS requests_today,
+                COALESCE(SUM(tokens_used), 0) AS tokens_today
+            FROM ai_token_usage
+            WHERE provider = 'gemini'
+              AND date(created_at) = date('now')
+            GROUP BY key_name
+        `).all().reduce((acc, row) => {
+            acc[row.key_name] = row;
+            return acc;
+        }, {});
+
+        const requestDailyLimit = Math.max(1, Number(process.env.GEMINI_REQUEST_DAILY_LIMIT) || 1500);
+        const tokenDailyLimit = Math.max(1, Number(process.env.GEMINI_TOKEN_DAILY_LIMIT) || 1000000);
+        const geminiKeys = Array.from({ length: 20 }, (_, index) => {
+            const keyName = `GEMINI_KEY_${index + 1}`;
+            const usage = geminiUsageByKey[keyName] || {};
+            const requestsToday = Number(usage.requests_today) || 0;
+            const tokensToday = Number(usage.tokens_today) || 0;
+            return {
+                keyName,
+                configured: Boolean(String(process.env[keyName] || '').trim()),
+                requestsToday,
+                tokensToday,
+                requestDailyLimit,
+                tokenDailyLimit,
+                remainingRequests: Math.max(0, requestDailyLimit - requestsToday),
+                remainingTokens: Math.max(0, tokenDailyLimit - tokensToday)
+            };
+        });
+
+        const enrichedUsers = users.map((user) => {
+            const progress = progressByUser[String(user.id)] || {};
+            const practice = practiceByUser[String(user.id)] || {};
+            const corrections = correctionsByUser[String(user.id)] || {};
+            return {
+                ...user,
+                access_grants: grantsByUser[String(user.id)] || [],
+                progress: {
+                    rows: Number(progress.progress_rows) || 0,
+                    solved: Number(progress.solved_count) || 0,
+                    attempts: Number(progress.total_attempts) || 0,
+                    xpEarned: Number(progress.xp_earned) || 0
+                },
+                practice: {
+                    attempts: Number(practice.attempt_count) || 0,
+                    correct: Number(practice.correct_count) || 0
+                },
+                corrections: {
+                    count: Number(corrections.correction_count) || 0,
+                    averageScore: corrections.average_score == null ? null : Number(corrections.average_score),
+                    lastAt: corrections.last_correction_at || null
+                }
+            };
+        });
+
+        res.json({
+            generatedAt: new Date().toISOString(),
+            currentUserId: req.session.userId || null,
+            users: enrichedUsers,
+            geminiKeys
+        });
+    } catch (e) {
+        console.error('GET /dashboard-data error:', e);
+        res.status(500).json({ error: 'Gagal memuat data dashboard admin.' });
+    }
+});
+
 router.get('/users', (req, res) => {
     try {
         const db = req.app.locals.db;
@@ -277,13 +590,87 @@ router.put('/users/:id/password', async (req, res) => {
         if (!newPassword || newPassword.length < 8) {
             return res.status(400).json({ error: 'Password minimal 8 karakter' });
         }
-        const bcrypt = require('bcrypt');
         const password_hash = await bcrypt.hash(newPassword, 10);
         const db = req.app.locals.db;
         const info = db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(password_hash, req.params.id);
         if (info.changes === 0) return res.status(404).json({ error: 'User tidak ditemukan' });
         res.json({ ok: true });
     } catch (e) { console.error('PUT /users/password error:', e); res.status(500).json({ error: e.message }); }
+});
+
+router.post('/users/:id/reset-password', async (req, res) => {
+    try {
+        const userId = parsePositiveId(req.params.id);
+        if (!userId) return res.status(400).json({ error: 'ID user tidak valid.' });
+
+        const db = req.app.locals.db;
+        const user = readUser(db, userId);
+        if (!user) return res.status(404).json({ error: 'User tidak ditemukan.' });
+
+        const password_hash = await bcrypt.hash(DEFAULT_ADMIN_RESET_PASSWORD, 10);
+        db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(password_hash, userId);
+        res.json({ ok: true, userId, temporaryPassword: DEFAULT_ADMIN_RESET_PASSWORD });
+    } catch (e) {
+        console.error('POST /users/reset-password error:', e);
+        res.status(500).json({ error: 'Gagal reset password user.' });
+    }
+});
+
+router.post('/users/:id/grant-access', (req, res) => {
+    try {
+        const userId = parsePositiveId(req.params.id);
+        if (!userId) return res.status(400).json({ error: 'ID user tidak valid.' });
+
+        const accessType = normalizeAccessType(req.body.access_type || req.body.accessType);
+        const accessValue = normalizeAccessValue(req.body.access_value || req.body.accessValue);
+        if (!accessType) return res.status(400).json({ error: 'Tipe akses tidak valid.' });
+        if (!accessValue) return res.status(400).json({ error: 'Nilai akses wajib diisi dan maksimal 120 karakter.' });
+
+        const db = req.app.locals.db;
+        const user = readUser(db, userId);
+        if (!user) return res.status(404).json({ error: 'User tidak ditemukan.' });
+
+        const existing = db.prepare(`
+            SELECT id
+            FROM user_access_grants
+            WHERE user_id = ? AND access_type = ? AND access_value = ?
+        `).get(userId, accessType, accessValue);
+        if (existing) {
+            return res.json({ ok: true, id: existing.id, duplicate: true });
+        }
+
+        const info = db.prepare(`
+            INSERT INTO user_access_grants (user_id, access_type, access_value)
+            VALUES (?, ?, ?)
+        `).run(userId, accessType, accessValue);
+        res.json({ ok: true, id: info.lastInsertRowid });
+    } catch (e) {
+        console.error('POST /users/grant-access error:', e);
+        res.status(500).json({ error: 'Gagal memberi akses user.' });
+    }
+});
+
+router.post('/users/:id/role', (req, res) => {
+    try {
+        const userId = parsePositiveId(req.params.id);
+        if (!userId) return res.status(400).json({ error: 'ID user tidak valid.' });
+
+        const role = String(req.body.role || '').trim().toLowerCase();
+        if (!USER_ROLES.has(role)) return res.status(400).json({ error: 'Role tidak valid.' });
+        if (req.session.userId === userId && role !== 'admin') {
+            return res.status(400).json({ error: 'Tidak bisa mencabut akses admin dari akun sendiri.' });
+        }
+
+        const db = req.app.locals.db;
+        const user = readUser(db, userId);
+        if (!user) return res.status(404).json({ error: 'User tidak ditemukan.' });
+
+        db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
+        res.json({ ok: true, userId, role });
+    } catch (e) {
+        console.error('POST /users/role error:', e);
+        res.status(500).json({ error: 'Gagal mengubah role user.' });
+    }
 });
 
 module.exports = router;

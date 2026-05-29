@@ -1,6 +1,6 @@
 // Profile/report route. Uses the original Mafiking visual language.
 
-const Profile = ({ setRoute, isAdmin = false }) => {
+const Profile = ({ setRoute, isAdmin = false, onRequestLanding, onRequestLogout }) => {
   const { useState, useEffect } = React;
   const [loading, setLoading] = useState(true);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -141,6 +141,17 @@ const Profile = ({ setRoute, isAdmin = false }) => {
     return "Analisis lokal aktif";
   }
 
+  async function handleLogout() {
+    if (typeof onRequestLogout === "function") {
+      onRequestLogout();
+      return;
+    }
+    try {
+      await MafikingAPI.post("/api/auth/logout", {});
+    } catch (_) {}
+    window.location.assign("/");
+  }
+
   /* Inject spin keyframe once */
   React.useEffect(() => {
     if (document.getElementById("profile-spin-style")) return;
@@ -167,8 +178,14 @@ const Profile = ({ setRoute, isAdmin = false }) => {
               <button onClick={() => setRoute("belajar")} className="btn-ink !py-2.5 !px-5 text-sm">
                 Kembali Belajar
               </button>
+              <button onClick={() => (typeof onRequestLanding === "function" ? onRequestLanding() : setRoute({ route: "lobby", publicLanding: true }))} className="btn-ghost !py-2.5 !px-5 text-sm">
+                Landing
+              </button>
               <button onClick={() => loadProfile(true)} className="btn-ghost !py-2.5 !px-5 text-sm">
                 Refresh
+              </button>
+              <button onClick={handleLogout} className="btn-ghost !py-2.5 !px-5 text-sm">
+                Logout
               </button>
             </div>
           </div>

@@ -8,10 +8,11 @@ The active browser entry point is `MAFIKING.html`, served by `server.js`. The fr
 
 - UI shell: copied Mafiking static UI with tweaks panel + full UX improvements.
 - Practice UI: segmented control (Pilgan | Kanvas), Submit always visible in focus mode, ResultModal with wrong-step visualization, XP toast on correct answers.
-- Lobby: auto-splits into `Landing` (marketing, for guest/`Tamu_*` users) vs `Dashboard` (logged-in users with greeting, continue card, progress stats).
+- Lobby: `/` always opens the marketing landing page. `Coba Gratis` enters the app at `Belajar -> Try Out`, while login/sign up can redirect back into the intended app route.
+- Belajar: mapel selector now includes `Try Out`, `Matematika`, `Fisika`, and `Kimia`. Free users can start the free Try Out, while protected chapters and premium pages route through login/package gates.
 - Shared: global toast system (`showToast`), `Skeleton` loading states, `OfflineBanner`.
 - Payment: package selection → Duitku redirect → status polling page (`src/payment.jsx`).
-- Admin mode: shield toggle button (bottom-right corner). Pressing shield **auto-opens `AdminPanel`** (full CRUD modal). On Belajar page shows `AdminBelajarView` with DB-wired chapter CRUD (mapel, semester, description, topics per chapter). On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete; a floating `+` FAB adds new questions.
+- Admin mode: role-gated shield toggle button (bottom-right corner). Pressing shield enables admin mode; the top nav then shows an `Admin Panel` entry that opens the full admin page. The admin page can manage Try Out packages, Matematika/Fisika/Kimia chapters and subtopics, landing-page media, users/access, and Gemini usage visibility. On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete.
 - SOP: `SOP-AI-INPUT-SOAL.md` documents the general AI question-entry guide. `SOP-DEEPSEEK-IMPORT-SOAL.md` is the stricter prompt contract for admin file import via DeepSeek.
 - Backend: Express 5, SQLite through `better-sqlite3`, session auth, API routes.
 - Question bank: exported from `../Mafiking/db/database.sqlite` into `db/question-bank.json`.
@@ -48,6 +49,8 @@ Create `.env` from `.env.example`.
 | `SESSION_SECRET` | Yes for real use | Express session signing secret. |
 | `GEMINI_KEY_1` ... `GEMINI_KEY_20` | Required for AI correction | Gemini API keys used with fallback rotation. |
 | `GEMINI_MODELS` | No | Comma-separated model preference before built-in fallbacks. |
+| `GEMINI_REQUEST_DAILY_LIMIT` | No | Admin monitoring request limit display per Gemini key. Defaults to `1500`. |
+| `GEMINI_TOKEN_DAILY_LIMIT` | No | Admin monitoring token limit display per Gemini key. Defaults to `1000000`. |
 | `AI_PROFILE_PROVIDER` | No | `gemini` by default. Set `9router` to use 9Router only for profile narrative text. |
 | `NINEROUTER_BASE_URL` | Required if `AI_PROFILE_PROVIDER=9router` | 9Router OpenAI-compatible base URL, usually `http://127.0.0.1:20128/v1`. |
 | `NINEROUTER_API_KEY` | Required if `AI_PROFILE_PROVIDER=9router` | API key copied from the 9Router dashboard. Server-side only. |
@@ -101,43 +104,6 @@ The canonical PM2 process and Nginx site name is `new_mafiking`; legacy
 process/site names such as `mafiking` and `new-mafiking` should be removed when
 deploying so `mafiking.com` cannot accidentally point at an older app process.
 
-Deploy from Linux, WSL, or Git Bash:
-
-```bash
-./deploy.sh 202.155.94.210 root
-```
-
-Deploy from Windows PowerShell:
-
-```powershell
-.\deploy.ps1 202.155.94.210 root
-```
-
-`deploy.ps1` is a wrapper that runs the same `deploy.sh` through WSL first, then
-Git Bash if WSL is unavailable. The Bash environment must have `ssh`, `rsync`,
-and `npm`.
-
-If PowerShell blocks local scripts, run it with a one-time execution-policy
-bypass:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\deploy.ps1 202.155.94.210 root
-```
-
-To overwrite the server database during deploy, set `DEPLOY_DB=1`.
-
-Linux, WSL, or Git Bash:
-
-```bash
-DEPLOY_DB=1 ./deploy.sh 202.155.94.210 root
-```
-
-Windows PowerShell:
-
-```powershell
-$env:DEPLOY_DB = "1"; .\deploy.ps1 202.155.94.210 root
-```
-
 ## Admin Account
 
 A local admin user is pre-created in `db/database.sqlite`:
@@ -159,23 +125,26 @@ db.prepare(\"UPDATE users SET role = 'admin' WHERE username = ?\").run('username
 
 ## Admin Mode (Frontend)
 
-The admin mode toggle does **not** require login — it is a testing convenience.
+The admin mode toggle is visible only to users whose `role` is `admin`.
 
-- Tap the **shield button** (⛨) at the bottom-right corner of any page to enter admin mode (button turns yellow). This also **automatically opens `AdminPanel`** — the full CRUD modal for chapters, subtopics, problems, steps, and users.
-- Tap again to exit (button returns to black, panel closes).
-- While admin mode is active, a **floating `+` FAB** (bottom-right) reopens `AdminPanel` if it was closed.
+- Tap the **shield button** (⛨) at the bottom-right corner of any page to enter admin mode (button turns yellow). This does not open a popup by itself; use the top-nav `Admin Panel` button to enter the admin page.
+- Tap again to exit (button returns to black). If you are on the Admin Panel page, exiting returns you to Belajar.
+- While admin mode is active, the top nav shows an **Admin Panel** button. Click it to open the dedicated Admin Panel page.
 - Local development bypass: in non-production, `/api/admin/*` accepts localhost requests even when the current session is only an auto-guest. Set `LOCAL_ADMIN_MODE=false` to force real admin login again.
+- `Users & Token Monitoring` lists users, manual access grants, one-click password reset to `123456`, role controls for Admin Panel access, and 20 Gemini key cards with request/token usage for the current UTC day.
+- `Bab & Subtopik` starts with a content selector: `Try Out`, `Matematika`, `Fisika`, or `Kimia`. Try Out opens package CRUD; the subject options open chapter/subtopic CRUD.
+- `Landing Page` lets admins upload/replace the promo popup image, feature images, and demo video used by the public landing page.
 
 **What changes in admin mode:**
 
 | Page | Admin behavior |
 | --- | --- |
 | Belajar | Chapter list replaced by `AdminBelajarView`: DB-wired CRUD — each chapter has ✏ Edit and ✕ Delete buttons, plus a "+ Tambah Bab Baru" row at bottom. Chapter form fields: title, mapel (Matematika/Fisika/Kimia), semester (1/2), garis besar isi (topics), estimated time, sort order. Changes persist to DB via `/api/admin/chapters`. |
-| Practice | A compact `Admin Soal` card deck appears above the question: drag short question cards to reorder, click a card to jump to it, use `+ Soal` to add, and `Hapus` to delete the active question. Clicking any question card (title area) still opens inline editing for question text and choices, while `AdminPanel` can edit full problem details and solution steps. |
+| Practice | A compact `Admin Soal` card deck appears above the question: drag short question cards to reorder, click a card to jump to it, use `+ Soal` to add, and `Hapus` to delete the active question. Clicking any question card (title area) still opens inline editing for question text and choices, while the Admin Panel page can edit full problem details and solution steps. |
 
 ### Admin AI Import
 
-`AdminPanel` has an `Import AI` tab for bulk question entry:
+The Admin Panel page has an `Import AI` tab for bulk question entry:
 
 1. Choose the destination subtopic.
 2. Upload a PDF, DOCX, TXT, or MD file.
@@ -227,6 +196,7 @@ The import script refuses to replace question tables when user progress or corre
 |   `-- purcell-inspired-question-bank.md # Original Purcell-aligned reference questions for recommendations
 |-- lib/
 |   |-- admin-import.js        # Admin import normalization and DeepSeek helper logic
+|   |-- log-token-usage.js     # Non-blocking AI token usage logger
 |   `-- recommendation-engine.js # Deterministic weakness scoring and follow-up question picker
 |-- SOP-9ROUTER-PROFILE-SUMMARY.md # Required profile narrative prompt for 9Router/Gemini
 |-- routes/
@@ -249,16 +219,17 @@ The import script refuses to replace question tables when user progress or corre
 |   |-- app.jsx                # Router, isAdmin toggle state, shield button, root render
 |   |-- shared.jsx             # Nav, footer, icons, Skeleton, showToast, ToastContainer, OfflineBanner
 |   |-- backend-api.jsx        # Fetch helper for same-origin API calls
-|   |-- lobby.jsx              # Landing (guest/marketing) + Dashboard (logged-in)
-|   |-- belajar.jsx            # Static chapter cards; admin branch to AdminBelajarView
+|   |-- lobby.jsx              # Public landing + login/signup screen using the existing auth shell
+|   |-- belajar.jsx            # Try Out tab + static chapter cards; admin branch to AdminBelajarView
 |   |-- practice.jsx           # Practice route: ChoiceView, CanvasView, ModeSegment, ResultModal
 |   |-- toolbar.jsx            # Canvas drawing toolbar and focus-mode actions
 |   |-- drawing-canvas.jsx     # Low-level canvas drawing surface
 |   |-- answer-board.jsx       # Stylus answer board wrapper
 |   |-- profile.jsx            # Profile/report view
 |   |-- misi.jsx               # Daily mission screen
-|   |-- tryout.jsx             # Tryout screen
+|   |-- tryout.jsx             # Paket / paid tryout package screen
 |   |-- payment.jsx            # Payment package selection + Duitku redirect + status polling
+|   |-- admin-monitoring.jsx   # Admin user/access and Gemini usage monitoring tab
 |   |-- admin.jsx              # Admin UI: AdminBelajarView, slide AdminPracticeBar, plug problem editor, CRUD modals
 |   `-- styles.css             # All CSS including admin styles appended at end
 |-- tweaks-panel.jsx
@@ -278,8 +249,20 @@ The import script refuses to replace question tables when user progress or corre
 
 ### Lobby / Home
 
-- Guest (`Tamu_XXXX`) users see the `Landing` component: full marketing page.
-- Registered users see the `Dashboard` component: dynamic greeting, continue card (last chapter with progress > 0), XP/streak stats, mapel grid.
+- Everyone opening `/` sees the `Landing` component.
+- The Mafiking logo returns to this landing page from app routes.
+- `Coba Gratis` opens `Belajar` with the `Try Out` tab selected. If the user is already logged in, the same button continues into their account context.
+- The login screen uses the existing auth UI. Sign up temporarily reuses that shell with sign-up labels and a display-name field.
+
+### Belajar / Free Entry
+
+- The `Belajar` mapel selector is `Try Out`, `Matematika`, `Fisika`, `Kimia`.
+- The `Try Out` tab exposes the free tryout entry point.
+- Free users can start the free tryout in multiple-choice mode.
+- Pembahasan/canvas review for the free tryout requires login or sign up.
+- Clicking protected subject chapters such as Matematika Integral while logged out opens the login/sign-up gate, then returns to the intended chapter.
+- `Misi Harian`, profile history, and premium learning areas show a package/access gate when the user does not have access.
+- The top nav uses `Beranda` for the app belajar home and `Paket` for package selection; there is no separate `Belajar` nav item.
 
 ### Opening a Chapter
 
@@ -304,7 +287,7 @@ The import script refuses to replace question tables when user progress or corre
 2. User writes on the canvas in `src/practice.jsx` / `src/answer-board.jsx`.
 3. Submit exports the canvas image as PNG data URL.
 4. Frontend posts to `POST /api/correction/evaluate`.
-5. Backend validates image size/type, calls Gemini with key/model fallback, normalizes the JSON response, stores a row in `correction_attempts`, then returns feedback.
+5. Backend validates image size/type, calls Gemini with key/model fallback, logs successful token usage in `ai_token_usage`, normalizes the JSON response, stores a row in `correction_attempts`, then returns feedback.
 6. Frontend shows the ResultModal and posts progress to `POST /api/progress/submit`.
 
 ### Profile Report
@@ -353,8 +336,14 @@ All API routes except `/api/health` and `/api/payment/callback` require a sessio
 | `PUT/DELETE` | `/api/admin/problems/:id` | Update or delete problem (admin only). |
 | `GET/POST` | `/api/admin/problems/:id/steps` | List or create steps (admin only). |
 | `PUT/DELETE` | `/api/admin/steps/:id` | Update or delete step (admin only). |
+| `GET/POST/DELETE` | `/api/admin/landing-media` | Manage landing page image/video slots (admin only). |
+| `GET/POST/PUT/DELETE` | `/api/admin/tryout-packages` | Manage Try Out package cards (admin only). |
 | `GET` | `/api/admin/users` | List users (admin only). |
 | `PUT` | `/api/admin/users/:id/password` | Reset user password (admin only). |
+| `GET` | `/api/admin/dashboard-data` | Combined user/access and Gemini usage dashboard data (admin only). |
+| `POST` | `/api/admin/users/:id/reset-password` | Reset a user password to `123456` (admin only). |
+| `POST` | `/api/admin/users/:id/grant-access` | Add a manual user access grant (admin only). |
+| `POST` | `/api/admin/users/:id/role` | Promote or demote Admin Panel access by setting user role (admin only). |
 | `POST` | `/api/admin/import/draft` | Upload file and ask DeepSeek for a reviewable import draft (admin only). |
 | `POST` | `/api/admin/import/commit` | Insert reviewed draft questions and steps into SQLite (admin only). |
 | `POST` | `/api/payment/create` | Create Duitku invoice. |
@@ -391,8 +380,13 @@ curl -s http://127.0.0.1:3000/api/quiz/init
 
 Browser checks:
 
-- Open `/` — lobby loads (Landing for guest, Dashboard for registered user).
-- Shield button appears at bottom-right; pressing it turns yellow (admin mode).
+- Open `/` - public landing loads for both guests and logged-in users.
+- Click `Coba Gratis` - app opens `Belajar` with the `Try Out` tab selected.
+- Click the Mafiking logo from an app route - returns to the public landing page.
+- From `Belajar -> Matematika`, click `Integral` while logged out - login/sign-up gate opens.
+- From `Belajar -> Try Out`, click `Mulai Try Out` - practice opens in multiple-choice mode; clicking canvas/pembahasan while logged out opens the auth gate.
+- Log in as an admin; shield button appears at bottom-right. Pressing it turns yellow and adds `Admin Panel` to the top nav.
+- Click `Admin Panel`, open `Users & Token Monitoring`, and confirm the user table plus 20 Gemini cards render.
 - Open `Belajar` in admin mode — numbered chapter list with ✏/✕ buttons; "+ Tambah Bab Baru" row at bottom. Changes persist to DB.
 - Open `Belajar` in normal mode — chapter cards render normally (no admin buttons).
 - Click `Teknik Integrasi` → practice opens with 23 questions in Pilgan mode.
@@ -411,6 +405,7 @@ Browser checks:
 - The HTML loads React 18 UMD from CDN, while `package.json` includes React 19 for local tooling. Do not assume package React is what the browser runtime uses.
 - Auto-guest sessions create users for API requests. Guest names start with `Tamu_`.
 - Only Integral question data is currently imported. Static chapter cards for other subjects are placeholders.
-- Admin mode toggle requires no login — it is a testing convenience. Restrict in production.
+- Admin shield visibility is role-gated in the frontend, and admin APIs remain protected by backend middleware. Local development still has localhost admin API bypass unless `LOCAL_ADMIN_MODE=false`.
+- Gemini token "remaining" values are monitoring estimates from configured daily limits, not a live Google quota lookup.
 - Duitku routes point at sandbox base URL in code. Review payment environment and base URL before production use.
 - `db/mafiking.db` exists but is the wrong file — use `db/database.sqlite`.

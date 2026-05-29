@@ -150,13 +150,25 @@ async function parseAdminApiResponse(response) {
 }
 
 // ─── Chapter modal ────────────────────────────────────────────────────────────
-const AdminChapterModal = ({ chapter, onDone, onClose }) => {
+const AdminChapterModal = ({ chapter, defaultMapel = 'Matematika', onDone, onClose }) => {
   const isEdit = Boolean(chapter && chapter.id);
   const [form, setForm] = useAdminState({
     title: (chapter && chapter.title) || '',
     icon: (chapter && chapter.icon) || '',
     sort_order: (chapter && chapter.sort_order != null) ? chapter.sort_order : 0,
+    mapel: (chapter && chapter.mapel) || defaultMapel || 'Matematika',
+    semester: (chapter && chapter.semester) || 1,
+    description: (chapter && chapter.description) || '',
+    est: (chapter && chapter.est) || '',
   });
+  const [topicsRaw, setTopicsRaw] = useAdminState((() => {
+    try {
+      const parsed = JSON.parse((chapter && chapter.topics) || '[]');
+      return Array.isArray(parsed) ? parsed.join(', ') : '';
+    } catch (_) {
+      return '';
+    }
+  })());
   const [saving, setSaving] = useAdminState(false);
   const [err, setErr] = useAdminState('');
 
@@ -169,7 +181,10 @@ const AdminChapterModal = ({ chapter, onDone, onClose }) => {
       const r = await fetch(url, {
         method, credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          topics: topicsRaw.split(',').map((item) => item.trim()).filter(Boolean),
+        }),
       });
       if (!r.ok) throw new Error('Gagal simpan bab');
       showToast(isEdit ? 'Bab diperbarui.' : 'Bab baru ditambahkan.', 'success');
@@ -184,6 +199,29 @@ const AdminChapterModal = ({ chapter, onDone, onClose }) => {
       </AdminField>
       <AdminField label="Icon (emoji)">
         <AdminInput value={form.icon} onChange={(e) => setForm({ ...form, icon: e.target.value })} placeholder="∫" />
+      </AdminField>
+      <AdminField label="Jenis konten">
+        <AdminSelect
+          value={form.mapel}
+          onChange={(e) => setForm({ ...form, mapel: e.target.value })}
+          options={['Matematika', 'Fisika', 'Kimia'].map((item) => ({ value: item, label: item }))}
+        />
+      </AdminField>
+      <AdminField label="Semester">
+        <AdminSelect
+          value={form.semester}
+          onChange={(e) => setForm({ ...form, semester: Number(e.target.value) })}
+          options={[{ value: 1, label: 'Semester 1' }, { value: 2, label: 'Semester 2' }]}
+        />
+      </AdminField>
+      <AdminField label="Deskripsi singkat">
+        <AdminTextarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Ringkasan bab untuk kartu belajar" />
+      </AdminField>
+      <AdminField label="Garis besar isi (pisah koma)">
+        <AdminInput value={topicsRaw} onChange={(e) => setTopicsRaw(e.target.value)} placeholder="Topik 1, Topik 2, Topik 3" />
+      </AdminField>
+      <AdminField label="Estimasi waktu">
+        <AdminInput value={form.est} onChange={(e) => setForm({ ...form, est: e.target.value })} placeholder="45 mnt" />
       </AdminField>
       <AdminField label="Urutan tampil">
         <AdminInput type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: Number(e.target.value) })} />
@@ -1282,8 +1320,316 @@ const AdminUsersPanel = () => {
 };
 
 // ─── Full admin panel ─────────────────────────────────────────────────────────
-const AdminPanel = ({ onClose }) => {
+const ADMIN_CONTENT_SCOPES = ['Try Out', 'Matematika', 'Fisika', 'Kimia'];
+
+const AdminLandingMediaPanel = () => {
+  const slotOrder = ['promo_image', 'feature_image_1', 'feature_image_2', 'feature_image_3', 'demo_video'];
+  const [slots, setSlots] = useAdminState({});
+  const [media, setMedia] = useAdminState({});
+  const [loading, setLoading] = useAdminState(true);
+  const [busySlot, setBusySlot] = useAdminState('');
+
+  const loadMedia = useAdminCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await MafikingAPI.get('/api/admin/landing-media');
+      setSlots(data.slots || {});
+      setMedia(data.media || {});
+    } catch (e) {
+      showToast('Gagal memuat media landing page: ' + e.message, 'error');
+      setSlots({});
+      setMedia({});
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useAdminEffect(() => { loadMedia(); }, [loadMedia]);
+
+  async function upload(slot, event) {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+    setBusySlot(slot);
+    try {
+      const body = new FormData();
+      body.append('slot', slot);
+      body.append('media', file);
+      const response = await fetch('/api/admin/landing-media', {
+        method: 'POST',
+        credentials: 'same-origin',
+        body,
+      });
+      await parseAdminApiResponse(response);
+      showToast('Media landing page diperbarui.', 'success');
+      await loadMedia();
+    } catch (e) {
+      showToast(e.message || 'Gagal upload media landing page.', 'error');
+    } finally {
+      setBusySlot('');
+    }
+  }
+
+  async function remove(slot) {
+    if (!window.confirm('Hapus media landing page pada slot ini?')) return;
+    setBusySlot(slot);
+    try {
+      const response = await fetch('/api/admin/landing-media/' + encodeURIComponent(slot), {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      await parseAdminApiResponse(response);
+      showToast('Media landing page dihapus.', 'success');
+      await loadMedia();
+    } catch (e) {
+      showToast(e.message || 'Gagal hapus media landing page.', 'error');
+    } finally {
+      setBusySlot('');
+    }
+  }
+
+  const entries = slotOrder
+    .filter((slot) => slots[slot])
+    .map((slot) => ({ slot, meta: slots[slot], row: media[slot] }));
+
+  if (loading) {
+    return <div className="grid md:grid-cols-2 gap-4">{[1,2,3,4].map((i) => <Skeleton key={i} className="h-44 w-full" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="admin-step-edit">
+        <p className="kicker mb-2">Landing Page CMS</p>
+        <p className="text-sm text-ink/60">
+          Upload gambar dan video ini untuk mengganti media di landing page ala Google AI Studio: popup promo, kartu fitur, dan demo canvas.
+        </p>
+      </div>
+      <div className="grid md:grid-cols-2 gap-4">
+        {entries.map(({ slot, meta, row }) => (
+          <div key={slot} className="admin-step-edit">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <p className="font-semibold">{meta.label || slot}</p>
+                <p className="text-xs text-ink/50">{meta.mediaType === 'video' ? 'MP4 atau WEBM, maks 50MB' : 'JPG, PNG, WEBP, atau GIF, maks 50MB'}</p>
+              </div>
+              {row && (
+                <button className="admin-icon-btn admin-icon-btn-danger" disabled={busySlot === slot} onClick={() => remove(slot)} type="button" title="Hapus media">
+                  <AdminIcon.Trash />
+                </button>
+              )}
+            </div>
+            <div className="admin-media-preview mb-3">
+              {row ? (
+                row.media_type === 'video'
+                  ? <video className="admin-media-preview-inner" src={row.url} controls />
+                  : <img className="admin-media-preview-inner" src={row.url} alt={meta.label || slot} />
+              ) : (
+                <div className="admin-media-empty">Belum ada media.</div>
+              )}
+            </div>
+            {row && (
+              <p className="text-xs text-ink/45 mb-3 truncate">{row.original_name || row.url}</p>
+            )}
+            <label className="admin-upload-btn">
+              <AdminIcon.Upload />
+              <span>{busySlot === slot ? 'Mengunggah...' : 'Upload media'}</span>
+              <input
+                accept={meta.mediaType === 'video' ? 'video/mp4,video/webm' : 'image/jpeg,image/png,image/webp,image/gif'}
+                disabled={busySlot === slot}
+                onChange={(event) => upload(slot, event)}
+                type="file"
+              />
+            </label>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const AdminTryoutPackagesPanel = () => {
+  const emptyForm = {
+    title: '',
+    description: '',
+    price: 'Gratis',
+    original_price: '',
+    badge: '',
+    duration: '',
+    questions: 0,
+    features: '',
+    tone: 'default',
+    sort_order: 0,
+  };
+  const [packages, setPackages] = useAdminState([]);
+  const [form, setForm] = useAdminState(emptyForm);
+  const [editing, setEditing] = useAdminState(null);
+  const [loading, setLoading] = useAdminState(true);
+  const [saving, setSaving] = useAdminState(false);
+
+  const loadPackages = useAdminCallback(async () => {
+    setLoading(true);
+    try {
+      setPackages(await MafikingAPI.get('/api/admin/tryout-packages'));
+    } catch (e) {
+      showToast('Gagal memuat paket try out: ' + e.message, 'error');
+      setPackages([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useAdminEffect(() => { loadPackages(); }, [loadPackages]);
+
+  function startEdit(pkg) {
+    setEditing(pkg);
+    setForm({
+      title: pkg.title || '',
+      description: pkg.description || '',
+      price: pkg.price || 'Gratis',
+      original_price: pkg.original_price || '',
+      badge: pkg.badge || '',
+      duration: pkg.duration || '',
+      questions: pkg.questions || 0,
+      features: (() => {
+        try {
+          const parsed = JSON.parse(pkg.features || '[]');
+          return Array.isArray(parsed) ? parsed.join(', ') : '';
+        } catch (_) {
+          return '';
+        }
+      })(),
+      tone: pkg.tone || 'default',
+      sort_order: pkg.sort_order || 0,
+    });
+  }
+
+  function resetForm() {
+    setEditing(null);
+    setForm(emptyForm);
+  }
+
+  async function savePackage() {
+    if (!form.title.trim()) { showToast('Judul paket wajib diisi.', 'error'); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        ...form,
+        questions: Number(form.questions) || 0,
+        sort_order: Number(form.sort_order) || 0,
+        features: String(form.features || '').split(',').map((item) => item.trim()).filter(Boolean),
+      };
+      const url = editing ? '/api/admin/tryout-packages/' + editing.id : '/api/admin/tryout-packages';
+      const response = await fetch(url, {
+        method: editing ? 'PUT' : 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      await parseAdminApiResponse(response);
+      showToast(editing ? 'Paket try out diperbarui.' : 'Paket try out ditambahkan.', 'success');
+      resetForm();
+      loadPackages();
+    } catch (e) {
+      showToast(e.message || 'Gagal menyimpan paket try out.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deletePackage(pkg) {
+    if (!adminConfirmDelete('paket try out "' + pkg.title + '"')) return;
+    try {
+      const response = await fetch('/api/admin/tryout-packages/' + pkg.id, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      await parseAdminApiResponse(response);
+      showToast('Paket try out dihapus.', 'success');
+      loadPackages();
+    } catch (e) {
+      showToast(e.message || 'Gagal menghapus paket try out.', 'error');
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="admin-step-edit">
+        <p className="kicker mb-2">Try Out</p>
+        <p className="text-sm text-ink/60 mb-4">
+          Kelola kartu paket try out yang muncul pada bagian Try Out gratis dan halaman Paket.
+        </p>
+        <div className="grid md:grid-cols-2 gap-3">
+          <AdminField label="Judul paket">
+            <AdminInput value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Try Out Gratis" />
+          </AdminField>
+          <AdminField label="Badge">
+            <AdminInput value={form.badge} onChange={(e) => setForm({ ...form, badge: e.target.value })} placeholder="Gratis" />
+          </AdminField>
+          <AdminField label="Harga">
+            <AdminInput value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="Gratis" />
+          </AdminField>
+          <AdminField label="Harga coret">
+            <AdminInput value={form.original_price} onChange={(e) => setForm({ ...form, original_price: e.target.value })} placeholder="Opsional" />
+          </AdminField>
+          <AdminField label="Durasi">
+            <AdminInput value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} placeholder="90 menit" />
+          </AdminField>
+          <AdminField label="Jumlah soal">
+            <AdminInput type="number" value={form.questions} onChange={(e) => setForm({ ...form, questions: e.target.value })} />
+          </AdminField>
+          <AdminField label="Tone">
+            <AdminSelect value={form.tone} onChange={(e) => setForm({ ...form, tone: e.target.value })} options={['default', 'featured', 'dark']} />
+          </AdminField>
+          <AdminField label="Urutan">
+            <AdminInput type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: e.target.value })} />
+          </AdminField>
+          <AdminField label="Deskripsi">
+            <AdminTextarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Deskripsi singkat paket" />
+          </AdminField>
+          <AdminField label="Fitur (pisah koma)">
+            <AdminTextarea value={form.features} onChange={(e) => setForm({ ...form, features: e.target.value })} placeholder="Pembahasan gratis setelah login, Soal pilihan ganda" />
+          </AdminField>
+        </div>
+        <div className="admin-form-actions">
+          {editing && <button className="admin-btn-ghost" onClick={resetForm} type="button">Batal edit</button>}
+          <button className="admin-btn-primary" disabled={saving} onClick={savePackage} type="button">
+            {saving ? 'Menyimpan...' : (editing ? 'Update Paket' : '+ Tambah Paket')}
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex flex-col gap-2">{[1,2].map((i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+      ) : packages.length === 0 ? (
+        <p className="text-sm text-ink/55">Belum ada paket try out.</p>
+      ) : (
+        <div className="admin-problem-card-list">
+          {packages.map((pkg) => (
+            <div key={pkg.id} className="admin-problem-order-card">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="tag text-xs">{pkg.price || 'Gratis'}</span>
+                  {pkg.badge && <span className="tag text-xs">{pkg.badge}</span>}
+                  <span className="tag text-xs">{pkg.questions || 0} soal</span>
+                </div>
+                <p className="admin-problem-order-title">{pkg.title}</p>
+                {pkg.description && <p className="text-xs text-ink/50 mt-1">{pkg.description}</p>}
+              </div>
+              <div className="flex gap-1 shrink-0 mt-1">
+                <button className="admin-icon-btn" title="Edit paket" onClick={() => startEdit(pkg)} type="button"><AdminIcon.Pencil /></button>
+                <button className="admin-icon-btn admin-icon-btn-danger" title="Hapus paket" onClick={() => deletePackage(pkg)} type="button"><AdminIcon.Trash /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AdminPanelContent = () => {
   const [tab, setTab] = useAdminState('chapters');
+  const [contentScope, setContentScope] = useAdminState('Matematika');
   const [chapters, setChapters] = useAdminState([]);
   const [subtopics, setSubtopics] = useAdminState([]);
   const [problems, setProblems] = useAdminState([]);
@@ -1319,7 +1665,26 @@ const AdminPanel = ({ onClose }) => {
   useAdminEffect(() => { loadAll(); }, [loadAll]);
   useAdminEffect(() => { if (selectedSubtopic) loadProblems(selectedSubtopic.id); }, [selectedSubtopic, loadProblems]);
 
+  const scopeChapters = contentScope === 'Try Out'
+    ? []
+    : chapters.filter((chapter) => (chapter.mapel || 'Matematika') === contentScope);
+  const scopeChapterIds = new Set(scopeChapters.map((chapter) => chapter.id));
+  const scopedSubtopics = contentScope === 'Try Out'
+    ? []
+    : subtopics.filter((subtopic) => scopeChapterIds.has(subtopic.chapter_id));
   const filteredSubs = subtopics.filter((s) => selectedChapter && s.chapter_id === selectedChapter.id);
+
+  useAdminEffect(() => {
+    if (contentScope === 'Try Out') {
+      if (selectedChapter) setSelectedChapter(null);
+      if (selectedSubtopic) setSelectedSubtopic(null);
+      return;
+    }
+    if (!selectedChapter || !scopeChapters.some((chapter) => chapter.id === selectedChapter.id)) {
+      setSelectedChapter(scopeChapters[0] || null);
+      setSelectedSubtopic(null);
+    }
+  }, [contentScope, chapters, selectedChapter, selectedSubtopic]);
 
   async function deleteChapter(c) {
     if (!adminConfirmDelete('Bab "' + c.title + '" beserta semua subtopik dan soalnya')) return;
@@ -1371,9 +1736,9 @@ const AdminPanel = ({ onClose }) => {
   }
 
   return (
-    <AdminModal title="Admin Panel" onClose={onClose} wide>
-      <div className="flex gap-1 mb-5 pb-3" style={{ borderBottom: '1px solid rgba(11,19,38,.08)' }}>
-        {[['chapters', 'Bab & Subtopik'], ['problems', 'Soal'], ['import', 'Import AI'], ['users', 'Pengguna']].map(function(pair) {
+    <div className="admin-panel-content">
+      <div className="flex flex-wrap gap-1 mb-5 pb-3" style={{ borderBottom: '1px solid rgba(11,19,38,.08)' }}>
+        {[['chapters', 'Bab & Subtopik'], ['problems', 'Soal'], ['import', 'Import AI'], ['landing', 'Landing Page'], ['users', 'Pengguna'], ['monitoring', 'Users & Token Monitoring']].map(function(pair) {
           const id = pair[0]; const label = pair[1];
           return (
             <button
@@ -1389,12 +1754,18 @@ const AdminPanel = ({ onClose }) => {
 
       {loading ? (
         <div className="flex flex-col gap-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+      ) : tab === 'monitoring' ? (
+        window.AdminMonitoringPanel ? React.createElement(window.AdminMonitoringPanel) : (
+          <div className="admin-step-edit">Panel monitoring belum siap dimuat.</div>
+        )
+      ) : tab === 'landing' ? (
+        <AdminLandingMediaPanel />
       ) : tab === 'users' ? (
         <AdminUsersPanel />
       ) : tab === 'import' ? (
         <AdminAiImportPanel
           selectedSubtopic={selectedSubtopic}
-          subtopics={subtopics}
+          subtopics={scopedSubtopics}
           onSelectSubtopic={setSelectedSubtopic}
           onImported={(subtopicId) => {
             const nextSubtopic = subtopics.find((s) => s.id === subtopicId) || selectedSubtopic;
@@ -1404,13 +1775,33 @@ const AdminPanel = ({ onClose }) => {
           }}
         />
       ) : tab === 'chapters' ? (
-        <div className="admin-two-pane">
+        <div className="space-y-4">
+          <div className="admin-step-edit">
+            <p className="kicker mb-2">Pilih konten yang dikelola</p>
+            <div className="mode-segment">
+              {ADMIN_CONTENT_SCOPES.map((scope) => (
+                <button
+                  key={scope}
+                  className={'mode-segment-item' + (contentScope === scope ? ' is-active' : '')}
+                  style={contentScope === scope ? { background: 'var(--ink)', color: 'white' } : {}}
+                  onClick={() => setContentScope(scope)}
+                  type="button"
+                >{scope}</button>
+              ))}
+            </div>
+          </div>
+          {contentScope === 'Try Out' ? (
+            <AdminTryoutPackagesPanel />
+          ) : (
+            <div className="admin-two-pane">
           <div>
             <div className="admin-pane-header">
-              <span className="kicker">Bab</span>
+              <span className="kicker">Bab {contentScope}</span>
               <button className="admin-btn-primary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setModal({ type: 'chapter', target: null })} type="button">+ Bab</button>
             </div>
-            {chapters.map((c) => (
+            {scopeChapters.length === 0 ? (
+              <p className="text-sm text-ink/55">Belum ada bab untuk {contentScope}.</p>
+            ) : scopeChapters.map((c) => (
               <div key={c.id} className={'admin-tree-row' + (selectedChapter && selectedChapter.id === c.id ? ' is-active' : '')} onClick={() => { setSelectedChapter(c); setSelectedSubtopic(null); }}>
                 <span className="admin-tree-label">{c.icon} {c.title}</span>
                 <div className="flex gap-1 shrink-0">
@@ -1422,7 +1813,7 @@ const AdminPanel = ({ onClose }) => {
           </div>
           <div>
             <div className="admin-pane-header">
-              <span className="kicker">{selectedChapter ? 'Subtopik · ' + selectedChapter.title : 'Subtopik'}</span>
+              <span className="kicker">{selectedChapter ? 'Subtopik - ' + selectedChapter.title : 'Subtopik'}</span>
               {selectedChapter && (
                 <button className="admin-btn-primary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setModal({ type: 'subtopic', target: null })} type="button">+ Subtopik</button>
               )}
@@ -1441,6 +1832,8 @@ const AdminPanel = ({ onClose }) => {
               </div>
             ))}
           </div>
+            </div>
+          )}
         </div>
       ) : (
         <div>
@@ -1451,7 +1844,7 @@ const AdminPanel = ({ onClose }) => {
                 const s = subtopics.find((x) => x.id === Number(e.target.value));
                 setSelectedSubtopic(s || null);
               }}
-              options={[{ value: '', label: '— Pilih subtopik —' }].concat(subtopics.map((s) => ({ value: s.id, label: s.chapter_title + ' › ' + s.title })))}
+              options={[{ value: '', label: 'Pilih subtopik' }].concat(scopedSubtopics.map((s) => ({ value: s.id, label: s.chapter_title + ' > ' + s.title })))}
               style={{ minWidth: 240 }}
             />
             {selectedSubtopic && (
@@ -1512,23 +1905,49 @@ const AdminPanel = ({ onClose }) => {
       )}
 
       {modal && modal.type === 'chapter' && (
-        <AdminChapterModal chapter={modal.target} onDone={loadAll} onClose={() => setModal(null)} />
+        <AdminChapterModal chapter={modal.target} defaultMapel={contentScope} onDone={loadAll} onClose={() => setModal(null)} />
       )}
       {modal && modal.type === 'subtopic' && (
-        <AdminSubtopicModal subtopic={modal.target} chapters={chapters} defaultChapterId={selectedChapter && selectedChapter.id} onDone={loadAll} onClose={() => setModal(null)} />
+        <AdminSubtopicModal subtopic={modal.target} chapters={scopeChapters} defaultChapterId={selectedChapter && selectedChapter.id} onDone={loadAll} onClose={() => setModal(null)} />
       )}
       {modal && modal.type === 'problem' && (
-        <AdminProblemModal problem={modal.target} subtopics={subtopics} defaultSubtopicId={selectedSubtopic && selectedSubtopic.id} onDone={() => { if (selectedSubtopic) loadProblems(selectedSubtopic.id); }} onClose={() => setModal(null)} />
+        <AdminProblemModal problem={modal.target} subtopics={scopedSubtopics} defaultSubtopicId={selectedSubtopic && selectedSubtopic.id} onDone={() => { if (selectedSubtopic) loadProblems(selectedSubtopic.id); }} onClose={() => setModal(null)} />
       )}
       {modal && modal.type === 'problem-add' && (
-        <AdminPlugProblemModal subtopics={subtopics} defaultSubtopicId={selectedSubtopic && selectedSubtopic.id} defaultSortOrder={problems.length + 1} onDone={() => { if (selectedSubtopic) loadProblems(selectedSubtopic.id); }} onClose={() => setModal(null)} />
+        <AdminPlugProblemModal subtopics={scopedSubtopics} defaultSubtopicId={selectedSubtopic && selectedSubtopic.id} defaultSortOrder={problems.length + 1} onDone={() => { if (selectedSubtopic) loadProblems(selectedSubtopic.id); }} onClose={() => setModal(null)} />
       )}
       {modal && modal.type === 'steps' && (
         <AdminStepsModal problemId={modal.target.id} questionText={modal.target.question_display} onClose={() => setModal(null)} />
       )}
-    </AdminModal>
+    </div>
   );
 };
+
+const AdminPanel = ({ onClose }) => (
+  <AdminModal title="Admin Panel" onClose={onClose} wide>
+    <AdminPanelContent />
+  </AdminModal>
+);
+
+const AdminPage = ({ setRoute }) => (
+  <section className="max-w-6xl mx-auto px-6 md:px-8 py-10 md:py-12">
+    <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-7">
+      <div>
+        <p className="kicker mb-2">Admin</p>
+        <h1 className="font-display font-bold text-4xl md:text-5xl leading-tight">Admin Panel</h1>
+      </div>
+      <button className="admin-btn-ghost" onClick={() => setRoute("belajar")} type="button">
+        Kembali ke belajar
+      </button>
+    </div>
+    <div className="admin-page-shell">
+      <AdminPanelContent />
+    </div>
+  </section>
+);
+
+window.AdminPanel = AdminPanel;
+window.AdminPage = AdminPage;
 
 // ─── Practice inline bar ──────────────────────────────────────────────────────
 const AdminPracticeBar = ({ problem, problems, problemIndex, onProblemSelect, onProblemSaved, onProblemDeleted }) => {

@@ -2,7 +2,7 @@
 
 const CANVAS_DEMO_VIDEO_SRC = "/assets/saas_demo_video.mp4";
 
-const Practice = ({ context, setRoute, isAdmin }) => {
+const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
   const boardRef = useRef(null);
   const [mode, setMode] = useState("choice"); // "choice" | "canvas"
   const [loading, setLoading] = useState(true);
@@ -20,7 +20,25 @@ const Practice = ({ context, setRoute, isAdmin }) => {
   const [showCanvasIntro, setShowCanvasIntro] = useState(true);
 
   function dismissCanvasIntro() { setShowCanvasIntro(false); }
-  function openCanvasFromIntro() { dismissCanvasIntro(); switchMode("canvas"); }
+  function requiresLoginForDiscussion() {
+    return context?.freeTryout && !isLoggedIn && !isAdmin;
+  }
+  function requestDiscussionLogin() {
+    showToast("Masuk atau sign up dulu untuk melihat pembahasan try out gratis.", "error");
+    setRoute({
+      route: "lobby",
+      authMode: "login",
+      authRedirect: { route: "practice", practice: context },
+    });
+  }
+  function openCanvasFromIntro() {
+    if (requiresLoginForDiscussion()) {
+      requestDiscussionLogin();
+      return;
+    }
+    dismissCanvasIntro();
+    switchMode("canvas");
+  }
 
   useEffect(() => {
     loadPractice();
@@ -243,6 +261,10 @@ const Practice = ({ context, setRoute, isAdmin }) => {
 
   function switchMode(nextMode) {
     if (nextMode === mode) return;
+    if (nextMode === "canvas" && requiresLoginForDiscussion()) {
+      requestDiscussionLogin();
+      return;
+    }
     if (mode === "canvas" && boardDirty && !window.confirm("Beralih mode akan mengosongkan canvas. Lanjut?")) return;
     setMode(nextMode);
     setBoardDirty(false);

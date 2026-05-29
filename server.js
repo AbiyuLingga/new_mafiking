@@ -49,7 +49,19 @@ for (const migration of [
   "ALTER TABLE chapters ADD COLUMN description TEXT DEFAULT ''",
   "ALTER TABLE chapters ADD COLUMN est TEXT DEFAULT ''",
   "ALTER TABLE chapters ADD COLUMN topics TEXT DEFAULT '[]'",
-  "ALTER TABLE daily_missions ADD COLUMN release_date TEXT DEFAULT ''"
+  "ALTER TABLE daily_missions ADD COLUMN release_date TEXT DEFAULT ''",
+  "ALTER TABLE ai_token_usage ADD COLUMN tokens_used INTEGER DEFAULT 0",
+  "ALTER TABLE ai_token_usage ADD COLUMN created_at DATETIME",
+  `CREATE TABLE IF NOT EXISTS landing_media (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slot TEXT UNIQUE NOT NULL,
+    media_type TEXT NOT NULL,
+    url TEXT NOT NULL,
+    original_name TEXT DEFAULT '',
+    mime_type TEXT DEFAULT '',
+    size_bytes INTEGER DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`
 ]) {
   try {
     db.exec(migration);
@@ -57,6 +69,42 @@ for (const migration of [
     // Column already exists.
   }
 }
+
+try {
+  db.exec(`
+    UPDATE ai_token_usage
+    SET tokens_used = COALESCE(tokens_used, total_tokens, 0)
+    WHERE tokens_used IS NULL OR tokens_used = 0
+  `);
+} catch (_) {
+  try {
+    db.exec(`
+      UPDATE ai_token_usage
+      SET tokens_used = COALESCE(tokens_used, 0)
+      WHERE tokens_used IS NULL
+    `);
+  } catch (_) {}
+}
+
+try {
+  db.exec(`
+    UPDATE ai_token_usage
+    SET created_at = COALESCE(created_at, used_at, CURRENT_TIMESTAMP)
+    WHERE created_at IS NULL OR created_at = ''
+  `);
+} catch (_) {
+  try {
+    db.exec(`
+      UPDATE ai_token_usage
+      SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP)
+      WHERE created_at IS NULL OR created_at = ''
+    `);
+  } catch (_) {}
+}
+
+try {
+  db.exec('CREATE INDEX IF NOT EXISTS idx_ai_token_usage_provider_key_created ON ai_token_usage (provider, key_name, created_at)');
+} catch (_) {}
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS correction_attempts (
@@ -240,7 +288,7 @@ setInterval(() => {
 
 app.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
-  if (req.path === '/api/health' || req.path === '/api/payment/callback') return next();
+  if (req.path === '/api/health' || req.path === '/api/payment/callback' || req.path === '/api/landing-media') return next();
   if (req.session.userId) return next();
 
   const guestName = `Tamu_${Math.floor(Math.random() * 10000)}`;
@@ -336,6 +384,22 @@ app.get('/api/tryout-packages', (req, res) => {
     res.json(db.prepare('SELECT * FROM tryout_packages ORDER BY sort_order, id').all());
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+app.get('/api/landing-media', (_req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT slot, media_type, url, original_name, mime_type, size_bytes, updated_at
+      FROM landing_media
+      ORDER BY slot
+    `).all();
+    res.json(rows.reduce((acc, row) => {
+      acc[row.slot] = row;
+      return acc;
+    }, {}));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.use('/api/progress', require('./routes/progress'));
 app.use('/api/admin/import', require('./routes/admin-import'));
 app.use('/api/admin', require('./routes/admin'));
@@ -345,8 +409,9 @@ app.use('/api/correction', require('./routes/correction'));
 const staticCache = {
   index: false,
   setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.jsx')) {
+    if (filePath.endsWith('.jsx') || filePath.endsWith('styles.css')) {
       res.setHeader('Content-Type', 'text/babel; charset=utf-8');
+      if (filePath.endsWith('styles.css')) res.setHeader('Content-Type', 'text/css; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       return;
     }

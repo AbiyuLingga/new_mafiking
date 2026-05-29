@@ -99,6 +99,9 @@ src/answer-board.jsx
 src/practice.jsx
 src/misi.jsx
 src/tryout.jsx
+src/payment.jsx
+src/admin-monitoring.jsx
+src/admin.jsx
 src/app.jsx
 ```
 
@@ -115,15 +118,18 @@ The frontend is not module-based. Components are defined in browser global scope
 | `src/app.jsx` | Route state, tweaks defaults, root render. |
 | `src/shared.jsx` | Navigation, footer, icons, shared components. |
 | `src/backend-api.jsx` | Same-origin `fetch` helper. |
-| `src/lobby.jsx` | Home/lobby screen. |
-| `src/belajar.jsx` | Static chapter cards, mapel selector, chapter-to-practice navigation. |
+| `src/lobby.jsx` | Public marketing landing plus login/sign-up screen. |
+| `src/belajar.jsx` | Free Try Out tab, static chapter cards, mapel selector, chapter-to-practice navigation. |
 | `src/practice.jsx` | Practice route, multiple-choice/canvas mode state, question-source mapping, correction submit. |
 | `src/toolbar.jsx` | Canvas drawing toolbar, eraser/lasso controls, focus-mode edge navigation. |
 | `src/drawing-canvas.jsx` | Low-level writable canvas surface. |
 | `src/answer-board.jsx` | Stylus answer board wrapper and canvas export surface. |
 | `src/profile.jsx` | Profile/report view using progress and correction APIs. |
 | `src/misi.jsx` | Daily mission screen. |
-| `src/tryout.jsx` | Tryout screen. |
+| `src/tryout.jsx` | Paket / paid tryout package screen. |
+| `src/payment.jsx` | Payment package selection and status polling. |
+| `src/admin-monitoring.jsx` | Admin user/access and Gemini usage monitoring tab, exported as `window.AdminMonitoringPanel`. |
+| `src/admin.jsx` | Admin page/modal shell, subject/Try Out content CRUD, landing media tab, import tab, users tab, and monitoring tab shell. |
 | `src/styles.css` | Local custom CSS and appended feature styles. |
 | `tweaks-panel.jsx` | Tweaks panel and persisted tweak state. |
 
@@ -136,6 +142,7 @@ lobby
 belajar
 misi
 tryout
+admin
 profile
 practice
 ```
@@ -149,9 +156,35 @@ For practice navigation, `setRoute` can receive an object:
 }
 ```
 
-`src/app.jsx` stores `practice` as `practiceContext` and passes it into `Practice`.
+Route objects are also used for auth redirects, payment context, and Belajar section selection:
 
-The global `Nav` is intentionally not rendered while `route === "practice"`. The practice route owns its own session bar and canvas toolbar so question work is not crowded by the main site header.
+```js
+{
+  route: "lobby",
+  authMode: "login",
+  authRedirect: { route: "practice", practice: context }
+}
+
+{
+  route: "belajar",
+  section: "Try Out"
+}
+```
+
+`src/app.jsx` stores `practice` as `practiceContext` and passes it into `Practice`. It also stores the selected Belajar section so `Coba Gratis` can land directly on the free Try Out tab.
+
+The global `Nav` is intentionally not rendered while `route === "practice"` or `route === "lobby"`. The practice route owns its own session bar and canvas toolbar, and the public landing owns its own marketing header.
+
+### Public Landing And Access Gates
+
+- `/` always renders the public landing page, even when the user already has a logged-in session.
+- Clicking the Mafiking logo from app routes returns to the public landing.
+- The landing `Coba Gratis` CTA routes to `Belajar -> Try Out`.
+- Landing media slots are loaded from `GET /api/landing-media`; admins can replace those images/videos from the Admin Panel `Landing Page` tab.
+- The top app nav uses `Beranda` for `belajar`, `Misi Harian` for `misi`, and `Paket` for `tryout`; there is no separate `Belajar` nav link.
+- Logged-out users can start the free Try Out in multiple-choice mode.
+- Free Try Out pembahasan/canvas review and protected subject chapters route through login/sign-up with an auth redirect back to the intended route.
+- Premium-only pages such as Misi Harian show an access gate when the user lacks an active package.
 
 ### Tweaks
 
@@ -176,7 +209,7 @@ Current defaults:
 
 ### Practice Question Mapping
 
-`src/belajar.jsx` has static chapter card data for Matematika, Fisika, and Kimia.
+`src/belajar.jsx` has static chapter card data for Matematika, Fisika, and Kimia, plus a `Try Out` tab for the free package entry point.
 
 Backend question data is currently narrower:
 
@@ -303,6 +336,7 @@ Core responsibilities:
 - Retry only retryable Gemini overload/rate-limit errors.
 - Normalize evaluation/profile JSON.
 - Store correction attempts in SQLite.
+- Log successful Gemini token usage to `ai_token_usage` without blocking the request.
 - Provide local fallback profile summaries when Gemini is unavailable.
 - Compute deterministic `recommendedItems` from local skill metadata and the Purcell-inspired reference bank; Gemini does not freely choose those follow-up questions.
 - Optionally use 9Router for profile narrative text only when `AI_PROFILE_PROVIDER=9router`; canvas OCR/evaluation still uses Gemini directly.
@@ -318,6 +352,11 @@ Admin-only CRUD for:
 - Problems.
 - Problem steps.
 - Users' passwords.
+- Dashboard data for user progress/access grants and Gemini usage.
+- Manual user access grants.
+- Admin role promotion/demotion for controlling who sees the admin shield and Admin Panel page entry.
+- Landing page media slot CRUD for promo image, feature images, and demo video.
+- Try Out package CRUD separated from Matematika/Fisika/Kimia chapter/subtopic CRUD.
 
 This route requires both session auth and admin role.
 
@@ -377,6 +416,9 @@ docs/purcell-inspired-question-bank.md
 | `payments` | Duitku invoice/status records. |
 | `user_progress` | Per-user per-problem attempts, solved state, XP. |
 | `correction_attempts` | Canvas correction outputs and normalized evaluation JSON. |
+| `user_access_grants` | Manual admin grants such as tryout or subscription access. |
+| `ai_token_usage` | Successful AI provider token usage for admin monitoring. |
+| `landing_media` | Admin-managed image/video slots used by the public landing page. |
 
 ### Key Relationships
 
@@ -386,6 +428,7 @@ subtopics 1 -> many problems
 problems 1 -> many problem_steps
 users 1 -> many user_progress
 users 1 -> many correction_attempts
+users 1 -> many user_access_grants
 users 1 -> many payments
 problems 1 -> many user_progress
 problems 1 -> many correction_attempts, nullable on delete
@@ -433,6 +476,7 @@ User opens Try Canvas
   -> POST /api/correction/evaluate
   -> validateImagePayload()
   -> callGeminiWithFallback()
+  -> logTokenUsage()
   -> normalizeEvaluation()
   -> INSERT correction_attempts
   -> return evaluation
@@ -510,6 +554,8 @@ Import script replaces those four tables in a transaction after checking whether
 - Login/register/correction are rate-limited.
 - Registration fields are sanitized with `xss`.
 - Admin routes require role check.
+- Admin monitoring endpoints validate user IDs/access payloads and use parameterized SQL.
+- The frontend only renders the admin shield for `currentUser.role === "admin"`; shield activation adds an Admin Panel route entry, while backend middleware remains the real authorization boundary.
 - Gemini image input is limited to PNG, JPEG, WEBP, and 10,000,000 base64 characters.
 - Payment callbacks verify Duitku MD5 callback signatures.
 - `SESSION_SECRET` must be changed before real deployment.
@@ -536,7 +582,7 @@ Important: `npm run build` does not prove that `MAFIKING.html` bundled a product
 - Practice is multiple-choice-first; canvas correction is still available but no longer the default entry mode.
 - Auto-guest users can accumulate during browser/API testing.
 - Payment route uses sandbox URL by default in code.
-- Admin UI is not documented here as a separate browser page; only admin API routes exist in this project snapshot.
+- Admin monitoring reads token usage from local logging only; it does not query Google live quota APIs.
 
 ## Extension Points
 

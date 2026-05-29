@@ -142,6 +142,7 @@ const Icon = {
 
 // ─── Constants ────────────────────────────────────────────────────────────
 const MAPEL_META = {
+  "Try Out": { code: "TRY", icon: Icon.Trophy, color: "amber" },
   Matematika: { code: "MAT", icon: Icon.Integral, color: "amber" },
   Fisika: { code: "FIS", icon: Icon.Atom, color: "blue" },
   Kimia: { code: "KIM", icon: Icon.Flask, color: "emerald" },
@@ -174,7 +175,7 @@ const StreakFlame = ({ className = "" }) => (
 );
 
 // ─── Top Nav ──────────────────────────────────────────────────────────────
-const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn = false, onLogoClick }) => {
+const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn = false, isAdminMode = false, onLogoClick, onAdminPanelOpen }) => {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
@@ -184,15 +185,20 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
   }, []);
 
   const links = [
-    { id: "lobby", label: "Beranda" },
-    { id: "belajar", label: "Belajar" },
+    { id: "belajar", label: "Beranda" },
     { id: "misi", label: "Misi Harian" },
-    { id: "tryout", label: "Tryout" },
+    { id: "tryout", label: "Paket" },
   ];
 
   const isInk = navStyle === "ink";
   const isWhite = navStyle === "white";
   const showPublicCtas = !gamified && !isLoggedIn;
+  const goHome = () => {
+    setRoute({ route: "lobby", publicLanding: true });
+  };
+  const goRoute = (id) => {
+    setRoute(id);
+  };
 
   const headerCls = isInk
     ? "bg-ink text-white border-b border-white/10"
@@ -210,8 +216,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
             onLogoClick();
             return;
           }
-          if (typeof window.__mafikingShowLanding === 'function') window.__mafikingShowLanding();
-          else setRoute("lobby");
+          goHome();
         }} className="flex items-center">
           <Logo size={32} inverted={isInk} />
         </button>
@@ -221,7 +226,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
             return (
               <button
                 key={l.id}
-                onClick={() => setRoute(l.id)}
+                onClick={() => goRoute(l.id)}
                 className={`relative px-4 py-2 text-[14px] font-medium rounded-full transition-colors ${
                   active
                     ? "bg-ink text-amber-300 font-semibold"
@@ -232,9 +237,20 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
               </button>
             );
           })}
+          {isAdminMode && (
+            <button
+              onClick={onAdminPanelOpen}
+              className={`relative px-4 py-2 text-[14px] font-semibold rounded-full transition-colors ${
+                route === "admin" ? "bg-ink text-amber-300" : "bg-yel text-ink hover:bg-yel/80"
+              }`}
+              type="button"
+            >
+              Admin Panel
+            </button>
+          )}
         </nav>
         <div className="flex items-center gap-2">
-          {gamified && (
+          {gamified && isLoggedIn && (
             <div className="flex items-center gap-2 mr-1">
               <button onClick={() => setRoute("misi")} className="chip-streak" title="Runtunan 12 hari">
                 <StreakFlame />
@@ -249,12 +265,26 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
           )}
           {showPublicCtas && <button onClick={() => setRoute("profile")} className={`hidden md:inline-flex text-sm font-semibold px-4 py-2 ${isInk ? "text-white/70 hover:text-white" : "text-ink/70 hover:text-ink"}`}>Masuk</button>}
           {showPublicCtas && (
-            <button onClick={() => setRoute("belajar")} className={isInk ? "btn-yel !py-2.5 !px-5 text-sm" : "btn-ink !py-2.5 !px-5 text-sm"}>
+            <button onClick={() => setRoute({ route: "belajar", section: "Try Out" })} className={isInk ? "btn-yel !py-2.5 !px-5 text-sm" : "btn-ink !py-2.5 !px-5 text-sm"}>
               Coba Gratis
             </button>
           )}
+          {gamified && !isLoggedIn && (
+            <button
+              onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "belajar" } })}
+              className={`hidden md:inline-flex text-sm font-semibold px-4 py-2 ${isInk ? "text-white/70 hover:text-white" : "text-ink/70 hover:text-ink"}`}
+              type="button"
+            >
+              Masuk
+            </button>
+          )}
           {gamified && (
-            <button aria-label="Buka profil" onClick={() => setRoute("profile")} type="button" className={`w-9 h-9 inline-flex items-center justify-center rounded-full border hairline ${isInk ? "text-white hover:bg-white/10" : "hover:bg-ink/5"}`}>
+            <button
+              aria-label={isLoggedIn ? "Buka profil" : "Masuk ke akun"}
+              onClick={() => isLoggedIn ? setRoute("profile") : setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "profile" } })}
+              type="button"
+              className={`w-9 h-9 inline-flex items-center justify-center rounded-full border hairline ${isInk ? "text-white hover:bg-white/10" : "hover:bg-ink/5"}`}
+            >
               <Icon.User className="w-4 h-4" />
             </button>
           )}
@@ -266,10 +296,15 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
       {menuOpen && (
         <div className={`md:hidden border-t p-4 flex flex-col gap-1 ${isInk ? "bg-ink border-white/10" : "bg-white hairline"}`}>
           {links.map(l => (
-            <button key={l.id} onClick={() => { setRoute(l.id); setMenuOpen(false); }} className={`text-left px-4 py-3 font-semibold rounded-xl ${isInk ? "text-white hover:bg-white/10" : "hover:bg-ink/5"}`}>
+            <button key={l.id} onClick={() => { goRoute(l.id); setMenuOpen(false); }} className={`text-left px-4 py-3 font-semibold rounded-xl ${isInk ? "text-white hover:bg-white/10" : "hover:bg-ink/5"}`}>
               {l.label}
             </button>
           ))}
+          {isAdminMode && (
+            <button onClick={() => { if (typeof onAdminPanelOpen === 'function') onAdminPanelOpen(); setMenuOpen(false); }} className={`text-left px-4 py-3 font-semibold rounded-xl ${route === "admin" ? "bg-ink text-amber-300" : "bg-yel text-ink"}`} type="button">
+              Admin Panel
+            </button>
+          )}
         </div>
       )}
     </header>
@@ -303,7 +338,7 @@ const Footer = ({ setRoute }) => (
             <div className="kicker mb-3 text-white/40">Platform</div>
             <ul className="space-y-2.5">
               <li><button onClick={() => setRoute("misi")} className="hover:text-yel">Misi Harian</button></li>
-              <li><button onClick={() => setRoute("tryout")} className="hover:text-yel">Tryout</button></li>
+              <li><button onClick={() => setRoute("tryout")} className="hover:text-yel">Paket</button></li>
               <li><button className="hover:text-yel">Peringkat</button></li>
             </ul>
           </div>

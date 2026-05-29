@@ -125,13 +125,13 @@ const Tryout = ({ setRoute, isAdmin }) => {
         <div className="max-w-6xl mx-auto px-6 md:px-8 pt-12 pb-10">
           <div className="grid lg:grid-cols-12 gap-8 items-end">
             <div className="lg:col-span-7">
-              <div className="kicker mb-2">Tryout Arena</div>
+              <div className="kicker mb-2">Paket Try Out</div>
               <h1 className="font-display font-bold text-4xl md:text-5xl tracking-[-0.03em] leading-[1.05]">
-                Uji nyalimu dengan<br/>
-                simulasi ujian <span className="hi-yel">berstandar kampus.</span>
+                Pilih paket belajar<br/>
+                sesuai akses yang kamu butuhkan.
               </h1>
               <p className="text-ink/65 text-lg mt-3 max-w-xl">
-                Dapatkan analisis performa mendalam untuk memaksimalkan nilai UAS dan TPB.
+                Mulai dari Try Out Gratis, lalu upgrade untuk akses pembahasan dan fitur penuh.
               </p>
               {isAdmin && (
                 <button
@@ -145,8 +145,8 @@ const Tryout = ({ setRoute, isAdmin }) => {
             </div>
             <div className="lg:col-span-5 flex lg:justify-end">
               <div className="bg-white border hairline rounded-full p-1 flex">
-                <button onClick={() => setTab("beli")} className={`px-5 py-2.5 rounded-full text-sm font-semibold ${tab === "beli" ? "bg-ink text-white" : "text-ink/55 hover:text-ink"}`}>Beli Tryout</button>
-                <button onClick={() => setTab("milikku")} className={`px-5 py-2.5 rounded-full text-sm font-semibold ${tab === "milikku" ? "bg-ink text-white" : "text-ink/55 hover:text-ink"}`}>Tryout Saya</button>
+                <button onClick={() => setTab("beli")} className={`px-5 py-2.5 rounded-full text-sm font-semibold ${tab === "beli" ? "bg-ink text-white" : "text-ink/55 hover:text-ink"}`}>Semua Paket</button>
+                <button onClick={() => setTab("milikku")} className={`px-5 py-2.5 rounded-full text-sm font-semibold ${tab === "milikku" ? "bg-ink text-white" : "text-ink/55 hover:text-ink"}`}>Paket Saya</button>
               </div>
             </div>
           </div>
@@ -213,7 +213,7 @@ const Tryout = ({ setRoute, isAdmin }) => {
                           </div>
                         </div>
                       </div>
-                      <button onClick={() => setRoute("belajar")} className="btn-yel shrink-0 relative z-10 self-end md:self-center group">
+                      <button onClick={() => setRoute({ route: "belajar", section: "Try Out" })} className="btn-yel shrink-0 relative z-10 self-end md:self-center group">
                         Mulai <Icon.Arrow className="transition-transform group-hover:translate-x-1" />
                       </button>
                     </div>
@@ -223,8 +223,8 @@ const Tryout = ({ setRoute, isAdmin }) => {
             ) : (
               <div className="text-center py-12 rounded-2xl border hairline bg-white">
                 <Icon.Trophy className="w-8 h-8 mx-auto opacity-30" />
-                <p className="text-ink/60 mt-3">Belum ada tryout yang aktif.</p>
-                <button onClick={() => setTab("beli")} className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold hover:gap-2.5 transition-all">Lihat semua tryout <Icon.Arrow /></button>
+                <p className="text-ink/60 mt-3">Belum ada paket yang aktif.</p>
+                <button onClick={() => setTab("beli")} className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold hover:gap-2.5 transition-all">Lihat semua paket <Icon.Arrow /></button>
               </div>
             )}
           </div>
@@ -357,7 +357,7 @@ const PackageCard = ({ pkg, setRoute, isAdmin, adminEdit, onDelete, hasAccess })
         <button
           onClick={() => {
             if (hasAccess) {
-              setRoute("belajar");
+              setRoute({ route: "belajar", section: "Try Out" });
             } else {
               setRoute({ route: "payment", payment: { type: "tryout", package: pkg } });
             }

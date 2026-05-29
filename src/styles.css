@@ -231,6 +231,164 @@ button:focus-visible, a:focus-visible {
   animation: shimmer 1.4s linear infinite;
 }
 
+@keyframes landing-fade-pop {
+  from { opacity: 0; transform: translateY(40px) scale(.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes landing-promo-pop {
+  from { opacity: 0; transform: translateY(50px) scale(.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes landing-mobile-in {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.landing-reveal {
+  opacity: 0;
+  transform: translateY(42px) scale(.98);
+  transform-origin: center;
+  transition:
+    opacity 720ms cubic-bezier(.2,.8,.2,1),
+    transform 720ms cubic-bezier(.2,.8,.2,1);
+  will-change: opacity, transform;
+}
+
+.landing-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.landing-reveal.is-visible > * {
+  animation: landing-fade-pop 560ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+.landing-reveal.is-visible .landing-card-motion {
+  animation: landing-fade-pop 640ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+.landing-reveal.is-visible .landing-card-motion:nth-child(2) { animation-delay: 90ms; }
+.landing-reveal.is-visible .landing-card-motion:nth-child(3) { animation-delay: 180ms; }
+
+.landing-section-pop {
+  animation: landing-section-focus 720ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+@keyframes landing-section-focus {
+  0% { transform: translateY(18px) scale(.985); }
+  48% { transform: translateY(0) scale(1.012); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+.landing-promo {
+  animation: landing-promo-pop 520ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+.landing-mobile-menu {
+  animation: landing-mobile-in 180ms ease-out both;
+}
+
+.landing-edit-hotspot {
+  align-items: center;
+  background: rgba(15, 23, 42, .18);
+  border: 1px dashed rgba(255, 255, 255, .9);
+  border-radius: inherit;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  inset: 8px;
+  justify-content: center;
+  opacity: 0;
+  position: absolute;
+  transition: opacity .18s, background .18s, transform .18s;
+  z-index: 30;
+}
+
+.landing-edit-hotspot:hover,
+.landing-edit-hotspot:focus-visible {
+  background: rgba(15, 23, 42, .46);
+  opacity: 1;
+  transform: scale(.99);
+}
+
+.landing-edit-pill {
+  align-items: center;
+  background: #fde047;
+  border-radius: 999px;
+  color: #0f172a;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 900;
+  gap: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, .22);
+}
+
+.landing-media-modal-backdrop {
+  align-items: center;
+  background: rgba(2, 6, 23, .72);
+  backdrop-filter: blur(10px);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  padding: 24px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 21000;
+}
+
+.landing-media-modal {
+  animation: landing-fade-pop 240ms cubic-bezier(.2,.8,.2,1) both;
+  background: #0b1326;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 24px;
+  box-shadow: 0 30px 90px rgba(0,0,0,.36);
+  max-width: 520px;
+  padding: 28px;
+  width: min(520px, calc(100vw - 48px));
+}
+
+.landing-media-dropzone {
+  align-items: center;
+  border: 1.5px dashed rgba(253, 224, 71, .55);
+  border-radius: 20px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 170px;
+  justify-content: center;
+  background: rgba(255,255,255,.05);
+}
+
+.landing-media-dropzone input {
+  display: none;
+}
+
+.tryout-entry-pop {
+  animation: landing-fade-pop 520ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-reveal,
+  .landing-reveal.is-visible,
+  .landing-reveal.is-visible > *,
+  .landing-section-pop,
+  .landing-card-motion,
+  .landing-promo,
+  .landing-mobile-menu,
+  .tryout-entry-pop {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
 /* ─── Toast ──────────────────────────────────────────────────────────────── */
 .toast-container {
   position: fixed;
@@ -259,6 +417,66 @@ button:focus-visible, a:focus-visible {
 .toast-success { border-left: 3px solid #22c55e; }
 .toast-error   { border-left: 3px solid #f87171; }
 .toast-info    { border-left: 3px solid #60a5fa; }
+
+.mafiking-confirm-overlay {
+  align-items: center;
+  background: rgba(11, 19, 38, .45);
+  backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: center;
+  bottom: 0;
+  left: 0;
+  padding: 24px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 9500;
+}
+
+.mafiking-confirm-card {
+  animation: landing-fade-pop 220ms cubic-bezier(.2,.8,.2,1) both;
+  background: #fff;
+  border: 1px solid rgba(11,19,38,.08);
+  border-radius: 18px;
+  box-shadow: 0 28px 80px rgba(11,19,38,.22);
+  max-width: 420px;
+  padding: 24px;
+  position: relative;
+  width: 100%;
+}
+
+.mafiking-confirm-card h2 {
+  color: #0b1326;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.1;
+  margin: 0 0 8px;
+}
+
+.mafiking-confirm-card p {
+  color: rgba(11,19,38,.62);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.mafiking-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.mafiking-confirm-danger {
+  background: #dc2626;
+  border: 1px solid #dc2626;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 800;
+}
 
 /* ─── Offline banner ─────────────────────────────────────────────────────── */
 .offline-banner {
@@ -2795,6 +3013,48 @@ button:focus-visible, a:focus-visible {
   border-radius: 14px;
   padding: 16px;
   background: #f8f9fc;
+}
+
+.admin-media-preview {
+  aspect-ratio: 16 / 9;
+  background: linear-gradient(135deg, #f8fafc, #eef2f7);
+  border: 1px dashed rgba(11,19,38,.18);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.admin-media-preview-inner {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.admin-media-empty {
+  align-items: center;
+  color: rgba(11,19,38,.45);
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  height: 100%;
+  justify-content: center;
+}
+
+.admin-upload-btn {
+  align-items: center;
+  background: #0b1326;
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.admin-upload-btn input {
+  display: none;
 }
 
 .admin-problem-card-list {

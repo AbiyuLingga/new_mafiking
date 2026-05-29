@@ -75,6 +75,12 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - `src/*.jsx` files use global symbols and assign components to `window.*`.
 - `src/app.jsx` owns route state and tweaks defaults.
 - `src/backend-api.jsx` is the same-origin API helper.
+- `/` intentionally opens the public landing page for guests and logged-in users. The Mafiking logo returns to that landing page from app routes.
+- `Coba Gratis` routes into `Belajar` with the `Try Out` section selected.
+- The app top nav labels are `Beranda`, `Misi Harian`, and `Paket`; `Beranda` maps to the `belajar` route and `Paket` maps to the `tryout` route.
+- `Belajar` sections are `Try Out`, `Matematika`, `Fisika`, and `Kimia`. The `Try Out` section is the free entry point.
+- `src/admin-monitoring.jsx` is the admin user/access and Gemini usage monitoring panel. It must load before `src/admin.jsx` in `MAFIKING.html` because `admin.jsx` renders `window.AdminMonitoringPanel`.
+- Landing media is stored in `landing_media` and served through `GET /api/landing-media`. Admin uploads for promo image, feature images, and demo video live in the Admin Panel `Landing Page` tab.
 - The global `Nav` is intentionally not rendered on the `practice` route; practice owns its own compact session bars/toolbars.
 - `db/database.sqlite` is generated local runtime state.
 - `db/question-bank.json` is the portable seeded question-bank source.
@@ -83,11 +89,13 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 
 Do:
 
-- Keep route names consistent with `src/app.jsx`: `lobby`, `belajar`, `misi`, `tryout`, `profile`, `practice`.
+- Keep route names consistent with `src/app.jsx`: `lobby`, `belajar`, `misi`, `tryout`, `admin`, `profile`, `practice`.
 - Keep script order in `MAFIKING.html` valid when adding frontend files.
 - Export browser components/functions on `window` when they must be used by later scripts.
 - Use existing utility classes, card styles, icon globals, and layout patterns.
 - Keep the `practice` route free of the global top navigation unless the user explicitly asks to restore it.
+- Keep the `lobby` route using its own marketing header; do not add the global app `Nav` to the public landing.
+- Keep logged-out access behavior: free Try Out multiple-choice can open, but free Try Out pembahasan/canvas review and protected subject chapters should route through login/sign-up.
 - Keep tweaks defaults in `src/app.jsx` aligned with the user's selected defaults:
   - `heroLayout: "split"`
   - `density: "normal"`
@@ -127,10 +135,13 @@ Important behavior:
 
 When editing this area, browser-smoke at least:
 
-1. `Belajar -> Teknik Integrasi` opens multiple-choice practice with 23 questions and a `Try Canvas` entry.
-2. `Belajar -> Bentuk Tak Tentu & Integral Tak Wajar` shows empty state.
-3. `Belajar -> Fisika -> Kinematika` shows empty state until Fisika bank soal exists.
-4. `Try Canvas` opens canvas practice, `Try Pilgan` returns to multiple choice, and focus mode keeps navigation at toolbar edges.
+1. `/ -> Coba Gratis` opens `Belajar -> Try Out`.
+2. `Belajar -> Try Out -> Mulai Try Out` opens free multiple-choice practice.
+3. Logged-out free Try Out canvas/pembahasan entry opens the login/sign-up gate.
+4. `Belajar -> Matematika -> Teknik Integrasi` opens multiple-choice practice with 23 questions and a `Try Canvas` entry when the user is logged in.
+5. `Belajar -> Bentuk Tak Tentu & Integral Tak Wajar` shows empty state.
+6. `Belajar -> Fisika -> Kinematika` shows empty state until Fisika bank soal exists.
+7. `Try Canvas` opens canvas practice, `Try Pilgan` returns to multiple choice, and focus mode keeps navigation at toolbar edges.
 
 ## Backend Rules
 
@@ -196,6 +207,11 @@ Rules:
 - Most API routes require `req.session.userId`.
 - `server.js` creates a guest user for API requests that lack a session, except `/api/health` and `/api/payment/callback`.
 - Admin routes require both `isAuthenticated` and `isAdmin`.
+- Admin monitoring uses `GET /api/admin/dashboard-data`, `POST /api/admin/users/:id/reset-password`, `POST /api/admin/users/:id/grant-access`, and `POST /api/admin/users/:id/role`. Keep those endpoints admin-only and validate user IDs/access payloads.
+- Admin landing media uses `GET /api/admin/landing-media`, `POST /api/admin/landing-media`, and `DELETE /api/admin/landing-media/:slot`. Keep uploads admin-only, MIME allowlisted, and stored under `assets/landing/`.
+- Admin content management separates Try Out package CRUD from Matematika/Fisika/Kimia chapter/subtopic CRUD in the `Bab & Subtopik` tab.
+- The admin shield is frontend-visible only for `currentUser.role === "admin"`; do not expose it to every user. Admin mode adds an `Admin Panel` button to the top nav, and that button navigates to the dedicated `admin` route/page.
+- Gemini token usage is observational data in `ai_token_usage`, written by `lib/log-token-usage.js`. Logging failures must not break correction/transcription/profile AI requests.
 - `routes/correction.js` supports up to 20 Gemini keys: `GEMINI_KEY_1` through `GEMINI_KEY_20`.
 - Profile summary can fall back locally when Gemini keys are missing.
 - Profile recommendations are catalog-backed and deterministic. Preserve `recommendedItems`, `recommendedQuestions`, and `skillNeedScores` in `/api/correction/profile-summary`; Gemini or 9Router can write summary prose but should not choose follow-up question refs at runtime. Keep the larger local recommendation window separate from the smaller AI prompt window.
