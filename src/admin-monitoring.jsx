@@ -187,6 +187,28 @@ const AdminMonitoringPanel = () => {
     }
   }
 
+  async function deleteUser(user) {
+    if (data?.currentUserId === user.id) {
+      adminMonitoringToast('Tidak bisa menghapus akun sendiri.', 'error');
+      return;
+    }
+    if (user.role === 'admin') {
+      adminMonitoringToast('Akun admin tidak bisa dihapus dari panel ini.', 'error');
+      return;
+    }
+    if (!window.confirm('Hapus user ' + user.display_name + '? Aksi ini tidak bisa dibatalkan.')) return;
+    setBusyUserId(user.id);
+    try {
+      await MafikingAPI.del('/api/admin/users/' + user.id);
+      adminMonitoringToast('User ' + user.display_name + ' dihapus.', 'success');
+      await loadDashboard();
+    } catch (e) {
+      adminMonitoringToast(e.message || 'Gagal menghapus user.', 'error');
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
   if (loading) {
     return <div className="flex flex-col gap-2">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
   }
@@ -301,6 +323,15 @@ const AdminMonitoringPanel = () => {
                         type="button"
                       >
                         Reset Sandi
+                      </button>
+                      <button
+                        className="admin-btn-danger"
+                        style={{ padding: '4px 10px', fontSize: 12, marginLeft: 6 }}
+                        disabled={busyUserId === user.id || data?.currentUserId === user.id || user.role === 'admin'}
+                        onClick={() => deleteUser(user)}
+                        type="button"
+                      >
+                        Hapus
                       </button>
                     </td>
                   </tr>

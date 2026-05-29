@@ -18,31 +18,38 @@ const chapterData = {
   ],
 };
 
-const BELAJAR_MAPELS = ["Matematika", "Fisika", "Kimia"];
+const BELAJAR_MAPELS = ["Try Out", "Matematika", "Fisika", "Kimia"];
 const BELAJAR_MAPEL_STORAGE_KEY = "mafiking:last-belajar-mapel";
 
-const getInitialBelajarMapel = () => {
-  try {
-    const saved = window.localStorage.getItem(BELAJAR_MAPEL_STORAGE_KEY);
-    if (BELAJAR_MAPELS.includes(saved)) return saved;
-  } catch (_) {}
-  return "Matematika";
+const normalizeBelajarSection = (value) => {
+  const text = String(value || "").trim().toLowerCase();
+  if (text === "tryout" || text === "try out" || text === "try-out") return "Try Out";
+  return BELAJAR_MAPELS.find((item) => item.toLowerCase() === text) || null;
 };
 
-const Belajar = ({ setRoute, tweaks, isAdmin }) => {
-  const [mapel, setMapelState] = useState(getInitialBelajarMapel);
+const getInitialBelajarMapel = () => {
+  return "Try Out";
+};
+
+const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, initialSection = null }) => {
+  const [mapel, setMapelState] = useState(normalizeBelajarSection(initialSection) || getInitialBelajarMapel);
   const [semester, setSemester] = useState(1);
   const [dbInit, setDbInit] = useState(null);
 
   const cardStyle = tweaks.chapterCard || "list";
   const selectorStyle = tweaks.mapelSelector || "pills";
   const setMapel = (nextMapel) => {
-    const safeMapel = BELAJAR_MAPELS.includes(nextMapel) ? nextMapel : "Matematika";
+    const safeMapel = BELAJAR_MAPELS.includes(nextMapel) ? nextMapel : "Try Out";
     try {
       window.localStorage.setItem(BELAJAR_MAPEL_STORAGE_KEY, safeMapel);
     } catch (_) {}
     setMapelState(safeMapel);
   };
+
+  useEffect(() => {
+    const nextSection = normalizeBelajarSection(initialSection);
+    if (nextSection && nextSection !== mapel) setMapel(nextSection);
+  }, [initialSection]);
 
   function loadDbChapters() {
     MafikingAPI.get('/api/quiz/init').then(data => setDbInit(data)).catch(() => {});
@@ -71,6 +78,7 @@ const Belajar = ({ setRoute, tweaks, isAdmin }) => {
     ? rawDbChapters.filter(c => c.mapel === mapel)
     : (chapterData[mapel] || []);
   const chapters = allMapelChapters.filter(c => c.semester === semester);
+  const isTryOutSection = mapel === "Try Out";
 
   return (
     <div className="bg-paper">
@@ -80,7 +88,7 @@ const Belajar = ({ setRoute, tweaks, isAdmin }) => {
           <div>
             <SemesterKicker semester={semester} setSemester={setSemester} />
             <h1 className="font-display font-bold text-4xl md:text-5xl tracking-[-0.03em] leading-[1.05]">
-              Selamat pagi, Abiyyu.
+              Selamat datang pejuang IP 4.0
             </h1>
           </div>
         </div>
@@ -92,7 +100,9 @@ const Belajar = ({ setRoute, tweaks, isAdmin }) => {
       {/* Main content */}
       <section>
         <div key={mapel} className="max-w-6xl mx-auto px-6 md:px-8 py-10">
-          {(() => {
+          {isTryOutSection ? (
+            <TryOutBelajarPanel setRoute={setRoute} isLoggedIn={isLoggedIn} />
+          ) : (() => {
             const totalSoal = chapters.reduce((s, c) => s + c.total, 0);
             const doneSoal  = chapters.reduce((s, c) => s + c.progress, 0);
             const inProgress = chapters.filter(c => c.progress > 0).length;
@@ -122,15 +132,15 @@ const Belajar = ({ setRoute, tweaks, isAdmin }) => {
 
 
           {/* Chapter cards — admin mode shows inline editor, user mode shows card variants */}
-          {isAdmin && typeof AdminBelajarView !== "undefined" ? (
+          {!isTryOutSection && isAdmin && typeof AdminBelajarView !== "undefined" ? (
             <AdminBelajarView setRoute={setRoute} mapel={mapel} chapters={allMapelChapters} onChaptersChanged={loadDbChapters} />
-          ) : (
+          ) : !isTryOutSection ? (
             <React.Fragment>
               {cardStyle === "numbered" && <ChaptersNumbered chapters={chapters} setRoute={setRoute} mapel={mapel} />}
               {cardStyle === "soft" && <ChaptersSoft chapters={chapters} setRoute={setRoute} mapel={mapel} />}
               {cardStyle === "magazine" && <ChaptersMagazine chapters={chapters} setRoute={setRoute} mapel={mapel} />}
             </React.Fragment>
-          )}
+          ) : null}
 
         </div>
       </section>
@@ -140,6 +150,58 @@ const Belajar = ({ setRoute, tweaks, isAdmin }) => {
 };
 
 // ─── Semester kicker (header) ─────────────────────────────────────────────
+const TryOutBelajarPanel = ({ setRoute, isLoggedIn }) => {
+  const startPractice = () => {
+    setRoute({
+      route: "practice",
+      practice: {
+        id: "free-tryout-integral",
+        num: "01",
+        title: "Teknik Integrasi",
+        mapel: "Matematika",
+        semester: 1,
+        est: "60 mnt",
+        total: 23,
+        topics: ["Try Out Gratis", "Integral", "Limit"],
+        freeTryout: true,
+      },
+    });
+  };
+
+  return (
+    <div className="mapel-stagger">
+      <section className="relative min-h-[360px] overflow-hidden rounded-[2rem] bg-ink p-7 text-white md:p-10 lg:min-h-[420px]">
+        <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-yel/20 blur-3xl" />
+        <div className="relative z-10">
+          <span className="inline-flex rounded-full bg-yel px-3 py-1 text-[11px] font-black uppercase tracking-widest text-ink">
+            Gratis
+          </span>
+          <h2 className="mt-5 font-display text-3xl font-black tracking-[-0.03em] md:text-5xl">
+            Try Out Gratis TPB
+          </h2>
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-white/70 md:text-base">
+            Mulai dari simulasi ringan untuk menguji ritme belajar. Soal bisa dicoba gratis, sementara pembahasan lengkap dan progres tersimpan setelah masuk akun.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <button onClick={startPractice} className="btn-yel !px-6 !py-3" type="button">
+              Mulai Try Out <Icon.Arrow />
+            </button>
+            {!isLoggedIn && (
+              <button
+                onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "belajar", section: "Try Out" } })}
+                className="inline-flex items-center rounded-full border border-white/15 px-6 py-3 text-sm font-bold text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                type="button"
+              >
+                Login untuk pembahasan
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
+
 const SemesterKicker = ({ semester, setSemester }) => {
   const [open, setOpen] = useState(false);
   return (

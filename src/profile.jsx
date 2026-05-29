@@ -1,6 +1,6 @@
 // Profile/report route. Uses the original Mafiking visual language.
 
-const Profile = ({ setRoute, isAdmin = false }) => {
+const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
   const { useState, useEffect } = React;
   const [loading, setLoading] = useState(true);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -170,6 +170,11 @@ const Profile = ({ setRoute, isAdmin = false }) => {
               <button onClick={() => loadProfile(true)} className="btn-ghost !py-2.5 !px-5 text-sm">
                 Refresh
               </button>
+              {typeof onRequestLogout === "function" && (
+                <button onClick={onRequestLogout} className="btn-ghost !py-2.5 !px-5 text-sm">
+                  Logout
+                </button>
+              )}
             </div>
           </div>
         </div>

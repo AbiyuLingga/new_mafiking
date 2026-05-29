@@ -36,48 +36,125 @@ const App = () => {
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [currentUser, setCurrentUser] = React.useState(null);
   const [isAdmin, setIsAdmin] = React.useState(false);
-  const [forcePublicLanding, setForcePublicLanding] = React.useState(false);
+  const [authMode, setAuthMode] = React.useState(null);
+  const [authRedirect, setAuthRedirect] = React.useState(null);
+  const [belajarSection, setBelajarSection] = React.useState(null);
+  const [activePackages, setActivePackages] = React.useState([]);
+  const [confirmAction, setConfirmAction] = React.useState(null);
   const isGuest = currentUser && currentUser.display_name?.startsWith("Tamu_");
   const isLoggedIn = currentUser && !isGuest;
   const isAdminAccount = currentUser?.role === "admin";
+  const hasPremiumAccess = isAdminAccount || activePackages.length > 0;
+
+  const refreshCurrentUser = React.useCallback(async () => {
+    const user = await MafikingAPI.get("/api/auth/me");
+    setCurrentUser(user);
+    try {
+      const packages = await MafikingAPI.get("/api/payment/active-packages");
+      setActivePackages(Array.isArray(packages) ? packages : []);
+    } catch (_) {
+      setActivePackages([]);
+    }
+    return user;
+  }, []);
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const hasOrder = params.has("merchantOrderId");
-    if (params.get("landing") === "true") {
-      setForcePublicLanding(true);
-    }
 
-    MafikingAPI.get("/api/auth/me")
-      .then((user) => {
-        setCurrentUser(user);
-        const isGuest = user && user.display_name?.startsWith("Tamu_");
-        const isLoggedIn = user && !isGuest;
-        if (isLoggedIn && !hasOrder) {
-          setRoute("belajar");
-        } else if (hasOrder) {
-          setRoute("payment");
-        }
+    refreshCurrentUser()
+      .then(() => {
+        if (hasOrder) setRoute("payment");
       })
       .catch(() => {
         setCurrentUser(null);
+        setActivePackages([]);
         if (hasOrder) setRoute("payment");
       });
-  }, []);
+  }, [refreshCurrentUser]);
 
   const navigate = React.useCallback((next) => {
     if (next && typeof next === "object") {
       if (next.practice) setPracticeContext(next.practice);
       if (next.payment) setPaymentContext(next.payment);
       else setPaymentContext(null);
-      setForcePublicLanding(Boolean(next.publicLanding));
+      if (next.section || next.belajarSection) setBelajarSection(next.section || next.belajarSection);
+      if (next.authMode) {
+        setAuthMode(next.authMode);
+        setAuthRedirect(next.authRedirect || null);
+      } else {
+        setAuthMode(null);
+        setAuthRedirect(null);
+      }
       setRoute(next.route || "lobby");
       return;
     }
     setPaymentContext(null);
-    setForcePublicLanding(next === "lobby");
+    setAuthMode(null);
+    setAuthRedirect(null);
+    if (next !== "belajar") setBelajarSection(null);
     setRoute(next);
   }, []);
+
+  const requestConfirm = React.useCallback((config) => {
+    setConfirmAction({
+      title: config.title || "Konfirmasi",
+      message: config.message || "",
+      confirmLabel: config.confirmLabel || "Lanjut",
+      cancelLabel: config.cancelLabel || "Batal",
+      tone: config.tone || "default",
+      onConfirm: config.onConfirm,
+    });
+  }, []);
+
+  const confirmLandingReturn = React.useCallback(() => {
+    requestConfirm({
+      title: "Apakah ingin kembali ke landing page?",
+      message: "Halaman belajar akan ditutup sementara dan kamu akan kembali ke tampilan awal Mafiking.",
+      confirmLabel: "Ya, kembali",
+      onConfirm: () => navigate({ route: "lobby", publicLanding: true }),
+    });
+  }, [navigate, requestConfirm]);
+
+  const confirmLogout = React.useCallback(() => {
+    requestConfirm({
+      title: "Apakah ingin keluar?",
+      message: "Sesi akun akan ditutup. Progres yang sudah tersimpan tetap aman.",
+      confirmLabel: "Ya, logout",
+      tone: "danger",
+      onConfirm: async () => {
+        try {
+          await MafikingAPI.post("/api/auth/logout", {});
+        } catch (_) {}
+        if (window.MafikingClerk && typeof window.MafikingClerk.signOut === "function") {
+          await window.MafikingClerk.signOut();
+        }
+        window.location.assign("/");
+      },
+    });
+  }, [requestConfirm]);
+
+  async function runConfirmedAction() {
+    const action = confirmAction;
+    setConfirmAction(null);
+    if (action && typeof action.onConfirm === "function") {
+      await action.onConfirm();
+    }
+  }
+
+  const handleAuthSuccess = React.useCallback((user, redirect) => {
+    setCurrentUser(user);
+    MafikingAPI.get("/api/payment/active-packages")
+      .then((packages) => setActivePackages(Array.isArray(packages) ? packages : []))
+      .catch(() => setActivePackages([]));
+    setAuthMode(null);
+    setAuthRedirect(null);
+    if (redirect) {
+      navigate(redirect);
+      return;
+    }
+    navigate({ route: "belajar", section: "Try Out" });
+  }, [navigate]);
 
   React.useEffect(() => { window.__mafikingNavigate = navigate; }, [navigate]);
 
@@ -91,13 +168,8 @@ const App = () => {
   }, [isAdminAccount, navigate, route]);
 
   const handleLogoClick = React.useCallback(() => {
-    if (isAdminAccount || isAdmin) {
-      navigate({ route: "lobby", publicLanding: true });
-      return;
-    }
-    if (typeof window.__mafikingShowLanding === 'function') window.__mafikingShowLanding();
-    else navigate("lobby");
-  }, [isAdminAccount, isAdmin, navigate]);
+    confirmLandingReturn();
+  }, [confirmLandingReturn]);
 
   // Density to <html>
   React.useEffect(() => {
@@ -126,7 +198,7 @@ const App = () => {
   return (
     <div className="min-h-screen flex flex-col bg-paper text-ink">
       <OfflineBanner />
-      {route !== "practice" && isLoggedIn && (
+      {route !== "practice" && route !== "lobby" && (
         <Nav
           route={route}
           setRoute={navigate}
@@ -141,18 +213,88 @@ const App = () => {
 
       <main className="flex-1">
         <div data-screen-label={routeLabel(route)}>
-          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} forcePublicLanding={forcePublicLanding} isAdmin={isAdmin || isAdminAccount} />}
-          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} />}
-          {route === "misi" && <ScreenErrorBoundary><Misi setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} /></ScreenErrorBoundary>}
+          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={isAdmin || isAdminAccount} authMode={authMode} authRedirect={authRedirect} onAuthSuccess={handleAuthSuccess} />}
+          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} initialSection={belajarSection} />}
+          {route === "misi" && (
+            <ScreenErrorBoundary>
+              {hasPremiumAccess
+                ? <Misi setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} />
+                : <AccessGate setRoute={navigate} title="Misi Harian termasuk paket belajar" message="Beli paket untuk mendapat akses ke misi harian, XP bonus, dan latihan terarah setiap hari." />}
+            </ScreenErrorBoundary>
+          )}
           {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} />}
           {route === "admin" && isAdminAccount && isAdmin && window.AdminPage && React.createElement(window.AdminPage, { setRoute: navigate })}
-          {route === "profile" && <Profile setRoute={navigate} isAdmin={isAdmin || isAdminAccount} />}
+          {route === "profile" && (isLoggedIn
+            ? <Profile setRoute={navigate} isAdmin={isAdmin || isAdminAccount} onRequestLanding={confirmLandingReturn} onRequestLogout={confirmLogout} />
+            : <AccessGate setRoute={navigate} title="Masuk untuk membuka profil" message="Profil menyimpan progres, pembahasan, dan riwayat belajarmu." requireLogin />
+          )}
           {route === "payment" && <Payment setRoute={navigate} currentUser={currentUser} context={paymentContext} />}
-          {route === "practice" && <Practice setRoute={navigate} context={practiceContext} isAdmin={isAdmin} />}
+          {route === "practice" && <Practice setRoute={navigate} context={practiceContext} isAdmin={isAdmin} isLoggedIn={isLoggedIn} />}
         </div>
       </main>
 
       <ToastContainer />
+
+      {confirmAction && ReactDOM.createPortal((
+        <div
+          className="mafiking-confirm-overlay"
+          role="presentation"
+          onClick={(event) => { if (event.target === event.currentTarget) setConfirmAction(null); }}
+          style={{
+            alignItems: "center",
+            background: "rgba(11, 19, 38, .54)",
+            backdropFilter: "blur(4px)",
+            bottom: 0,
+            display: "flex",
+            justifyContent: "center",
+            left: 0,
+            padding: 24,
+            position: "fixed",
+            right: 0,
+            top: 0,
+            zIndex: 20000,
+          }}
+        >
+          <div
+            className="mafiking-confirm-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mafiking-confirm-title"
+          style={{
+            animation: "landing-fade-pop 220ms cubic-bezier(.2,.8,.2,1) both",
+            background: "#fffdf1",
+            border: "1px solid rgba(11,19,38,.08)",
+            borderRadius: 6,
+            boxShadow: "-28px -24px 0 rgba(255,244,79,.32), 0 22px 60px rgba(11,19,38,.22)",
+            maxWidth: 360,
+            padding: "34px 40px 32px",
+            width: "min(360px, calc(100vw - 48px))",
+          }}
+        >
+          <h2 id="mafiking-confirm-title" style={{ color: "#0b1326", fontSize: 20, fontWeight: 800, margin: "0 0 14px" }}>{confirmAction.title}</h2>
+          <div style={{ height: 1, background: "rgba(250,204,21,.75)", marginBottom: 20 }} />
+          {confirmAction.message && <p style={{ color: "rgba(11,19,38,.68)", fontSize: 14, lineHeight: 1.6, margin: 0 }}>{confirmAction.message}</p>}
+          <div className="mafiking-confirm-actions" style={{ display: "flex", gap: 16, justifyContent: "flex-end", marginTop: 34 }}>
+            <button
+              className="btn-ghost !py-2.5 !px-5 text-sm"
+              onClick={() => setConfirmAction(null)}
+              style={{ background: "#fffdf1", border: "2px solid rgba(11,19,38,.12)", borderRadius: 999, color: "#0b1326", fontWeight: 800, minWidth: 88, padding: "10px 18px" }}
+              type="button"
+            >
+              {confirmAction.cancelLabel}
+            </button>
+            <button
+              className={(confirmAction.tone === "danger" ? "mafiking-confirm-danger" : "btn-ink") + " !py-2.5 !px-5 text-sm"}
+              onClick={runConfirmedAction}
+              style={{ background: "#fff44f", border: "2px solid #fff44f", borderRadius: 999, color: "#0b1326", fontWeight: 800, minWidth: 88, padding: "10px 18px" }}
+              type="button"
+            >
+                {confirmAction.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ), document.body)}
 
       {route !== "payment" && isAdminAccount && (
         <button
@@ -185,14 +327,13 @@ const App = () => {
         <TweakSection label="Navigasi cepat">
           <div className="grid grid-cols-2 gap-1.5">
             {[
-              ["lobby", "Beranda"],
-              ["belajar", "Belajar"],
+              ["belajar", "Beranda"],
               ["misi", "Misi"],
-              ["tryout", "Tryout"],
+              ["tryout", "Paket"],
             ].map(([id, label]) => (
               <button
                 key={id}
-                onClick={() => navigate(id)}
+                onClick={() => navigate(id === "belajar" ? { route: "belajar", section: "Try Out" } : id)}
                 className={`px-3 py-2 text-xs font-semibold rounded-lg border ${route === id ? "bg-ink text-white border-ink" : "bg-white border-ink/15 hover:border-ink/40"}`}
               >
                 {label}
@@ -317,12 +458,58 @@ const App = () => {
   );
 };
 
+const AccessGate = ({ setRoute, title, message, requireLogin = false }) => (
+  <div className="bg-paper min-h-[calc(100vh-72px)] flex items-center justify-center px-6 py-16">
+    <div className="max-w-xl w-full bg-white border hairline rounded-[var(--card-radius)] p-8 md:p-10 text-center">
+      <div className="w-12 h-12 rounded-2xl bg-yel/70 flex items-center justify-center mx-auto mb-5">
+        <Icon.Lock className="w-5 h-5" />
+      </div>
+      <p className="kicker mb-2">{requireLogin ? "Akun diperlukan" : "Akses paket"}</p>
+      <h1 className="font-display font-bold text-3xl md:text-4xl tracking-[-0.03em] leading-tight">
+        {title}
+      </h1>
+      <p className="text-ink/60 mt-4 leading-relaxed">
+        {message}
+      </p>
+      <div className="flex flex-wrap items-center justify-center gap-3 mt-7">
+        {requireLogin ? (
+          <React.Fragment>
+            <button
+              onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "profile" } })}
+              className="btn-ink"
+              type="button"
+            >
+              Masuk <Icon.Arrow />
+            </button>
+            <button
+              onClick={() => setRoute({ route: "lobby", authMode: "signup", authRedirect: { route: "profile" } })}
+              className="btn-ghost"
+              type="button"
+            >
+              Sign Up
+            </button>
+          </React.Fragment>
+        ) : (
+          <React.Fragment>
+            <button onClick={() => setRoute("tryout")} className="btn-ink" type="button">
+              Lihat Paket <Icon.Arrow />
+            </button>
+            <button onClick={() => setRoute({ route: "belajar", section: "Try Out" })} className="btn-ghost" type="button">
+              Try Out Gratis
+            </button>
+          </React.Fragment>
+        )}
+      </div>
+    </div>
+  </div>
+);
+
 function routeLabel(r) {
   return ({
     lobby: "01 Beranda",
-    belajar: "02 Belajar",
+    belajar: "02 Beranda",
     misi: "03 Misi Harian",
-    tryout: "04 Tryout",
+    tryout: "04 Paket",
     admin: "05 Admin Panel",
     profile: "06 Profil",
     payment: "07 Pembayaran",

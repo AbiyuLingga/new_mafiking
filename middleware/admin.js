@@ -1,4 +1,7 @@
 function isAdmin(req, res, next) {
+    if (req.role === 'admin') {
+        return next();
+    }
     if (req.session && req.session.role === 'admin') {
         return next();
     }

@@ -516,4 +516,29 @@ router.post('/users/:id/role', (req, res) => {
     }
 });
 
+router.delete('/users/:id', (req, res) => {
+    try {
+        const userId = parsePositiveId(req.params.id);
+        if (!userId) return res.status(400).json({ error: 'ID user tidak valid.' });
+
+        const currentUserId = Number(req.userId || (req.session && req.session.userId));
+        if (currentUserId === userId) {
+            return res.status(400).json({ error: 'Tidak bisa menghapus akun sendiri.' });
+        }
+
+        const db = req.app.locals.db;
+        const user = readUser(db, userId);
+        if (!user) return res.status(404).json({ error: 'User tidak ditemukan.' });
+        if (user.role === 'admin') {
+            return res.status(400).json({ error: 'Akun admin tidak bisa dihapus dari panel ini.' });
+        }
+
+        const info = db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+        res.json({ ok: true, userId, deleted: info.changes });
+    } catch (e) {
+        console.error('DELETE /users error:', e);
+        res.status(500).json({ error: 'Gagal menghapus user.' });
+    }
+});
+
 module.exports = router;

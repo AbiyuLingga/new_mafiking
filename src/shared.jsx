@@ -142,6 +142,7 @@ const Icon = {
 
 // ─── Constants ────────────────────────────────────────────────────────────
 const MAPEL_META = {
+  "Try Out": { code: "TRY", icon: Icon.Trophy, color: "amber" },
   Matematika: { code: "MAT", icon: Icon.Integral, color: "amber" },
   Fisika: { code: "FIS", icon: Icon.Atom, color: "blue" },
   Kimia: { code: "KIM", icon: Icon.Flask, color: "emerald" },
@@ -184,10 +185,9 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
   }, []);
 
   const links = [
-    { id: "lobby", label: "Beranda" },
-    { id: "belajar", label: "Belajar" },
+    { id: "belajar", label: "Beranda", section: "Try Out" },
     { id: "misi", label: "Misi Harian" },
-    { id: "tryout", label: "Tryout" },
+    { id: "tryout", label: "Paket" },
   ];
 
   const isInk = navStyle === "ink";
@@ -199,6 +199,11 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
   const goRoute = (id) => {
     if (id === "lobby") {
       goHome();
+      return;
+    }
+    const link = links.find((item) => item.id === id);
+    if (link && link.section) {
+      setRoute({ route: id, section: link.section });
       return;
     }
     setRoute(id);
@@ -270,7 +275,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
           )}
           {showPublicCtas && <button onClick={() => setRoute("profile")} className={`hidden md:inline-flex text-sm font-semibold px-4 py-2 ${isInk ? "text-white/70 hover:text-white" : "text-ink/70 hover:text-ink"}`}>Masuk</button>}
           {showPublicCtas && (
-            <button onClick={() => setRoute("belajar")} className={isInk ? "btn-yel !py-2.5 !px-5 text-sm" : "btn-ink !py-2.5 !px-5 text-sm"}>
+            <button onClick={() => setRoute({ route: "belajar", section: "Try Out" })} className={isInk ? "btn-yel !py-2.5 !px-5 text-sm" : "btn-ink !py-2.5 !px-5 text-sm"}>
               Coba Gratis
             </button>
           )}

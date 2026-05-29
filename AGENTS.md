@@ -36,11 +36,14 @@ Before planning or implementing non-trivial work, inspect:
 server.js
 db/schema.sql
 routes/
+middleware/clerk-auth.js
+lib/clerk-user-sync.js
 src/app.jsx
 src/belajar.jsx
 src/practice.jsx
 src/profile.jsx
 src/backend-api.jsx
+src/clerk-auth.jsx
 MAFIKING.html
 README.md
 ARCHITECTURE.md
@@ -75,7 +78,16 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - `src/*.jsx` files use global symbols and assign components to `window.*`.
 - `src/app.jsx` owns route state and tweaks defaults.
 - `src/backend-api.jsx` is the same-origin API helper.
-- `src/admin-monitoring.jsx` is the admin user/access and Gemini usage monitoring panel. It must load before `src/admin.jsx` in `MAFIKING.html` because `admin.jsx` renders `window.AdminMonitoringPanel`.
+- `src/clerk-auth.jsx` is the static-Babel Clerk bridge. It fetches only the public publishable key from `/api/config/clerk`, loads Clerk browser scripts, and exposes `window.MafikingClerk`.
+- `middleware/clerk-auth.js` maps verified Clerk Bearer tokens to local SQLite users before API routes run.
+- `lib/clerk-user-sync.js` owns Clerk-to-local linking and guest-to-Google merge behavior.
+- `/` intentionally opens the public landing page for guests and logged-in users. The Mafiking logo returns to that landing page from app routes.
+- `Coba Gratis` routes into `Belajar` with the `Try Out` section selected.
+- The app top nav labels are `Beranda`, `Misi Harian`, and `Paket`; `Beranda` maps to the `belajar` route and `Paket` maps to the `tryout` route.
+- `Belajar` sections are `Try Out`, `Matematika`, `Fisika`, and `Kimia`. The `Try Out` section is the free entry point.
+- `src/admin.jsx` owns the admin page. The monitoring tab is implemented by `src/admin-monitoring.jsx`, which must load before `src/admin.jsx` in `MAFIKING.html`.
+- Landing media is stored in `landing_media` and served through `GET /api/landing-media`. Admin uploads for promo image, feature images, and demo video live in the Admin Panel `Landing Page` tab.
+- The public landing uses local reveal/pop animations in `src/lobby.jsx` and `src/styles.css`. The demo video section should not have the old grid background.
 - The global `Nav` is intentionally not rendered on the `practice` route; practice owns its own compact session bars/toolbars.
 - `db/database.sqlite` is generated local runtime state.
 - `db/question-bank.json` is the portable seeded question-bank source.
@@ -89,6 +101,8 @@ Do:
 - Export browser components/functions on `window` when they must be used by later scripts.
 - Use existing utility classes, card styles, icon globals, and layout patterns.
 - Keep the `practice` route free of the global top navigation unless the user explicitly asks to restore it.
+- Keep the `lobby` route using its own marketing header; do not add the global app `Nav` to the public landing.
+- Keep logged-out access behavior: free Try Out multiple-choice can open, but free Try Out pembahasan/canvas review and protected subject chapters should route through login/sign-up.
 - Keep tweaks defaults in `src/app.jsx` aligned with the user's selected defaults:
   - `heroLayout: "split"`
   - `density: "normal"`
@@ -128,10 +142,13 @@ Important behavior:
 
 When editing this area, browser-smoke at least:
 
-1. `Belajar -> Teknik Integrasi` opens multiple-choice practice with 23 questions and a `Try Canvas` entry.
-2. `Belajar -> Bentuk Tak Tentu & Integral Tak Wajar` shows empty state.
-3. `Belajar -> Fisika -> Kinematika` shows empty state until Fisika bank soal exists.
-4. `Try Canvas` opens canvas practice, `Try Pilgan` returns to multiple choice, and focus mode keeps navigation at toolbar edges.
+1. `/ -> Coba Gratis` opens `Belajar -> Try Out`.
+2. `Belajar -> Try Out -> Mulai Try Out` opens free multiple-choice practice.
+3. Logged-out free Try Out canvas/pembahasan entry opens the login/sign-up gate.
+4. `Belajar -> Matematika -> Teknik Integrasi` opens multiple-choice practice with 23 questions and a `Try Canvas` entry when the user is logged in.
+5. `Belajar -> Bentuk Tak Tentu & Integral Tak Wajar` shows empty state.
+6. `Belajar -> Fisika -> Kinematika` shows empty state until Fisika bank soal exists.
+7. `Try Canvas` opens canvas practice, `Try Pilgan` returns to multiple choice, and focus mode keeps navigation at toolbar edges.
 
 ## Backend Rules
 
@@ -156,7 +173,10 @@ Rules:
 
 - Keep API responses JSON.
 - Keep session auth behavior compatible with `src/backend-api.jsx`.
+- Keep Clerk auth compatible with the existing session/local-user model. Clerk users must sync to local SQLite `users` before app features read progress, role, XP, or payments.
 - Keep `/api/health` public.
+- Keep `/api/config/clerk` public but never expose `CLERK_SECRET_KEY`.
+- Keep `/api/webhooks/clerk` public but signature-verified with `CLERK_WEBHOOK_SIGNING_SECRET` and raw body parsing.
 - Keep `/api/payment/callback` public for server-to-server callbacks.
 - Keep auto-guest session behavior unless the user asks to change auth.
 - Validate request payloads before calling external services.
@@ -195,14 +215,20 @@ Rules:
 ## API and Session Notes
 
 - Most API routes require `req.session.userId`.
-- `server.js` creates a guest user for API requests that lack a session, except `/api/health` and `/api/payment/callback`.
+- Clerk-signed API requests can set `req.userId` and `req.session.userId` after the server verifies the Bearer token with `@clerk/express`.
+- First-time Clerk users may need `POST /api/auth/clerk-onboard` to save a Mafiking display name and merge auto-guest data into the Google-linked account.
+- `server.js` creates a guest user for API requests that lack a session, except `/api/health`, `/api/config/clerk`, `/api/payment/callback`, `/api/landing-media`, and `/api/webhooks/clerk`.
 - Admin routes require both `isAuthenticated` and `isAdmin`.
-- Admin monitoring uses `GET /api/admin/dashboard-data`, `POST /api/admin/users/:id/reset-password`, `POST /api/admin/users/:id/grant-access`, and `POST /api/admin/users/:id/role`. Keep those endpoints admin-only and validate user IDs/access payloads.
+- Admin monitoring/users uses `GET /api/admin/dashboard-data`, `POST /api/admin/users/:id/reset-password`, `POST /api/admin/users/:id/grant-access`, `POST /api/admin/users/:id/role`, and `DELETE /api/admin/users/:id`. Keep those endpoints admin-only, validate user IDs/access payloads, and never allow deleting the current admin account from the panel.
+- Admin landing media uses `GET /api/admin/landing-media`, `POST /api/admin/landing-media`, and `DELETE /api/admin/landing-media/:slot`. Keep uploads admin-only, MIME allowlisted, and stored under `assets/landing/`.
+- Admin content management starts with a `Try Out` / `Matematika` / `Fisika` / `Kimia` selector in the `Bab & Subtopik` tab. `Try Out` opens package CRUD; subject options open chapter/subtopic CRUD filtered by `chapters.mapel`.
 - The admin shield is frontend-visible only for `currentUser.role === "admin"`; do not expose it to every user. Admin mode adds an `Admin Panel` button to the top nav, and that button navigates to the dedicated `admin` route/page.
+- Logout and return-to-landing confirmation dialogs are centered modals with Mafiking yellow/ink styling, not browser confirms or blue theme popups.
 - Gemini token usage is observational data in `ai_token_usage`, written by `lib/log-token-usage.js`. Logging failures must not break correction/transcription/profile AI requests.
 - `routes/correction.js` supports up to 20 Gemini keys: `GEMINI_KEY_1` through `GEMINI_KEY_20`.
 - Profile summary can fall back locally when Gemini keys are missing.
 - Profile recommendations are catalog-backed and deterministic. Preserve `recommendedItems`, `recommendedQuestions`, and `skillNeedScores` in `/api/correction/profile-summary`; Gemini or 9Router can write summary prose but should not choose follow-up question refs at runtime. Keep the larger local recommendation window separate from the smaller AI prompt window.
+- Clerk CLI writes `.env.local`; do not read, print, or commit secret env files. `.env.local` and `env` are ignored.
 
 ## Documentation Rules
 

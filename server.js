@@ -8,16 +8,33 @@ const Database = require('better-sqlite3');
 const dotenv = require('dotenv');
 const bcrypt = require('bcrypt');
 
-const envResult = dotenv.config({ path: path.join(__dirname, '.env'), quiet: true });
-if (envResult.parsed) {
-  for (const [key, value] of Object.entries(envResult.parsed)) {
-    if (process.env[key] === undefined || String(process.env[key]).trim() === '') {
-      process.env[key] = value;
+function loadEnvFile(fileName) {
+  const envResult = dotenv.config({ path: path.join(__dirname, fileName), quiet: true });
+  if (envResult.parsed) {
+    for (const [key, value] of Object.entries(envResult.parsed)) {
+      if (process.env[key] === undefined || String(process.env[key]).trim() === '') {
+        process.env[key] = value;
+      }
     }
   }
 }
 
+loadEnvFile('.env.local');
+loadEnvFile('.env');
+
+if (!process.env.CLERK_PUBLISHABLE_KEY && process.env.VITE_CLERK_PUBLISHABLE_KEY) {
+  process.env.CLERK_PUBLISHABLE_KEY = process.env.VITE_CLERK_PUBLISHABLE_KEY;
+}
+
+let clerkMiddleware = null;
+try {
+  ({ clerkMiddleware } = require('@clerk/express'));
+} catch (_) {
+  // Clerk is optional in local development.
+}
+
 const app = express();
+const webhookRoutes = require('./routes/webhooks');
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -44,6 +61,9 @@ for (const migration of [
   "ALTER TABLE users ADD COLUMN highest_streak INTEGER DEFAULT 0",
   "ALTER TABLE users ADD COLUMN last_play_date DATE",
   "ALTER TABLE users ADD COLUMN badge_tier INTEGER DEFAULT 0",
+  "ALTER TABLE users ADD COLUMN clerk_id TEXT",
+  "ALTER TABLE users ADD COLUMN email TEXT",
+  "ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT 'local'",
   "ALTER TABLE chapters ADD COLUMN mapel TEXT DEFAULT 'Matematika'",
   "ALTER TABLE chapters ADD COLUMN semester INTEGER DEFAULT 1",
   "ALTER TABLE chapters ADD COLUMN description TEXT DEFAULT ''",
@@ -51,7 +71,17 @@ for (const migration of [
   "ALTER TABLE chapters ADD COLUMN topics TEXT DEFAULT '[]'",
   "ALTER TABLE daily_missions ADD COLUMN release_date TEXT DEFAULT ''",
   "ALTER TABLE ai_token_usage ADD COLUMN tokens_used INTEGER DEFAULT 0",
-  "ALTER TABLE ai_token_usage ADD COLUMN created_at DATETIME"
+  "ALTER TABLE ai_token_usage ADD COLUMN created_at DATETIME",
+  `CREATE TABLE IF NOT EXISTS landing_media (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slot TEXT UNIQUE NOT NULL,
+    media_type TEXT NOT NULL,
+    url TEXT NOT NULL,
+    original_name TEXT DEFAULT '',
+    mime_type TEXT DEFAULT '',
+    size_bytes INTEGER DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`
 ]) {
   try {
     db.exec(migration);
@@ -94,6 +124,18 @@ try {
 
 try {
   db.exec('CREATE INDEX IF NOT EXISTS idx_ai_token_usage_provider_key_created ON ai_token_usage (provider, key_name, created_at)');
+} catch (_) {}
+
+try {
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_clerk_id ON users (clerk_id) WHERE clerk_id IS NOT NULL AND clerk_id != ''");
+} catch (_) {}
+
+try {
+  db.exec(`
+    UPDATE users
+    SET auth_provider = 'local'
+    WHERE auth_provider IS NULL OR auth_provider = '' OR auth_provider = 'password'
+  `);
 } catch (_) {}
 
 db.exec(`
@@ -198,12 +240,12 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net", "https://cdn.tailwindcss.com", "https://unpkg.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "https://cdn.jsdelivr.net", "https://cdn.tailwindcss.com", "https://unpkg.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
       imgSrc: ["'self'", "data:", "https:"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
-      connectSrc: ["'self'", "https://unpkg.com"],
-      frameSrc: ["'none'"],
+      connectSrc: ["'self'", "https:", "https://unpkg.com"],
+      frameSrc: ["'self'", "https:"],
       objectSrc: ["'none'"],
       workerSrc: ["'self'", "blob:"]
     }
@@ -211,6 +253,7 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 
+app.post('/api/webhooks/clerk', express.raw({ type: '*/*' }), webhookRoutes.handleClerkWebhook);
 app.use(express.json({ limit: '12mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
@@ -230,12 +273,22 @@ app.use(session({
   }
 }));
 
+if (clerkMiddleware && process.env.CLERK_SECRET_KEY) {
+  app.use(clerkMiddleware());
+}
+app.use(require('./middleware/clerk-auth').clerkAuthMiddleware);
+
 app.get('/api/health', (_req, res) => {
   const counts = {
     chapters: db.prepare('SELECT COUNT(*) AS count FROM chapters').get().count,
     problems: db.prepare('SELECT COUNT(*) AS count FROM problems').get().count
   };
   res.json({ ok: true, service: 'new-mafiking', counts });
+});
+
+app.get('/api/config/clerk', (_req, res) => {
+  const publishableKey = String(process.env.VITE_CLERK_PUBLISHABLE_KEY || process.env.CLERK_PUBLISHABLE_KEY || '').trim();
+  res.json({ enabled: Boolean(publishableKey), publishableKey });
 });
 
 const loginLimiter = rateLimit({
@@ -278,7 +331,7 @@ setInterval(() => {
 
 app.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
-  if (req.path === '/api/health' || req.path === '/api/payment/callback') return next();
+  if (req.path === '/api/health' || req.path === '/api/config/clerk' || req.path === '/api/payment/callback' || req.path === '/api/landing-media' || req.path === '/api/webhooks/clerk') return next();
   if (req.session.userId) return next();
 
   const guestName = `Tamu_${Math.floor(Math.random() * 10000)}`;
@@ -374,6 +427,22 @@ app.get('/api/tryout-packages', (req, res) => {
     res.json(db.prepare('SELECT * FROM tryout_packages ORDER BY sort_order, id').all());
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+app.get('/api/landing-media', (_req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT slot, media_type, url, original_name, mime_type, size_bytes, updated_at
+      FROM landing_media
+      ORDER BY slot
+    `).all();
+    res.json(rows.reduce((acc, row) => {
+      acc[row.slot] = row;
+      return acc;
+    }, {}));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.use('/api/progress', require('./routes/progress'));
 app.use('/api/admin/import', require('./routes/admin-import'));
 app.use('/api/admin', require('./routes/admin'));
@@ -383,8 +452,9 @@ app.use('/api/correction', require('./routes/correction'));
 const staticCache = {
   index: false,
   setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.jsx')) {
+    if (filePath.endsWith('.jsx') || filePath.endsWith('styles.css')) {
       res.setHeader('Content-Type', 'text/babel; charset=utf-8');
+      if (filePath.endsWith('styles.css')) res.setHeader('Content-Type', 'text/css; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       return;
     }
