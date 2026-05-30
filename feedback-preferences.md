@@ -1,27 +1,22 @@
 ---
 name: feedback-preferences
-description: How the user wants Claude to communicate and work
-metadata: 
+description: "How the user wants coding assistants to communicate and work"
+metadata:
   node_type: memory
   type: feedback
   originSessionId: 565135b7-999d-442b-ab83-beabde9bb03f
 ---
 
-**No trailing summaries.** Do not recap what was just done at the end of a response.
-**Why:** User can read the diff; summaries are noise.
-**How to apply:** End responses after the last substantive sentence. One-line "hard-refresh browser" style closing is fine.
-
-**Terse.** One sentence per update while working; don't narrate reasoning.
-**Why:** User moves fast, doesn't need explanation of obvious steps.
+**Terse.** Keep updates short and practical. The user moves fast and prefers direct next actions.
 
 **No emojis** unless explicitly requested.
 
-**Indonesian UI copy** — all user-facing strings in the app are Indonesian (Bahasa Indonesia). Code comments may be English.
+**Indonesian UI copy.** User-facing strings in the app should be Indonesian unless the source/domain requires English.
 
-**Prefer editing existing files** over creating new ones. Only create new files when genuinely needed (new route, new page component).
+**Prefer editing existing files** over creating new ones. Create files only when genuinely needed for a route, page, component, or durable doc.
 
-**No unnecessary abstraction.** Fix the specific thing asked; don't refactor surrounding code.
+**No unnecessary abstraction.** Fix the specific thing asked and preserve surrounding behavior.
 
-**Don't add dark mode, extra feature flags, or hypothetical future requirements** unless asked.
+**Do not add dark mode, extra feature flags, or hypothetical future requirements** unless asked.
 
-**Hard-refresh reminder** — after frontend file changes, always tell user to hard-refresh (`Ctrl+Shift+R`).
+**Frontend reminder.** After frontend file changes, remind the user to hard-refresh (`Ctrl+Shift+R`) if browser cache may show old UI.

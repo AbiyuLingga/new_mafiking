@@ -126,6 +126,9 @@ const App = () => {
         try {
           await MafikingAPI.post("/api/auth/logout", {});
         } catch (_) {}
+        if (window.MafikingClerk && typeof window.MafikingClerk.signOut === "function") {
+          await window.MafikingClerk.signOut();
+        }
         window.location.assign("/");
       },
     });

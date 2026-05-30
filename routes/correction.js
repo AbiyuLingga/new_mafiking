@@ -7,6 +7,7 @@ const {
   call9RouterProfileSummary,
   shouldUse9RouterProfile,
 } = require('../lib/ai-profile-provider');
+const { logTokenUsage } = require('../lib/log-token-usage');
 
 const router = express.Router();
 
@@ -534,7 +535,7 @@ function normalizeSkillNeedScores(value) {
   }).filter((score) => score && score.skillId).slice(0, 8);
 }
 
-async function callGeminiWithFallback({ maxOutputTokens, models, parts, schema, systemInstruction }) {
+async function callGeminiWithFallback({ maxOutputTokens, models, parts, schema, systemInstruction, db }) {
   const keys = getGeminiKeys();
   const attempts = [];
 
@@ -565,7 +566,21 @@ async function callGeminiWithFallback({ maxOutputTokens, models, parts, schema, 
         });
 
         const text = typeof response.text === 'function' ? response.text() : response.text;
-        return { durationMs: Date.now() - startedAt, keyIndex: keyIndex + 1, modelUsed: model, text: String(text || '') };
+        const usageMetadata = response.usageMetadata || {};
+        const geminiKeyIndex = keyIndex + 1;
+        logTokenUsage(db, {
+          provider: 'gemini',
+          model,
+          keyName: `GEMINI_KEY_${geminiKeyIndex}`,
+          tokensUsed: usageMetadata.totalTokenCount
+        });
+        return {
+          durationMs: Date.now() - startedAt,
+          keyIndex: geminiKeyIndex,
+          modelUsed: model,
+          text: String(text || ''),
+          usageMetadata
+        };
       } catch (error) {
         lastError = error;
         attempts.push({
@@ -590,7 +605,7 @@ async function callGeminiWithFallback({ maxOutputTokens, models, parts, schema, 
   throw error;
 }
 
-async function callProfileNarrativeSummary(attempts) {
+async function callProfileNarrativeSummary(attempts, db) {
   if (shouldUse9RouterProfile()) {
     return call9RouterProfileSummary({
       attempts,
@@ -604,6 +619,7 @@ async function callProfileNarrativeSummary(attempts) {
     models: getGeminiModels(PROFILE_MODELS),
     schema: PROFILE_SCHEMA,
     systemInstruction: PROFILE_SYSTEM_PROMPT,
+    db,
     parts: [{ text: `Buat raport belajar dari data berikut:\n\n${JSON.stringify(attempts)}` }]
   });
 
@@ -887,6 +903,7 @@ router.post('/transcribe', isAuthenticated, requireRegisteredUser, async (req, r
       models: getGeminiModels(TRANSCRIBE_MODELS),
       schema: TRANSCRIPTION_SCHEMA,
       systemInstruction: TRANSCRIBE_SYSTEM_PROMPT,
+      db: req.app.locals.db,
       parts: [
         {
           text: [
@@ -956,6 +973,7 @@ router.post('/evaluate', isAuthenticated, requireRegisteredUser, async (req, res
       models: getGeminiModels(EVALUATE_MODELS),
       schema: EVALUATION_SCHEMA,
       systemInstruction: EVALUATE_SYSTEM_PROMPT,
+      db: req.app.locals.db,
       parts
     });
     const parsed = safeJsonParse(result.text, (fullFeedback) => ({ fullFeedback, isCorrect: false, score: 0 }));
@@ -1042,7 +1060,7 @@ router.post('/profile-summary', isAuthenticated, async (req, res) => {
     if (shouldCallAi) {
       try {
         const aiEvidence = buildProfileAiEvidence({ aiAttempts, multipleChoiceEvidence });
-        result = await callProfileNarrativeSummary(aiEvidence);
+        result = await callProfileNarrativeSummary(aiEvidence, db);
       } catch (error) {
         console.warn('Profile AI narrative provider failed:', error.message);
       }

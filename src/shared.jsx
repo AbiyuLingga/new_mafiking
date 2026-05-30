@@ -185,7 +185,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
   }, []);
 
   const links = [
-    { id: "belajar", label: "Beranda" },
+    { id: "belajar", label: "Beranda", section: "Try Out" },
     { id: "misi", label: "Misi Harian" },
     { id: "tryout", label: "Paket" },
   ];
@@ -197,6 +197,15 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
     setRoute({ route: "lobby", publicLanding: true });
   };
   const goRoute = (id) => {
+    if (id === "lobby") {
+      goHome();
+      return;
+    }
+    const link = links.find((item) => item.id === id);
+    if (link && link.section) {
+      setRoute({ route: id, section: link.section });
+      return;
+    }
     setRoute(id);
   };
 
@@ -216,7 +225,8 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
             onLogoClick();
             return;
           }
-          goHome();
+          if (typeof window.__mafikingShowLanding === 'function') window.__mafikingShowLanding();
+          else goHome();
         }} className="flex items-center">
           <Logo size={32} inverted={isInk} />
         </button>
@@ -250,7 +260,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
           )}
         </nav>
         <div className="flex items-center gap-2">
-          {gamified && isLoggedIn && (
+          {gamified && (
             <div className="flex items-center gap-2 mr-1">
               <button onClick={() => setRoute("misi")} className="chip-streak" title="Runtunan 12 hari">
                 <StreakFlame />
@@ -269,22 +279,8 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
               Coba Gratis
             </button>
           )}
-          {gamified && !isLoggedIn && (
-            <button
-              onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "belajar" } })}
-              className={`hidden md:inline-flex text-sm font-semibold px-4 py-2 ${isInk ? "text-white/70 hover:text-white" : "text-ink/70 hover:text-ink"}`}
-              type="button"
-            >
-              Masuk
-            </button>
-          )}
           {gamified && (
-            <button
-              aria-label={isLoggedIn ? "Buka profil" : "Masuk ke akun"}
-              onClick={() => isLoggedIn ? setRoute("profile") : setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "profile" } })}
-              type="button"
-              className={`w-9 h-9 inline-flex items-center justify-center rounded-full border hairline ${isInk ? "text-white hover:bg-white/10" : "hover:bg-ink/5"}`}
-            >
+            <button aria-label="Buka profil" onClick={() => setRoute("profile")} type="button" className={`w-9 h-9 inline-flex items-center justify-center rounded-full border hairline ${isInk ? "text-white hover:bg-white/10" : "hover:bg-ink/5"}`}>
               <Icon.User className="w-4 h-4" />
             </button>
           )}
@@ -338,7 +334,7 @@ const Footer = ({ setRoute }) => (
             <div className="kicker mb-3 text-white/40">Platform</div>
             <ul className="space-y-2.5">
               <li><button onClick={() => setRoute("misi")} className="hover:text-yel">Misi Harian</button></li>
-              <li><button onClick={() => setRoute("tryout")} className="hover:text-yel">Paket</button></li>
+              <li><button onClick={() => setRoute("tryout")} className="hover:text-yel">Tryout</button></li>
               <li><button className="hover:text-yel">Peringkat</button></li>
             </ul>
           </div>

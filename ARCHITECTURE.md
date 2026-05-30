@@ -88,6 +88,7 @@ Script load order matters:
 
 ```text
 tweaks-panel.jsx
+src/clerk-auth.jsx
 src/backend-api.jsx
 src/shared.jsx
 src/lobby.jsx
@@ -100,7 +101,6 @@ src/practice.jsx
 src/misi.jsx
 src/tryout.jsx
 src/payment.jsx
-src/admin-monitoring.jsx
 src/admin.jsx
 src/app.jsx
 ```
@@ -118,6 +118,7 @@ The frontend is not module-based. Components are defined in browser global scope
 | `src/app.jsx` | Route state, tweaks defaults, root render. |
 | `src/shared.jsx` | Navigation, footer, icons, shared components. |
 | `src/backend-api.jsx` | Same-origin `fetch` helper. |
+| `src/clerk-auth.jsx` | Static-Babel Clerk bridge: loads Clerk browser scripts, opens sign-in/sign-up, and syncs Clerk users to local sessions. |
 | `src/lobby.jsx` | Public marketing landing plus login/sign-up screen. |
 | `src/belajar.jsx` | Free Try Out tab, static chapter cards, mapel selector, chapter-to-practice navigation. |
 | `src/practice.jsx` | Practice route, multiple-choice/canvas mode state, question-source mapping, correction submit. |
@@ -128,7 +129,6 @@ The frontend is not module-based. Components are defined in browser global scope
 | `src/misi.jsx` | Daily mission screen. |
 | `src/tryout.jsx` | Paket / paid tryout package screen. |
 | `src/payment.jsx` | Payment package selection and status polling. |
-| `src/admin-monitoring.jsx` | Admin user/access and Gemini usage monitoring tab, exported as `window.AdminMonitoringPanel`. |
 | `src/admin.jsx` | Admin page/modal shell, subject/Try Out content CRUD, landing media tab, import tab, users tab, and monitoring tab shell. |
 | `src/styles.css` | Local custom CSS and appended feature styles. |
 | `tweaks-panel.jsx` | Tweaks panel and persisted tweak state. |
@@ -181,6 +181,9 @@ The global `Nav` is intentionally not rendered while `route === "practice"` or `
 - Clicking the Mafiking logo from app routes returns to the public landing.
 - The landing `Coba Gratis` CTA routes to `Belajar -> Try Out`.
 - Landing media slots are loaded from `GET /api/landing-media`; admins can replace those images/videos from the Admin Panel `Landing Page` tab.
+- The landing page uses local reveal/pop animations in `src/lobby.jsx` and `src/styles.css`; it does not rely on a bundled Framer Motion runtime in this static-Babel app.
+- The demo video section intentionally has no grid background after the latest landing UI correction.
+- Login/sign-up screens expose both the existing username/password flow and Clerk Google auth. Clerk browser scripts are loaded dynamically by `src/clerk-auth.jsx`.
 - The top app nav uses `Beranda` for `belajar`, `Misi Harian` for `misi`, and `Paket` for `tryout`; there is no separate `Belajar` nav link.
 - Logged-out users can start the free Try Out in multiple-choice mode.
 - Free Try Out pembahasan/canvas review and protected subject chapters route through login/sign-up with an auth redirect back to the intended route.
@@ -265,6 +268,7 @@ Backend is a single Express application with route modules.
 
 ```text
 server.js
+  |-- routes/webhooks.js
   |-- routes/auth.js
   |-- routes/quiz.js
   |-- routes/progress.js
@@ -277,14 +281,15 @@ server.js
 
 | Concern | Location | Behavior |
 | --- | --- | --- |
-| Environment | `server.js` | Loads `.env` from project root. |
+| Environment | `server.js` | Loads `.env.local` first, then `.env`, without printing secrets. |
 | Database | `server.js` | Opens SQLite, applies schema and compatibility migrations. |
 | Security headers | `server.js` | Helmet with CSP that allows required CDN scripts/styles. |
 | Body limits | `server.js` | JSON limit `12mb`; URL encoded limit `100kb`. |
 | Sessions | `server.js` | `express-session`, 7-day cookie, `sameSite: strict`. |
+| Clerk auth | `server.js` + `middleware/clerk-auth.js` + `src/clerk-auth.jsx` | `@clerk/express` verifies Clerk sessions; frontend sends Bearer token when Clerk is signed in, then middleware maps Clerk users to local SQLite users. |
 | Rate limits | `server.js` | Login, register, and correction route limits. |
-| Auth guard | `middleware/auth.js` | Requires `req.session.userId`. |
-| Admin guard | `middleware/admin.js` | Requires `req.session.role === "admin"`. |
+| Auth guard | `middleware/auth.js` | Requires either `req.userId` from Clerk or `req.session.userId`. |
+| Admin guard | `middleware/admin.js` | Requires admin role from either Clerk-mapped request state or session. |
 | Auto guest | `server.js` | Creates a guest user for most API requests without a session. |
 | Error handler | `server.js` | JSON errors; hides details in production. |
 
@@ -295,9 +300,18 @@ server.js
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
+- `POST /api/auth/clerk-onboard`
 - `GET /api/auth/me`
 
 Uses bcrypt for passwords, XSS sanitization for registration fields, route-level login lockout, and sessions for auth state.
+
+Clerk-signed requests are synced before this route runs. `GET /api/auth/me` still returns the local SQLite user because the rest of the app keys progress, XP, role, and payments by local `users.id`. `POST /api/auth/clerk-onboard` saves the user's Mafiking display name after first Google sign-in and can merge an auto-guest row into the Google-linked account.
+
+#### `routes/webhooks.js`
+
+- `POST /api/webhooks/clerk`
+
+The route receives a raw JSON body before the normal Express JSON parser, verifies Clerk signatures with `svix` and `CLERK_WEBHOOK_SIGNING_SECRET`, and currently handles `user.created` by creating or linking a local SQLite user. It is skipped by auto-guest creation and does not expose env secrets.
 
 #### `routes/quiz.js`
 
@@ -354,11 +368,13 @@ Admin-only CRUD for:
 - Users' passwords.
 - Dashboard data for user progress/access grants and Gemini usage.
 - Manual user access grants.
-- Admin role promotion/demotion for controlling who sees the admin shield and Admin Panel page entry.
+- Admin role promotion/demotion and guarded deletion of non-admin user accounts.
 - Landing page media slot CRUD for promo image, feature images, and demo video.
 - Try Out package CRUD separated from Matematika/Fisika/Kimia chapter/subtopic CRUD.
 
 This route requires both session auth and admin role.
+
+The backend dashboard endpoint is present at `GET /api/admin/dashboard-data`. The richer monitoring UI lives in `src/admin-monitoring.jsx`, exports `window.AdminMonitoringPanel`, and is loaded before `src/admin.jsx` in `MAFIKING.html`.
 
 #### `routes/payment.js`
 
@@ -433,6 +449,8 @@ users 1 -> many payments
 problems 1 -> many user_progress
 problems 1 -> many correction_attempts, nullable on delete
 ```
+
+Clerk adds `users.clerk_id`, `users.email`, and `users.auth_provider`. A partial unique index protects non-empty `clerk_id` values. `auth_provider` uses `local`, `clerk`, or `linked`; old `password` values are normalized to `local` at startup. If a Clerk user's email matches an existing local username/email, the account is linked instead of duplicating progress.
 
 ### Startup Schema Behavior
 
@@ -550,6 +568,7 @@ Import script replaces those four tables in a transaction after checking whether
 ## Security and Safety Notes
 
 - Helmet CSP allows the current CDN-based frontend runtime. Tightening CSP requires changing the frontend delivery model first.
+- CSP allows HTTPS script/connect/frame sources for Clerk browser auth. Do not expose `CLERK_SECRET_KEY` in client code; only `/api/config/clerk` exposes the publishable key.
 - Session cookies are `httpOnly`, `sameSite: strict`, and `secure: auto`.
 - Login/register/correction are rate-limited.
 - Registration fields are sanitized with `xss`.
@@ -583,6 +602,7 @@ Important: `npm run build` does not prove that `MAFIKING.html` bundled a product
 - Auto-guest users can accumulate during browser/API testing.
 - Payment route uses sandbox URL by default in code.
 - Admin monitoring reads token usage from local logging only; it does not query Google live quota APIs.
+- User deletion from admin tools is intentionally limited to non-admin accounts and blocks deleting the current account.
 
 ## Extension Points
 

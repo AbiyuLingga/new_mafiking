@@ -117,32 +117,12 @@ const MafikingClerk = (() => {
     return parseApiResponse(response);
   }
 
-  function hasVisibleClerkDialog() {
-    const selectors = [
-      ".cl-modalBackdrop",
-      ".cl-modalContent",
-      ".cl-card",
-      ".cl-rootBox [role='dialog']",
-      "[class*='cl-modal']",
-    ];
-    return selectors.some((selector) => Array.from(document.querySelectorAll(selector)).some((element) => {
-      const rect = element.getBoundingClientRect();
-      const style = window.getComputedStyle(element);
-      return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
-    }));
-  }
-
-  async function waitForSignedInOrClosed(timeoutMs = 180000) {
+  async function waitForSignedIn(timeoutMs = 180000) {
     const clerk = await load();
     const startedAt = Date.now();
-    let sawDialog = hasVisibleClerkDialog();
     while (Date.now() - startedAt < timeoutMs) {
       if (clerk.isSignedIn && clerk.session) return clerk;
-      sawDialog = sawDialog || hasVisibleClerkDialog();
-      if (sawDialog && !hasVisibleClerkDialog()) {
-        throw new Error("Login Google dibatalkan.");
-      }
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
     throw new Error("Login Clerk belum selesai.");
   }
@@ -156,7 +136,7 @@ const MafikingClerk = (() => {
     } else {
       throw new Error("Kontrol login Clerk tidak tersedia.");
     }
-    await waitForSignedInOrClosed();
+    await waitForSignedIn();
     return syncSession();
   }
 

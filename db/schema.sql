@@ -7,6 +7,9 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     display_name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'user',
+    clerk_id TEXT,
+    email TEXT,
+    auth_provider TEXT NOT NULL DEFAULT 'local',
     xp INTEGER DEFAULT 0,
     level INTEGER DEFAULT 1,
     streak_days INTEGER DEFAULT 0,
@@ -159,17 +162,3 @@ CREATE TABLE IF NOT EXISTS ai_token_usage (
 
 CREATE INDEX IF NOT EXISTS idx_ai_token_usage_provider_key
     ON ai_token_usage (provider, key_name);
-
-CREATE TABLE IF NOT EXISTS landing_media (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    slot TEXT UNIQUE NOT NULL,
-    media_type TEXT NOT NULL,
-    url TEXT NOT NULL,
-    original_name TEXT DEFAULT '',
-    mime_type TEXT DEFAULT '',
-    size_bytes INTEGER DEFAULT 0,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_landing_media_slot
-    ON landing_media (slot);

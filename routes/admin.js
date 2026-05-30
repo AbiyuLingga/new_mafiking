@@ -1,8 +1,5 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
-const fs = require('fs');
-const multer = require('multer');
-const path = require('path');
 const xss = require('xss');
 const { isAuthenticated } = require('../middleware/auth');
 const { isAdmin } = require('../middleware/admin');
@@ -13,26 +10,6 @@ router.use(isAuthenticated, isAdmin);
 const ACCESS_TYPES = new Set(['tryout', 'subscription', 'package', 'manual']);
 const USER_ROLES = new Set(['admin', 'user']);
 const DEFAULT_ADMIN_RESET_PASSWORD = '123456';
-const LANDING_MEDIA_DIR = path.join(__dirname, '..', 'assets', 'landing');
-const LANDING_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
-const LANDING_MEDIA_SLOTS = {
-    promo_image: { label: 'Promo popup', mediaType: 'image' },
-    feature_image_1: { label: 'Gambar fitur 1', mediaType: 'image' },
-    feature_image_2: { label: 'Gambar fitur 2', mediaType: 'image' },
-    feature_image_3: { label: 'Gambar fitur tryout', mediaType: 'image' },
-    demo_video: { label: 'Video demo canvas', mediaType: 'video' }
-};
-const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm']);
-const uploadLandingMedia = multer({
-    storage: multer.memoryStorage(),
-    limits: {
-        fileSize: LANDING_MEDIA_MAX_BYTES,
-        files: 1,
-        fields: 4,
-        fieldSize: 20 * 1024
-    }
-});
 
 function parsePositiveId(value) {
     const id = Number(value);
@@ -68,47 +45,6 @@ function rowMapByUserId(rows) {
         acc[String(row.user_id)] = row;
         return acc;
     }, {});
-}
-
-function getLandingSlot(value) {
-    const slot = String(value || '').trim();
-    return LANDING_MEDIA_SLOTS[slot] ? slot : null;
-}
-
-function getSafeMediaExtension(file, mediaType) {
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    const imageExts = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
-    const videoExts = new Set(['.mp4', '.webm']);
-    if (mediaType === 'image' && imageExts.has(ext)) return ext === '.jpeg' ? '.jpg' : ext;
-    if (mediaType === 'video' && videoExts.has(ext)) return ext;
-    if (file.mimetype === 'image/jpeg') return '.jpg';
-    if (file.mimetype === 'image/png') return '.png';
-    if (file.mimetype === 'image/webp') return '.webp';
-    if (file.mimetype === 'image/gif') return '.gif';
-    if (file.mimetype === 'video/mp4') return '.mp4';
-    if (file.mimetype === 'video/webm') return '.webm';
-    return null;
-}
-
-function deleteLocalLandingFile(url) {
-    const normalized = String(url || '');
-    if (!normalized.startsWith('/assets/landing/')) return;
-    const basename = path.basename(normalized);
-    const resolved = path.resolve(LANDING_MEDIA_DIR, basename);
-    if (!resolved.startsWith(path.resolve(LANDING_MEDIA_DIR))) return;
-    try {
-        fs.unlinkSync(resolved);
-    } catch (_) {}
-}
-
-function landingUploadSingle(req, res, next) {
-    uploadLandingMedia.single('media')(req, res, (err) => {
-        if (!err) return next();
-        const message = err.code === 'LIMIT_FILE_SIZE'
-            ? 'Ukuran file maksimal 50MB.'
-            : (err.message || 'Upload media gagal.');
-        res.status(400).json({ error: message });
-    });
 }
 
 // ===== CHAPTERS =====
@@ -367,99 +303,6 @@ router.delete('/tryout-packages/:id', (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ===== LANDING MEDIA =====
-router.get('/landing-media', (req, res) => {
-    try {
-        const db = req.app.locals.db;
-        const rows = db.prepare(`
-            SELECT slot, media_type, url, original_name, mime_type, size_bytes, updated_at
-            FROM landing_media
-            ORDER BY slot
-        `).all();
-        res.json({
-            slots: LANDING_MEDIA_SLOTS,
-            media: rows.reduce((acc, row) => {
-                acc[row.slot] = row;
-                return acc;
-            }, {})
-        });
-    } catch (e) {
-        console.error('GET /landing-media error:', e);
-        res.status(500).json({ error: 'Gagal memuat media landing page.' });
-    }
-});
-
-router.post('/landing-media', landingUploadSingle, (req, res) => {
-    try {
-        const slot = getLandingSlot(req.body.slot);
-        if (!slot) return res.status(400).json({ error: 'Slot media tidak valid.' });
-        if (!req.file) return res.status(400).json({ error: 'File media wajib diunggah.' });
-
-        const expected = LANDING_MEDIA_SLOTS[slot];
-        const mimeType = String(req.file.mimetype || '').toLowerCase();
-        const validMime = expected.mediaType === 'image'
-            ? IMAGE_MIME_TYPES.has(mimeType)
-            : VIDEO_MIME_TYPES.has(mimeType);
-        if (!validMime) {
-            return res.status(400).json({
-                error: expected.mediaType === 'image'
-                    ? 'Slot ini hanya menerima JPG, PNG, WEBP, atau GIF.'
-                    : 'Slot ini hanya menerima MP4 atau WEBM.'
-            });
-        }
-
-        const ext = getSafeMediaExtension(req.file, expected.mediaType);
-        if (!ext) return res.status(400).json({ error: 'Ekstensi file tidak didukung.' });
-
-        fs.mkdirSync(LANDING_MEDIA_DIR, { recursive: true });
-        const previous = req.app.locals.db.prepare('SELECT url FROM landing_media WHERE slot = ?').get(slot);
-        const filename = `${slot}-${Date.now()}${ext}`;
-        const targetPath = path.join(LANDING_MEDIA_DIR, filename);
-        fs.writeFileSync(targetPath, req.file.buffer);
-        const url = `/assets/landing/${filename}`;
-
-        req.app.locals.db.prepare(`
-            INSERT INTO landing_media (slot, media_type, url, original_name, mime_type, size_bytes, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(slot) DO UPDATE SET
-                media_type = excluded.media_type,
-                url = excluded.url,
-                original_name = excluded.original_name,
-                mime_type = excluded.mime_type,
-                size_bytes = excluded.size_bytes,
-                updated_at = CURRENT_TIMESTAMP
-        `).run(
-            slot,
-            expected.mediaType,
-            url,
-            xss(req.file.originalname || ''),
-            mimeType,
-            Number(req.file.size) || 0
-        );
-
-        if (previous && previous.url !== url) deleteLocalLandingFile(previous.url);
-        res.json({ ok: true, slot, media_type: expected.mediaType, url });
-    } catch (e) {
-        console.error('POST /landing-media error:', e);
-        res.status(500).json({ error: 'Gagal menyimpan media landing page.' });
-    }
-});
-
-router.delete('/landing-media/:slot', (req, res) => {
-    try {
-        const slot = getLandingSlot(req.params.slot);
-        if (!slot) return res.status(400).json({ error: 'Slot media tidak valid.' });
-        const db = req.app.locals.db;
-        const existing = db.prepare('SELECT url FROM landing_media WHERE slot = ?').get(slot);
-        db.prepare('DELETE FROM landing_media WHERE slot = ?').run(slot);
-        if (existing) deleteLocalLandingFile(existing.url);
-        res.json({ ok: true, slot });
-    } catch (e) {
-        console.error('DELETE /landing-media error:', e);
-        res.status(500).json({ error: 'Gagal menghapus media landing page.' });
-    }
-});
-
 // ===== USERS =====
 router.get('/dashboard-data', (req, res) => {
     try {
@@ -670,6 +513,31 @@ router.post('/users/:id/role', (req, res) => {
     } catch (e) {
         console.error('POST /users/role error:', e);
         res.status(500).json({ error: 'Gagal mengubah role user.' });
+    }
+});
+
+router.delete('/users/:id', (req, res) => {
+    try {
+        const userId = parsePositiveId(req.params.id);
+        if (!userId) return res.status(400).json({ error: 'ID user tidak valid.' });
+
+        const currentUserId = Number(req.userId || (req.session && req.session.userId));
+        if (currentUserId === userId) {
+            return res.status(400).json({ error: 'Tidak bisa menghapus akun sendiri.' });
+        }
+
+        const db = req.app.locals.db;
+        const user = readUser(db, userId);
+        if (!user) return res.status(404).json({ error: 'User tidak ditemukan.' });
+        if (user.role === 'admin') {
+            return res.status(400).json({ error: 'Akun admin tidak bisa dihapus dari panel ini.' });
+        }
+
+        const info = db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+        res.json({ ok: true, userId, deleted: info.changes });
+    } catch (e) {
+        console.error('DELETE /users error:', e);
+        res.status(500).json({ error: 'Gagal menghapus user.' });
     }
 });
 

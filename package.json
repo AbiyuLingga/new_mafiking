@@ -25,6 +25,8 @@
     "check": "node --check server.js && node --check middleware/auth.js && node --check routes/correction.js && node --check routes/admin-import.js && node --check routes/payment.js && node --check lib/admin-import.js && node --check lib/recommendation-engine.js && node --check lib/ai-profile-provider.js && node --check scripts/export-question-bank.js && node --check scripts/import-question-bank.js && node --check scripts/test-recommendation-engine.js && node --check scripts/test-profile-summary-window.js && node --check scripts/test-ai-profile-provider.js && node --check scripts/test-auth-registered-user.js && node --check scripts/test-payment-contract.js && npm run test:admin-import && npm run test:recommendations && npm run test:profile-summary && npm run test:ai-profile && npm run test:auth-registered-user && npm run test:payment-contract"
   },
   "dependencies": {
+    "@clerk/express": "^2.1.22",
+    "@clerk/react": "^6.7.2",
     "@google/genai": "^1.34.0",
     "@vitejs/plugin-react": "^5.1.1",
     "axios": "^1.15.2",
@@ -41,6 +43,7 @@
     "pdf-parse": "^2.4.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "svix": "^1.95.1",
     "vite": "^6.0.3",
     "xss": "^1.0.15",
     "zod": "^3.25.76",

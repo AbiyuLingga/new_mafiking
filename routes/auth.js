@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const xss = require('xss');
+const { mergeGuestIntoUser, readUser } = require('../lib/clerk-user-sync');
 const router = express.Router();
 
 // --- Brute force protection (per-username) ---
@@ -135,22 +136,61 @@ router.post('/logout', (req, res) => {
     });
 });
 
+// POST /api/auth/clerk-onboard
+router.post('/clerk-onboard', (req, res) => {
+    const userId = req.userId || (req.session && req.session.userId);
+    if (!userId || !req.clerkUserId) {
+        return res.status(401).json({ error: 'Login Google diperlukan' });
+    }
+
+    const displayName = xss(String(req.body.display_name || '').trim());
+    if (!displayName) {
+        return res.status(400).json({ error: 'Nama tampilan diperlukan' });
+    }
+    if (displayName.length > 100) {
+        return res.status(400).json({ error: 'Nama terlalu panjang (max 100 karakter)' });
+    }
+
+    const db = req.app.locals.db;
+    try {
+        const guestUserId = Number(req.body.guest_user_id || 0);
+        if (guestUserId && guestUserId !== Number(userId)) {
+            mergeGuestIntoUser(db, guestUserId, Number(userId));
+        }
+
+        db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(displayName, userId);
+        if (req.session) {
+            req.session.clerkNeedsOnboarding = false;
+            req.session.clerkSuggestedDisplayName = '';
+        }
+        res.json(readUser(db, userId));
+    } catch (err) {
+        console.error('Clerk onboard error:', err);
+        res.status(500).json({ error: 'Gagal menyimpan akun Google' });
+    }
+});
+
 // GET /api/auth/me
 router.get('/me', (req, res) => {
-    if (!req.session || !req.session.userId) {
+    const userId = req.userId || (req.session && req.session.userId);
+    if (!userId) {
         return res.status(401).json({ error: 'Belum login' });
     }
 
     const db = req.app.locals.db;
     const user = db.prepare(
-        'SELECT id, username, display_name, fakultas, role, xp, level, badge_tier, streak_days, highest_streak, last_active FROM users WHERE id = ?'
-    ).get(req.session.userId);
+        'SELECT id, username, display_name, fakultas, role, xp, level, badge_tier, streak_days, highest_streak, last_active, email, auth_provider FROM users WHERE id = ?'
+    ).get(userId);
 
     if (!user) {
         return res.status(401).json({ error: 'User tidak ditemukan' });
     }
 
-    res.json(user);
+    res.json({
+        ...user,
+        needs_onboarding: Boolean(req.session && req.session.clerkNeedsOnboarding),
+        suggested_display_name: (req.session && req.session.clerkSuggestedDisplayName) || user.display_name,
+    });
 });
 
 module.exports = router;

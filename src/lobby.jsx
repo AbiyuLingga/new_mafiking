@@ -8,6 +8,7 @@ const Lobby = ({ setRoute, tweaks, currentUser, isAdmin = false, authMode = null
         redirect={authRedirect}
         setRoute={setRoute}
         onSuccess={onAuthSuccess}
+        currentUser={currentUser}
       />
     );
   }
@@ -58,14 +59,31 @@ const DevScreen = ({ unlockCount, onUnlockAttempt }) => {
   );
 };
 
-const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess }) => {
+const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess, currentUser = null }) => {
   const { useState } = React;
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [clerkLoading, setClerkLoading] = useState(false);
+  const [clerkEnabled, setClerkEnabled] = useState(false);
+  const [pendingClerkUser, setPendingClerkUser] = useState(null);
   const isSignup = mode === "signup";
+  const isGuestUser = currentUser && currentUser.display_name?.startsWith('Tamu_');
+
+  React.useEffect(() => {
+    let alive = true;
+    if (!window.MafikingClerk || typeof window.MafikingClerk.isEnabled !== 'function') return undefined;
+    window.MafikingClerk.isEnabled()
+      .then((enabled) => {
+        if (alive) setClerkEnabled(Boolean(enabled));
+      })
+      .catch(() => {
+        if (alive) setClerkEnabled(false);
+      });
+    return () => { alive = false; };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -91,6 +109,107 @@ const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess }) =>
       setLoading(false);
     }
   };
+
+  const handleClerkAuth = async () => {
+    setClerkLoading(true);
+    setError('');
+    try {
+      if (!window.MafikingClerk || typeof window.MafikingClerk.openAuth !== 'function') {
+        throw new Error('Login Google belum siap dimuat.');
+      }
+      const user = await window.MafikingClerk.openAuth(isSignup ? 'signup' : 'login');
+      if (user && user.needs_onboarding) {
+        setPendingClerkUser(user);
+        setDisplayName(user.suggested_display_name || user.display_name || '');
+        return;
+      }
+      if (typeof onSuccess === 'function') onSuccess(user, redirect);
+      else setRoute(redirect || { route: "belajar", section: "Try Out" });
+    } catch (err) {
+      setError(err.message || 'Login Google gagal.');
+    } finally {
+      setClerkLoading(false);
+    }
+  };
+
+  const submitClerkDisplayName = async (e) => {
+    e.preventDefault();
+    setClerkLoading(true);
+    setError('');
+    try {
+      const user = await MafikingAPI.post('/api/auth/clerk-onboard', {
+        display_name: displayName,
+        guest_user_id: isGuestUser ? currentUser.id : null,
+      });
+      setPendingClerkUser(null);
+      if (typeof onSuccess === 'function') onSuccess(user, redirect);
+      else setRoute(redirect || { route: "belajar", section: "Try Out" });
+    } catch (err) {
+      setError(err.message || 'Gagal menyimpan nama tampilan.');
+    } finally {
+      setClerkLoading(false);
+    }
+  };
+
+  if (pendingClerkUser) {
+    return (
+      <div style={{
+        backgroundColor: '#ffffff',
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        fontFamily: 'inherit',
+      }}>
+        <form onSubmit={submitClerkDisplayName} style={{
+          background: '#ffffff',
+          border: '1px solid rgba(11,19,38,0.1)',
+          borderRadius: 24,
+          boxShadow: '0 8px 40px rgba(11,19,38,0.08)',
+          margin: '0 16px',
+          maxWidth: 420,
+          padding: 40,
+          width: '100%',
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: 26 }}>
+            <img src="/assets/logo.png" alt="Mafiking" style={{ width: 56, height: 56, objectFit: 'contain', marginBottom: 10 }} />
+            <h1 style={{ color: '#0b1326', fontSize: 26, fontWeight: 800, margin: 0 }}>Pilih nama tampilan</h1>
+            <p style={{ color: 'rgba(11,19,38,0.55)', fontSize: 14, lineHeight: 1.6, marginTop: 8 }}>
+              Nama ini yang akan muncul di akun Mafiking kamu.
+            </p>
+          </div>
+          <label style={{ display: 'block', fontSize: 13, color: 'rgba(11,19,38,0.65)', fontWeight: 700, marginBottom: 8 }}>Nama tampilan</label>
+          <input
+            type="text"
+            value={displayName}
+            onChange={e => setDisplayName(e.target.value)}
+            placeholder="Nama kamu"
+            required
+            autoFocus
+            style={{
+              width: '100%', padding: '13px 16px', boxSizing: 'border-box',
+              background: '#f8f8f8', border: '1px solid rgba(11,19,38,0.12)',
+              borderRadius: 12, color: '#0b1326', fontSize: 15, outline: 'none',
+            }}
+          />
+          {error && <p style={{ color: '#ef4444', fontSize: 13, marginTop: 8 }}>{error}</p>}
+          <button
+            type="submit"
+            disabled={clerkLoading}
+            style={{
+              width: '100%', padding: 14, marginTop: 22,
+              background: clerkLoading ? 'rgba(11,19,38,0.4)' : '#0b1326',
+              color: '#FFF44F', border: 'none', borderRadius: 12,
+              fontSize: 16, fontWeight: 800, cursor: clerkLoading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {clerkLoading ? 'Menyimpan...' : 'Lanjut'}
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -207,6 +326,41 @@ const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess }) =>
             {loading ? (isSignup ? 'Membuat akun...' : 'Masuk...') : (isSignup ? 'Sign Up' : 'Masuk')}
           </button>
         </form>
+
+        {clerkEnabled && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '22px 0 18px' }}>
+              <div style={{ flex: 1, height: 1, background: 'rgba(11,19,38,0.1)' }} />
+              <span style={{ color: 'rgba(11,19,38,0.45)', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em' }}>atau</span>
+              <div style={{ flex: 1, height: 1, background: 'rgba(11,19,38,0.1)' }} />
+            </div>
+
+            <button
+              type="button"
+              disabled={clerkLoading}
+              onClick={handleClerkAuth}
+              style={{
+                alignItems: 'center',
+                background: '#ffffff',
+                border: '1px solid rgba(11,19,38,0.14)',
+                borderRadius: 12,
+                color: '#0b1326',
+                cursor: clerkLoading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                fontSize: 15,
+                fontWeight: 800,
+                gap: 10,
+                justifyContent: 'center',
+                opacity: clerkLoading ? 0.65 : 1,
+                padding: 14,
+                width: '100%',
+              }}
+            >
+              <span style={{ alignItems: 'center', border: '1px solid rgba(11,19,38,.08)', borderRadius: 999, display: 'inline-flex', height: 24, justifyContent: 'center', width: 24 }}>G</span>
+              {clerkLoading ? 'Menunggu Google...' : (isSignup ? 'Daftar dengan Google' : 'Masuk dengan Google')}
+            </button>
+          </>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 18, fontSize: 13 }}>
           <button
