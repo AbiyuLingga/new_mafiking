@@ -83,8 +83,10 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - `lib/clerk-user-sync.js` owns Clerk-to-local linking and guest-to-Google merge behavior.
 - `/` intentionally opens the public landing page for guests and logged-in users. The Mafiking logo returns to that landing page from app routes.
 - `Coba Gratis` routes into `Belajar` with the `Try Out` section selected.
-- The app top nav labels are `Beranda`, `Misi Harian`, and `Paket`; `Beranda` maps to the `belajar` route and `Paket` maps to the `tryout` route.
+- The app top nav labels are `Beranda`, `Misi Harian`, `Paket`, and `Peringkat`; `Beranda` maps to the `belajar` route, `Paket` maps to `tryout`, and `Peringkat` maps to `leaderboard`.
 - `Belajar` sections are `Try Out`, `Matematika`, `Fisika`, and `Kimia`. The `Try Out` section is the free entry point.
+- `src/leaderboard.jsx` owns the current Peringkat page. It is frontend-static data for now and uses an inner-scroll table body; do not present it as live backend ranking until it is wired to `/api/progress/leaderboard`.
+- `src/shared.jsx` owns the sliding top-nav active pill and reusable `SlidingSegmented` control. Keep those globals loaded before pages that use them.
 - `src/admin.jsx` owns the admin page. The monitoring tab is implemented by `src/admin-monitoring.jsx`, which must load before `src/admin.jsx` in `MAFIKING.html`.
 - Landing media is stored in `landing_media` and served through `GET /api/landing-media`. Admin uploads for promo image, feature images, and demo video live in the Admin Panel `Landing Page` tab.
 - The public landing uses local reveal/pop animations in `src/lobby.jsx` and `src/styles.css`. The demo video section should not have the old grid background.
@@ -96,7 +98,7 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 
 Do:
 
-- Keep route names consistent with `src/app.jsx`: `lobby`, `belajar`, `misi`, `tryout`, `admin`, `profile`, `practice`.
+- Keep route names consistent with `src/app.jsx`: `lobby`, `belajar`, `misi`, `tryout`, `leaderboard`, `admin`, `profile`, `practice`.
 - Keep script order in `MAFIKING.html` valid when adding frontend files.
 - Export browser components/functions on `window` when they must be used by later scripts.
 - Use existing utility classes, card styles, icon globals, and layout patterns.

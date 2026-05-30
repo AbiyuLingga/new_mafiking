@@ -151,10 +151,14 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn }) => {
               )}
             </div>
             <div className="lg:col-span-5 flex lg:justify-end">
-              <div className="bg-white border hairline rounded-full p-1 flex">
-                <button onClick={() => setTab("beli")} className={`px-5 py-2.5 rounded-full text-sm font-semibold ${tab === "beli" ? "bg-ink text-white" : "text-ink/55 hover:text-ink"}`}>Semua Paket</button>
-                <button onClick={() => setTab("milikku")} className={`px-5 py-2.5 rounded-full text-sm font-semibold ${tab === "milikku" ? "bg-ink text-white" : "text-ink/55 hover:text-ink"}`}>Paket Saya</button>
-              </div>
+              <SlidingSegmented
+                value={tab}
+                onChange={setTab}
+                options={[
+                  { id: "beli", label: "Semua Paket" },
+                  { id: "milikku", label: "Paket Saya" },
+                ]}
+              />
             </div>
           </div>
         </div>

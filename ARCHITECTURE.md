@@ -100,7 +100,9 @@ src/answer-board.jsx
 src/practice.jsx
 src/misi.jsx
 src/tryout.jsx
+src/leaderboard.jsx
 src/payment.jsx
+src/admin-monitoring.jsx
 src/admin.jsx
 src/app.jsx
 ```
@@ -128,6 +130,7 @@ The frontend is not module-based. Components are defined in browser global scope
 | `src/profile.jsx` | Profile/report view using progress and correction APIs. |
 | `src/misi.jsx` | Daily mission screen. |
 | `src/tryout.jsx` | Paket / paid tryout package screen. |
+| `src/leaderboard.jsx` | Peringkat page with isolated-scroll leaderboard and `Semua` / `Top Mingguan` views. |
 | `src/payment.jsx` | Payment package selection and status polling. |
 | `src/admin.jsx` | Admin page/modal shell, subject/Try Out content CRUD, landing media tab, import tab, users tab, and monitoring tab shell. |
 | `src/styles.css` | Local custom CSS and appended feature styles. |
@@ -142,6 +145,7 @@ lobby
 belajar
 misi
 tryout
+leaderboard
 admin
 profile
 practice
@@ -184,7 +188,9 @@ The global `Nav` is intentionally not rendered while `route === "practice"` or `
 - The landing page uses local reveal/pop animations in `src/lobby.jsx` and `src/styles.css`; it does not rely on a bundled Framer Motion runtime in this static-Babel app.
 - The demo video section intentionally has no grid background after the latest landing UI correction.
 - Login/sign-up screens expose both the existing username/password flow and Clerk Google auth. Clerk browser scripts are loaded dynamically by `src/clerk-auth.jsx`.
-- The top app nav uses `Beranda` for `belajar`, `Misi Harian` for `misi`, and `Paket` for `tryout`; there is no separate `Belajar` nav link.
+- The top app nav uses `Beranda` for `belajar`, `Misi Harian` for `misi`, `Paket` for `tryout`, and `Peringkat` for `leaderboard`; there is no separate `Belajar` nav link.
+- The app route shell uses a small vertical fade/slide transition. `src/shared.jsx` measures nav and segmented-control buttons so the active oval moves instead of teleporting.
+- The leaderboard is currently frontend-static display data; `routes/progress.js` already exposes leaderboard APIs but this first page does not consume them yet.
 - Logged-out users can start the free Try Out in multiple-choice mode.
 - Free Try Out pembahasan/canvas review and protected subject chapters route through login/sign-up with an auth redirect back to the intended route.
 - Premium-only pages such as Misi Harian show an access gate when the user lacks an active package.
