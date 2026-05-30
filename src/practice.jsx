@@ -31,6 +31,17 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
       authRedirect: { route: "practice", practice: context },
     });
   }
+  function requiresLoginForAnswer() {
+    return !context?.isPreview && !isLoggedIn && !isAdmin;
+  }
+  function requestAnswerLogin() {
+    showToast("Masuk atau sign up dulu untuk cek jawaban.", "error");
+    setRoute({
+      route: "lobby",
+      authMode: "login",
+      authRedirect: { route: "practice", practice: context },
+    });
+  }
   function openCanvasFromIntro() {
     if (requiresLoginForDiscussion()) {
       requestDiscussionLogin();
@@ -126,6 +137,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
   function submitChoice() {
     if (!problem) return;
     if (selectedChoiceIndex == null) { setError("Pilih salah satu jawaban dulu."); return; }
+    if (requiresLoginForAnswer()) { requestAnswerLogin(); return; }
     const choices = getChoices(problem);
     const correctIndex = getCorrectChoiceIndex(problem, choices);
     const isCorrect = correctIndex >= 0 && selectedChoiceIndex === correctIndex;
@@ -167,6 +179,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
   async function submitCanvas() {
     if (!problem) return;
     if (context?.isPreview) { setError("Canvas correction tidak tersedia di mode preview."); return; }
+    if (requiresLoginForAnswer()) { requestAnswerLogin(); return; }
     try {
       setError("");
       setShowResultModal(false);

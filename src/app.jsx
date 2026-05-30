@@ -219,7 +219,7 @@ const App = () => {
                 : <AccessGate setRoute={navigate} title="Misi Harian termasuk paket belajar" message="Beli paket untuk mendapat akses ke misi harian, XP bonus, dan latihan terarah setiap hari." />}
             </ScreenErrorBoundary>
           )}
-          {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} />}
+          {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} />}
           {route === "admin" && isAdminAccount && isAdmin && window.AdminPage && React.createElement(window.AdminPage, { setRoute: navigate })}
           {route === "profile" && (isLoggedIn
             ? <Profile setRoute={navigate} isAdmin={isAdmin || isAdminAccount} onRequestLanding={confirmLandingReturn} onRequestLogout={confirmLogout} />

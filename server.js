@@ -431,6 +431,9 @@ app.get('/SOP-DEEPSEEK-IMPORT-SOAL.md', (req, res) => {
 app.get('/tweaks-panel.jsx', (_req, res) => {
   res.type('text/babel').sendFile(path.join(__dirname, 'tweaks-panel.jsx'));
 });
+app.get(['/syarat-ketentuan.html', '/terms.html', '/tnc.html'], (_req, res) => {
+  res.sendFile(path.join(__dirname, 'syarat-ketentuan.html'));
+});
 
 const appHtmlPath = path.join(__dirname, 'MAFIKING.html');
 app.get(['/', '/index.html', '/MAFIKING.html'], (_req, res) => {

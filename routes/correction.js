@@ -1,7 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const { isAuthenticated } = require('../middleware/auth');
+const { isAuthenticated, requireRegisteredUser } = require('../middleware/auth');
 const { buildRecommendationSummary, formatLearningSkillLabel } = require('../lib/recommendation-engine');
 const {
   call9RouterProfileSummary,
@@ -876,7 +876,7 @@ router.get('/attempts', isAuthenticated, (req, res) => {
   res.json(rows.map(serializeAttempt));
 });
 
-router.post('/transcribe', isAuthenticated, async (req, res) => {
+router.post('/transcribe', isAuthenticated, requireRegisteredUser, async (req, res) => {
   try {
     const { imageBase64, mimeType, questionText } = req.body;
     const { cleanBase64, normalizedMimeType } = validateImagePayload(imageBase64, mimeType);
@@ -909,7 +909,7 @@ router.post('/transcribe', isAuthenticated, async (req, res) => {
   }
 });
 
-router.post('/evaluate', isAuthenticated, async (req, res) => {
+router.post('/evaluate', isAuthenticated, requireRegisteredUser, async (req, res) => {
   try {
     const {
       expectedAnswer,

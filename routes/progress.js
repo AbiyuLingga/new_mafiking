@@ -1,9 +1,9 @@
 const express = require('express');
-const { isAuthenticated } = require('../middleware/auth');
+const { isAuthenticated, requireRegisteredUser } = require('../middleware/auth');
 const router = express.Router();
 
 // POST /api/progress/submit — submit answer
-router.post('/submit', isAuthenticated, (req, res) => {
+router.post('/submit', isAuthenticated, requireRegisteredUser, (req, res) => {
     const {
         problemId,
         correct,

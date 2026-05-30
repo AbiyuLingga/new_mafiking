@@ -2,7 +2,7 @@
 
 const BLANK_PKG = { title: '', description: '', price: 'Gratis', original_price: '', badge: '', duration: '60 mnt', questions: 30, features: '', tone: 'default', sort_order: 0 };
 
-const Tryout = ({ setRoute, isAdmin }) => {
+const Tryout = ({ setRoute, isAdmin, isLoggedIn }) => {
   const [tab, setTab] = useState("beli");
   const [packages, setPackages] = useState([]);
   const [activePackages, setActivePackages] = useState([]);
@@ -72,6 +72,13 @@ const Tryout = ({ setRoute, isAdmin }) => {
       tone: source.tone,
       sort_order: source.sort_order,
     };
+  }
+
+  function startTryoutPackage(pkg) {
+    setRoute({
+      route: "practice",
+      practice: buildTryoutPracticeContext(pkg),
+    });
   }
 
   function startInlineEdit(pkg, field, rows) {
@@ -169,6 +176,8 @@ const Tryout = ({ setRoute, isAdmin }) => {
                     hasAccess={hasAccess(pkg)}
                     setRoute={setRoute}
                     isAdmin={isAdmin}
+                    isLoggedIn={isLoggedIn}
+                    onStartPackage={startTryoutPackage}
                     adminEdit={{ inlineEdit, saving, startInlineEdit, setInlineEdit, saveInlineEdit }}
                     onDelete={() => deletePkg(pkg.id)}
                   />
@@ -302,7 +311,7 @@ const AdminEditablePackageField = ({ pkg, field, rows, isAdmin, adminEdit, child
 };
 
 // ─── Package card ─────────────────────────────────────────────────────────────
-const PackageCard = ({ pkg, setRoute, isAdmin, adminEdit, onDelete, hasAccess }) => {
+const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, hasAccess, onStartPackage }) => {
   const feature = pkg.tone === "feature";
   const featureList = Array.isArray(pkg.features)
     ? pkg.features
@@ -357,7 +366,13 @@ const PackageCard = ({ pkg, setRoute, isAdmin, adminEdit, onDelete, hasAccess })
         <button
           onClick={() => {
             if (hasAccess) {
-              setRoute({ route: "belajar", section: "Try Out" });
+              onStartPackage(pkg);
+            } else if (!isLoggedIn) {
+              setRoute({
+                route: "lobby",
+                authMode: "login",
+                authRedirect: { route: "payment", payment: { type: "tryout", package: pkg } },
+              });
             } else {
               setRoute({ route: "payment", payment: { type: "tryout", package: pkg } });
             }
@@ -376,6 +391,23 @@ const PackageCard = ({ pkg, setRoute, isAdmin, adminEdit, onDelete, hasAccess })
     </article>
   );
 };
+
+function buildTryoutPracticeContext(pkg) {
+  const isFree = String(pkg?.price || "").toLowerCase() === "gratis" || String(pkg?.title || "").toLowerCase().includes("gratis");
+  return {
+    id: 1,
+    num: 1,
+    title: "Teknik Integrasi",
+    mapel: "Matematika",
+    semester: 1,
+    est: pkg?.duration || "45 mnt",
+    total: Number(pkg?.questions || 23),
+    progress: 0,
+    topics: [pkg?.title || "Try Out", "Integral", isFree ? "Pembahasan setelah login" : "Paket aktif"],
+    freeTryout: isFree,
+    packageTitle: pkg?.title || "Try Out",
+  };
+}
 
 // ─── Tryout edit modal ────────────────────────────────────────────────────────
 const TryoutEditModal = ({ pkg, saving, onChange, onSave, onClose }) => (

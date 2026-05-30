@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const axios = require('axios');
+const { isRegisteredUser } = require('../middleware/auth');
 const router = express.Router();
 
 const DUITKU_BASE_URL = 'https://api-sandbox.duitku.com/api'; // ganti ke https://api-prod.duitku.com/api saat production
@@ -88,6 +89,10 @@ function resolvePaymentItem({ body, db }) {
     };
 }
 
+function isRegisteredPaymentUser({ db, userId }) {
+    return isRegisteredUser(db, userId);
+}
+
 function paymentStatusPayload(payment, status) {
     return {
         status,
@@ -103,7 +108,9 @@ function paymentStatusPayload(payment, status) {
 router.post('/create', async (req, res) => {
     const db = req.app.locals.db;
     const userId = req.session.userId;
-    if (!userId) return res.status(401).json({ error: 'Belum login' });
+    if (!isRegisteredPaymentUser({ db, userId })) {
+        return res.status(401).json({ error: 'Login diperlukan sebelum membeli paket' });
+    }
 
     const { email, name } = req.body;
 
@@ -398,6 +405,7 @@ router.get('/mock-complete', (req, res) => {
 
 router.__test = {
     SUBSCRIPTION_PACKAGES,
+    isRegisteredPaymentUser,
     parsePrice,
     resolvePaymentItem,
 };

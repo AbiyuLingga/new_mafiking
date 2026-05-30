@@ -1,9 +1,27 @@
 const assert = require('assert');
 const paymentRouter = require('../routes/payment');
 
-const { resolvePaymentItem, SUBSCRIPTION_PACKAGES } = paymentRouter.__test || {};
+const { isRegisteredPaymentUser, resolvePaymentItem, SUBSCRIPTION_PACKAGES } = paymentRouter.__test || {};
 
 assert.strictEqual(typeof resolvePaymentItem, 'function', 'resolvePaymentItem must be exported for contract tests');
+assert.strictEqual(typeof isRegisteredPaymentUser, 'function', 'isRegisteredPaymentUser must be exported for contract tests');
+
+const userDb = {
+    prepare(sql) {
+        assert.match(sql, /FROM users/);
+        return {
+            get(id) {
+                if (id === 1) return { password_hash: 'none' };
+                if (id === 2) return { password_hash: '$2b$10$realHash' };
+                return null;
+            },
+        };
+    },
+};
+
+assert.strictEqual(isRegisteredPaymentUser({ db: userDb, userId: 1 }), false);
+assert.strictEqual(isRegisteredPaymentUser({ db: userDb, userId: 2 }), true);
+assert.strictEqual(isRegisteredPaymentUser({ db: userDb, userId: 3 }), false);
 
 const subscription = resolvePaymentItem({
     body: {
