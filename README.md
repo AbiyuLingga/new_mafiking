@@ -11,6 +11,8 @@ The active browser entry point is `MAFIKING.html`, served by `server.js`. The fr
 - Lobby: `/` always opens the marketing landing page. `Coba Gratis` enters the app at `Belajar -> Try Out`, while login/sign up can redirect back into the intended app route.
 - Belajar: mapel selector now includes `Try Out`, `Matematika`, `Fisika`, and `Kimia`. Free users can start the free Try Out, while protected chapters and premium pages route through login/package gates.
 - Shared: global toast system (`showToast`), `Skeleton` loading states, `OfflineBanner`.
+- Peringkat: app nav includes a `Peringkat` route with an isolated-scroll leaderboard, static table header, and `Semua` / `Top Mingguan` segmented point views.
+- Motion polish: app route transitions, the top-nav active pill, and shared segmented controls use local CSS motion; no new frontend runtime dependency is required.
 - Payment: package selection → Duitku redirect → status polling page (`src/payment.jsx`).
 - Admin mode: role-gated shield toggle button (bottom-right corner). Pressing shield enables admin mode; the top nav then shows an `Admin Panel` entry that opens the full admin page. The admin page can manage Try Out packages, Matematika/Fisika/Kimia chapters and subtopics, landing-page media, users/access, and Gemini usage backend data. On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete.
 - SOP: `SOP-AI-INPUT-SOAL.md` documents the general AI question-entry guide. `SOP-DEEPSEEK-IMPORT-SOAL.md` is the stricter prompt contract for admin file import via DeepSeek.
@@ -238,6 +240,7 @@ The import script refuses to replace question tables when user progress or corre
 |   |-- profile.jsx            # Profile/report view
 |   |-- misi.jsx               # Daily mission screen
 |   |-- tryout.jsx             # Paket / paid tryout package screen
+|   |-- leaderboard.jsx        # Peringkat page with isolated-scroll leaderboard
 |   |-- payment.jsx            # Payment package selection + Duitku redirect + status polling
 |   |-- admin.jsx              # Admin UI: content CRUD, landing media, users, import, and monitoring tab shell
 |   `-- styles.css             # All CSS including admin styles appended at end
@@ -374,6 +377,8 @@ Most API routes require either a local session or a verified Clerk Bearer token.
 - Clerk auth is integrated through a static-Babel bridge in `src/clerk-auth.jsx`, not `@clerk/react` components. The CLI may install `@clerk/react`, but the live `MAFIKING.html` runtime uses Clerk's browser scripts dynamically.
 - `src/app.jsx` owns route state, tweaks defaults, and `isAdmin` toggle.
 - `src/app.jsx` intentionally does not render the global `Nav` while `route === "practice"`.
+- `src/shared.jsx` owns the sliding top-nav active pill and reusable `SlidingSegmented` control used by Paket and Peringkat.
+- `src/leaderboard.jsx` is currently frontend-static data only; use backend leaderboard APIs before treating it as live ranking data.
 - `src/belajar.jsx` loads chapter data from `/api/quiz/init` on mount and maps DB rows to display cards. `window.chapterData` is set here for use by practice.jsx. Static fallback is used while loading.
 - Admin mode in `belajar.jsx` shows `AdminBelajarView` — API-wired CRUD that persists to DB. Admin mode in `practice.jsx` enables inline click-to-edit on question cards and a compact admin question control for add/delete/reorder; `AdminPracticeBar` (separate bar) has been removed.
 - `server.js` applies SQLite schema on startup and includes inline migrations for older local DBs.

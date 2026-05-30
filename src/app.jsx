@@ -203,7 +203,7 @@ const App = () => {
           route={route}
           setRoute={navigate}
           navStyle={tweaks.navStyle}
-          gamified={route === "belajar" || route === "misi" || route === "profile" || route === "tryout" || route === "admin"}
+          gamified={route === "belajar" || route === "misi" || route === "profile" || route === "tryout" || route === "leaderboard" || route === "admin"}
           isLoggedIn={isLoggedIn}
           isAdminMode={isAdmin}
           onLogoClick={handleLogoClick}
@@ -212,7 +212,11 @@ const App = () => {
       )}
 
       <main className="flex-1">
-        <div data-screen-label={routeLabel(route)}>
+        <div
+          key={`${route}:${belajarSection || ""}:${authMode || ""}`}
+          data-screen-label={routeLabel(route)}
+          className={route === "practice" ? "" : "app-route-transition"}
+        >
           {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={isAdmin || isAdminAccount} authMode={authMode} authRedirect={authRedirect} onAuthSuccess={handleAuthSuccess} />}
           {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} initialSection={belajarSection} />}
           {route === "misi" && (
@@ -223,6 +227,7 @@ const App = () => {
             </ScreenErrorBoundary>
           )}
           {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} />}
+          {route === "leaderboard" && window.Leaderboard && React.createElement(window.Leaderboard)}
           {route === "admin" && isAdminAccount && isAdmin && window.AdminPage && React.createElement(window.AdminPage, { setRoute: navigate })}
           {route === "profile" && (isLoggedIn
             ? <Profile setRoute={navigate} isAdmin={isAdmin || isAdminAccount} onRequestLanding={confirmLandingReturn} onRequestLogout={confirmLogout} />
@@ -510,10 +515,11 @@ function routeLabel(r) {
     belajar: "02 Beranda",
     misi: "03 Misi Harian",
     tryout: "04 Paket",
-    admin: "05 Admin Panel",
-    profile: "06 Profil",
-    payment: "07 Pembayaran",
-    practice: "08 Latihan",
+    leaderboard: "05 Peringkat",
+    admin: "06 Admin Panel",
+    profile: "07 Profil",
+    payment: "08 Pembayaran",
+    practice: "09 Latihan",
   })[r] || r;
 }
 

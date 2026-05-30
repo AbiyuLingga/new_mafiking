@@ -175,9 +175,69 @@ const StreakFlame = ({ className = "" }) => (
 );
 
 // ─── Top Nav ──────────────────────────────────────────────────────────────
+const SlidingSegmented = ({ options, value, onChange, className = "" }) => {
+  const trackRef = useRef(null);
+  const [pill, setPill] = useState({ left: 0, width: 0, ready: false });
+
+  useEffect(() => {
+    if (!trackRef.current) return;
+    let raf = 0;
+    const measure = () => {
+      const track = trackRef.current;
+      if (!track) return;
+      const active = track.querySelector(`[data-segment-id="${value}"]`);
+      if (!active) return;
+      const trackRect = track.getBoundingClientRect();
+      const activeRect = active.getBoundingClientRect();
+      setPill({
+        left: activeRect.left - trackRect.left,
+        width: activeRect.width,
+        ready: true,
+      });
+    };
+    raf = window.requestAnimationFrame(measure);
+    window.addEventListener("resize", measure);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+    };
+  }, [value, options.length]);
+
+  return (
+    <div ref={trackRef} className={`sliding-segmented ${className}`}>
+      {pill.ready && (
+        <span
+          aria-hidden="true"
+          className="sliding-segmented-pill"
+          style={{
+            width: `${pill.width}px`,
+            transform: `translateX(${pill.left}px)`,
+          }}
+        />
+      )}
+      {options.map((option) => {
+        const active = value === option.id;
+        return (
+          <button
+            key={option.id}
+            data-segment-id={option.id}
+            onClick={() => onChange(option.id)}
+            className={`sliding-segmented-button ${active ? "is-active" : ""}`}
+            type="button"
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
 const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn = false, isAdminMode = false, onLogoClick, onAdminPanelOpen }) => {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const navRef = useRef(null);
+  const [activePill, setActivePill] = useState({ left: 0, width: 0, ready: false });
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", onScroll);
@@ -188,7 +248,39 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
     { id: "belajar", label: "Beranda", section: "Try Out" },
     { id: "misi", label: "Misi Harian" },
     { id: "tryout", label: "Paket" },
+    { id: "leaderboard", label: "Peringkat" },
   ];
+
+  const activeLinkId = route !== "lobby" && links.some((item) => item.id === route) ? route : "";
+
+  useEffect(() => {
+    if (!activeLinkId || !navRef.current) {
+      setActivePill((current) => current.ready ? { left: 0, width: 0, ready: false } : current);
+      return;
+    }
+
+    let raf = 0;
+    const measure = () => {
+      const navNode = navRef.current;
+      if (!navNode) return;
+      const activeButton = navNode.querySelector(`[data-nav-id="${activeLinkId}"]`);
+      if (!activeButton) return;
+      const navRect = navNode.getBoundingClientRect();
+      const buttonRect = activeButton.getBoundingClientRect();
+      setActivePill({
+        left: buttonRect.left - navRect.left,
+        width: buttonRect.width,
+        ready: true,
+      });
+    };
+
+    raf = window.requestAnimationFrame(measure);
+    window.addEventListener("resize", measure);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+    };
+  }, [activeLinkId]);
 
   const isInk = navStyle === "ink";
   const isWhite = navStyle === "white";
@@ -230,16 +322,27 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
         }} className="flex items-center">
           <Logo size={32} inverted={isInk} />
         </button>
-        <nav className="hidden md:flex items-center gap-1">
+        <nav ref={navRef} className="relative hidden md:flex items-center gap-1">
+          {activePill.ready && (
+            <span
+              aria-hidden="true"
+              className={`nav-active-pill ${isInk ? "nav-active-pill-ink" : ""}`}
+              style={{
+                width: `${activePill.width}px`,
+                transform: `translateX(${activePill.left}px)`,
+              }}
+            />
+          )}
           {links.map((l) => {
             const active = route !== "lobby" && route === l.id;
             return (
               <button
                 key={l.id}
+                data-nav-id={l.id}
                 onClick={() => goRoute(l.id)}
-                className={`relative px-4 py-2 text-[14px] font-medium rounded-full transition-colors ${
+                className={`relative z-10 px-4 py-2 text-[14px] font-medium rounded-full transition-colors ${
                   active
-                    ? "bg-ink text-amber-300 font-semibold"
+                    ? "text-amber-300 font-semibold"
                     : isInk ? "text-white/55 hover:text-white" : "text-ink/55 hover:text-ink"
                 }`}
               >
@@ -432,6 +535,7 @@ window.Icon = Icon;
 window.MAPEL_META = MAPEL_META;
 window.pad2 = pad2;
 window.Logo = Logo;
+window.SlidingSegmented = SlidingSegmented;
 window.Nav = Nav;
 window.Footer = Footer;
 window.Skeleton = Skeleton;
