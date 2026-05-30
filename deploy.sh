@@ -110,7 +110,8 @@ rsync -az --delete --human-readable --info=progress2,stats2 \
   --exclude ".codex" \
   --exclude "node_modules" \
   --exclude "dist" \
-  --exclude ".env" \
+  --exclude ".env*" \
+  --exclude "env" \
   --exclude ".deploy-deps.sha" \
   --exclude "*.log" \
   --exclude "logs" \
