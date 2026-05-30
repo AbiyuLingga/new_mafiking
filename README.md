@@ -9,12 +9,13 @@ The active browser entry point is `MAFIKING.html`, served by `server.js`. The fr
 - UI shell: copied Mafiking static UI with tweaks panel + full UX improvements.
 - Practice UI: segmented control (Pilgan | Kanvas), Submit always visible in focus mode, ResultModal with wrong-step visualization, XP toast on correct answers.
 - Lobby: `/` always opens the marketing landing page. `Coba Gratis` enters the app at `Belajar -> Try Out`, while login/sign up can redirect back into the intended app route.
+- Onboarding: after first login/sign-up, non-admin users with incomplete profile data get a mandatory centered profile modal for name, phone, semester, faculty/major, and subject priorities. It cannot be skipped and saves through `/api/auth/profile-onboarding`.
 - Belajar: mapel selector now includes `Try Out`, `Matematika`, `Fisika`, and `Kimia`. Free users can start the free Try Out, while protected chapters and premium pages route through login/package gates.
 - Shared: global toast system (`showToast`), `Skeleton` loading states, `OfflineBanner`.
 - Peringkat: app nav includes a `Peringkat` route with an isolated-scroll leaderboard, static table header, and `Semua` / `Top Mingguan` segmented point views.
 - Motion polish: app route transitions, the top-nav active pill, and shared segmented controls use local CSS motion; no new frontend runtime dependency is required.
 - Payment: package selection → Duitku redirect → status polling page (`src/payment.jsx`).
-- Admin mode: role-gated shield toggle button (bottom-right corner). Pressing shield enables admin mode; the top nav then shows an `Admin Panel` entry that opens the full admin page. The admin page can manage Try Out packages, Matematika/Fisika/Kimia chapters and subtopics, landing-page media, users/access, and Gemini usage backend data. On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete.
+- Admin mode: role-gated shield toggle button (bottom-right corner). Pressing shield enables admin mode; the top nav then shows an `Admin Panel` entry that opens the full admin page. The admin page can manage Try Out packages, Matematika/Fisika/Kimia chapters and subtopics, users/access, and Gemini usage backend data. On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete.
 - SOP: `SOP-AI-INPUT-SOAL.md` documents the general AI question-entry guide. `SOP-DEEPSEEK-IMPORT-SOAL.md` is the stricter prompt contract for admin file import via DeepSeek.
 - Backend: Express 5, SQLite through `better-sqlite3`, session auth, API routes.
 - Question bank: exported from `../Mafiking/db/database.sqlite` into `db/question-bank.json`.
@@ -141,7 +142,7 @@ The admin mode toggle is visible only to users whose `role` is `admin`.
 - Local development bypass: in non-production, `/api/admin/*` accepts localhost requests even when the current session is only an auto-guest. Set `LOCAL_ADMIN_MODE=false` to force real admin login again.
 - `Users & Token Monitoring` is implemented by `src/admin-monitoring.jsx` and reads backend data from `/api/admin/dashboard-data`.
 - `Bab & Subtopik` starts with a content selector: `Try Out`, `Matematika`, `Fisika`, or `Kimia`. Try Out opens package CRUD; the subject options open chapter/subtopic CRUD.
-- `Landing Page` lets admins upload/replace the promo popup image, feature images, and demo video used by the public landing page.
+- The public landing no longer exposes inline `Ganti gambar` / `Ganti video` controls to admins. Landing media still loads from `/api/landing-media`, but media replacement is intentionally not part of the current admin UI.
 
 **What changes in admin mode:**
 
@@ -231,6 +232,7 @@ The import script refuses to replace question tables when user progress or corre
 |   |-- shared.jsx             # Nav, footer, icons, Skeleton, showToast, ToastContainer, OfflineBanner
 |   |-- clerk-auth.jsx         # ClerkJS browser bridge for static Babel runtime
 |   |-- backend-api.jsx        # Fetch helper for same-origin API calls
+|   |-- onboarding.jsx         # Mandatory first-login profile completion modal
 |   |-- lobby.jsx              # Public landing + login/signup screen using the existing auth shell
 |   |-- belajar.jsx            # Try Out tab + static chapter cards; admin branch to AdminBelajarView
 |   |-- practice.jsx           # Practice route: ChoiceView, CanvasView, ModeSegment, ResultModal
@@ -242,7 +244,7 @@ The import script refuses to replace question tables when user progress or corre
 |   |-- tryout.jsx             # Paket / paid tryout package screen
 |   |-- leaderboard.jsx        # Peringkat page with isolated-scroll leaderboard
 |   |-- payment.jsx            # Payment package selection + Duitku redirect + status polling
-|   |-- admin.jsx              # Admin UI: content CRUD, landing media, users, import, and monitoring tab shell
+|   |-- admin.jsx              # Admin UI: content CRUD, users, import, and monitoring tab shell
 |   `-- styles.css             # All CSS including admin styles appended at end
 |-- tweaks-panel.jsx
 |-- vite.config.js
@@ -267,7 +269,8 @@ The import script refuses to replace question tables when user progress or corre
 - The login screen uses the existing auth UI. Sign up temporarily reuses that shell with sign-up labels and a display-name field.
 - The auth screen also includes Clerk Google login/sign-up controls. Clerk is loaded through `src/clerk-auth.jsx`, using `/api/config/clerk` to fetch only the publishable key.
 - Clerk users are synced into local SQLite users on API requests through `@clerk/express`; the local `users.id` remains the source of truth for progress, XP, admin role, and payments.
-- First-time Google users can be prompted for a Mafiking display name through `POST /api/auth/clerk-onboard`. If the user started as an auto-guest, guest progress/payments/attempt rows are merged into the Google-linked local account.
+- First-time Google users are synced into the local account model, then incomplete non-admin profiles are completed through the mandatory modal in `src/onboarding.jsx`.
+- The profile modal stores draft progress in localStorage, stays fixed in the center of the viewport, and saves through `POST /api/auth/profile-onboarding`. Admin users are exempt.
 
 ### Belajar / Free Entry
 
@@ -336,6 +339,7 @@ Most API routes require either a local session or a verified Clerk Bearer token.
 | `POST` | `/api/auth/login` | Login with rate limiting and per-username lockout. |
 | `POST` | `/api/auth/logout` | Destroy session. |
 | `POST` | `/api/auth/clerk-onboard` | Save display name and merge guest data after first Google sign-in. |
+| `POST` | `/api/auth/profile-onboarding` | Save mandatory first-login profile data: name, phone, semester, faculty/major, and subject priorities. |
 | `GET` | `/api/auth/me` | Current user profile. |
 | `POST` | `/api/webhooks/clerk` | Clerk webhook, verified with `CLERK_WEBHOOK_SIGNING_SECRET`, for user-created sync. |
 | `GET` | `/api/quiz/init` | Chapters, subtopics, and problem counts. |
@@ -354,7 +358,6 @@ Most API routes require either a local session or a verified Clerk Bearer token.
 | `PUT/DELETE` | `/api/admin/problems/:id` | Update or delete problem (admin only). |
 | `GET/POST` | `/api/admin/problems/:id/steps` | List or create steps (admin only). |
 | `PUT/DELETE` | `/api/admin/steps/:id` | Update or delete step (admin only). |
-| `GET/POST/DELETE` | `/api/admin/landing-media` | Manage landing page image/video slots (admin only). |
 | `GET/POST/PUT/DELETE` | `/api/admin/tryout-packages` | Manage Try Out package cards (admin only). |
 | `GET` | `/api/admin/users` | List users (admin only). |
 | `PUT` | `/api/admin/users/:id/password` | Reset user password (admin only). |

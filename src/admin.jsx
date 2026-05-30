@@ -1467,38 +1467,65 @@ const AdminUsersPanel = () => {
     }
   }
 
+  function parsePrioritySubjects(value) {
+    if (Array.isArray(value)) return value;
+    try {
+      const parsed = JSON.parse(value || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function academicLabel(user) {
+    const semester = Number(user.semester || 0);
+    if (!semester) return '-';
+    const detail = semester === 1 ? user.fakultas : user.jurusan;
+    return `S${semester}${detail ? ' · ' + detail : ''}`;
+  }
+
   if (loading) return <div className="flex flex-col gap-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
 
   return (
     <div>
       <div className="overflow-x-auto">
         <table className="admin-table">
-          <thead><tr><th>Nama</th><th>Username</th><th>Role</th><th>Lv</th><th>XP</th><th>Streak</th><th></th></tr></thead>
+          <thead><tr><th>Nama</th><th>Username</th><th>No. HP</th><th>Akademik</th><th>Prioritas</th><th>Role</th><th>Lv</th><th>XP</th><th>Streak</th><th></th></tr></thead>
           <tbody>
-            {users.map((u) => (
-              <tr key={u.id} className={u.role === 'admin' ? 'admin-row-admin' : ''}>
-                <td className="font-semibold">{u.display_name}</td>
-                <td className="text-ink/60 text-xs">{u.username}</td>
-                <td><span className={'tag' + (u.role === 'admin' ? ' tag-ink' : '')}>{u.role}</span></td>
-                <td className="tnum text-center">{u.level}</td>
-                <td className="tnum">{u.xp}</td>
-                <td className="tnum">{u.streak_days}h</td>
-                <td>
-                  <div className="flex flex-wrap gap-2">
-                    <button className="admin-btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => { setPwTarget(u); setNewPw(''); }} type="button">Reset PW</button>
-                    <button
-                      className="admin-btn-danger"
-                      style={{ padding: '4px 10px', fontSize: 12 }}
-                      disabled={u.role === 'admin' || deleteBusyId === u.id}
-                      onClick={() => deleteUser(u)}
-                      type="button"
-                    >
-                      {deleteBusyId === u.id ? 'Hapus...' : 'Hapus'}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {users.map((u) => {
+              const priorities = parsePrioritySubjects(u.mapel_prioritas);
+              return (
+                <tr key={u.id} className={u.role === 'admin' ? 'admin-row-admin' : ''}>
+                  <td className="font-semibold">{u.display_name}</td>
+                  <td className="text-ink/60 text-xs">{u.username}</td>
+                  <td className="text-ink/60 text-xs">{u.phone_number || '-'}</td>
+                  <td className="text-ink/60 text-xs whitespace-nowrap">{academicLabel(u)}</td>
+                  <td>
+                    <div className="flex flex-wrap gap-1">
+                      {priorities.length ? priorities.map((subject) => <span className="tag" key={subject}>{subject}</span>) : <span className="text-ink/40 text-xs">-</span>}
+                    </div>
+                  </td>
+                  <td><span className={'tag' + (u.role === 'admin' ? ' tag-ink' : '')}>{u.role}</span></td>
+                  <td className="tnum text-center">{u.level}</td>
+                  <td className="tnum">{u.xp}</td>
+                  <td className="tnum">{u.streak_days}h</td>
+                  <td>
+                    <div className="flex flex-wrap gap-2">
+                      <button className="admin-btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => { setPwTarget(u); setNewPw(''); }} type="button">Reset PW</button>
+                      <button
+                        className="admin-btn-danger"
+                        style={{ padding: '4px 10px', fontSize: 12 }}
+                        disabled={u.role === 'admin' || deleteBusyId === u.id}
+                        onClick={() => deleteUser(u)}
+                        type="button"
+                      >
+                        {deleteBusyId === u.id ? 'Hapus...' : 'Hapus'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

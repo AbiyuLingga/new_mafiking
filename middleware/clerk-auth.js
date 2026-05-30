@@ -34,7 +34,6 @@ async function clerkAuthMiddleware(req, res, next) {
       req.session.userId = result.user.id;
       req.session.role = result.user.role;
       if (result.created) {
-        req.session.clerkNeedsOnboarding = true;
         req.session.clerkSuggestedDisplayName = req.clerkSuggestedDisplayName;
       }
     }

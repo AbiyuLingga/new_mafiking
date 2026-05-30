@@ -91,6 +91,7 @@ tweaks-panel.jsx
 src/clerk-auth.jsx
 src/backend-api.jsx
 src/shared.jsx
+src/onboarding.jsx
 src/lobby.jsx
 src/belajar.jsx
 src/profile.jsx
@@ -121,6 +122,7 @@ The frontend is not module-based. Components are defined in browser global scope
 | `src/shared.jsx` | Navigation, footer, icons, shared components. |
 | `src/backend-api.jsx` | Same-origin `fetch` helper. |
 | `src/clerk-auth.jsx` | Static-Babel Clerk bridge: loads Clerk browser scripts, opens sign-in/sign-up, and syncs Clerk users to local sessions. |
+| `src/onboarding.jsx` | Mandatory profile completion modal for non-admin users whose local profile fields are incomplete. |
 | `src/lobby.jsx` | Public marketing landing plus login/sign-up screen. |
 | `src/belajar.jsx` | Free Try Out tab, static chapter cards, mapel selector, chapter-to-practice navigation. |
 | `src/practice.jsx` | Practice route, multiple-choice/canvas mode state, question-source mapping, correction submit. |
@@ -132,7 +134,7 @@ The frontend is not module-based. Components are defined in browser global scope
 | `src/tryout.jsx` | Paket / paid tryout package screen. |
 | `src/leaderboard.jsx` | Peringkat page with isolated-scroll leaderboard and `Semua` / `Top Mingguan` views. |
 | `src/payment.jsx` | Payment package selection and status polling. |
-| `src/admin.jsx` | Admin page/modal shell, subject/Try Out content CRUD, landing media tab, import tab, users tab, and monitoring tab shell. |
+| `src/admin.jsx` | Admin page/modal shell, subject/Try Out content CRUD, import tab, users tab, and monitoring tab shell. |
 | `src/styles.css` | Local custom CSS and appended feature styles. |
 | `tweaks-panel.jsx` | Tweaks panel and persisted tweak state. |
 
@@ -184,10 +186,11 @@ The global `Nav` is intentionally not rendered while `route === "practice"` or `
 - `/` always renders the public landing page, even when the user already has a logged-in session.
 - Clicking the Mafiking logo from app routes returns to the public landing.
 - The landing `Coba Gratis` CTA routes to `Belajar -> Try Out`.
-- Landing media slots are loaded from `GET /api/landing-media`; admins can replace those images/videos from the Admin Panel `Landing Page` tab.
+- Landing media slots are loaded from `GET /api/landing-media`; the public landing no longer exposes inline media replacement controls to admins.
 - The landing page uses local reveal/pop animations in `src/lobby.jsx` and `src/styles.css`; it does not rely on a bundled Framer Motion runtime in this static-Babel app.
 - The demo video section intentionally has no grid background after the latest landing UI correction.
 - Login/sign-up screens expose both the existing username/password flow and Clerk Google auth. Clerk browser scripts are loaded dynamically by `src/clerk-auth.jsx`.
+- After auth succeeds, `GET /api/auth/me` marks incomplete non-admin profiles with `profile_needs_completion`; `src/app.jsx` then renders the fixed, non-dismissible `ProfileOnboardingModal`.
 - The top app nav uses `Beranda` for `belajar`, `Misi Harian` for `misi`, `Paket` for `tryout`, and `Peringkat` for `leaderboard`; there is no separate `Belajar` nav link.
 - The app route shell uses a small vertical fade/slide transition. `src/shared.jsx` measures nav and segmented-control buttons so the active oval moves instead of teleporting.
 - The leaderboard is currently frontend-static display data; `routes/progress.js` already exposes leaderboard APIs but this first page does not consume them yet.
@@ -307,11 +310,12 @@ server.js
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
 - `POST /api/auth/clerk-onboard`
+- `POST /api/auth/profile-onboarding`
 - `GET /api/auth/me`
 
 Uses bcrypt for passwords, XSS sanitization for registration fields, route-level login lockout, and sessions for auth state.
 
-Clerk-signed requests are synced before this route runs. `GET /api/auth/me` still returns the local SQLite user because the rest of the app keys progress, XP, role, and payments by local `users.id`. `POST /api/auth/clerk-onboard` saves the user's Mafiking display name after first Google sign-in and can merge an auto-guest row into the Google-linked account.
+Clerk-signed requests are synced before this route runs. `GET /api/auth/me` still returns the local SQLite user because the rest of the app keys progress, XP, role, and payments by local `users.id`. `POST /api/auth/clerk-onboard` remains for legacy display-name completion and guest merge. New first-login profile completion uses `POST /api/auth/profile-onboarding`, which validates phone, semester, faculty/major, and subject priorities before marking `users.onboarding_completed_at`.
 
 #### `routes/webhooks.js`
 
@@ -375,7 +379,7 @@ Admin-only CRUD for:
 - Dashboard data for user progress/access grants and Gemini usage.
 - Manual user access grants.
 - Admin role promotion/demotion and guarded deletion of non-admin user accounts.
-- Landing page media slot CRUD for promo image, feature images, and demo video.
+- Read-only landing media delivery for the promo image, feature images, and demo video through `GET /api/landing-media`.
 - Try Out package CRUD separated from Matematika/Fisika/Kimia chapter/subtopic CRUD.
 
 This route requires both session auth and admin role.
@@ -430,7 +434,7 @@ docs/purcell-inspired-question-bank.md
 
 | Table | Purpose |
 | --- | --- |
-| `users` | Login identity, role, XP, level, streak, profile fields. |
+| `users` | Login identity, role, XP, level, streak, Clerk link, and onboarding profile fields. |
 | `chapters` | Top-level learning chapters. |
 | `subtopics` | Chapter subdivisions. |
 | `problems` | Questions, answer display, acceptable answers, type, options. |

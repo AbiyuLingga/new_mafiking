@@ -129,11 +129,6 @@ const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess, curr
         redirect,
       });
       if (!user) return;
-      if (user && user.needs_onboarding) {
-        setPendingClerkUser(user);
-        setDisplayName(user.suggested_display_name || user.display_name || '');
-        return;
-      }
       if (typeof onSuccess === 'function') onSuccess(user, redirect);
       else setRoute(redirect || { route: "belajar", section: "Try Out" });
     } catch (err) {
@@ -793,6 +788,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [landingMedia, setLandingMedia] = React.useState({});
   const [mediaEditTarget, setMediaEditTarget] = React.useState(null);
+  const landingMediaEditEnabled = false;
   const isRegistered = currentUser && !currentUser.display_name?.startsWith("Tamu_");
   const authRedirect = { route: "belajar", section: "Try Out" };
   const openLogin = () => setRoute({ route: "lobby", authMode: "login", authRedirect });
@@ -837,22 +833,19 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
     { title: "Kimia", code: "KI 1101", desc: "Wujud zat, stoikiometri - dari model Bohr hingga setara redoks.", IconC: Icon.Flask, section: "Kimia", count: "16 bab" },
   ];
 
-  return (
-    <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-slate-200">
-              {promoOpen && (
-                <div className="landing-promo fixed bottom-6 right-6 z-[100] hidden w-80 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl md:block">
+  const promoPopup = promoOpen ? ReactDOM.createPortal((
+                <div className="landing-promo fixed bottom-5 right-4 z-[9000] w-[min(360px,calc(100vw-24px))] max-h-[calc(100vh-32px)] overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl md:bottom-7 md:right-7">
           <button onClick={() => setPromoOpen(false)} className="absolute right-4 top-4 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70" type="button" aria-label="Tutup promo">
             <Icon.X className="w-4 h-4" />
           </button>
-          <div className="relative flex h-32 items-center justify-center overflow-hidden bg-slate-100">
-            <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#FDE047] to-amber-300 opacity-80" />
-            <img src={promoImage} alt="Promo Background" className="absolute inset-0 z-10 h-full w-full object-cover opacity-30 mix-blend-multiply" />
-            <LandingEditableMedia enabled={isAdmin} slot="promo_image" label="promo popup" mediaType="image" onEdit={setMediaEditTarget} />
+          <div className="relative flex h-[19.25rem] items-center justify-center overflow-hidden bg-slate-100">
+            <img src={promoImage} alt="Promo Background" className="absolute inset-0 z-0 h-full w-full object-cover" />
+            <LandingEditableMedia enabled={landingMediaEditEnabled} slot="promo_image" label="promo popup" mediaType="image" onEdit={setMediaEditTarget} />
             <div className="relative z-20 text-center">
               <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] font-bold text-slate-800 shadow-sm">
                 <Icon.Sparkles className="h-3 w-3 text-amber-500" /> PROMO TERBATAS
               </div>
-              <h3 className="px-4 text-xl font-extrabold text-slate-900">Diskon 50% Kelas TPB!</h3>
+              <h3 className="px-4 text-xl font-extrabold text-white drop-shadow-[0_2px_12px_rgba(0,0,0,.65)]">Diskon 50% Kelas TPB!</h3>
             </div>
           </div>
           <div className="bg-white p-4 text-center">
@@ -862,7 +855,11 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
             </button>
           </div>
         </div>
-      )}
+      ), document.body) : null;
+
+  return (
+    <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-slate-200">
+      {promoPopup}
 
       <nav className="fixed z-50 w-full border-b border-slate-100 bg-white/80 backdrop-blur-md transition-all">
         <div className="mx-auto w-full max-w-[1800px] px-6 md:px-12 lg:px-20">
@@ -979,9 +976,9 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
             <div className="mx-auto w-full max-w-[1800px] px-6 md:px-12 lg:px-20">
               <div className="mx-auto mb-16 max-w-3xl text-center md:mb-24"><div className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-500">Mengapa Mafiking Berbeda?</div><h2 className="mb-6 text-3xl font-extrabold tracking-tight text-slate-900 md:text-5xl">Platform pembelajaran modern untuk mendukung kesuksesan belajar kamu</h2><p className="text-lg text-slate-600 md:text-xl">Platform belajar pertama untuk TPB ITB yang fokus pada pembentukan intuisi dan penanganan kelemahan secara personal.</p></div>
               <div className="grid gap-6 lg:grid-cols-2">
-                <div className="landing-card-motion flex flex-col rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md"><h3 className="mb-3 text-2xl font-bold text-slate-900">Rekomendasi Latihan</h3><p className="mb-8 font-medium text-slate-500">AI mendeteksi kelemahanmu dan merekomendasikan porsi latihan yang sesuai.</p><div className="relative mt-auto aspect-[4/3] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"><LandingEditableMedia enabled={isAdmin} slot="feature_image_1" label="gambar fitur 1" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureOne} alt="Fitur rekomendasi latihan" /></LandingEditableMedia><div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><span className="rounded-xl border border-slate-100 bg-white/90 px-5 py-2.5 text-sm font-bold text-slate-800 shadow-sm backdrop-blur-sm">Tempat Gambar 1</span></div></div></div>
-                <div className="landing-card-motion flex flex-col rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md"><div className="mb-3 flex items-center gap-2"><h3 className="text-2xl font-bold text-slate-900">History Kesalahan Canvas</h3><span className="inline-flex rounded bg-amber-100 px-2 py-0.5 text-xs font-bold uppercase tracking-widest text-amber-700">Prioritas</span></div><p className="mb-8 font-medium text-slate-500">Semua coretan salah tertangkap otomatis. Ulangi di mana kamu salah, tanpa perlu mengulang dari awal.</p><div className="relative mt-auto aspect-[4/3] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"><LandingEditableMedia enabled={isAdmin} slot="feature_image_2" label="gambar fitur 2" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureTwo} alt="Fitur history kesalahan canvas" /></LandingEditableMedia><div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><span className="rounded-xl border border-slate-100 bg-white/90 px-5 py-2.5 text-sm font-bold text-slate-800 shadow-sm backdrop-blur-sm">Tempat Gambar 2</span></div></div></div>
-                <div className="landing-card-motion flex flex-col items-center gap-8 rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md md:flex-row lg:col-span-2"><div className="w-full md:w-1/3"><h3 className="mb-3 text-2xl font-bold text-slate-900">Simulasi Tryout CBT</h3><p className="mb-6 font-medium text-slate-500">Tampilan layar utuh yang mensimulasikan lingkungan UTS/UAS nyata. Dilengkapi timer presisi.</p><button onClick={startFree} className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-900 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50" type="button">Coba Tryout Gratis</button></div><div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 md:w-2/3 md:aspect-[21/9]"><LandingEditableMedia enabled={isAdmin} slot="feature_image_3" label="gambar fitur tryout" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureThree} alt="Fitur simulasi tryout CBT" /></LandingEditableMedia><div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><span className="rounded-xl border border-slate-100 bg-white/90 px-5 py-2.5 text-sm font-bold text-slate-800 shadow-sm backdrop-blur-sm">Tempat Gambar 3</span></div></div></div>
+                <div className="landing-card-motion flex flex-col rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md"><h3 className="mb-3 text-2xl font-bold text-slate-900">Rekomendasi Latihan</h3><p className="mb-8 font-medium text-slate-500">AI mendeteksi kelemahanmu dan merekomendasikan porsi latihan yang sesuai.</p><div className="relative mt-auto aspect-[4/3] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"><LandingEditableMedia enabled={landingMediaEditEnabled} slot="feature_image_1" label="gambar fitur 1" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureOne} alt="Fitur rekomendasi latihan" /></LandingEditableMedia><div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><span className="rounded-xl border border-slate-100 bg-white/90 px-5 py-2.5 text-sm font-bold text-slate-800 shadow-sm backdrop-blur-sm">Tempat Gambar 1</span></div></div></div>
+                <div className="landing-card-motion flex flex-col rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md"><div className="mb-3 flex items-center gap-2"><h3 className="text-2xl font-bold text-slate-900">History Kesalahan Canvas</h3><span className="inline-flex rounded bg-amber-100 px-2 py-0.5 text-xs font-bold uppercase tracking-widest text-amber-700">Prioritas</span></div><p className="mb-8 font-medium text-slate-500">Semua coretan salah tertangkap otomatis. Ulangi di mana kamu salah, tanpa perlu mengulang dari awal.</p><div className="relative mt-auto aspect-[4/3] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"><LandingEditableMedia enabled={landingMediaEditEnabled} slot="feature_image_2" label="gambar fitur 2" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureTwo} alt="Fitur history kesalahan canvas" /></LandingEditableMedia><div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><span className="rounded-xl border border-slate-100 bg-white/90 px-5 py-2.5 text-sm font-bold text-slate-800 shadow-sm backdrop-blur-sm">Tempat Gambar 2</span></div></div></div>
+                <div className="landing-card-motion flex flex-col items-center gap-8 rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md md:flex-row lg:col-span-2"><div className="w-full md:w-1/3"><h3 className="mb-3 text-2xl font-bold text-slate-900">Simulasi Tryout CBT</h3><p className="mb-6 font-medium text-slate-500">Tampilan layar utuh yang mensimulasikan lingkungan UTS/UAS nyata. Dilengkapi timer presisi.</p><button onClick={startFree} className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-900 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50" type="button">Coba Tryout Gratis</button></div><div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 md:w-2/3 md:aspect-[21/9]"><LandingEditableMedia enabled={landingMediaEditEnabled} slot="feature_image_3" label="gambar fitur tryout" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureThree} alt="Fitur simulasi tryout CBT" /></LandingEditableMedia><div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><span className="rounded-xl border border-slate-100 bg-white/90 px-5 py-2.5 text-sm font-bold text-slate-800 shadow-sm backdrop-blur-sm">Tempat Gambar 3</span></div></div></div>
               </div>
             </div>
           </LandingFade>
@@ -996,7 +993,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
                 {demoVideo ? <video src={demoVideo} muted loop autoPlay playsInline className="h-full w-full object-cover opacity-60" /> : (
                   <div className="flex h-full w-full flex-col bg-[#0F172A] p-8 opacity-50"><div className="mb-6 flex w-full max-w-sm items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/80 px-4 py-3"><div className="flex gap-2"><div className="h-3 w-3 rounded-full bg-rose-500" /><div className="h-3 w-3 rounded-full bg-amber-500" /><div className="h-3 w-3 rounded-full bg-emerald-500" /></div><div className="font-mono text-xs text-slate-400">canvas_evaluation_ai.js</div></div><div className="flex-grow space-y-6"><div className="h-4 w-1/3 rounded-md bg-slate-800" /><div className="h-4 w-1/2 rounded-md bg-slate-800" /><div className="relative flex h-32 w-full items-center justify-center overflow-hidden rounded-2xl border border-rose-500/30 bg-slate-800/50 shadow-inner"><div className="absolute bottom-0 left-0 top-0 w-1 bg-rose-500" /><span className="font-mono text-sm text-rose-400">Error Detected: Calculation logic drift in Step 3.</span></div></div></div>
                 )}
-                <LandingEditableMedia enabled={isAdmin} slot="demo_video" label="video demo canvas" mediaType="video" onEdit={setMediaEditTarget} />
+                <LandingEditableMedia enabled={landingMediaEditEnabled} slot="demo_video" label="video demo canvas" mediaType="video" onEdit={setMediaEditTarget} />
                 <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-900/60 transition-colors duration-500 group-hover:bg-slate-900/40"><div className="flex h-24 w-24 items-center justify-center rounded-full border border-white/20 bg-white/10 backdrop-blur-md transition-transform duration-300 group-hover:scale-110"><LandingPlayIcon className="ml-2 h-10 w-10 text-white" /></div></div>
               </div>
               <div className="mx-auto grid w-full grid-cols-1 gap-8 sm:grid-cols-3 md:gap-16">

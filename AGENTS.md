@@ -43,6 +43,7 @@ src/belajar.jsx
 src/practice.jsx
 src/profile.jsx
 src/backend-api.jsx
+src/onboarding.jsx
 src/clerk-auth.jsx
 MAFIKING.html
 README.md
@@ -79,6 +80,7 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - `src/app.jsx` owns route state and tweaks defaults.
 - `src/backend-api.jsx` is the same-origin API helper.
 - `src/clerk-auth.jsx` is the static-Babel Clerk bridge. It fetches only the public publishable key from `/api/config/clerk`, loads Clerk browser scripts, and exposes `window.MafikingClerk`.
+- `src/onboarding.jsx` owns the mandatory non-admin profile-completion modal. It must load after `src/shared.jsx` and before `src/app.jsx`.
 - `middleware/clerk-auth.js` maps verified Clerk Bearer tokens to local SQLite users before API routes run.
 - `lib/clerk-user-sync.js` owns Clerk-to-local linking and guest-to-Google merge behavior.
 - `/` intentionally opens the public landing page for guests and logged-in users. The Mafiking logo returns to that landing page from app routes.
@@ -88,7 +90,7 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - `src/leaderboard.jsx` owns the current Peringkat page. It is frontend-static data for now and uses an inner-scroll table body; do not present it as live backend ranking until it is wired to `/api/progress/leaderboard`.
 - `src/shared.jsx` owns the sliding top-nav active pill and reusable `SlidingSegmented` control. Keep those globals loaded before pages that use them.
 - `src/admin.jsx` owns the admin page. The monitoring tab is implemented by `src/admin-monitoring.jsx`, which must load before `src/admin.jsx` in `MAFIKING.html`.
-- Landing media is stored in `landing_media` and served through `GET /api/landing-media`. Admin uploads for promo image, feature images, and demo video live in the Admin Panel `Landing Page` tab.
+- Landing media is stored in `landing_media` and served through `GET /api/landing-media`. The public landing should not expose inline `Ganti gambar` / `Ganti video` controls to admins.
 - The public landing uses local reveal/pop animations in `src/lobby.jsx` and `src/styles.css`. The demo video section should not have the old grid background.
 - The global `Nav` is intentionally not rendered on the `practice` route; practice owns its own compact session bars/toolbars.
 - `db/database.sqlite` is generated local runtime state.
@@ -218,11 +220,11 @@ Rules:
 
 - Most API routes require `req.session.userId`.
 - Clerk-signed API requests can set `req.userId` and `req.session.userId` after the server verifies the Bearer token with `@clerk/express`.
-- First-time Clerk users may need `POST /api/auth/clerk-onboard` to save a Mafiking display name and merge auto-guest data into the Google-linked account.
+- First-time or incomplete non-admin users are forced through `src/onboarding.jsx`; `POST /api/auth/profile-onboarding` saves name, phone, semester, faculty/major, and subject priorities. Keep this modal non-dismissible and fixed center.
 - `server.js` creates a guest user for API requests that lack a session, except `/api/health`, `/api/config/clerk`, `/api/payment/callback`, `/api/landing-media`, and `/api/webhooks/clerk`.
 - Admin routes require both `isAuthenticated` and `isAdmin`.
 - Admin monitoring/users uses `GET /api/admin/dashboard-data`, `POST /api/admin/users/:id/reset-password`, `POST /api/admin/users/:id/grant-access`, `POST /api/admin/users/:id/role`, and `DELETE /api/admin/users/:id`. Keep those endpoints admin-only, validate user IDs/access payloads, and never allow deleting the current admin account from the panel.
-- Admin landing media uses `GET /api/admin/landing-media`, `POST /api/admin/landing-media`, and `DELETE /api/admin/landing-media/:slot`. Keep uploads admin-only, MIME allowlisted, and stored under `assets/landing/`.
+- Landing media is read by the public landing through `GET /api/landing-media`; do not re-enable admin-facing landing media replacement unless the user explicitly asks for that workflow again.
 - Admin content management starts with a `Try Out` / `Matematika` / `Fisika` / `Kimia` selector in the `Bab & Subtopik` tab. `Try Out` opens package CRUD; subject options open chapter/subtopic CRUD filtered by `chapters.mapel`.
 - The admin shield is frontend-visible only for `currentUser.role === "admin"`; do not expose it to every user. Admin mode adds an `Admin Panel` button to the top nav, and that button navigates to the dedicated `admin` route/page.
 - Logout and return-to-landing confirmation dialogs are centered modals with Mafiking yellow/ink styling, not browser confirms or blue theme popups.

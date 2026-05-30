@@ -148,11 +148,6 @@ const App = () => {
 
   const handleAuthSuccess = React.useCallback((user, redirect) => {
     setCurrentUser(user);
-    if (user && user.needs_onboarding) {
-      setPendingClerkUser(user);
-      navigate({ route: "lobby", authMode: "login", authRedirect: redirect || null });
-      return;
-    }
     setPendingClerkUser(null);
     MafikingAPI.get("/api/payment/active-packages")
       .then((packages) => setActivePackages(Array.isArray(packages) ? packages : []))
@@ -284,6 +279,14 @@ const App = () => {
       </main>
 
       <ToastContainer />
+
+      {isLoggedIn && !isAdminAccount && currentUser?.profile_needs_completion && window.ProfileOnboardingModal && React.createElement(window.ProfileOnboardingModal, {
+        user: currentUser,
+        onComplete: (updatedUser) => {
+          setCurrentUser(updatedUser);
+          setPendingClerkUser(null);
+        },
+      })}
 
       {confirmAction && ReactDOM.createPortal((
         <div

@@ -308,7 +308,8 @@ router.get('/dashboard-data', (req, res) => {
     try {
         const db = req.app.locals.db;
         const users = db.prepare(`
-            SELECT id, username, display_name, role, xp, level, streak_days, last_active, created_at
+            SELECT id, username, display_name, role, xp, level, streak_days, last_active, created_at,
+                   phone_number, semester, fakultas, jurusan, mapel_prioritas, onboarding_completed_at
             FROM users
             ORDER BY id
         `).all();
@@ -422,7 +423,12 @@ router.get('/dashboard-data', (req, res) => {
 router.get('/users', (req, res) => {
     try {
         const db = req.app.locals.db;
-        const users = db.prepare('SELECT id, username, display_name, role, xp, level, streak_days, last_active FROM users ORDER BY id').all();
+        const users = db.prepare(`
+            SELECT id, username, display_name, role, xp, level, streak_days, last_active,
+                   phone_number, semester, fakultas, jurusan, mapel_prioritas, onboarding_completed_at
+            FROM users
+            ORDER BY id
+        `).all();
         res.json(users);
     } catch (e) { console.error('GET /users error:', e); res.status(500).json({ error: e.message }); }
 });
