@@ -1,6 +1,6 @@
 // MAFIKING Lobby — minimalist with 3 hero variants
 
-const Lobby = ({ setRoute, tweaks, currentUser, isAdmin = false, authMode = null, authRedirect = null, onAuthSuccess }) => {
+const Lobby = ({ setRoute, tweaks, currentUser, isAdmin = false, authMode = null, authRedirect = null, onAuthSuccess, pendingClerkUser = null }) => {
   if (authMode) {
     return (
       <AuthScreen
@@ -9,6 +9,7 @@ const Lobby = ({ setRoute, tweaks, currentUser, isAdmin = false, authMode = null
         setRoute={setRoute}
         onSuccess={onAuthSuccess}
         currentUser={currentUser}
+        initialClerkUser={pendingClerkUser}
       />
     );
   }
@@ -59,16 +60,16 @@ const DevScreen = ({ unlockCount, onUnlockAttempt }) => {
   );
 };
 
-const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess, currentUser = null }) => {
+const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess, currentUser = null, initialClerkUser = null }) => {
   const { useState } = React;
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
+  const [displayName, setDisplayName] = useState(initialClerkUser?.suggested_display_name || initialClerkUser?.display_name || '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [clerkLoading, setClerkLoading] = useState(false);
   const [clerkEnabled, setClerkEnabled] = useState(false);
-  const [pendingClerkUser, setPendingClerkUser] = useState(null);
+  const [pendingClerkUser, setPendingClerkUser] = useState(initialClerkUser || null);
   const isSignup = mode === "signup";
   const isGuestUser = currentUser && currentUser.display_name?.startsWith('Tamu_');
 
@@ -84,6 +85,12 @@ const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess, curr
       });
     return () => { alive = false; };
   }, []);
+
+  React.useEffect(() => {
+    if (!initialClerkUser) return;
+    setPendingClerkUser(initialClerkUser);
+    setDisplayName(initialClerkUser.suggested_display_name || initialClerkUser.display_name || '');
+  }, [initialClerkUser]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -117,7 +124,11 @@ const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess, curr
       if (!window.MafikingClerk || typeof window.MafikingClerk.openAuth !== 'function') {
         throw new Error('Login Google belum siap dimuat.');
       }
-      const user = await window.MafikingClerk.openAuth(isSignup ? 'signup' : 'login');
+      const user = await window.MafikingClerk.openAuth(isSignup ? 'signup' : 'login', {
+        provider: 'google',
+        redirect,
+      });
+      if (!user) return;
       if (user && user.needs_onboarding) {
         setPendingClerkUser(user);
         setDisplayName(user.suggested_display_name || user.display_name || '');

@@ -3,6 +3,8 @@
 const MafikingClerk = (() => {
   let readyPromise = null;
   let configPromise = null;
+  const OAUTH_CALLBACK_PATH = "/sso-callback";
+  const PENDING_OAUTH_KEY = "mafiking.clerk.pendingOAuth";
 
   function loadScript(src, attrs = {}) {
     const existing = Array.from(document.scripts).find((script) => script.src === src);
@@ -117,6 +119,42 @@ const MafikingClerk = (() => {
     return parseApiResponse(response);
   }
 
+  function readPendingOAuth() {
+    try {
+      const raw = window.sessionStorage.getItem(PENDING_OAUTH_KEY);
+      if (!raw) return null;
+      const pending = JSON.parse(raw);
+      const age = Date.now() - Number(pending.createdAt || 0);
+      if (age > 10 * 60 * 1000) {
+        window.sessionStorage.removeItem(PENDING_OAUTH_KEY);
+        return null;
+      }
+      return pending;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writePendingOAuth(mode, redirect) {
+    try {
+      window.sessionStorage.setItem(PENDING_OAUTH_KEY, JSON.stringify({
+        mode,
+        redirect: redirect || null,
+        createdAt: Date.now(),
+      }));
+    } catch (_) {}
+  }
+
+  function clearPendingOAuth() {
+    try {
+      window.sessionStorage.removeItem(PENDING_OAUTH_KEY);
+    } catch (_) {}
+  }
+
+  function isRedirectCallback() {
+    return window.location.pathname === OAUTH_CALLBACK_PATH;
+  }
+
   async function waitForSignedIn(timeoutMs = 180000) {
     const clerk = await load();
     const startedAt = Date.now();
@@ -127,7 +165,73 @@ const MafikingClerk = (() => {
     throw new Error("Login Clerk belum selesai.");
   }
 
-  async function openAuth(mode = "login") {
+  async function startGoogleRedirect(mode = "login", options = {}) {
+    const clerk = await load();
+    const pendingRedirect = options && options.redirect ? options.redirect : null;
+    const callbackUrl = `${window.location.origin}${OAUTH_CALLBACK_PATH}`;
+    const target = mode === "signup"
+      ? (clerk.signUp || clerk.client?.signUp)
+      : (clerk.signIn || clerk.client?.signIn);
+
+    writePendingOAuth(mode, pendingRedirect);
+
+    if (target && typeof target.sso === "function") {
+      await target.sso({
+        strategy: "oauth_google",
+        redirectCallbackUrl: callbackUrl,
+        redirectUrl: callbackUrl,
+      });
+      return null;
+    }
+
+    if (target && typeof target.authenticateWithRedirect === "function") {
+      await target.authenticateWithRedirect({
+        strategy: "oauth_google",
+        redirectUrl: callbackUrl,
+        redirectUrlComplete: callbackUrl,
+      });
+      return null;
+    }
+
+    clearPendingOAuth();
+    throw new Error("Login Google langsung belum didukung oleh Clerk saat ini.");
+  }
+
+  async function completeRedirectAuth() {
+    if (!isRedirectCallback()) return null;
+    const pending = readPendingOAuth();
+    const clerk = await load();
+
+    if (typeof clerk.handleRedirectCallback === "function") {
+      await clerk.handleRedirectCallback({
+        continueSignUpUrl: "/",
+        signInUrl: "/",
+        signUpUrl: "/",
+        signInForceRedirectUrl: "/",
+        signUpForceRedirectUrl: "/",
+        signInFallbackRedirectUrl: "/",
+        signUpFallbackRedirectUrl: "/",
+      }, async () => {});
+    }
+
+    await waitForSignedIn();
+    const user = await syncSession();
+    clearPendingOAuth();
+    if (window.location.pathname === OAUTH_CALLBACK_PATH) {
+      window.history.replaceState({}, document.title, "/");
+    }
+    return {
+      user,
+      redirect: pending && pending.redirect ? pending.redirect : null,
+      mode: pending && pending.mode ? pending.mode : "login",
+    };
+  }
+
+  async function openAuth(mode = "login", options = {}) {
+    if (options && options.provider === "google") {
+      return startGoogleRedirect(mode, options);
+    }
+
     const clerk = await load();
     if (mode === "signup" && typeof clerk.openSignUp === "function") {
       clerk.openSignUp();
@@ -149,7 +253,7 @@ const MafikingClerk = (() => {
     } catch (_) {}
   }
 
-  return { getToken, isEnabled, load, openAuth, signOut, syncSession };
+  return { completeRedirectAuth, getToken, isEnabled, isRedirectCallback, load, openAuth, signOut, syncSession };
 })();
 
 window.MafikingClerk = MafikingClerk;

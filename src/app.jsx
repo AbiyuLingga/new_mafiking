@@ -38,6 +38,10 @@ const App = () => {
   const [isAdmin, setIsAdmin] = React.useState(false);
   const [authMode, setAuthMode] = React.useState(null);
   const [authRedirect, setAuthRedirect] = React.useState(null);
+  const [pendingClerkUser, setPendingClerkUser] = React.useState(null);
+  const [authCallbackLoading, setAuthCallbackLoading] = React.useState(() => {
+    return Boolean(window.MafikingClerk && typeof window.MafikingClerk.isRedirectCallback === "function" && window.MafikingClerk.isRedirectCallback());
+  });
   const [belajarSection, setBelajarSection] = React.useState(null);
   const [activePackages, setActivePackages] = React.useState([]);
   const [confirmAction, setConfirmAction] = React.useState(null);
@@ -144,6 +148,12 @@ const App = () => {
 
   const handleAuthSuccess = React.useCallback((user, redirect) => {
     setCurrentUser(user);
+    if (user && user.needs_onboarding) {
+      setPendingClerkUser(user);
+      navigate({ route: "lobby", authMode: "login", authRedirect: redirect || null });
+      return;
+    }
+    setPendingClerkUser(null);
     MafikingAPI.get("/api/payment/active-packages")
       .then((packages) => setActivePackages(Array.isArray(packages) ? packages : []))
       .catch(() => setActivePackages([]));
@@ -157,6 +167,30 @@ const App = () => {
   }, [navigate]);
 
   React.useEffect(() => { window.__mafikingNavigate = navigate; }, [navigate]);
+
+  React.useEffect(() => {
+    if (!window.MafikingClerk || typeof window.MafikingClerk.completeRedirectAuth !== "function") return undefined;
+    if (typeof window.MafikingClerk.isRedirectCallback !== "function" || !window.MafikingClerk.isRedirectCallback()) return undefined;
+
+    let cancelled = false;
+    setAuthCallbackLoading(true);
+    window.MafikingClerk.completeRedirectAuth()
+      .then((result) => {
+        if (cancelled || !result || !result.user) return;
+        handleAuthSuccess(result.user, result.redirect);
+      })
+      .catch((err) => {
+        console.error("[clerk-callback]", err);
+        if (!cancelled) {
+          navigate({ route: "lobby", authMode: "login" });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAuthCallbackLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [handleAuthSuccess, navigate]);
 
   React.useEffect(() => {
     if (!isAdminAccount) {
@@ -195,6 +229,17 @@ const App = () => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [route]);
 
+  if (authCallbackLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-paper text-ink">
+        <div className="rounded-2xl border border-ink/10 bg-white px-8 py-6 text-center shadow-sm">
+          <div className="font-display text-2xl font-bold">Menyelesaikan login Google...</div>
+          <div className="mt-2 text-sm font-semibold text-ink/55">Mohon tunggu sebentar.</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-paper text-ink">
       <OfflineBanner />
@@ -213,7 +258,7 @@ const App = () => {
 
       <main className="flex-1">
         <div data-screen-label={routeLabel(route)}>
-          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={isAdmin || isAdminAccount} authMode={authMode} authRedirect={authRedirect} onAuthSuccess={handleAuthSuccess} />}
+          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={isAdmin || isAdminAccount} authMode={authMode} authRedirect={authRedirect} onAuthSuccess={handleAuthSuccess} pendingClerkUser={pendingClerkUser} />}
           {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} initialSection={belajarSection} />}
           {route === "misi" && (
             <ScreenErrorBoundary>
