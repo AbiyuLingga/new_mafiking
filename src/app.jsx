@@ -255,7 +255,7 @@ const App = () => {
         <div
           key={`${route}:${belajarSection || ""}:${authMode || ""}`}
           data-screen-label={routeLabel(route)}
-          className={route === "practice" ? "" : "app-route-transition"}
+          className={route === "practice" || route === "lobby" ? "" : "app-route-transition"}
         >
           {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={isAdmin || isAdminAccount} authMode={authMode} authRedirect={authRedirect} onAuthSuccess={handleAuthSuccess} pendingClerkUser={pendingClerkUser} />}
           {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} initialSection={belajarSection} />}

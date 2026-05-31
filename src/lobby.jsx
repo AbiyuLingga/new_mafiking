@@ -861,7 +861,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-slate-200">
       {promoPopup}
 
-      <nav className="fixed z-50 w-full border-b border-slate-100 bg-white/80 backdrop-blur-md transition-all">
+      <nav className="fixed top-0 z-50 w-full border-b border-slate-100 bg-white/80 backdrop-blur-md transition-all">
         <div className="mx-auto w-full max-w-[1800px] px-6 md:px-12 lg:px-20">
           <div className="flex h-20 items-center justify-between">
             <button onClick={() => scrollToId("beranda")} className="flex items-center gap-2" type="button">
