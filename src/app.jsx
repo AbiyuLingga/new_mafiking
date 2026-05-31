@@ -33,6 +33,7 @@ const App = () => {
   const [route, setRoute] = React.useState("lobby");
   const [practiceContext, setPracticeContext] = React.useState(null);
   const [paymentContext, setPaymentContext] = React.useState(null);
+  const [tryoutContext, setTryoutContext] = React.useState(null);
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [currentUser, setCurrentUser] = React.useState(null);
   const [isAdmin, setIsAdmin] = React.useState(false);
@@ -80,6 +81,8 @@ const App = () => {
   const navigate = React.useCallback((next) => {
     if (next && typeof next === "object") {
       if (next.practice) setPracticeContext(next.practice);
+      if (next.tryout) setTryoutContext(next.tryout);
+      else setTryoutContext(null);
       if (next.payment) setPaymentContext(next.payment);
       else setPaymentContext(null);
       if (next.section || next.belajarSection) setBelajarSection(next.section || next.belajarSection);
@@ -94,6 +97,7 @@ const App = () => {
       return;
     }
     setPaymentContext(null);
+    setTryoutContext(null);
     setAuthMode(null);
     setAuthRedirect(null);
     if (next !== "belajar") setBelajarSection(null);
@@ -253,7 +257,7 @@ const App = () => {
 
       <main className="flex-1">
         <div
-          key={`${route}:${belajarSection || ""}:${authMode || ""}`}
+          key={`${route}:${belajarSection || ""}:${authMode || ""}:${tryoutContext?.id || ""}`}
           data-screen-label={routeLabel(route)}
           className={route === "practice" || route === "lobby" ? "" : "app-route-transition"}
         >
@@ -266,7 +270,7 @@ const App = () => {
                 : <AccessGate setRoute={navigate} title="Misi Harian termasuk paket belajar" message="Beli paket untuk mendapat akses ke misi harian, XP bonus, dan latihan terarah setiap hari." variant="misi" />}
             </ScreenErrorBoundary>
           )}
-          {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} />}
+          {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} context={tryoutContext} />}
           {route === "leaderboard" && window.Leaderboard && React.createElement(window.Leaderboard)}
           {route === "admin" && isAdminAccount && isAdmin && window.AdminPage && React.createElement(window.AdminPage, { setRoute: navigate })}
           {route === "profile" && (isLoggedIn
