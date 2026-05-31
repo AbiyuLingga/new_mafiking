@@ -2,7 +2,7 @@
 
 const BLANK_PKG = { title: '', description: '', price: 'Gratis', original_price: '', badge: '', duration: '60 mnt', questions: 30, features: '', tone: 'default', sort_order: 0 };
 
-const Tryout = ({ setRoute, isAdmin, isLoggedIn }) => {
+const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
   const [tab, setTab] = useState("beli");
   const [packages, setPackages] = useState([]);
   const [activePackages, setActivePackages] = useState([]);
@@ -11,7 +11,20 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn }) => {
   const [inlineEdit, setInlineEdit] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { loadPackages(); }, []);
+  useEffect(() => {
+    if (context?.mode !== "free-math") loadPackages();
+  }, [context?.mode]);
+
+  if (context?.mode === "free-math") {
+    return (
+      <Practice
+        setRoute={setRoute}
+        context={buildFreeMathTryoutPracticeContext(context)}
+        isAdmin={isAdmin}
+        isLoggedIn={isLoggedIn}
+      />
+    );
+  }
 
   async function loadPackages() {
     setLoading(true);
@@ -410,6 +423,28 @@ function buildTryoutPracticeContext(pkg) {
     topics: [pkg?.title || "Try Out", "Integral", isFree ? "Pembahasan setelah login" : "Paket aktif"],
     freeTryout: isFree,
     packageTitle: pkg?.title || "Try Out",
+  };
+}
+
+function buildFreeMathTryoutPracticeContext(context) {
+  return {
+    id: context?.id || "free-math-tryout-15",
+    num: "TO-01",
+    title: context?.title || "Try Out Matematika",
+    mapel: "Matematika",
+    semester: Number(context?.semester || 1),
+    est: context?.est || "15 mnt",
+    total: Number(context?.total || context?.problemLimit || 15),
+    progress: 0,
+    topics: context?.topics || ["Try Out Gratis", "Matematika"],
+    freeTryout: true,
+    isTryoutSession: true,
+    tryoutMode: "math",
+    problemLimit: Number(context?.problemLimit || 15),
+    timeLimitSeconds: Number(context?.timeLimitSeconds || 15 * 60),
+    disableCanvasIntro: true,
+    disableCanvasMode: true,
+    backRoute: { route: "belajar", section: "Try Out" },
   };
 }
 

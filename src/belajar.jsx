@@ -153,43 +153,64 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, initialSection
 const TryOutBelajarPanel = ({ setRoute, isLoggedIn }) => {
   const startPractice = () => {
     setRoute({
-      route: "practice",
-      practice: {
-        id: "free-tryout-integral",
-        num: "01",
-        title: "Teknik Integrasi",
+      route: "tryout",
+      tryout: {
+        id: "free-math-tryout-15",
+        mode: "free-math",
+        title: "Try Out Matematika",
         mapel: "Matematika",
         semester: 1,
-        est: "60 mnt",
-        total: 23,
-        topics: ["Try Out Gratis", "Integral", "Limit"],
+        est: "15 mnt",
+        total: 15,
+        problemLimit: 15,
+        timeLimitSeconds: 15 * 60,
+        topics: ["Try Out Gratis", "Matematika"],
         freeTryout: true,
+        isTryoutSession: true,
       },
     });
   };
 
   return (
-    <div className="mapel-stagger">
-      <section className="relative min-h-[360px] overflow-hidden rounded-[2rem] bg-ink p-7 text-white md:p-10 lg:min-h-[420px]">
-        <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-yel/20 blur-3xl" />
-        <div className="relative z-10">
-          <span className="inline-flex rounded-full bg-yel px-3 py-1 text-[11px] font-black uppercase tracking-widest text-ink">
-            Gratis
-          </span>
-          <h2 className="mt-5 font-display text-3xl font-black tracking-[-0.03em] md:text-5xl">
+    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mapel-stagger">
+      <section className="card-premium card-premium-amber p-6 group flex flex-col justify-between transition-all">
+        <div className="card-premium-glow glow-top-right glow-amber" />
+        <div className="card-premium-glow glow-bottom-left glow-amber" />
+        <div className="card-grid-pattern" />
+
+        <div className="relative z-10 flex flex-col h-full">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[10px] font-mono font-bold tracking-widest uppercase bg-ink/5 text-ink/65 px-2.5 py-1 rounded-md border border-ink/5">
+              Try Out
+            </span>
+            <div className="h-8 min-w-[3.75rem] px-2 rounded-lg bg-transparent flex items-center justify-center gap-1 text-[10px] font-mono font-bold tracking-widest uppercase text-ink/60 border border-ink/5">
+              <Icon.Clock className="w-3 h-3" />
+              15 mnt
+            </div>
+          </div>
+
+          <h2 className="font-display font-extrabold text-2xl text-ink leading-tight tracking-tight mb-3 group-hover:text-ink/80 transition-colors">
             Try Out Gratis TPB
           </h2>
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-white/70 md:text-base">
+          <p className="text-xs text-ink/55 font-sans leading-relaxed mb-6 line-clamp-3">
             Mulai dari simulasi ringan untuk menguji ritme belajar. Soal bisa dicoba gratis, sementara pembahasan lengkap dan progres tersimpan setelah masuk akun.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <button onClick={startPractice} className="btn-yel !px-6 !py-3" type="button">
-              Mulai Try Out <Icon.Arrow />
+
+          <div className="mt-auto pt-4 border-t border-ink/5 flex items-center justify-between gap-3 w-full">
+            <span className="text-xs font-mono font-bold text-ink/45">
+              15 soal latihan
+            </span>
+            <button onClick={startPractice} className="btn-premium-cta btn-premium-cta-amber shrink-0" type="button">
+              Mulai
+              <Icon.Arrow className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
             </button>
+          </div>
+
+          <div className="mt-3 flex">
             {!isLoggedIn && (
               <button
                 onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "belajar", section: "Try Out" } })}
-                className="inline-flex items-center rounded-full border border-white/15 px-6 py-3 text-sm font-bold text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                className="text-xs font-bold text-ink/45 transition-colors hover:text-ink"
                 type="button"
               >
                 Login untuk pembahasan

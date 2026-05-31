@@ -17,7 +17,14 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
   const [showResultModal, setShowResultModal] = useState(false);
   const [ocrReview, setOcrReview] = useState(null);
   const [focusMode, setFocusMode] = useState(false);
-  const [showCanvasIntro, setShowCanvasIntro] = useState(true);
+  const [showCanvasIntro, setShowCanvasIntro] = useState(() => !context?.disableCanvasIntro);
+  const [timeLeftSeconds, setTimeLeftSeconds] = useState(() => {
+    const limit = Number(context?.timeLimitSeconds || 0);
+    return limit > 0 ? limit : null;
+  });
+  const timeExpiredNoticeRef = useRef(false);
+  const isTimedTryout = Number(context?.timeLimitSeconds || 0) > 0;
+  const timeExpired = isTimedTryout && timeLeftSeconds === 0;
 
   function dismissCanvasIntro() { setShowCanvasIntro(false); }
   function requiresLoginForDiscussion() {
@@ -54,6 +61,28 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
   useEffect(() => {
     loadPractice();
   }, [context?.id, context?.mapel]);
+
+  useEffect(() => {
+    const limit = Number(context?.timeLimitSeconds || 0);
+    setTimeLeftSeconds(limit > 0 ? limit : null);
+    timeExpiredNoticeRef.current = false;
+    setShowCanvasIntro(!context?.disableCanvasIntro);
+  }, [context?.id, context?.timeLimitSeconds, context?.disableCanvasIntro]);
+
+  useEffect(() => {
+    if (!isTimedTryout) return undefined;
+    const timer = window.setInterval(() => {
+      setTimeLeftSeconds((current) => current == null ? current : Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [context?.id, isTimedTryout]);
+
+  useEffect(() => {
+    if (!timeExpired || timeExpiredNoticeRef.current) return;
+    timeExpiredNoticeRef.current = true;
+    setError("Waktu try out sudah habis.");
+    showToast("Waktu try out sudah habis.", "error");
+  }, [timeExpired]);
 
   // Reset per-problem state on navigation.
   useEffect(() => {
@@ -136,6 +165,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
 
   function submitChoice() {
     if (!problem) return;
+    if (timeExpired) { setError("Waktu try out sudah habis."); return; }
     if (selectedChoiceIndex == null) { setError("Pilih salah satu jawaban dulu."); return; }
     if (requiresLoginForAnswer()) { requestAnswerLogin(); return; }
     const choices = getChoices(problem);
@@ -178,6 +208,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
 
   async function submitCanvas() {
     if (!problem) return;
+    if (timeExpired) { setError("Waktu try out sudah habis."); return; }
     if (context?.isPreview) { setError("Canvas correction tidak tersedia di mode preview."); return; }
     if (requiresLoginForAnswer()) { requestAnswerLogin(); return; }
     try {
@@ -274,6 +305,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
 
   function switchMode(nextMode) {
     if (nextMode === mode) return;
+    if (nextMode === "canvas" && context?.disableCanvasMode) return;
     if (nextMode === "canvas" && requiresLoginForDiscussion()) {
       requestDiscussionLogin();
       return;
@@ -389,7 +421,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
         attempt={activeAttempt}
         error={error}
         isAdmin={isAdmin}
-        onBack={() => setRoute("belajar")}
+        onBack={() => setRoute(context?.backRoute || "belajar")}
         onChoiceSelect={setSelectedChoiceIndex}
         onHintToggle={() => setShowHint((v) => !v)}
         onMoveProblem={moveProblem}
@@ -412,6 +444,10 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
         showCanvasIntro={showCanvasIntro}
         onDismissCanvasIntro={dismissCanvasIntro}
         onOpenCanvasFromIntro={openCanvasFromIntro}
+        isCanvasModeDisabled={Boolean(context?.disableCanvasMode)}
+        isTimedTryout={isTimedTryout}
+        timeExpired={timeExpired}
+        timeLeftSeconds={timeLeftSeconds}
       />
     </React.Fragment>
   );
@@ -985,6 +1021,7 @@ const ChoiceView = ({
   problems, onProblemSelect, showHint, totalProblems, subtopicTitle, currentChapter, availableChapters,
   onChapterSelect, getChoices, getCorrectChoiceIndex,
   showCanvasIntro, onDismissCanvasIntro, onOpenCanvasFromIntro,
+  isCanvasModeDisabled, isTimedTryout, timeExpired, timeLeftSeconds,
 }) => {
   const rawChoices = getChoices(problem);
   const choices = isAdmin && !rawChoices.length ? ["", "", "", ""] : rawChoices;
@@ -992,7 +1029,7 @@ const ChoiceView = ({
   const isAnswered = attempt?.mode === "choice";
   const isCorrect = Boolean(attempt?.evaluation?.isCorrect);
   const firstStep = (problem.steps || [])[0];
-  const canSubmitChoice = selectedChoiceIndex != null && !isAnswered && choices.length > 0;
+  const canSubmitChoice = selectedChoiceIndex != null && !isAnswered && choices.length > 0 && !timeExpired;
 
   const [qDraft, setQDraft] = useState(null);
   const [editingChoice, setEditingChoice] = useState(null);
@@ -1057,7 +1094,12 @@ const ChoiceView = ({
           />
         </div>
         <div className="mafiking-session-stats">
-          <ModeSegment value="choice" onChange={onSwitchMode} />
+          {isTimedTryout && (
+            <div className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-black tnum ${timeExpired ? "border-red-200 bg-red-50 text-red-700" : "border-ink/10 bg-white text-ink"}`}>
+              {formatDurationClock(timeLeftSeconds || 0)}
+            </div>
+          )}
+          {!isCanvasModeDisabled && <ModeSegment value="choice" onChange={onSwitchMode} />}
         </div>
       </div>
 
@@ -1766,6 +1808,7 @@ const CanvasView = ({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 function getPracticeChapters(context) {
+  if (context?.isTryoutSession) return [];
   const mapel = context?.mapel || "Matematika";
   const allChapters = window.chapterData?.[mapel] || [];
   const semester = Number(context?.semester || 0);
@@ -1789,18 +1832,23 @@ function getCurrentChapter(context, session, availableChapters) {
 async function loadQuestionSource(questionSource) {
   if (questionSource.type === "subtopic") {
     const data = await MafikingAPI.get(`/api/quiz/subtopics/${questionSource.subtopic.id}/full`);
+    const problems = limitProblems(
+      data.problems.map((p) => ({ ...p, sourceSubtopic: data.subtopic })),
+      questionSource.limit
+    );
     return {
       ...data,
-      problems: data.problems.map((p) => ({ ...p, sourceSubtopic: data.subtopic })),
+      problems,
     };
   }
   const subtopicSessions = await Promise.all(
     questionSource.subtopics.map((s) => MafikingAPI.get(`/api/quiz/subtopics/${s.id}/full`))
   );
+  const problems = subtopicSessions.flatMap((data) =>
+    data.problems.map((p) => ({ ...p, sourceSubtopic: data.subtopic }))
+  );
   return {
-    problems: subtopicSessions.flatMap((data) =>
-      data.problems.map((p) => ({ ...p, sourceSubtopic: data.subtopic }))
-    ),
+    problems: limitProblems(problems, questionSource.limit),
     subtopic: { id: questionSource.chapter.id, title: questionSource.title },
   };
 }
@@ -1815,6 +1863,21 @@ function chooseQuestionSource(init, context) {
 
   const mapel = normalizeText(context.mapel);
   if (mapel && mapel !== "matematika") return null;
+
+  if (context.tryoutMode === "math") {
+    const mathChapters = chapters.filter((chapter) => normalizeText(chapter.mapel || "Matematika") === "matematika");
+    const subtopics = mathChapters
+      .flatMap((chapter) => chapter.subtopics || [])
+      .filter((subtopic) => Number(problemCounts[subtopic.id] || 0) > 0);
+    if (!subtopics.length) return null;
+    return {
+      chapter: { id: context.id || "tryout-math", title: context.title || "Try Out Matematika" },
+      limit: Number(context.problemLimit || 15),
+      subtopics,
+      title: context.title || "Try Out Matematika",
+      type: "chapter",
+    };
+  }
 
   const title = normalizeText(context.title);
   if (title.includes("teknik integrasi")) {
@@ -1835,6 +1898,12 @@ function chooseQuestionSource(init, context) {
   return matched ? { subtopic: matched, type: "subtopic" } : null;
 }
 
+function limitProblems(problems, limit) {
+  const safeLimit = Number(limit || 0);
+  if (!safeLimit || safeLimit < 1) return problems;
+  return problems.slice(0, safeLimit);
+}
+
 function normalizeText(value) {
   return String(value || "")
     .toLowerCase()
@@ -1849,6 +1918,13 @@ function normalizeAnswerText(value) {
     .toLowerCase()
     .replace(/\s+/g, "")
     .replace(/[^0-9a-z+\-*/=().,]/g, "");
+}
+
+function formatDurationClock(seconds) {
+  const safeSeconds = Math.max(0, Number(seconds || 0));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainder = safeSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
 function getDataUrlMimeType(dataUrl) {
