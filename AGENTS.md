@@ -90,6 +90,7 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - `src/leaderboard.jsx` owns the current Peringkat page. It is frontend-static data for now and uses an inner-scroll table body; do not present it as live backend ranking until it is wired to `/api/progress/leaderboard`.
 - `src/shared.jsx` owns the sliding top-nav active pill and reusable `SlidingSegmented` control. Keep those globals loaded before pages that use them.
 - `src/admin.jsx` owns the admin page. The monitoring tab is implemented by `src/admin-monitoring.jsx`, which must load before `src/admin.jsx` in `MAFIKING.html`.
+- `src/styles.css` owns shared `.app-page-bg` variants for Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and locked access gates. Keep those as background layers; do not change page flow just to alter glow colors.
 - Landing media is stored in `landing_media` and served through `GET /api/landing-media`. The public landing should not expose inline `Ganti gambar` / `Ganti video` controls to admins.
 - The public landing uses local reveal/pop animations in `src/lobby.jsx` and `src/styles.css`. The demo video section should not have the old grid background.
 - The global `Nav` is intentionally not rendered on the `practice` route; practice owns its own compact session bars/toolbars.

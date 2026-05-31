@@ -1843,18 +1843,20 @@ const AdminPanel = ({ onClose }) => (
 );
 
 const AdminPage = ({ setRoute }) => (
-  <section className="max-w-6xl mx-auto px-6 md:px-8 py-10 md:py-12">
-    <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-7">
-      <div>
-        <p className="kicker mb-2">Admin</p>
-        <h1 className="font-display font-bold text-4xl md:text-5xl leading-tight">Admin Panel</h1>
+  <section className="app-page-bg app-page-bg--admin min-h-[calc(100vh-72px)] px-6 md:px-8 py-10 md:py-12">
+    <div className="max-w-6xl mx-auto">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-7">
+        <div>
+          <p className="kicker mb-2">Admin</p>
+          <h1 className="font-display font-bold text-4xl md:text-5xl leading-tight">Admin Panel</h1>
+        </div>
+        <button className="admin-btn-ghost" onClick={() => setRoute("belajar")} type="button">
+          Kembali ke belajar
+        </button>
       </div>
-      <button className="admin-btn-ghost" onClick={() => setRoute("belajar")} type="button">
-        Kembali ke belajar
-      </button>
-    </div>
-    <div className="admin-page-shell">
-      <AdminPanelContent />
+      <div className="admin-page-shell">
+        <AdminPanelContent />
+      </div>
     </div>
   </section>
 );

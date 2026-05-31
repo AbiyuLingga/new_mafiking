@@ -143,7 +143,7 @@ const Misi = ({ setRoute, tweaks, isAdmin }) => {
   const adminEditState = { inlineEdit, saving, startInlineEdit, setInlineEdit, saveInlineEdit, saveMissionPatch };
 
   return (
-    <div className="bg-paper">
+    <div className="app-page-bg app-page-bg--misi min-h-[calc(100vh-72px)]">
       <section>
         <div className="max-w-6xl mx-auto px-6 md:px-8 pt-12 pb-10">
           <div>
@@ -427,18 +427,67 @@ const MissionMafikingLatihan = ({ timeline, setRoute, isAdmin, adminEdit, onDele
   const [focusedDay, setFocusedDay] = useState(
     timeline.find((m) => getMissionDisplayStatus(m) === "active")?.day || (timeline[0]?.day || 1)
   );
+  const [carouselPaused, setCarouselPaused] = useState(false);
   const scrollRef = useRef(null);
   const activeRef = useRef(null);
+  const marqueeTimeline = timeline.length > 1 ? [...timeline, ...timeline] : timeline;
 
   useEffect(() => {
     activeRef.current?.scrollIntoView({ behavior: "instant", inline: "center", block: "nearest" });
   }, []);
 
-  const scrollMissions = (direction) => {
-    if (!scrollRef.current) return;
+  const getLoopPoint = React.useCallback((container) => {
+    if (!container || timeline.length < 2) return Math.max(0, container.scrollWidth - container.clientWidth);
+    const first = container.children[0];
+    const duplicateFirst = container.children[timeline.length];
+    if (!first || !duplicateFirst) return container.scrollWidth / 2;
+    return Math.max(0, duplicateFirst.offsetLeft - first.offsetLeft);
+  }, [timeline.length]);
+
+  const scrollMissions = React.useCallback((direction) => {
+    const container = scrollRef.current;
+    if (!container) return;
     const scrollAmount = window.innerWidth > 768 ? 400 : 300;
-    scrollRef.current.scrollBy({ left: direction === "left" ? -scrollAmount : scrollAmount, behavior: "smooth" });
-  };
+    const loopPoint = getLoopPoint(container);
+    if (loopPoint <= 0) return;
+
+    let nextLeft = container.scrollLeft + (direction === "left" ? -scrollAmount : scrollAmount);
+    if (timeline.length > 1) {
+      if (nextLeft >= loopPoint) nextLeft -= loopPoint;
+      if (nextLeft < 0) nextLeft += loopPoint;
+    } else {
+      nextLeft = Math.max(0, Math.min(loopPoint, nextLeft));
+    }
+
+    container.scrollTo({ left: nextLeft, behavior: "smooth" });
+  }, [getLoopPoint, timeline.length]);
+
+  useEffect(() => {
+    if (carouselPaused || timeline.length < 2) return undefined;
+    let frameId = 0;
+    let previousTime = 0;
+
+    const tick = (time) => {
+      const container = scrollRef.current;
+      if (container) {
+        const elapsed = previousTime ? time - previousTime : 0;
+        const loopPoint = getLoopPoint(container);
+        if (loopPoint > 0 && elapsed > 0) {
+          const nextLeft = container.scrollLeft + elapsed * 0.10;
+          if (nextLeft >= loopPoint) {
+            container.scrollLeft = nextLeft - loopPoint;
+          } else {
+            container.scrollLeft = nextLeft;
+          }
+        }
+      }
+      previousTime = time;
+      frameId = window.requestAnimationFrame(tick);
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [carouselPaused, getLoopPoint, timeline.length]);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
@@ -465,8 +514,19 @@ const MissionMafikingLatihan = ({ timeline, setRoute, isAdmin, adminEdit, onDele
         <Icon.ChevR className="w-6 h-6 md:w-8 md:h-8" />
       </button>
 
-      <div ref={scrollRef} onScroll={handleScroll} className="flex gap-4 md:gap-8 overflow-x-auto snap-x snap-mandatory hide-scrollbar py-8 items-center px-[5vw] md:px-[15vw]">
-        {timeline.map((mission) => {
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        onMouseEnter={() => setCarouselPaused(true)}
+        onMouseLeave={() => setCarouselPaused(false)}
+        onFocusCapture={() => setCarouselPaused(true)}
+        onBlurCapture={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setCarouselPaused(false);
+        }}
+        className="flex gap-4 md:gap-8 overflow-x-auto hide-scrollbar py-8 items-center px-[5vw] md:px-[15vw]"
+      >
+        {marqueeTimeline.map((mission, index) => {
+          const isPrimaryCopy = index < timeline.length;
           const status = getMissionDisplayStatus(mission);
           const isActive = status === "active";
           const isCompleted = status === "completed";
@@ -475,10 +535,10 @@ const MissionMafikingLatihan = ({ timeline, setRoute, isAdmin, adminEdit, onDele
           const isFocused = focusedDay === mission.day;
           return (
             <article
-              key={mission.id || mission.day}
+              key={`${mission.id || mission.day}-${index}`}
               data-day={mission.day}
-              ref={isActive ? activeRef : null}
-              className={`shrink-0 snap-center flex flex-col justify-between border transition-all duration-300 relative overflow-hidden w-[300px] md:w-[400px] min-h-[380px] rounded-[2rem] p-6 md:p-8 ${isFocused ? "transform scale-100 shadow-2xl z-10 opacity-100" : "transform scale-90 opacity-60 hover:opacity-80 shadow-sm"} ${isActive ? "border-amber-300 bg-gradient-to-br from-amber-50 to-white" : isCompleted ? "bg-emerald-50/30 border-emerald-100" : "bg-gray-50 border-gray-200"}`}
+              ref={isPrimaryCopy && isActive ? activeRef : null}
+              className={`shrink-0 flex flex-col justify-between border transition-all duration-300 relative overflow-hidden w-[300px] md:w-[400px] min-h-[380px] rounded-[2rem] p-6 md:p-8 ${isFocused ? "transform scale-100 shadow-2xl z-10 opacity-100" : "transform scale-90 opacity-60 hover:opacity-80 shadow-sm"} ${isActive ? "border-amber-300 bg-gradient-to-br from-amber-50 to-white" : isCompleted ? "bg-emerald-50/30 border-emerald-100" : "bg-gray-50 border-gray-200"}`}
             >
               {isActive && <div className="absolute top-0 right-0 w-64 h-64 bg-amber-200 blur-[80px] rounded-full opacity-40 pointer-events-none" />}
               <div className="flex justify-between items-start mb-4 relative z-10 w-full">

@@ -37,7 +37,7 @@ const Leaderboard = () => {
   const pointLabel = activeTab === "semua" ? "Total Poin (XP)" : "Poin (XP) Minggu Ini";
 
   return (
-    <section className="h-[calc(100vh-72px)] overflow-hidden bg-slate-50 text-slate-900">
+    <section className="app-page-bg app-page-bg--peringkat h-[calc(100vh-72px)] overflow-hidden text-slate-900">
       <div className="mx-auto flex h-full max-w-6xl min-h-0 flex-col px-4 py-5 sm:px-6 lg:px-8">
         <div className="flex shrink-0 flex-col gap-4 pb-4 md:flex-row md:items-end md:justify-between">
           <div>

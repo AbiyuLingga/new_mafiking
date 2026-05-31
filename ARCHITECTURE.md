@@ -193,6 +193,7 @@ The global `Nav` is intentionally not rendered while `route === "practice"` or `
 - After auth succeeds, `GET /api/auth/me` marks incomplete non-admin profiles with `profile_needs_completion`; `src/app.jsx` then renders the fixed, non-dismissible `ProfileOnboardingModal`.
 - The top app nav uses `Beranda` for `belajar`, `Misi Harian` for `misi`, `Paket` for `tryout`, and `Peringkat` for `leaderboard`; there is no separate `Belajar` nav link.
 - The app route shell uses a small vertical fade/slide transition. `src/shared.jsx` measures nav and segmented-control buttons so the active oval moves instead of teleporting.
+- Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and locked access gates use shared `.app-page-bg` variants from `src/styles.css` for the soft grid/glow background while keeping page-specific content/layout components unchanged.
 - The leaderboard is currently frontend-static display data; `routes/progress.js` already exposes leaderboard APIs but this first page does not consume them yet.
 - Logged-out users can start the free Try Out in multiple-choice mode.
 - Free Try Out pembahasan/canvas review and protected subject chapters route through login/sign-up with an auth redirect back to the intended route.

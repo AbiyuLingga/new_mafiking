@@ -151,7 +151,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
   }, []);
 
   return (
-    <div className="bg-paper min-h-screen">
+    <div className="app-page-bg app-page-bg--profil min-h-screen">
       <section className="pt-12 pb-6">
         <div className="max-w-6xl mx-auto px-6 md:px-8">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b hairline pb-6">

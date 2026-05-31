@@ -127,7 +127,7 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn }) => {
   }
 
   return (
-    <div className="bg-paper">
+    <div className="app-page-bg app-page-bg--paket min-h-[calc(100vh-72px)]">
       <section>
         <div className="max-w-6xl mx-auto px-6 md:px-8 pt-12 pb-10">
           <div className="grid lg:grid-cols-12 gap-8 items-end">

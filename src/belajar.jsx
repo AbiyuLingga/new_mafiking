@@ -81,7 +81,7 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, initialSection
   const isTryOutSection = mapel === "Try Out";
 
   return (
-    <div className="bg-paper">
+    <div className="app-page-bg app-page-bg--belajar min-h-[calc(100vh-72px)]">
       {/* Header */}
       <section>
         <div className="max-w-6xl mx-auto px-6 md:px-8 pt-12 pb-8">
@@ -336,7 +336,7 @@ const MapelSidebar = ({ mapel, setMapel, semester, setSemester }) => (
 
 // Variant B — Underline tabs
 const MapelTabs = ({ mapel, setMapel }) => (
-  <section className="sticky top-[72px] z-30 bg-paper border-b hairline">
+  <section className="sticky top-[72px] z-30 bg-transparent border-b hairline">
     <div className="max-w-6xl mx-auto px-6 md:px-8">
       <div className="flex gap-8 overflow-x-auto hide-scrollbar pt-5">
         {BELAJAR_MAPELS.map(m => {

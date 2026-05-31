@@ -164,6 +164,92 @@ body {
   border-radius: 20px;
 }
 
+/* Shared soft grid + glow background for app pages */
+.app-page-bg {
+  --app-bg-grid: rgba(15, 23, 42, 0.055);
+  --app-bg-glow-a: rgba(254, 240, 138, 0.54);
+  --app-bg-glow-b: rgba(186, 230, 253, 0.42);
+  --app-bg-glow-c: rgba(255, 244, 79, 0.22);
+  --app-bg-veil: rgba(255, 255, 255, 0);
+  position: relative;
+  isolation: isolate;
+  background: #fff;
+}
+
+.app-page-bg--belajar {
+  --app-bg-grid: rgba(15, 23, 42, 0.035);
+  --app-bg-glow-a: rgba(254, 240, 138, 0.46);
+  --app-bg-glow-b: rgba(186, 230, 253, 0.36);
+  --app-bg-glow-c: rgba(255, 255, 255, 0.56);
+  --app-bg-veil: rgba(255, 255, 255, 0.58);
+}
+
+.app-page-bg--misi {
+  --app-bg-glow-a: rgba(254, 240, 138, 0.50);
+  --app-bg-glow-b: rgba(187, 247, 208, 0.34);
+  --app-bg-glow-c: rgba(251, 191, 36, 0.18);
+  --app-bg-veil: rgba(255, 255, 255, 0.58);
+}
+
+.app-page-bg--paket {
+  --app-bg-glow-a: rgba(253, 224, 71, 0.42);
+  --app-bg-glow-b: rgba(203, 213, 225, 0.32);
+  --app-bg-glow-c: rgba(251, 146, 60, 0.14);
+  --app-bg-veil: rgba(255, 255, 255, 0.60);
+}
+
+.app-page-bg--peringkat {
+  --app-bg-glow-a: rgba(186, 230, 253, 0.40);
+  --app-bg-glow-b: rgba(254, 240, 138, 0.32);
+  --app-bg-glow-c: rgba(196, 181, 253, 0.16);
+  --app-bg-veil: rgba(255, 255, 255, 0.58);
+}
+
+.app-page-bg--profil {
+  --app-bg-glow-a: rgba(254, 240, 138, 0.34);
+  --app-bg-glow-b: rgba(167, 243, 208, 0.30);
+  --app-bg-glow-c: rgba(186, 230, 253, 0.24);
+  --app-bg-veil: rgba(255, 255, 255, 0.58);
+}
+
+.app-page-bg--admin {
+  --app-bg-grid: rgba(15, 23, 42, 0.04);
+  --app-bg-glow-a: rgba(253, 224, 71, 0.36);
+  --app-bg-glow-b: rgba(147, 197, 253, 0.30);
+  --app-bg-glow-c: rgba(167, 243, 208, 0.20);
+  --app-bg-veil: rgba(255, 255, 255, 0.60);
+}
+
+.app-page-bg::before,
+.app-page-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.app-page-bg::before {
+  z-index: 0;
+  background-image:
+    linear-gradient(var(--app-bg-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--app-bg-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.app-page-bg::after {
+  z-index: 0;
+  background:
+    linear-gradient(var(--app-bg-veil), var(--app-bg-veil)),
+    radial-gradient(circle at 88% 8%, var(--app-bg-glow-a), transparent 30%),
+    radial-gradient(circle at 8% 28%, var(--app-bg-glow-b), transparent 28%),
+    radial-gradient(circle at 70% 82%, var(--app-bg-glow-c), transparent 36%);
+}
+
+.app-page-bg > * {
+  position: relative;
+  z-index: 1;
+}
+
 /* Section paddings honour density */
 .sec-y { padding-top: calc(5rem * var(--density-pad)); padding-bottom: calc(5rem * var(--density-pad)); }
 .sec-y-sm { padding-top: calc(3rem * var(--density-pad)); padding-bottom: calc(3rem * var(--density-pad)); }
@@ -298,6 +384,29 @@ button:focus-visible, a:focus-visible {
   animation: landing-promo-pop 520ms cubic-bezier(.2,.8,.2,1) both;
 }
 
+.landing-testimonial-mask {
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}
+
+.landing-testimonial-track {
+  animation: landing-testimonial-slide 42s linear infinite;
+  will-change: transform;
+}
+
+.landing-testimonial-track:hover {
+  animation-play-state: paused;
+}
+
+.landing-testimonial-card {
+  box-shadow: 0 18px 46px -34px rgba(11, 19, 38, .24);
+}
+
+@keyframes landing-testimonial-slide {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+
 .landing-mobile-menu {
   animation: landing-mobile-in 180ms ease-out both;
 }
@@ -391,6 +500,7 @@ button:focus-visible, a:focus-visible {
   .landing-reveal.is-visible > *,
   .landing-section-pop,
   .landing-card-motion,
+  .landing-testimonial-track,
   .landing-promo,
   .landing-mobile-menu,
   .tryout-entry-pop {

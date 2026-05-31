@@ -263,7 +263,7 @@ const App = () => {
             <ScreenErrorBoundary>
               {hasPremiumAccess
                 ? <Misi setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} />
-                : <AccessGate setRoute={navigate} title="Misi Harian termasuk paket belajar" message="Beli paket untuk mendapat akses ke misi harian, XP bonus, dan latihan terarah setiap hari." />}
+                : <AccessGate setRoute={navigate} title="Misi Harian termasuk paket belajar" message="Beli paket untuk mendapat akses ke misi harian, XP bonus, dan latihan terarah setiap hari." variant="misi" />}
             </ScreenErrorBoundary>
           )}
           {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} />}
@@ -271,7 +271,7 @@ const App = () => {
           {route === "admin" && isAdminAccount && isAdmin && window.AdminPage && React.createElement(window.AdminPage, { setRoute: navigate })}
           {route === "profile" && (isLoggedIn
             ? <Profile setRoute={navigate} isAdmin={isAdmin || isAdminAccount} onRequestLanding={confirmLandingReturn} onRequestLogout={confirmLogout} />
-            : <AccessGate setRoute={navigate} title="Masuk untuk membuka profil" message="Profil menyimpan progres, pembahasan, dan riwayat belajarmu." requireLogin />
+            : <AccessGate setRoute={navigate} title="Masuk untuk membuka profil" message="Profil menyimpan progres, pembahasan, dan riwayat belajarmu." requireLogin variant="profil" />
           )}
           {route === "payment" && <Payment setRoute={navigate} currentUser={currentUser} context={paymentContext} />}
           {route === "practice" && <Practice setRoute={navigate} context={practiceContext} isAdmin={isAdmin} isLoggedIn={isLoggedIn} />}
@@ -512,8 +512,14 @@ const App = () => {
   );
 };
 
-const AccessGate = ({ setRoute, title, message, requireLogin = false }) => (
-  <div className="bg-paper min-h-[calc(100vh-72px)] flex items-center justify-center px-6 py-16">
+const AccessGate = ({ setRoute, title, message, requireLogin = false, variant = "misi" }) => {
+  const variantClass = {
+    misi: "app-page-bg--misi",
+    profil: "app-page-bg--profil",
+  }[variant] || "app-page-bg--misi";
+
+  return (
+  <div className={`app-page-bg ${variantClass} min-h-[calc(100vh-72px)] flex items-center justify-center px-6 py-16`}>
     <div className="max-w-xl w-full bg-white border hairline rounded-[var(--card-radius)] p-8 md:p-10 text-center">
       <div className="w-12 h-12 rounded-2xl bg-yel/70 flex items-center justify-center mx-auto mb-5">
         <Icon.Lock className="w-5 h-5" />
@@ -556,7 +562,8 @@ const AccessGate = ({ setRoute, title, message, requireLogin = false }) => (
       </div>
     </div>
   </div>
-);
+  );
+};
 
 function routeLabel(r) {
   return ({

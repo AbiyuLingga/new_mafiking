@@ -696,7 +696,7 @@ const LandingUploadIcon = ({ className = "h-4 w-4" }) => (
 );
 
 const LandingMediaImage = ({ src, alt }) => (
-  <img src={src} alt={alt} className="absolute inset-0 h-full w-full object-cover opacity-80 mix-blend-multiply" />
+  <img src={src} alt={alt} className="absolute inset-0 h-full w-full object-cover opacity-80 mix-blend-multiply transition-transform duration-700 group-hover:scale-105" />
 );
 
 const LandingEditableMedia = ({ enabled, slot, mediaType = "image", label, onEdit, children }) => (
@@ -832,6 +832,14 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
     { title: "Fisika", code: "FI 1101", desc: "Mekanika, termodinamika, listrik magnet - sesuai kaedah dahulu, namun kemaritiman.", IconC: Icon.Atom, section: "Fisika", count: "12 bab" },
     { title: "Kimia", code: "KI 1101", desc: "Wujud zat, stoikiometri - dari model Bohr hingga setara redoks.", IconC: Icon.Flask, section: "Kimia", count: "16 bab" },
   ];
+  const testimonials = [
+    ["Dulu paling takut sama Kalkulus karena nggak ngerti konsep dasar limit. Di sini semua jadi visual dan terhubung. UTS dapet A.", "Budi R.", "STEI 23", "B"],
+    ["Biasanya bimbel lain tutornya beneran cuma nyuruh hapal rumus nggak jelas. Latihannya terstruktur parah, serasa main game.", "Sarah M.", "FTMD 22", "S"],
+    ["Fitur tracker progresnya ngebantu banget buat maintain konsistensi. Lihat streak harian langsung terpacu buat buka modul.", "Rizky D.", "FITB 23", "R"],
+    ["Try out gratisnya bikin aku tahu bagian mana yang harus dikejar dulu. Pembahasannya enak karena langsung nyambung ke latihan.", "Alya N.", "FMIPA 24", "A"],
+    ["Canvas koreksinya kerasa beda. Salah hitung kecil langsung kelihatan, jadi nggak cuma tahu jawaban akhir benar atau salah.", "Dimas F.", "FTSL 23", "D"],
+    ["Belajarnya jadi lebih rapi. Aku bisa fokus ke Matematika dulu, terus pindah Fisika tanpa bingung mulai dari bab mana.", "Nadya K.", "SITH-R 24", "N"],
+  ];
 
   const promoPopup = promoOpen ? ReactDOM.createPortal((
                 <div className="landing-promo fixed bottom-5 right-4 z-[9000] w-[min(360px,calc(100vw-24px))] max-h-[calc(100vh-32px)] overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl md:bottom-7 md:right-7">
@@ -858,8 +866,21 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
       ), document.body) : null;
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-slate-200">
+    <div className="relative min-h-screen overflow-hidden bg-white text-slate-900 font-sans selection:bg-slate-200">
       {promoPopup}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: "linear-gradient(to right, rgba(15, 23, 42, 0.065) 1px, transparent 1px), linear-gradient(to bottom, rgba(15, 23, 42, 0.065) 1px, transparent 1px)",
+            backgroundSize: "24px 24px",
+          }}
+        />
+        <div className="absolute -right-[10%] top-4 h-[820px] w-[820px] rounded-full bg-yellow-200/50 opacity-85 blur-[130px]" />
+        <div className="absolute left-1/2 top-[24rem] h-[680px] w-[680px] -translate-x-1/2 rounded-full bg-white/80 blur-[150px]" />
+        <div className="absolute -left-[14%] top-[48rem] h-[680px] w-[680px] rounded-full bg-sky-100/55 opacity-75 blur-[140px]" />
+        <div className="absolute right-[-4%] top-[76rem] h-[780px] w-[780px] rounded-full bg-yellow-100/60 opacity-80 blur-[145px]" />
+      </div>
 
       <nav className="fixed top-0 z-50 w-full border-b border-slate-100 bg-white/80 backdrop-blur-md transition-all">
         <div className="mx-auto w-full max-w-[1800px] px-6 md:px-12 lg:px-20">
@@ -896,9 +917,9 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
         )}
       </nav>
 
-      <main className="pb-16 pt-24">
-        <section id="beranda" className="mx-auto w-full max-w-[1800px] scroll-mt-32 overflow-hidden px-6 pt-12 md:px-12 lg:px-20 lg:pb-20 lg:pt-24">
-          <LandingFade>
+      <main className="relative z-10 pb-16 pt-24">
+        <section id="beranda" className="relative mx-auto w-full max-w-[1800px] scroll-mt-32 overflow-hidden px-6 pt-12 md:px-12 lg:px-20 lg:pb-20 lg:pt-24">
+          <LandingFade className="relative z-10">
             <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-8">
               <div className="relative z-10 max-w-2xl">
                 <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-1.5 text-sm font-bold text-slate-800 shadow-sm">
@@ -940,8 +961,10 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
           </LandingFade>
         </section>
 
-        <section className="mt-8 border-y border-slate-100 bg-white py-12 lg:py-16">
-          <LandingFade delay={80}>
+        <section className="relative mt-8 overflow-hidden border-y border-slate-100 bg-white py-12 lg:py-16">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" aria-hidden="true" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" aria-hidden="true" />
+          <LandingFade delay={80} className="relative z-10">
             <div className="mx-auto w-full max-w-[1800px] px-6 md:px-12 lg:px-20">
               <div className="grid grid-cols-2 gap-8 md:grid-cols-4 md:divide-x md:divide-slate-100 md:gap-4">
                 {[["2.500+", "Mahasiswa aktif"], ["15.000+", "Soal diselesaikan"], ["98%", "Tingkat kepuasan"], ["24/7", "Support mentor"]].map(([value, label]) => (
@@ -952,8 +975,19 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
           </LandingFade>
         </section>
 
-        <section id="belajar" className="mx-auto w-full max-w-[1800px] scroll-mt-24 px-6 py-24 md:px-12 lg:px-20">
-          <LandingFade delay={120}>
+        <section id="belajar" className="relative mx-auto w-full max-w-[1800px] scroll-mt-24 overflow-hidden px-6 py-24 md:px-12 lg:px-20">
+          <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: "linear-gradient(to right, rgba(15, 23, 42, 0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(15, 23, 42, 0.06) 1px, transparent 1px)",
+                backgroundSize: "24px 24px",
+              }}
+            />
+            <div className="absolute -left-[10%] top-[12%] h-[620px] w-[620px] rounded-full bg-sky-100/55 opacity-70 blur-[130px]" />
+            <div className="absolute -right-[8%] -top-[18%] h-[720px] w-[720px] rounded-full bg-yellow-100/70 opacity-85 blur-[140px]" />
+          </div>
+          <LandingFade delay={120} className="relative z-10">
             <div className="mb-16 flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end">
               <div><div className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-500">Mata Pelajaran</div><h2 className="text-3xl font-extrabold tracking-tight text-slate-900 md:text-5xl lg:text-6xl">Tiga fondasi, <br className="hidden md:block" /> ratusan bab.</h2></div>
               <button onClick={() => setRoute({ route: "belajar", section: "Try Out" })} className="group flex items-center rounded-lg px-4 py-2 font-bold text-slate-900 transition-colors hover:bg-slate-50" type="button">Buka semua <Icon.ChevR className="ml-1 h-5 w-5 transition-transform group-hover:translate-x-1" /></button>
@@ -971,20 +1005,39 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
           </LandingFade>
         </section>
 
-        <section id="fitur" className="scroll-mt-24 border-y border-slate-200 bg-slate-50 py-24">
-          <LandingFade delay={150}>
+        <section id="fitur" className="relative scroll-mt-24 overflow-hidden border-y border-slate-200 bg-slate-50 py-24">
+          <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+            <div
+              className="absolute inset-0 opacity-70"
+              style={{
+                backgroundImage: "linear-gradient(to right, rgba(15, 23, 42, 0.035) 1px, transparent 1px), linear-gradient(to bottom, rgba(15, 23, 42, 0.035) 1px, transparent 1px)",
+                backgroundSize: "24px 24px",
+              }}
+            />
+            <div className="absolute -top-[18%] -right-[12%] h-[680px] w-[680px] rounded-full bg-yellow-200/45 opacity-85 blur-[130px] mix-blend-multiply" />
+            <div className="absolute -bottom-[16%] -left-[12%] h-[620px] w-[620px] rounded-full bg-sky-100/55 opacity-70 blur-[130px] mix-blend-multiply" />
+            <div className="absolute right-[18%] bottom-[-22%] h-[560px] w-[560px] rounded-full bg-yellow-100/55 opacity-80 blur-[135px] mix-blend-multiply" />
+          </div>
+          <LandingFade delay={150} className="relative z-10">
             <div className="mx-auto w-full max-w-[1800px] px-6 md:px-12 lg:px-20">
               <div className="mx-auto mb-16 max-w-3xl text-center md:mb-24"><div className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-500">Mengapa Mafiking Berbeda?</div><h2 className="mb-6 text-3xl font-extrabold tracking-tight text-slate-900 md:text-5xl">Platform pembelajaran modern untuk mendukung kesuksesan belajar kamu</h2><p className="text-lg text-slate-600 md:text-xl">Platform belajar pertama untuk TPB ITB yang fokus pada pembentukan intuisi dan penanganan kelemahan secara personal.</p></div>
               <div className="grid gap-6 lg:grid-cols-2">
-                <div className="landing-card-motion flex flex-col rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md"><h3 className="mb-3 text-2xl font-bold text-slate-900">Rekomendasi Latihan</h3><p className="mb-8 font-medium text-slate-500">AI mendeteksi kelemahanmu dan merekomendasikan porsi latihan yang sesuai.</p><div className="relative mt-auto aspect-[4/3] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"><LandingEditableMedia enabled={landingMediaEditEnabled} slot="feature_image_1" label="gambar fitur 1" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureOne} alt="Fitur rekomendasi latihan" /></LandingEditableMedia><div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><span className="rounded-xl border border-slate-100 bg-white/90 px-5 py-2.5 text-sm font-bold text-slate-800 shadow-sm backdrop-blur-sm">Tempat Gambar 1</span></div></div></div>
-                <div className="landing-card-motion flex flex-col rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md"><div className="mb-3 flex items-center gap-2"><h3 className="text-2xl font-bold text-slate-900">History Kesalahan Canvas</h3><span className="inline-flex rounded bg-amber-100 px-2 py-0.5 text-xs font-bold uppercase tracking-widest text-amber-700">Prioritas</span></div><p className="mb-8 font-medium text-slate-500">Semua coretan salah tertangkap otomatis. Ulangi di mana kamu salah, tanpa perlu mengulang dari awal.</p><div className="relative mt-auto aspect-[4/3] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"><LandingEditableMedia enabled={landingMediaEditEnabled} slot="feature_image_2" label="gambar fitur 2" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureTwo} alt="Fitur history kesalahan canvas" /></LandingEditableMedia><div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><span className="rounded-xl border border-slate-100 bg-white/90 px-5 py-2.5 text-sm font-bold text-slate-800 shadow-sm backdrop-blur-sm">Tempat Gambar 2</span></div></div></div>
-                <div className="landing-card-motion flex flex-col items-center gap-8 rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md md:flex-row lg:col-span-2"><div className="w-full md:w-1/3"><h3 className="mb-3 text-2xl font-bold text-slate-900">Simulasi Tryout CBT</h3><p className="mb-6 font-medium text-slate-500">Tampilan layar utuh yang mensimulasikan lingkungan UTS/UAS nyata. Dilengkapi timer presisi.</p><button onClick={startFree} className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-900 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50" type="button">Coba Tryout Gratis</button></div><div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 md:w-2/3 md:aspect-[21/9]"><LandingEditableMedia enabled={landingMediaEditEnabled} slot="feature_image_3" label="gambar fitur tryout" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureThree} alt="Fitur simulasi tryout CBT" /></LandingEditableMedia><div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"><span className="rounded-xl border border-slate-100 bg-white/90 px-5 py-2.5 text-sm font-bold text-slate-800 shadow-sm backdrop-blur-sm">Tempat Gambar 3</span></div></div></div>
+                <div className="landing-card-motion group flex flex-col rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md"><h3 className="mb-3 text-2xl font-bold text-slate-900">Rekomendasi Latihan</h3><p className="mb-8 font-medium text-slate-500">AI mendeteksi kelemahanmu dan merekomendasikan porsi latihan yang sesuai.</p><div className="relative mt-auto aspect-[4/3] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"><LandingEditableMedia enabled={landingMediaEditEnabled} slot="feature_image_1" label="gambar fitur 1" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureOne} alt="Fitur rekomendasi latihan" /></LandingEditableMedia></div></div>
+                <div className="landing-card-motion group flex flex-col rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md"><div className="mb-3 flex items-center gap-2"><h3 className="text-2xl font-bold text-slate-900">History Kesalahan Canvas</h3><span className="inline-flex rounded bg-amber-100 px-2 py-0.5 text-xs font-bold uppercase tracking-widest text-amber-700">Prioritas</span></div><p className="mb-8 font-medium text-slate-500">Semua coretan salah tertangkap otomatis. Ulangi di mana kamu salah, tanpa perlu mengulang dari awal.</p><div className="relative mt-auto aspect-[4/3] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"><LandingEditableMedia enabled={landingMediaEditEnabled} slot="feature_image_2" label="gambar fitur 2" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureTwo} alt="Fitur history kesalahan canvas" /></LandingEditableMedia></div></div>
+                <div className="landing-card-motion group flex flex-col items-center gap-8 rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md md:flex-row lg:col-span-2"><div className="w-full md:w-1/3"><h3 className="mb-3 text-2xl font-bold text-slate-900">Simulasi Tryout CBT</h3><p className="mb-6 font-medium text-slate-500">Tampilan layar utuh yang mensimulasikan lingkungan UTS/UAS nyata. Dilengkapi timer presisi.</p><button onClick={startFree} className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-900 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50" type="button">Coba Tryout Gratis</button></div><div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 md:w-2/3 md:aspect-[21/9]"><LandingEditableMedia enabled={landingMediaEditEnabled} slot="feature_image_3" label="gambar fitur tryout" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureThree} alt="Fitur simulasi tryout CBT" /></LandingEditableMedia></div></div>
               </div>
             </div>
           </LandingFade>
         </section>
 
         <section className="relative overflow-hidden bg-[#0B1221] py-24 text-white md:py-32">
+          <div
+            className="pointer-events-none absolute inset-0 z-0 opacity-20"
+            style={{
+              backgroundImage: "linear-gradient(to right, rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.1) 1px, transparent 1px)",
+              backgroundSize: "32px 32px",
+            }}
+          />
           <LandingFade delay={170}>
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-700 to-transparent" />
             <div className="relative z-10 mx-auto w-full max-w-[1800px] px-6 md:px-12 lg:px-20">
@@ -1005,20 +1058,44 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
           </LandingFade>
         </section>
 
-        <section id="testimoni" className="mx-auto w-full max-w-[1800px] scroll-mt-24 px-6 py-24 md:px-12 lg:px-20 lg:py-32">
+        <section id="testimoni" className="relative mx-auto w-full max-w-[1800px] scroll-mt-24 overflow-hidden px-6 py-24 md:px-12 lg:px-20 lg:py-32">
           <LandingFade delay={190}>
             <h2 className="mb-16 text-4xl font-extrabold leading-[1.1] tracking-tight text-slate-900 md:text-5xl lg:mb-24 lg:text-center lg:text-7xl">Mahasiswa yang sudah <br className="hidden lg:block" /> <span className="font-serif font-medium italic text-slate-500">berlangganan.</span></h2>
-            <div className="grid gap-6 md:grid-cols-3 lg:gap-8">
-              {[["Dulu paling takut sama Kalkulus karena nggak ngerti konsep dasar limit. Di sini semua jadi visual dan terhubung. UTS dapet A.", "Budi R.", "STEI 23", "B"], ["Biasanya bimbel lain tutornya beneran cuma nyuruh hapal rumus nggak jelas. Latihannya terstruktur parah, serasa main game.", "Sarah M.", "FTMD 22", "S"], ["Fitur tracker progresnya ngebantu banget buat maintain konsistensi. Lihat streak harian langsung terpacu buat buka modul.", "Rizky D.", "FITB 23", "R"]].map(([quote, name, meta, initial]) => (
-                <div key={name} className="rounded-[2rem] border border-slate-200 bg-slate-50 p-8 lg:p-10"><div className="mb-6 flex gap-1 text-amber-400">{[0,1,2,3,4].map(i => <Icon.Star key={i} className="h-5 w-5" />)}</div><p className="mb-10 text-lg font-medium leading-relaxed text-slate-700">"{quote}"</p><div className="flex items-center gap-4"><div className="flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-slate-200 font-bold text-slate-700">{initial}</div><div><div className="text-base font-bold text-slate-900">{name}</div><div className="text-sm font-medium text-slate-500">{meta}</div></div></div></div>
-              ))}
+            <div className="landing-testimonial-mask -mx-6 overflow-hidden md:-mx-12 lg:-mx-20">
+              <div className="landing-testimonial-track flex w-max gap-6 px-6 md:px-12 lg:gap-8 lg:px-20">
+                {[...testimonials, ...testimonials].map(([quote, name, meta, initial], index) => (
+                  <div key={`${name}-${index}`} className="landing-testimonial-card flex w-[min(86vw,440px)] shrink-0 flex-col rounded-[2rem] border border-slate-200 bg-slate-50/95 p-8 lg:w-[520px] lg:p-10">
+                    <div className="mb-6 flex gap-1 text-amber-400">{[0,1,2,3,4].map(i => <Icon.Star key={i} className="h-5 w-5" />)}</div>
+                    <p className="mb-10 min-h-[112px] text-lg font-medium leading-relaxed text-slate-700">"{quote}"</p>
+                    <div className="mt-auto flex items-center gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-slate-200 font-bold text-slate-700">{initial}</div>
+                      <div>
+                        <div className="text-base font-bold text-slate-900">{name}</div>
+                        <div className="text-sm font-medium text-slate-500">{meta}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </LandingFade>
         </section>
       </main>
 
-      <footer className="w-full border-t border-slate-800 bg-[#0B1221] pb-12 pt-24">
-        <LandingFade delay={210}>
+      <footer className="relative z-10 w-full overflow-hidden border-t border-slate-800 bg-[#0B1221] pb-12 pt-24">
+        <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+          <div
+            className="absolute inset-0 opacity-20"
+            style={{
+              backgroundImage: "linear-gradient(to right, rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.1) 1px, transparent 1px)",
+              backgroundSize: "32px 32px",
+            }}
+          />
+          <div className="absolute left-1/2 top-[-10%] h-[720px] w-[720px] -translate-x-1/2 rounded-full bg-slate-400/10 blur-[130px]" />
+          <div className="absolute left-[18%] top-[12%] h-[560px] w-[560px] rounded-full bg-blue-500/10 blur-[150px]" />
+          <div className="absolute right-[18%] top-[4%] h-[520px] w-[520px] rounded-full bg-yellow-300/8 blur-[150px]" />
+        </div>
+        <LandingFade delay={210} className="relative z-10">
           <div className="mx-auto flex w-full max-w-[1400px] flex-col items-center px-6 text-center md:px-12 lg:px-20">
             <h2 className="mb-8 text-4xl font-extrabold leading-[1.1] tracking-tight text-white md:text-5xl lg:text-7xl">Siap Mengamankan <br className="hidden md:block" /> <span className="text-[#FDE047]">Nilai A Pertamamu?</span></h2>
             <p className="mx-auto mb-12 max-w-2xl text-lg font-medium text-slate-400 lg:text-xl">Jangan tunggu sampai tertinggal materi. Bangun fondasi akademik terkuatmu hari ini juga.</p>
