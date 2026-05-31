@@ -17,11 +17,9 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
 
   if (context?.mode === "free-math") {
     return (
-      <Practice
+      <FreeMathTryoutExam
         setRoute={setRoute}
         context={buildFreeMathTryoutPracticeContext(context)}
-        isAdmin={isAdmin}
-        isLoggedIn={isLoggedIn}
       />
     );
   }
@@ -446,6 +444,295 @@ function buildFreeMathTryoutPracticeContext(context) {
     disableCanvasMode: true,
     backRoute: { route: "belajar", section: "Try Out" },
   };
+}
+
+const FreeMathTryoutExam = ({ setRoute, context }) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [problems, setProblems] = useState([]);
+  const [problemIndex, setProblemIndex] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [doubtful, setDoubtful] = useState({});
+  const [timeLeft, setTimeLeft] = useState(Number(context?.timeLimitSeconds || 15 * 60));
+  const timeExpired = timeLeft <= 0;
+  const totalProblems = problems.length || Number(context?.problemLimit || 15);
+  const activeProblem = problems[problemIndex];
+  const selectedChoiceIndex = activeProblem ? answers[activeProblem.id] : null;
+
+  useEffect(() => { loadTryoutProblems(); }, [context?.id]);
+
+  useEffect(() => {
+    setTimeLeft(Number(context?.timeLimitSeconds || 15 * 60));
+  }, [context?.id, context?.timeLimitSeconds]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setTimeLeft((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [context?.id]);
+
+  async function loadTryoutProblems() {
+    setLoading(true);
+    setError("");
+    try {
+      const init = await MafikingAPI.get("/api/quiz/init");
+      const chapters = (init.chapters || []).filter((chapter) => normalizeTryoutText(chapter.mapel || "Matematika") === "matematika");
+      const subtopics = chapters
+        .flatMap((chapter) => chapter.subtopics || [])
+        .filter((subtopic) => Number((init.problemCounts || {})[subtopic.id] || 0) > 0);
+      const sessions = await Promise.all(subtopics.map((subtopic) => MafikingAPI.get(`/api/quiz/subtopics/${subtopic.id}/full`)));
+      const nextProblems = sessions
+        .flatMap((data) => (data.problems || []).map((problem) => ({ ...problem, sourceSubtopic: data.subtopic })))
+        .slice(0, Number(context?.problemLimit || 15));
+      setProblems(nextProblems);
+      setProblemIndex(0);
+      setAnswers({});
+      setDoubtful({});
+    } catch (caught) {
+      setError(caught.message || "Gagal memuat soal tryout.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function getChoices(problem) {
+    if (!problem) return [];
+    try {
+      if (Array.isArray(problem.mc_options) && problem.mc_options.length) return problem.mc_options;
+      if (typeof problem.mc_options === "string" && problem.mc_options.trim()) {
+        const parsed = JSON.parse(problem.mc_options);
+        if (Array.isArray(parsed) && parsed.length) return parsed;
+      }
+    } catch (_) {}
+    return buildTryoutGeneratedChoices(problem, problems);
+  }
+
+  function selectChoice(choiceIndex) {
+    if (!activeProblem || timeExpired) return;
+    setAnswers((current) => ({ ...current, [activeProblem.id]: choiceIndex }));
+  }
+
+  function moveProblem(delta) {
+    setProblemIndex((current) => Math.min(Math.max(current + delta, 0), Math.max(problems.length - 1, 0)));
+  }
+
+  function finishTryout() {
+    showToast("Tryout selesai. Jawaban kamu tersimpan di sesi ini.", "success");
+    setRoute({ route: "belajar", section: "Try Out" });
+  }
+
+  if (loading) {
+    return (
+      <div className="tryout-exam-shell" aria-busy="true">
+        <div className="tryout-exam-topbar">
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="h-9 w-28 rounded-xl" />
+        </div>
+        <main className="tryout-exam-main">
+          <section className="tryout-question-card">
+            <Skeleton className="h-4 w-5/6 mb-8" />
+            {[1, 2, 3, 4, 5].map((item) => <Skeleton key={item} className="h-14 w-full rounded-2xl mb-4" />)}
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  if (error || !activeProblem) {
+    return (
+      <div className="tryout-exam-shell">
+        <div className="tryout-exam-topbar">
+          <button className="tryout-back-btn" onClick={() => setRoute({ route: "belajar", section: "Try Out" })} type="button">
+            <Icon.ChevL className="w-4 h-4" />
+          </button>
+          <div>
+            <h1>Tryout Matematika</h1>
+            <p>SOAL BELUM TERSEDIA</p>
+          </div>
+        </div>
+        <main className="tryout-exam-main">
+          <section className="tryout-question-card">
+            <div className="mafiking-answer-heading">{error || "Soal tryout belum tersedia."}</div>
+            <button className="mafiking-primary-button mt-6" onClick={loadTryoutProblems} type="button">Muat ulang</button>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  const choices = getChoices(activeProblem);
+  const answeredCount = problems.filter((problem) => answers[problem.id] != null).length;
+  const doubtfulCount = problems.filter((problem) => doubtful[problem.id]).length;
+  const isLastProblem = problemIndex >= problems.length - 1;
+
+  return (
+    <div className="tryout-exam-shell">
+      <header className="tryout-exam-topbar">
+        <div className="tryout-title-group">
+          <button className="tryout-back-btn" onClick={() => setRoute({ route: "belajar", section: "Try Out" })} type="button" aria-label="Kembali">
+            <Icon.ChevL className="w-4 h-4" />
+          </button>
+          <div>
+            <h1>{context?.packageTitle || "Tryout Bundling: Semester 1"}</h1>
+            <p>SOAL {problemIndex + 1} DARI {totalProblems}</p>
+          </div>
+        </div>
+        <div className={`tryout-timer${timeExpired ? " is-expired" : ""}`}>
+          <Icon.Clock className="w-4 h-4" />
+          {formatTryoutClock(timeLeft)}
+        </div>
+      </header>
+
+      <div className="tryout-exam-grid">
+        <main className="tryout-exam-main">
+          <section className="tryout-question-card">
+            {timeExpired && <div className="tryout-expired-note">Waktu tryout sudah habis.</div>}
+            <div className="tryout-question-text">
+              <Eq value={activeProblem.question_display || activeProblem.question_text || "Soal belum memiliki teks."} />
+            </div>
+            <div className="tryout-choice-list">
+              {choices.map((choice, choiceIndex) => (
+                <button
+                  key={`${activeProblem.id}-${choiceIndex}`}
+                  className={`tryout-choice${selectedChoiceIndex === choiceIndex ? " is-selected" : ""}`}
+                  disabled={timeExpired}
+                  onClick={() => selectChoice(choiceIndex)}
+                  type="button"
+                >
+                  <span className="tryout-choice-letter">{String.fromCharCode(65 + choiceIndex)}</span>
+                  <span className="tryout-choice-value"><Eq value={choice} /></span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </main>
+
+        <aside className="tryout-side-panel" aria-label="Navigasi soal">
+          <h2>Navigasi Soal</h2>
+          <div className="tryout-legend">
+            <span><i className="is-answered" /> Terjawab</span>
+            <span><i /> Belum</span>
+          </div>
+          <div className="tryout-number-grid">
+            {problems.map((problem, index) => {
+              const isAnswered = answers[problem.id] != null;
+              const isDoubtful = doubtful[problem.id];
+              return (
+                <button
+                  key={problem.id}
+                  className={[
+                    "tryout-number",
+                    index === problemIndex ? "is-current" : "",
+                    isAnswered ? "is-answered" : "",
+                    isDoubtful ? "is-doubtful" : "",
+                  ].filter(Boolean).join(" ")}
+                  onClick={() => setProblemIndex(index)}
+                  type="button"
+                >
+                  {index + 1}
+                </button>
+              );
+            })}
+          </div>
+          <div className="tryout-side-summary">
+            <span>{answeredCount} terjawab</span>
+            <span>{doubtfulCount} ragu-ragu</span>
+          </div>
+        </aside>
+      </div>
+
+      <footer className="tryout-bottom-bar">
+        <button className="tryout-secondary-action" disabled={problemIndex === 0} onClick={() => moveProblem(-1)} type="button">
+          <Icon.ChevL className="w-4 h-4" />
+          Sebelumnya
+        </button>
+        <button
+          className={`tryout-doubt-action${doubtful[activeProblem.id] ? " is-active" : ""}`}
+          onClick={() => setDoubtful((current) => ({ ...current, [activeProblem.id]: !current[activeProblem.id] }))}
+          type="button"
+        >
+          <TryoutFlagIcon className="w-4 h-4" />
+          Ragu-ragu
+        </button>
+        {isLastProblem ? (
+          <button className="tryout-finish-action" onClick={finishTryout} type="button">
+            Selesai
+            <Icon.Check className="w-4 h-4" />
+          </button>
+        ) : (
+          <button className="tryout-finish-action" onClick={() => moveProblem(1)} type="button">
+            Next
+            <Icon.ChevR className="w-4 h-4" />
+          </button>
+        )}
+      </footer>
+    </div>
+  );
+};
+
+const TryoutFlagIcon = ({ className = "w-4 h-4" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 21V5" />
+    <path d="M6 5h10l-1.5 4L16 13H6" />
+  </svg>
+);
+
+function normalizeTryoutText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function normalizeTryoutAnswer(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[^0-9a-z+\-*/=().,]/g, "");
+}
+
+function buildTryoutGeneratedChoices(problem, problems) {
+  const correct = problem?.answer_display || problem?.answer_text || "";
+  if (!correct) return [];
+  const seen = new Set([normalizeTryoutAnswer(correct)]);
+  const distractors = [];
+  for (const candidate of problems || []) {
+    if (!candidate || candidate.id === problem.id) continue;
+    const answer = candidate.answer_display || candidate.answer_text || "";
+    const normalized = normalizeTryoutAnswer(answer);
+    if (!answer || !normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    distractors.push(answer);
+  }
+  const choices = [correct, ...shuffleTryoutChoices(distractors, hashTryoutValue(`${problem.id}:${correct}`)).slice(0, 4)];
+  return shuffleTryoutChoices(choices.slice(0, 5), hashTryoutValue(`choice:${problem.id}:${correct}`));
+}
+
+function hashTryoutValue(value) {
+  return String(value || "").split("").reduce((hash, char) => {
+    return ((hash << 5) - hash + char.charCodeAt(0)) | 0;
+  }, 0);
+}
+
+function shuffleTryoutChoices(items, seed) {
+  const shuffled = [...items];
+  let state = Math.abs(seed) || 1;
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    const j = state % (i + 1);
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+function formatTryoutClock(seconds) {
+  const safeSeconds = Math.max(0, Number(seconds || 0));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainder = safeSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
 // ─── Tryout edit modal ────────────────────────────────────────────────────────

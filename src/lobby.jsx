@@ -842,11 +842,11 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   ];
 
   const promoPopup = promoOpen ? ReactDOM.createPortal((
-                <div className="landing-promo fixed bottom-5 right-4 z-[9000] w-[min(360px,calc(100vw-24px))] max-h-[calc(100vh-32px)] overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl md:bottom-7 md:right-7">
+        <div className="landing-promo fixed bottom-6 right-6 z-[9000] hidden w-[min(320px,calc(100vw-40px))] max-h-[calc(100vh-48px)] overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl shadow-slate-900/12 md:block">
           <button onClick={() => setPromoOpen(false)} className="absolute right-4 top-4 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70" type="button" aria-label="Tutup promo">
             <Icon.X className="w-4 h-4" />
           </button>
-          <div className="relative flex h-[19.25rem] items-center justify-center overflow-hidden bg-slate-100">
+          <div className="relative flex h-56 items-center justify-center overflow-hidden bg-slate-100">
             <img src={promoImage} alt="Promo Background" className="absolute inset-0 z-0 h-full w-full object-cover" />
             <LandingEditableMedia enabled={landingMediaEditEnabled} slot="promo_image" label="promo popup" mediaType="image" onEdit={setMediaEditTarget} />
             <div className="relative z-20 text-center">
@@ -872,14 +872,13 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
         <div
           className="absolute inset-0"
           style={{
-            backgroundImage: "linear-gradient(to right, rgba(15, 23, 42, 0.065) 1px, transparent 1px), linear-gradient(to bottom, rgba(15, 23, 42, 0.065) 1px, transparent 1px)",
-            backgroundSize: "24px 24px",
+            backgroundImage: "linear-gradient(to right, rgba(15, 23, 42, 0.035) 1px, transparent 1px), linear-gradient(to bottom, rgba(15, 23, 42, 0.035) 1px, transparent 1px)",
+            backgroundSize: "32px 32px",
           }}
         />
-        <div className="absolute -right-[10%] top-4 h-[820px] w-[820px] rounded-full bg-yellow-200/50 opacity-85 blur-[130px]" />
-        <div className="absolute left-1/2 top-[24rem] h-[680px] w-[680px] -translate-x-1/2 rounded-full bg-white/80 blur-[150px]" />
-        <div className="absolute -left-[14%] top-[48rem] h-[680px] w-[680px] rounded-full bg-sky-100/55 opacity-75 blur-[140px]" />
-        <div className="absolute right-[-4%] top-[76rem] h-[780px] w-[780px] rounded-full bg-yellow-100/60 opacity-80 blur-[145px]" />
+        <div className="absolute -right-[14%] top-0 h-[760px] w-[760px] rounded-full bg-yellow-100/45 opacity-70 blur-[150px]" />
+        <div className="absolute left-1/2 top-[28rem] h-[620px] w-[620px] -translate-x-1/2 rounded-full bg-white/80 blur-[170px]" />
+        <div className="absolute -left-[16%] top-[56rem] h-[560px] w-[560px] rounded-full bg-sky-50/55 opacity-60 blur-[160px]" />
       </div>
 
       <nav className="fixed top-0 z-50 w-full border-b border-slate-100 bg-white/80 backdrop-blur-md transition-all">
@@ -896,7 +895,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
             </div>
             <div className="hidden items-center gap-3 md:flex">
               {!isRegistered && <button onClick={openLogin} className="text-sm font-bold text-slate-500 hover:text-slate-900" type="button">Masuk</button>}
-              <button onClick={startFree} className="flex items-center gap-2 rounded-lg bg-slate-900 px-6 py-3 font-bold text-white transition-all hover:bg-slate-800 active:scale-95" type="button">
+              <button onClick={startFree} className="btn-ink" type="button">
                 Coba Gratis <Icon.Arrow className="w-4 h-4" />
               </button>
             </div>
@@ -910,7 +909,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
             {[["beranda", "Beranda"], ["belajar", "Belajar"], ["fitur", "Fitur"], ["testimoni", "Testimoni"]].map(([id, label]) => (
               <button key={id} onClick={() => scrollToId(id)} className="block w-full rounded-md px-3 py-2 text-left font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-900" type="button">{label}</button>
             ))}
-            <button onClick={startFree} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-[#FDE047] px-5 py-2.5 font-bold text-slate-900 hover:bg-[#FCE76B]" type="button">
+            <button onClick={startFree} className="btn-ink mt-4 w-full justify-center" type="button">
               Coba Gratis <Icon.Arrow className="w-4 h-4" />
             </button>
           </div>
@@ -918,27 +917,25 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
       </nav>
 
       <main className="relative z-10 pb-16 pt-24">
-        <section id="beranda" className="relative mx-auto w-full max-w-[1800px] scroll-mt-32 overflow-hidden px-6 pt-12 md:px-12 lg:px-20 lg:pb-20 lg:pt-24">
+        <section id="beranda" className="relative mx-auto w-full max-w-[1800px] scroll-mt-32 overflow-hidden px-6 pt-8 md:px-12 md:pt-12 lg:px-20 lg:pb-20 lg:pt-24">
           <LandingFade className="relative z-10">
             <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-8">
-              <div className="relative z-10 max-w-2xl">
+              <div className="landing-hero-copy relative z-10 w-full min-w-0">
                 <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-1.5 text-sm font-bold text-slate-800 shadow-sm">
                   <Icon.Sparkles className="h-4 w-4 text-slate-600" /> Bimbel #1 untuk TPB ITB
                 </div>
-                <h1 className="mb-8 flex flex-col items-start gap-1 text-6xl font-extrabold leading-[1] tracking-tight md:text-7xl lg:text-[5.5rem]">
-                  <span className="text-slate-900">Taklukkan TPB</span>
+                <h1 className="mb-6 flex flex-col items-start gap-1 text-[2.95rem] font-extrabold leading-[1] tracking-tight min-[420px]:text-[3.35rem] sm:text-6xl md:mb-8 md:text-7xl lg:text-[5.5rem]">
+                  <span className="text-slate-900">Taklukkan</span>
+                  <span className="text-slate-900">TPB</span>
                   <span className="text-slate-400">tanpa</span>
                   <span className="text-slate-400">kecemasan,</span>
                   <span className="relative mt-2 inline-block"><span className="absolute bottom-1 left-0 -z-10 h-[50%] w-[105%] bg-[#FDE047]" /><span className="pr-2 text-slate-900">dengan</span></span>
                   <span className="relative mt-2 inline-block"><span className="absolute bottom-1 left-0 -z-10 h-[50%] w-[105%] bg-[#FDE047]" /><span className="pr-2 text-slate-900">struktur.</span></span>
                 </h1>
-                <p className="mb-10 max-w-xl text-lg leading-relaxed text-slate-600">Bimbingan Matematika, Fisika, dan Kimia dasar khusus mahasiswa ITB. Belajar dengan modul terstruktur, latihan adaptif, dan mentor IP 4.00.</p>
-                <div className="mb-6 flex flex-col items-center gap-4 sm:flex-row">
-                  <button onClick={startFree} className="w-full rounded-xl bg-[#FDE047] px-8 py-4 font-bold text-slate-900 shadow-lg shadow-amber-200/50 transition-all hover:bg-[#FCE76B] active:scale-95 sm:w-auto" type="button">Coba Gratis &rarr;</button>
-                  <div className="hidden font-medium text-slate-400 sm:block">atau</div>
-                  <button onClick={openPackages} className="w-full rounded-xl border border-slate-200 px-8 py-4 font-semibold text-slate-700 transition-all hover:bg-slate-50 hover:text-slate-900 active:scale-95 sm:w-auto" type="button">lihat tryout &rarr;</button>
+                <p className="mb-7 max-w-full text-lg leading-relaxed text-slate-600 sm:mb-10 sm:max-w-xl">Bimbingan Matematika, Fisika, dan Kimia dasar khusus mahasiswa ITB. Belajar dengan modul terstruktur, latihan adaptif, dan mentor IP 4.00.</p>
+                <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row">
+                  <button onClick={startFree} className="btn-ink landing-hero-cta justify-center sm:w-auto" type="button">Coba Gratis <Icon.Arrow className="w-4 h-4" /></button>
                 </div>
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-500"><Icon.CheckCircle className="h-4 w-4 text-green-500" /> Aktivasi langsung di landing page</div>
               </div>
               <div className="relative flex items-center justify-center lg:h-[600px]">
                 <div className="relative mx-auto aspect-square w-full max-w-md lg:aspect-auto lg:h-full">
@@ -980,12 +977,12 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
             <div
               className="absolute inset-0"
               style={{
-                backgroundImage: "linear-gradient(to right, rgba(15, 23, 42, 0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(15, 23, 42, 0.06) 1px, transparent 1px)",
-                backgroundSize: "24px 24px",
-              }}
-            />
-            <div className="absolute -left-[10%] top-[12%] h-[620px] w-[620px] rounded-full bg-sky-100/55 opacity-70 blur-[130px]" />
-            <div className="absolute -right-[8%] -top-[18%] h-[720px] w-[720px] rounded-full bg-yellow-100/70 opacity-85 blur-[140px]" />
+            backgroundImage: "linear-gradient(to right, rgba(15, 23, 42, 0.028) 1px, transparent 1px), linear-gradient(to bottom, rgba(15, 23, 42, 0.028) 1px, transparent 1px)",
+            backgroundSize: "32px 32px",
+          }}
+        />
+            <div className="absolute -left-[12%] top-[18%] h-[540px] w-[540px] rounded-full bg-sky-50/60 opacity-55 blur-[150px]" />
+            <div className="absolute -right-[10%] -top-[16%] h-[600px] w-[600px] rounded-full bg-yellow-50/70 opacity-65 blur-[160px]" />
           </div>
           <LandingFade delay={120} className="relative z-10">
             <div className="mb-16 flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end">
@@ -1010,13 +1007,12 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
             <div
               className="absolute inset-0 opacity-70"
               style={{
-                backgroundImage: "linear-gradient(to right, rgba(15, 23, 42, 0.035) 1px, transparent 1px), linear-gradient(to bottom, rgba(15, 23, 42, 0.035) 1px, transparent 1px)",
-                backgroundSize: "24px 24px",
+                backgroundImage: "linear-gradient(to right, rgba(15, 23, 42, 0.022) 1px, transparent 1px), linear-gradient(to bottom, rgba(15, 23, 42, 0.022) 1px, transparent 1px)",
+                backgroundSize: "32px 32px",
               }}
             />
-            <div className="absolute -top-[18%] -right-[12%] h-[680px] w-[680px] rounded-full bg-yellow-200/45 opacity-85 blur-[130px] mix-blend-multiply" />
-            <div className="absolute -bottom-[16%] -left-[12%] h-[620px] w-[620px] rounded-full bg-sky-100/55 opacity-70 blur-[130px] mix-blend-multiply" />
-            <div className="absolute right-[18%] bottom-[-22%] h-[560px] w-[560px] rounded-full bg-yellow-100/55 opacity-80 blur-[135px] mix-blend-multiply" />
+            <div className="absolute -top-[18%] -right-[12%] h-[560px] w-[560px] rounded-full bg-yellow-100/45 opacity-55 blur-[155px] mix-blend-multiply" />
+            <div className="absolute -bottom-[16%] -left-[12%] h-[540px] w-[540px] rounded-full bg-sky-50/60 opacity-55 blur-[155px] mix-blend-multiply" />
           </div>
           <LandingFade delay={150} className="relative z-10">
             <div className="mx-auto w-full max-w-[1800px] px-6 md:px-12 lg:px-20">
@@ -1279,9 +1275,6 @@ const HeroSplit = ({ setRoute }) => (
             </button>
           </div>
           <div className="flex items-center gap-6 mt-10 text-sm text-ink/55">
-            <div className="flex items-center gap-2">
-              <Icon.CheckCircle className="w-4 h-4 text-emerald-600" /> Aktivasi langsung di landing page
-            </div>
           </div>
         </div>
         <div className="lg:col-span-5">
@@ -1822,7 +1815,6 @@ const CTA = ({ setRoute, tweaks = {} }) => {
             </button>
           </div>
           <div className={`flex items-center justify-center gap-6 mt-7 text-sm ${isInk ? "text-white/60" : "text-ink/55"}`}>
-            <div className="flex items-center gap-2"><Icon.CheckCircle className="w-4 h-4" /> Aktivasi langsung di landing page</div>
           </div>
         </div>
       </div>

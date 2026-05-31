@@ -173,34 +173,33 @@ const TryOutBelajarPanel = ({ setRoute, isLoggedIn }) => {
 
   return (
     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mapel-stagger">
-      <section className="card-premium card-premium-amber p-6 group flex flex-col justify-between transition-all">
-        <div className="card-premium-glow glow-top-right glow-amber" />
-        <div className="card-premium-glow glow-bottom-left glow-amber" />
-        <div className="card-grid-pattern" />
+      <section className="relative overflow-hidden rounded-[var(--card-radius)] bg-ink p-6 text-white group flex flex-col justify-between transition-all">
+        <div className="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-yel/20 blur-3xl" />
+        <div className="absolute -bottom-16 -left-12 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
 
         <div className="relative z-10 flex flex-col h-full">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-[10px] font-mono font-bold tracking-widest uppercase bg-ink/5 text-ink/65 px-2.5 py-1 rounded-md border border-ink/5">
+            <span className="text-[10px] font-mono font-bold tracking-widest uppercase bg-yel text-ink px-2.5 py-1 rounded-md border border-yel">
               Try Out
             </span>
-            <div className="h-8 min-w-[3.75rem] px-2 rounded-lg bg-transparent flex items-center justify-center gap-1 text-[10px] font-mono font-bold tracking-widest uppercase text-ink/60 border border-ink/5">
+            <div className="h-8 min-w-[3.75rem] px-2 rounded-lg bg-white/5 flex items-center justify-center gap-1 text-[10px] font-mono font-bold tracking-widest uppercase text-white/65 border border-white/10">
               <Icon.Clock className="w-3 h-3" />
               15 mnt
             </div>
           </div>
 
-          <h2 className="font-display font-extrabold text-2xl text-ink leading-tight tracking-tight mb-3 group-hover:text-ink/80 transition-colors">
+          <h2 className="font-display font-extrabold text-2xl leading-tight tracking-tight mb-3 text-white">
             Try Out Gratis TPB
           </h2>
-          <p className="text-xs text-ink/55 font-sans leading-relaxed mb-6 line-clamp-3">
+          <p className="text-xs text-white/65 font-sans leading-relaxed mb-6 line-clamp-3">
             Mulai dari simulasi ringan untuk menguji ritme belajar. Soal bisa dicoba gratis, sementara pembahasan lengkap dan progres tersimpan setelah masuk akun.
           </p>
 
-          <div className="mt-auto pt-4 border-t border-ink/5 flex items-center justify-between gap-3 w-full">
-            <span className="text-xs font-mono font-bold text-ink/45">
+          <div className="mt-auto pt-4 border-t border-white/10 flex items-center justify-between gap-3 w-full">
+            <span className="text-xs font-mono font-bold text-white/50">
               15 soal latihan
             </span>
-            <button onClick={startPractice} className="btn-premium-cta btn-premium-cta-amber shrink-0" type="button">
+            <button onClick={startPractice} className="btn-yel !px-4 !py-2 text-xs shrink-0" type="button">
               Mulai
               <Icon.Arrow className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
             </button>
@@ -210,7 +209,7 @@ const TryOutBelajarPanel = ({ setRoute, isLoggedIn }) => {
             {!isLoggedIn && (
               <button
                 onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "belajar", section: "Try Out" } })}
-                className="text-xs font-bold text-ink/45 transition-colors hover:text-ink"
+                className="text-xs font-bold text-white/45 transition-colors hover:text-white"
                 type="button"
               >
                 Login untuk pembahasan

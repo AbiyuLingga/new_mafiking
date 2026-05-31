@@ -116,13 +116,8 @@ const App = () => {
   }, []);
 
   const confirmLandingReturn = React.useCallback(() => {
-    requestConfirm({
-      title: "Apakah ingin kembali ke landing page?",
-      message: "Halaman belajar akan ditutup sementara dan kamu akan kembali ke tampilan awal Mafiking.",
-      confirmLabel: "Ya, kembali",
-      onConfirm: () => navigate({ route: "lobby", publicLanding: true }),
-    });
-  }, [navigate, requestConfirm]);
+    navigate({ route: "lobby", publicLanding: true });
+  }, [navigate]);
 
   const confirmLogout = React.useCallback(() => {
     requestConfirm({
@@ -242,7 +237,7 @@ const App = () => {
   return (
     <div className="min-h-screen flex flex-col bg-paper text-ink">
       <OfflineBanner />
-      {route !== "practice" && route !== "lobby" && (
+      {route !== "practice" && route !== "lobby" && !(route === "tryout" && tryoutContext?.mode === "free-math") && (
         <Nav
           route={route}
           setRoute={navigate}
