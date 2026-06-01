@@ -237,7 +237,9 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const navRef = useRef(null);
-  const [activePill, setActivePill] = useState({ left: 0, width: 0, ready: false });
+  const previousActiveLinkRef = useRef("");
+  const [activePill, setActivePill] = useState({ left: 0, width: 0, ready: false, moving: false, direction: 1, trail: 0, motionKey: 0 });
+  const NAV_PILL_FROM_KEY = "mafiking:nav-pill-from";
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", onScroll);
@@ -245,7 +247,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
   }, []);
 
   const links = [
-    { id: "belajar", label: "Beranda", section: "Try Out" },
+    { id: "belajar", label: "Beranda" },
     { id: "misi", label: "Misi Harian" },
     { id: "tryout", label: "Paket" },
     { id: "leaderboard", label: "Peringkat" },
@@ -260,6 +262,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
     }
 
     let raf = 0;
+    let settleTimer = 0;
     const measure = () => {
       const navNode = navRef.current;
       if (!navNode) return;
@@ -267,17 +270,52 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
       if (!activeButton) return;
       const navRect = navNode.getBoundingClientRect();
       const buttonRect = activeButton.getBoundingClientRect();
-      setActivePill({
-        left: buttonRect.left - navRect.left,
-        width: buttonRect.width,
+      let storedPrevious = "";
+      try {
+        storedPrevious = window.sessionStorage.getItem(NAV_PILL_FROM_KEY) || "";
+        window.sessionStorage.removeItem(NAV_PILL_FROM_KEY);
+      } catch (_) {}
+      const previousActiveLink = links.some((item) => item.id === storedPrevious)
+        ? storedPrevious
+        : previousActiveLinkRef.current;
+      const previousIndex = links.findIndex((item) => item.id === previousActiveLink);
+      const nextIndex = links.findIndex((item) => item.id === activeLinkId);
+      const direction = previousIndex >= 0 && nextIndex >= 0 && nextIndex < previousIndex ? -1 : 1;
+      const previousButton = previousActiveLink
+        ? navNode.querySelector(`[data-nav-id="${previousActiveLink}"]`)
+        : null;
+      const nextLeft = buttonRect.left - navRect.left;
+      const nextWidth = buttonRect.width;
+      const nextRight = nextLeft + nextWidth;
+      let trail = 0;
+      if (previousButton && previousActiveLink !== activeLinkId) {
+        const previousRect = previousButton.getBoundingClientRect();
+        const previousLeft = previousRect.left - navRect.left;
+        const previousRight = previousLeft + previousRect.width;
+        trail = direction > 0
+          ? Math.max(0, nextLeft - previousLeft)
+          : Math.max(0, previousRight - nextRight);
+      }
+      setActivePill((current) => ({
+        left: nextLeft,
+        width: nextWidth,
         ready: true,
-      });
+        moving: Boolean(trail > 0),
+        direction,
+        trail,
+        motionKey: trail > 0 ? current.motionKey + 1 : current.motionKey,
+      }));
+      previousActiveLinkRef.current = activeLinkId;
+      settleTimer = window.setTimeout(() => {
+        setActivePill((current) => ({ ...current, moving: false }));
+      }, 340);
     };
 
     raf = window.requestAnimationFrame(measure);
     window.addEventListener("resize", measure);
     return () => {
       window.cancelAnimationFrame(raf);
+      window.clearTimeout(settleTimer);
       window.removeEventListener("resize", measure);
     };
   }, [activeLinkId]);
@@ -292,6 +330,11 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
     if (id === "lobby") {
       goHome();
       return;
+    }
+    if (activeLinkId && activeLinkId !== id) {
+      try {
+        window.sessionStorage.setItem(NAV_PILL_FROM_KEY, activeLinkId);
+      } catch (_) {}
     }
     const link = links.find((item) => item.id === id);
     if (link && link.section) {
@@ -326,10 +369,11 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
           {activePill.ready && (
             <span
               aria-hidden="true"
-              className={`nav-active-pill ${isInk ? "nav-active-pill-ink" : ""}`}
+              className={`nav-active-pill ${activePill.moving ? "is-moving" : ""} ${activePill.direction < 0 ? "is-moving-left" : "is-moving-right"} ${activePill.motionKey % 2 ? "is-motion-a" : "is-motion-b"} ${isInk ? "nav-active-pill-ink" : ""}`}
               style={{
                 width: `${activePill.width}px`,
                 transform: `translateX(${activePill.left}px)`,
+                "--nav-pill-trail": `${activePill.trail}px`,
               }}
             />
           )}
@@ -452,7 +496,7 @@ const Footer = ({ setRoute }) => (
         </div>
       </div>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center pt-6 gap-3 text-xs text-white/40">
-        <div>© 2026 Mafiking Edukasi Integrasi · Bandung, Indonesia</div>
+        <div>© 2026 Mafiking.</div>
         <div className="flex gap-5">
           <button className="hover:text-white">Privasi</button>
           <button className="hover:text-white">Syarat</button>

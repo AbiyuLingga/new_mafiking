@@ -86,7 +86,21 @@ for (const migration of [
     mime_type TEXT DEFAULT '',
     size_bytes INTEGER DEFAULT 0,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`
+  )`,
+  `CREATE TABLE IF NOT EXISTS tryout_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tryout_id TEXT NOT NULL,
+    tryout_title TEXT NOT NULL,
+    score INTEGER NOT NULL DEFAULT 0,
+    correct_count INTEGER NOT NULL DEFAULT 0,
+    total_questions INTEGER NOT NULL DEFAULT 0,
+    answered_count INTEGER NOT NULL DEFAULT 0,
+    duration_seconds INTEGER NOT NULL DEFAULT 0,
+    completed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_tryout_attempts_tryout_score
+    ON tryout_attempts (tryout_id, score DESC, correct_count DESC, duration_seconds ASC, completed_at ASC)`
 ]) {
   try {
     db.exec(migration);
@@ -457,6 +471,10 @@ app.use('/api/correction', require('./routes/correction'));
 const staticCache = {
   index: false,
   setHeaders: (res, filePath) => {
+    if (filePath.includes(`${path.sep}assets${path.sep}landing${path.sep}`)) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      return;
+    }
     if (filePath.endsWith('.jsx') || filePath.endsWith('styles.css')) {
       res.setHeader('Content-Type', 'text/babel; charset=utf-8');
       if (filePath.endsWith('styles.css')) res.setHeader('Content-Type', 'text/css; charset=utf-8');
@@ -508,7 +526,7 @@ function ensureFixedAdminUser(database) {
   const existing = database.prepare('SELECT id FROM users WHERE username = ?').get(username);
   if (existing) {
     database.prepare(
-      "UPDATE users SET password_hash = ?, display_name = 'Admin 123', role = 'admin' WHERE id = ?"
+      "UPDATE users SET password_hash = ?, role = 'admin' WHERE id = ?"
     ).run(passwordHash, existing.id);
     return;
   }

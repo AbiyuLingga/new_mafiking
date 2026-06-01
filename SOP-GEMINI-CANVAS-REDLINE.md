@@ -462,15 +462,15 @@ Backend harus menormalisasi semua koordinat:
 Gunakan pola existing di `routes/correction.js`:
 
 - `GEMINI_KEY_1` sampai `GEMINI_KEY_20`
-- `GEMINI_MODELS` sebagai override urutan model
-- fallback model: `gemini-2.5-flash`, lalu `gemini-2.5-flash-lite`
+- `GEMINI_MODELS` sebagai override urutan model OCR/evaluasi canvas
+- fallback model: `gemini-3.1-flash-lite`
 - retry hanya untuk error retryable seperti 429, 503, rate limit, overloaded,
   atau unavailable
 
 Rekomendasi:
 
-- OCR bisa memakai model cepat.
-- Evaluasi memakai model terbaik yang tersedia di `GEMINI_MODELS`.
+- OCR memakai Gemini 3.1 Flash Lite secara default.
+- Evaluasi jawaban canvas juga memakai Gemini 3.1 Flash Lite secara default.
 - Jangan menganggap banyak key dalam satu project selalu menambah quota total.
 
 ---

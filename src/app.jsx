@@ -234,12 +234,17 @@ const App = () => {
     );
   }
 
+  const navRoute = route === "tryout" && String(tryoutContext?.mode || "").startsWith("free-math")
+    ? "belajar"
+    : route;
+  const isFreeMathTryoutRoute = route === "tryout" && String(tryoutContext?.mode || "").startsWith("free-math");
+
   return (
     <div className="min-h-screen flex flex-col bg-paper text-ink">
       <OfflineBanner />
       {route !== "practice" && route !== "lobby" && !(route === "tryout" && tryoutContext?.mode === "free-math") && (
         <Nav
-          route={route}
+          route={navRoute}
           setRoute={navigate}
           navStyle={tweaks.navStyle}
           gamified={route === "belajar" || route === "misi" || route === "profile" || route === "tryout" || route === "leaderboard" || route === "admin"}
@@ -252,17 +257,17 @@ const App = () => {
 
       <main className="flex-1">
         <div
-          key={`${route}:${belajarSection || ""}:${authMode || ""}:${tryoutContext?.id || ""}`}
+          key={`${route}:${authMode || ""}:${tryoutContext?.id || ""}`}
           data-screen-label={routeLabel(route)}
-          className={route === "practice" || route === "lobby" ? "" : "app-route-transition"}
+          className={route === "practice" || route === "lobby" || isFreeMathTryoutRoute ? "" : "app-route-transition"}
         >
           {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={isAdmin || isAdminAccount} authMode={authMode} authRedirect={authRedirect} onAuthSuccess={handleAuthSuccess} pendingClerkUser={pendingClerkUser} />}
-          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} initialSection={belajarSection} />}
+          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} initialSection={belajarSection} onSectionChange={setBelajarSection} />}
           {route === "misi" && (
             <ScreenErrorBoundary>
               {hasPremiumAccess
                 ? <Misi setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} />
-                : <AccessGate setRoute={navigate} title="Misi Harian termasuk paket belajar" message="Beli paket untuk mendapat akses ke misi harian, XP bonus, dan latihan terarah setiap hari." variant="misi" />}
+                : <AccessGate setRoute={navigate} title="Akses Paket" message="Beli paket untuk mendapat akses ke misi harian dan latihan terarah setiap hari" variant="misi" showFreeTryout={false} hideKicker />}
             </ScreenErrorBoundary>
           )}
           {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} context={tryoutContext} />}
@@ -270,7 +275,7 @@ const App = () => {
           {route === "admin" && isAdminAccount && isAdmin && window.AdminPage && React.createElement(window.AdminPage, { setRoute: navigate })}
           {route === "profile" && (isLoggedIn
             ? <Profile setRoute={navigate} isAdmin={isAdmin || isAdminAccount} onRequestLanding={confirmLandingReturn} onRequestLogout={confirmLogout} />
-            : <AccessGate setRoute={navigate} title="Masuk untuk membuka profil" message="Profil menyimpan progres, pembahasan, dan riwayat belajarmu." requireLogin variant="profil" />
+            : <AccessGate setRoute={navigate} title="Masuk untuk membuka profil" requireLogin variant="profil" />
           )}
           {route === "payment" && <Payment setRoute={navigate} currentUser={currentUser} context={paymentContext} />}
           {route === "practice" && <Practice setRoute={navigate} context={practiceContext} isAdmin={isAdmin} isLoggedIn={isLoggedIn} />}
@@ -511,7 +516,7 @@ const App = () => {
   );
 };
 
-const AccessGate = ({ setRoute, title, message, requireLogin = false, variant = "misi" }) => {
+const AccessGate = ({ setRoute, title, message, requireLogin = false, variant = "misi", showFreeTryout = true, hideKicker = false }) => {
   const variantClass = {
     misi: "app-page-bg--misi",
     profil: "app-page-bg--profil",
@@ -523,13 +528,17 @@ const AccessGate = ({ setRoute, title, message, requireLogin = false, variant = 
       <div className="w-12 h-12 rounded-2xl bg-yel/70 flex items-center justify-center mx-auto mb-5">
         <Icon.Lock className="w-5 h-5" />
       </div>
-      <p className="kicker mb-2">{requireLogin ? "Akun diperlukan" : "Akses paket"}</p>
+      {!hideKicker && (
+        <p className="kicker mb-2">{requireLogin ? "Akun diperlukan" : "Akses paket"}</p>
+      )}
       <h1 className="font-display font-bold text-3xl md:text-4xl tracking-[-0.03em] leading-tight">
         {title}
       </h1>
-      <p className="text-ink/60 mt-4 leading-relaxed">
-        {message}
-      </p>
+      {message && (
+        <p className="text-xs font-semibold text-ink/55 mt-3 leading-relaxed">
+          {message}
+        </p>
+      )}
       <div className="flex flex-wrap items-center justify-center gap-3 mt-7">
         {requireLogin ? (
           <React.Fragment>
@@ -553,9 +562,11 @@ const AccessGate = ({ setRoute, title, message, requireLogin = false, variant = 
             <button onClick={() => setRoute("tryout")} className="btn-ink" type="button">
               Lihat Paket <Icon.Arrow />
             </button>
-            <button onClick={() => setRoute({ route: "belajar", section: "Try Out" })} className="btn-ghost" type="button">
-              Try Out Gratis
-            </button>
+            {showFreeTryout && (
+              <button onClick={() => setRoute({ route: "belajar", section: "Try Out" })} className="btn-ghost" type="button">
+                Try Out Gratis
+              </button>
+            )}
           </React.Fragment>
         )}
       </div>

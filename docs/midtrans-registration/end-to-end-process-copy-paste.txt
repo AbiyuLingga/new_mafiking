@@ -1,0 +1,30 @@
+Berikut end-to-end process customer di Mafiking dari memilih produk/jasa sampai memproses pembayaran.
+
+Mafiking adalah platform belajar online untuk mahasiswa TPB yang menyediakan Try Out, latihan Matematika/Fisika/Kimia, koreksi jawaban berbasis AI, progres belajar, dan paket akses berbayar.
+
+1. Customer membuka website Mafiking di https://mafiking.com.
+2. Customer melihat informasi layanan, fitur belajar, Try Out, dan pilihan paket.
+3. Customer memilih produk/jasa yang ingin digunakan, misalnya Try Out gratis, Try Out berbayar, atau paket akses belajar seperti Trial 7 Hari, Bulanan, atau Semester.
+4. Pada halaman paket, customer dapat melihat nama paket, deskripsi, harga, durasi akses, jumlah soal atau cakupan layanan, dan fitur yang didapatkan.
+5. Jika customer memilih paket gratis, customer dapat masuk ke alur latihan tanpa pembayaran. Jika customer memilih paket berbayar, customer diarahkan ke proses login/daftar lalu checkout.
+6. Customer login atau membuat akun agar pembelian dapat dicatat, akses dapat diaktifkan setelah pembayaran berhasil, dan progres belajar tersimpan.
+7. Customer masuk ke halaman checkout dan mengisi nama lengkap serta email aktif pembelian.
+8. Customer memeriksa ringkasan pesanan, termasuk nama paket, durasi atau jenis akses, dan total harga dalam Rupiah.
+9. Customer menekan tombol bayar.
+10. Sistem Mafiking membuat data transaksi, order ID, nominal pembayaran, dan status awal pembayaran.
+11. Customer diarahkan ke halaman payment gateway/Midtrans untuk memilih metode pembayaran yang tersedia, seperti QRIS, virtual account, e-wallet, atau metode lain yang aktif pada akun merchant.
+12. Customer mengikuti instruksi pembayaran pada halaman payment gateway sampai pembayaran selesai.
+13. Setelah proses pembayaran, customer diarahkan kembali ke website Mafiking melalui return/finish URL dan dapat melihat status pembayaran.
+14. Payment gateway mengirim notifikasi/callback ke sistem Mafiking. Sistem memperbarui status transaksi menjadi sukses, gagal, atau pending sesuai hasil pembayaran.
+15. Jika pembayaran sukses, akses paket customer aktif otomatis sesuai paket yang dibeli. Customer dapat kembali ke halaman Try Out atau Belajar untuk menggunakan fitur Mafiking.
+16. Jika pembayaran pending, gagal, atau dana sudah terpotong tetapi akses belum aktif, customer dapat menghubungi Mafiking dengan menyertakan nama akun, email pembelian, order ID, waktu pembayaran, bukti pembayaran, dan kronologi singkat.
+
+Contoh paket yang ditampilkan ke customer:
+- Trial 7 Hari: Rp 29.000
+- Bulanan: Rp 99.000
+- Semester: Rp 249.000
+- Tryout Bundling: Rp 50.000
+- Tryout Premium: Rp 100.000
+- Tryout Gratis: Gratis
+
+Akses berbayar diberikan setelah pembayaran terkonfirmasi berhasil. Pembayaran yang gagal atau kedaluwarsa tidak mengaktifkan akses. Bantuan pembayaran dapat diminta melalui kontak resmi Mafiking yang ditampilkan di website.

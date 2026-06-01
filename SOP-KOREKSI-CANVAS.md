@@ -17,7 +17,7 @@ POST /api/correction/evaluate
         ↓
 Backend validasi & susun prompt
         ↓
-Gemini API (vision + JSON mode)
+Gemini 3.1 Flash Lite API (vision + JSON mode)
         ↓
 Normalisasi & simpan ke DB
         ↓
@@ -86,7 +86,7 @@ Pemeriksaan yang dilakukan:
 
 ## 5. Penyusunan Prompt ke AI
 
-Backend menyusun array `parts` yang dikirim ke Gemini:
+Backend menyusun array `parts` yang dikirim ke Gemini 3.1 Flash Lite:
 
 **Part 1 — teks konteks:**
 
@@ -128,11 +128,10 @@ Urutan prioritas model (diambil dari env, lalu fallback):
 
 ```
 GEMINI_MODELS (env, comma-separated)
-  → fallback: gemini-2.5-flash
-  → fallback: gemini-2.5-flash-lite
+  → fallback: gemini-3.1-flash-lite
 ```
 
-Env `GEMINI_MODELS` bisa berisi model lain di depan, misalnya `gemini-2.5-pro,gemini-2.5-flash`. Model dicoba dari kiri ke kanan.
+Env `GEMINI_MODELS` bisa berisi model lain di depan, tetapi default production Mafiking untuk OCR dan evaluasi canvas adalah `gemini-3.1-flash-lite`. Model dicoba dari kiri ke kanan.
 
 ### API Keys
 
@@ -169,7 +168,7 @@ Error retryable: HTTP 429, 503, `resource_exhausted`, `rate limit`, `overloaded`
 
 ```js
 ai.models.generateContent({
-  model: "gemini-2.5-flash",
+  model: "gemini-3.1-flash-lite",
   contents: [{ role: "user", parts }],
   config: {
     responseJsonSchema: EVALUATION_SCHEMA,  // paksa output JSON sesuai schema
@@ -284,7 +283,7 @@ Backend mengembalikan:
   "evaluation": { ... },
   "feedback": "1. Substitusi u = ...",
   "keyIndex": 2,
-  "modelUsed": "gemini-2.5-flash"
+  "modelUsed": "gemini-3.1-flash-lite"
 }
 ```
 
@@ -376,6 +375,6 @@ Mengambil 50 attempt terakhir user, diurutkan dari terbaru. Digunakan untuk hala
 GEMINI_KEY_1=AIza...
 GEMINI_KEY_2=AIza...   # opsional, untuk fallback
 
-# Opsional — override urutan model
-GEMINI_MODELS=gemini-2.5-pro,gemini-2.5-flash
+# Opsional — override urutan model OCR/evaluasi canvas
+GEMINI_MODELS=gemini-3.1-flash-lite
 ```

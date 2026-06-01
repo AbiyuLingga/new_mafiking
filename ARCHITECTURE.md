@@ -124,14 +124,14 @@ The frontend is not module-based. Components are defined in browser global scope
 | `src/clerk-auth.jsx` | Static-Babel Clerk bridge: loads Clerk browser scripts, opens sign-in/sign-up, and syncs Clerk users to local sessions. |
 | `src/onboarding.jsx` | Mandatory profile completion modal for non-admin users whose local profile fields are incomplete. |
 | `src/lobby.jsx` | Public marketing landing plus login/sign-up screen. |
-| `src/belajar.jsx` | Free Try Out tab, static chapter cards, mapel selector, chapter-to-practice navigation. |
+| `src/belajar.jsx` | Free Try Out tab, static chapter cards, animated mapel selector, chapter-to-practice navigation. |
 | `src/practice.jsx` | Practice route, multiple-choice/canvas mode state, question-source mapping, correction submit. |
 | `src/toolbar.jsx` | Canvas drawing toolbar, eraser/lasso controls, focus-mode edge navigation. |
 | `src/drawing-canvas.jsx` | Low-level writable canvas surface. |
 | `src/answer-board.jsx` | Stylus answer board wrapper and canvas export surface. |
 | `src/profile.jsx` | Profile/report view using progress and correction APIs. |
 | `src/misi.jsx` | Daily mission screen. |
-| `src/tryout.jsx` | Paket / paid tryout package screen. |
+| `src/tryout.jsx` | Paket / paid tryout package screen; `Semua Paket` and `Paket Saya` share the same `PackageCard` layout. |
 | `src/leaderboard.jsx` | Peringkat page with isolated-scroll leaderboard and `Semua` / `Top Mingguan` views. |
 | `src/payment.jsx` | Payment package selection and status polling. |
 | `src/admin.jsx` | Admin page/modal shell, subject/Try Out content CRUD, import tab, users tab, and monitoring tab shell. |
@@ -192,11 +192,11 @@ The global `Nav` is intentionally not rendered while `route === "practice"` or `
 - Login/sign-up screens expose both the existing username/password flow and Clerk Google auth. Clerk browser scripts are loaded dynamically by `src/clerk-auth.jsx`.
 - After auth succeeds, `GET /api/auth/me` marks incomplete non-admin profiles with `profile_needs_completion`; `src/app.jsx` then renders the fixed, non-dismissible `ProfileOnboardingModal`.
 - The top app nav uses `Beranda` for `belajar`, `Misi Harian` for `misi`, `Paket` for `tryout`, and `Peringkat` for `leaderboard`; there is no separate `Belajar` nav link.
-- The app route shell uses a small vertical fade/slide transition. `src/shared.jsx` measures nav and segmented-control buttons so the active oval moves instead of teleporting.
+- The app route shell uses a small vertical fade/slide transition. `src/shared.jsx` measures nav and segmented-control buttons so the active oval moves instead of teleporting. `src/belajar.jsx` separately measures the active mapel tab so its underline slides between `Try Out`, `Matematika`, `Fisika`, and `Kimia`; the `Try Out` underline uses the ink accent.
 - Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and locked access gates use shared `.app-page-bg` variants from `src/styles.css` for the soft grid/glow background while keeping page-specific content/layout components unchanged.
 - The leaderboard is currently frontend-static display data; `routes/progress.js` already exposes leaderboard APIs but this first page does not consume them yet.
-- Logged-out users can start the free Try Out in multiple-choice mode.
-- Free Try Out pembahasan/canvas review and protected subject chapters route through login/sign-up with an auth redirect back to the intended route.
+- Logged-out users can open the free Try Out confirmation and start the free 15-question / 15-minute session.
+- Free Try Out review paths outside the session and protected subject chapters route through login/sign-up with an auth redirect back to the intended route.
 - Premium-only pages such as Misi Harian show an access gate when the user lacks an active package.
 
 ### Tweaks
@@ -356,15 +356,15 @@ Computes XP, penalties, level, badge tier, streaks, solved counts, mastery, and 
 Core responsibilities:
 
 - Validate image MIME type and size.
-- Use up to 20 Gemini keys.
-- Try configured models plus defaults.
+- Use up to 20 Gemini API keys for Gemini/Gemma calls.
+- Try configured OCR/evaluation models plus the Gemini 3.1 Flash Lite default.
 - Retry only retryable Gemini overload/rate-limit errors.
 - Normalize evaluation/profile JSON.
 - Store correction attempts in SQLite.
-- Log successful Gemini token usage to `ai_token_usage` without blocking the request.
-- Provide local fallback profile summaries when Gemini is unavailable.
-- Compute deterministic `recommendedItems` from local skill metadata and the Purcell-inspired reference bank; Gemini does not freely choose those follow-up questions.
-- Optionally use 9Router for profile narrative text only when `AI_PROFILE_PROVIDER=9router`; canvas OCR/evaluation still uses Gemini directly.
+- Log successful Gemini/Gemma token usage to `ai_token_usage` without blocking the request.
+- Provide local fallback profile summaries when Gemma is unavailable.
+- Compute deterministic `recommendedItems` from local skill metadata and the Purcell-inspired reference bank; Gemma does not freely choose those follow-up questions.
+- Use Gemma 4 31B for profile narrative text by default; legacy 9Router override requires explicit `PROFILE_PROVIDER_ALLOW_9ROUTER=true`. Canvas OCR/evaluation still uses Gemini 3.1 Flash Lite directly.
 - Rate-limit AI profile narrative refreshes to once per hour for normal users; admin `123`/`135` bypasses the cooldown.
 - Include summarized multiple-choice mistakes from `practice_attempts` as profile narrative evidence, without letting AI choose final catalog refs.
 
@@ -526,7 +526,7 @@ Open profile
   -> summarize recent multiple-choice mistakes from practice_attempts
   -> skip AI narrative if normal user refreshed within the last 1 hour
   -> send only 20 newest correction attempts plus MC evidence to the profile narrative provider
-  -> merge Gemini report text with deterministic recommendedItems
+  -> merge Gemma report text with deterministic recommendedItems
   -> render total answered, weaknesses, recommended questions, catalog refs, difficulty, Purcell reference, and reason
 ```
 
@@ -545,15 +545,15 @@ need_score =
 
 `data/recommendation-catalog.json` owns official skill aliases, prerequisites, scoring weights, and difficulty gating. `docs/purcell-inspired-question-bank.md` owns the original Purcell-aligned question references used by the recommendation engine.
 
-Runtime recommendation selection must stay deterministic: Gemini can contribute `overallSummary` text, but `recommendedItems`, `recommendedQuestions`, and `skillNeedScores` are merged from `lib/recommendation-engine.js` so profile recommendations point at real catalog refs instead of invented items.
+Runtime recommendation selection must stay deterministic: Gemma can contribute `overallSummary` text, but `recommendedItems`, `recommendedQuestions`, and `skillNeedScores` are merged from `lib/recommendation-engine.js` so profile recommendations point at real catalog refs instead of invented items.
 
 The profile endpoint intentionally uses two attempt windows: `PROFILE_RECOMMENDATION_ATTEMPT_LIMIT = 200` for local recommendation stability and `PROFILE_AI_ATTEMPT_LIMIT = 20` for AI prompt cost/latency control. Multiple-choice evidence has its own `PROFILE_MC_ATTEMPT_LIMIT = 120` because it is summarized before reaching the AI prompt.
 
-AI narrative refreshes are recorded in `profile_ai_refreshes`. Normal users can refresh AI narrative text once per hour; admin account `123`/`135` bypasses the cooldown for testing and operations. When cooldown blocks the AI call or 9Router/Gemini fails, the endpoint still returns the deterministic local profile summary.
+AI narrative refreshes are recorded in `profile_ai_refreshes`. Normal users can refresh AI narrative text once per hour; admin account `123`/`135` bypasses the cooldown for testing and operations. When cooldown blocks the AI call or Gemma fails, the endpoint still returns the deterministic local profile summary.
 
-When configured, 9Router is called through `lib/ai-profile-provider.js` against an OpenAI-compatible `/chat/completions` endpoint. 9Router failure does not break profile rendering; the endpoint falls back to the deterministic local summary. Production should use `NINEROUTER_MODELS` as a comma-separated allowlist of smoke-tested model IDs; `NINEROUTER_MODEL=auto` is supported but can hit providers with invalid tokens.
+When explicitly enabled, legacy 9Router is called through `lib/ai-profile-provider.js` against an OpenAI-compatible `/chat/completions` endpoint. 9Router failure does not break profile rendering; the endpoint falls back to the deterministic local summary. Production should leave the default Gemma provider active unless intentionally testing a 9Router override.
 
-Profile narrative providers must read `SOP-9ROUTER-PROFILE-SUMMARY.md` through `routes/correction.js` before producing summary JSON. This SOP is the source of truth for what the AI may infer and what it must leave to the deterministic recommendation engine.
+Profile narrative providers must read `SOP-9ROUTER-PROFILE-SUMMARY.md` through `routes/correction.js` before producing summary JSON. Despite the legacy filename, this SOP is the source of truth for what Gemma may infer and what it must leave to the deterministic recommendation engine.
 
 ### Question Bank Export/Import Flow
 

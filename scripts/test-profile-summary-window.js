@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const correctionRouter = require('../routes/correction');
 
 const {
+  GEMMA_PROFILE_MODEL,
   MAX_LEARNING_TAGS,
   PROFILE_AI_ATTEMPT_LIMIT,
   PROFILE_AI_REFRESH_COOLDOWN_MS,
@@ -11,6 +12,8 @@ const {
   canBypassProfileAiCooldown,
   compactAttemptsForProfile,
   chooseProfileAttemptSource,
+  extractGeneratedText,
+  getProfileModels,
   getProfileAiRefreshState,
   normalizeLearningTags,
   summarizeMultipleChoiceEvidence,
@@ -22,10 +25,25 @@ const {
 } = correctionRouter._correctionInternals;
 
 assert.equal(MAX_LEARNING_TAGS, 5);
+assert.equal(GEMMA_PROFILE_MODEL, 'gemma-4-31b-it');
 assert.equal(PROFILE_AI_ATTEMPT_LIMIT, 20);
 assert.equal(PROFILE_RECOMMENDATION_ATTEMPT_LIMIT, 200);
 assert.equal(PROFILE_AI_REFRESH_COOLDOWN_MS, 60 * 60 * 1000);
 assert.ok(PROFILE_RECOMMENDATION_ATTEMPT_LIMIT > PROFILE_AI_ATTEMPT_LIMIT);
+assert.deepEqual(getProfileModels(['gemma-4-31b-it']), ['gemma-4-31b-it']);
+assert.equal(
+  extractGeneratedText({
+    candidates: [{
+      content: {
+        parts: [
+          { text: 'internal thought', thought: true },
+          { text: '{"overallSummary":"ok"}' }
+        ]
+      }
+    }]
+  }),
+  '{"overallSummary":"ok"}'
+);
 
 assert.deepEqual(
   normalizeLearningTags([

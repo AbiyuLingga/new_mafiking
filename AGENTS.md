@@ -85,6 +85,7 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - `lib/clerk-user-sync.js` owns Clerk-to-local linking and guest-to-Google merge behavior.
 - `/` intentionally opens the public landing page for guests and logged-in users. The Mafiking logo returns to that landing page from app routes.
 - `Coba Gratis` routes into `Belajar` with the `Try Out` section selected.
+- The `Belajar` mapel tabs use a measured sliding underline; keep `Try Out` on the ink underline color (`rgb(11 19 38)`) and subject tabs on their mapel accent colors.
 - The app top nav labels are `Beranda`, `Misi Harian`, `Paket`, and `Peringkat`; `Beranda` maps to the `belajar` route, `Paket` maps to `tryout`, and `Peringkat` maps to `leaderboard`.
 - `Belajar` sections are `Try Out`, `Matematika`, `Fisika`, and `Kimia`. The `Try Out` section is the free entry point.
 - `src/leaderboard.jsx` owns the current Peringkat page. It is frontend-static data for now and uses an inner-scroll table body; do not present it as live backend ranking until it is wired to `/api/progress/leaderboard`.
@@ -107,7 +108,7 @@ Do:
 - Use existing utility classes, card styles, icon globals, and layout patterns.
 - Keep the `practice` route free of the global top navigation unless the user explicitly asks to restore it.
 - Keep the `lobby` route using its own marketing header; do not add the global app `Nav` to the public landing.
-- Keep logged-out access behavior: free Try Out multiple-choice can open, but free Try Out pembahasan/canvas review and protected subject chapters should route through login/sign-up.
+- Keep logged-out access behavior: the free Try Out confirmation and 15-question / 15-minute session can open, but protected review paths and subject chapters should route through login/sign-up.
 - Keep tweaks defaults in `src/app.jsx` aligned with the user's selected defaults:
   - `heroLayout: "split"`
   - `density: "normal"`
@@ -148,8 +149,8 @@ Important behavior:
 When editing this area, browser-smoke at least:
 
 1. `/ -> Coba Gratis` opens `Belajar -> Try Out`.
-2. `Belajar -> Try Out -> Mulai Try Out` opens free multiple-choice practice.
-3. Logged-out free Try Out canvas/pembahasan entry opens the login/sign-up gate.
+2. `Belajar -> Try Out -> Mulai Try Out` opens the free Try Out confirmation, then starts the 15-question / 15-minute session.
+3. Logged-out protected review paths still open the login/sign-up gate.
 4. `Belajar -> Matematika -> Teknik Integrasi` opens multiple-choice practice with 23 questions and a `Try Canvas` entry when the user is logged in.
 5. `Belajar -> Bentuk Tak Tentu & Integral Tak Wajar` shows empty state.
 6. `Belajar -> Fisika -> Kinematika` shows empty state until Fisika bank soal exists.
@@ -229,10 +230,10 @@ Rules:
 - Admin content management starts with a `Try Out` / `Matematika` / `Fisika` / `Kimia` selector in the `Bab & Subtopik` tab. `Try Out` opens package CRUD; subject options open chapter/subtopic CRUD filtered by `chapters.mapel`.
 - The admin shield is frontend-visible only for `currentUser.role === "admin"`; do not expose it to every user. Admin mode adds an `Admin Panel` button to the top nav, and that button navigates to the dedicated `admin` route/page.
 - Logout and return-to-landing confirmation dialogs are centered modals with Mafiking yellow/ink styling, not browser confirms or blue theme popups.
-- Gemini token usage is observational data in `ai_token_usage`, written by `lib/log-token-usage.js`. Logging failures must not break correction/transcription/profile AI requests.
+- Gemini/Gemma token usage is observational data in `ai_token_usage`, written by `lib/log-token-usage.js`. Logging failures must not break correction/transcription/profile AI requests.
 - `routes/correction.js` supports up to 20 Gemini keys: `GEMINI_KEY_1` through `GEMINI_KEY_20`.
-- Profile summary can fall back locally when Gemini keys are missing.
-- Profile recommendations are catalog-backed and deterministic. Preserve `recommendedItems`, `recommendedQuestions`, and `skillNeedScores` in `/api/correction/profile-summary`; Gemini or 9Router can write summary prose but should not choose follow-up question refs at runtime. Keep the larger local recommendation window separate from the smaller AI prompt window.
+- Profile summary uses Gemma 4 31B via the Gemini API key pool and can fall back locally when keys/model calls are unavailable.
+- Profile recommendations are catalog-backed and deterministic. Preserve `recommendedItems`, `recommendedQuestions`, and `skillNeedScores` in `/api/correction/profile-summary`; Gemma writes summary prose but must not choose follow-up question refs at runtime. Keep the larger local recommendation window separate from the smaller AI prompt window.
 - Clerk CLI writes `.env.local`; do not read, print, or commit secret env files. `.env.local` and `env` are ignored.
 
 ## Documentation Rules

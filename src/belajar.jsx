@@ -28,10 +28,14 @@ const normalizeBelajarSection = (value) => {
 };
 
 const getInitialBelajarMapel = () => {
+  try {
+    const saved = normalizeBelajarSection(window.localStorage.getItem(BELAJAR_MAPEL_STORAGE_KEY));
+    if (saved) return saved;
+  } catch (_) {}
   return "Try Out";
 };
 
-const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, initialSection = null }) => {
+const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, initialSection = null, onSectionChange = null }) => {
   const [mapel, setMapelState] = useState(normalizeBelajarSection(initialSection) || getInitialBelajarMapel);
   const [semester, setSemester] = useState(1);
   const [dbInit, setDbInit] = useState(null);
@@ -43,6 +47,7 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, initialSection
     try {
       window.localStorage.setItem(BELAJAR_MAPEL_STORAGE_KEY, safeMapel);
     } catch (_) {}
+    if (typeof onSectionChange === "function") onSectionChange(safeMapel);
     setMapelState(safeMapel);
   };
 
@@ -88,7 +93,8 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, initialSection
           <div>
             <SemesterKicker semester={semester} setSemester={setSemester} />
             <h1 className="font-display font-bold text-4xl md:text-5xl tracking-[-0.03em] leading-[1.05]">
-              Selamat datang pejuang IP 4.0
+              Selamat datang<br />
+              <span className="hi-yel-word">pejuang</span> <span className="hi-yel-word">IP 4.0</span>
             </h1>
           </div>
         </div>
@@ -99,9 +105,11 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, initialSection
 
       {/* Main content */}
       <section>
-        <div key={mapel} className="max-w-6xl mx-auto px-6 md:px-8 py-10">
+        <div className="max-w-6xl mx-auto px-6 md:px-8 py-10">
           {isTryOutSection ? (
-            <TryOutBelajarPanel setRoute={setRoute} isLoggedIn={isLoggedIn} />
+            <div key={`cards-${mapel}`}>
+              <TryOutBelajarPanel setRoute={setRoute} isLoggedIn={isLoggedIn} />
+            </div>
           ) : (() => {
             const totalSoal = chapters.reduce((s, c) => s + c.total, 0);
             const doneSoal  = chapters.reduce((s, c) => s + c.progress, 0);
@@ -111,7 +119,7 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, initialSection
             const toneClass = { amber: "tone-icon-amber", blue: "tone-icon-blue", emerald: "tone-icon-emerald" }[M.color] || "tone-icon-amber";
             const barTone = { amber: "bar-amber", blue: "bar-blue", emerald: "bar-emerald" }[M.color] || "bar-amber";
             return (
-              <div className="flex items-start gap-4 mb-6 mapel-anim">
+              <div className="flex items-start gap-4 mb-6">
                 <div
                   className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 mt-0.5 ${toneClass}`}
                 >
@@ -136,9 +144,11 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, initialSection
             <AdminBelajarView setRoute={setRoute} mapel={mapel} chapters={allMapelChapters} onChaptersChanged={loadDbChapters} />
           ) : !isTryOutSection ? (
             <React.Fragment>
-              {cardStyle === "numbered" && <ChaptersNumbered chapters={chapters} setRoute={setRoute} mapel={mapel} />}
-              {cardStyle === "soft" && <ChaptersSoft chapters={chapters} setRoute={setRoute} mapel={mapel} />}
-              {cardStyle === "magazine" && <ChaptersMagazine chapters={chapters} setRoute={setRoute} mapel={mapel} />}
+              <div key={`cards-${mapel}-${semester}-${cardStyle}`}>
+                {cardStyle === "numbered" && <ChaptersNumbered chapters={chapters} setRoute={setRoute} mapel={mapel} />}
+                {cardStyle === "soft" && <ChaptersSoft chapters={chapters} setRoute={setRoute} mapel={mapel} />}
+                {cardStyle === "magazine" && <ChaptersMagazine chapters={chapters} setRoute={setRoute} mapel={mapel} />}
+              </div>
             </React.Fragment>
           ) : null}
 
@@ -156,7 +166,7 @@ const TryOutBelajarPanel = ({ setRoute, isLoggedIn }) => {
       route: "tryout",
       tryout: {
         id: "free-math-tryout-15",
-        mode: "free-math",
+        mode: "free-math-confirm",
         title: "Try Out Matematika",
         mapel: "Matematika",
         semester: 1,
@@ -189,15 +199,11 @@ const TryOutBelajarPanel = ({ setRoute, isLoggedIn }) => {
           </div>
 
           <h2 className="font-display font-extrabold text-2xl leading-tight tracking-tight mb-3 text-white">
-            Try Out Gratis TPB
+            Tryout pre-test TPB
           </h2>
-          <p className="text-xs text-white/65 font-sans leading-relaxed mb-6 line-clamp-3">
-            Mulai dari simulasi ringan untuk menguji ritme belajar. Soal bisa dicoba gratis, sementara pembahasan lengkap dan progres tersimpan setelah masuk akun.
-          </p>
-
           <div className="mt-auto pt-4 border-t border-white/10 flex items-center justify-between gap-3 w-full">
             <span className="text-xs font-mono font-bold text-white/50">
-              15 soal latihan
+              Gratis
             </span>
             <button onClick={startPractice} className="btn-yel !px-4 !py-2 text-xs shrink-0" type="button">
               Mulai
@@ -205,17 +211,6 @@ const TryOutBelajarPanel = ({ setRoute, isLoggedIn }) => {
             </button>
           </div>
 
-          <div className="mt-3 flex">
-            {!isLoggedIn && (
-              <button
-                onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "belajar", section: "Try Out" } })}
-                className="text-xs font-bold text-white/45 transition-colors hover:text-white"
-                type="button"
-              >
-                Login untuk pembahasan
-              </button>
-            )}
-          </div>
         </div>
       </section>
     </div>
@@ -313,6 +308,16 @@ const getMapelTone = (mapelName) => {
   return mapelToneClasses[color] || mapelToneClasses.amber;
 };
 
+const getMapelUnderlineColor = (mapelName) => {
+  if (mapelName === "Try Out") return "rgb(11 19 38)";
+  const color = MAPEL_META[mapelName]?.color || "amber";
+  return {
+    amber: "#f59e0b",
+    blue: "#3b82f6",
+    emerald: "#10b981",
+  }[color] || "#f59e0b";
+};
+
 // Variant A — Sidebar (vertical nav)
 const MapelSidebar = ({ mapel, setMapel, semester, setSemester }) => (
   <section className="sticky top-[72px] z-30 border-y hairline bg-white/92 backdrop-blur-md">
@@ -331,7 +336,6 @@ const MapelSidebar = ({ mapel, setMapel, semester, setSemester }) => (
               >
                 <M.icon className="w-4 h-4 shrink-0" />
                 <span className="font-semibold text-sm">{m}</span>
-                {active && <span className="ml-auto text-xs font-mono opacity-50">{M.code}</span>}
               </button>
             );
           })}
@@ -344,7 +348,7 @@ const MapelSidebar = ({ mapel, setMapel, semester, setSemester }) => (
               </div>
               <div>
                 <div className={`font-display font-bold text-2xl ${tone.activeText}`}>{mapel}</div>
-                <div className="text-sm text-ink/50">{M.code} · Semester {semester}</div>
+                <div className="text-sm text-ink/50">Semester {semester}</div>
               </div>
             </div>
           ); })()}
@@ -355,29 +359,69 @@ const MapelSidebar = ({ mapel, setMapel, semester, setSemester }) => (
 );
 
 // Variant B — Underline tabs
-const MapelTabs = ({ mapel, setMapel }) => (
-  <section className="sticky top-[72px] z-30 bg-transparent border-b hairline">
-    <div className="max-w-6xl mx-auto px-6 md:px-8">
-      <div className="flex gap-8 overflow-x-auto hide-scrollbar pt-5">
-        {BELAJAR_MAPELS.map(m => {
-          const M = MAPEL_META[m];
-          const active = mapel === m;
-          const tone = getMapelTone(m);
-          return (
-            <button
-              key={m}
-              onClick={() => setMapel(m)}
-              className="text-left whitespace-nowrap relative pb-3"
-            >
-              <div className={`font-display font-bold text-xl transition-colors duration-300 ${active ? tone.activeText : "text-ink/40"}`}>{m}</div>
-              {active && <div className={`absolute left-0 right-0 -bottom-[1px] h-[2px] ${tone.activeUnderline}`}></div>}
-            </button>
-          );
-        })}
+const MapelTabs = ({ mapel, setMapel }) => {
+  const trackRef = useRef(null);
+  const [underline, setUnderline] = useState({ left: 0, width: 0, ready: false });
+
+  useEffect(() => {
+    if (!trackRef.current) return;
+    let raf = 0;
+    const measure = () => {
+      const track = trackRef.current;
+      if (!track) return;
+      const active = track.querySelector(`[data-mapel-id="${mapel}"]`);
+      if (!active) return;
+      const trackRect = track.getBoundingClientRect();
+      const activeRect = active.getBoundingClientRect();
+      setUnderline({
+        left: activeRect.left - trackRect.left + track.scrollLeft,
+        width: activeRect.width,
+        ready: true,
+      });
+    };
+    raf = window.requestAnimationFrame(measure);
+    window.addEventListener("resize", measure);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+    };
+  }, [mapel]);
+
+  return (
+    <section className="sticky top-[72px] z-30 bg-transparent border-b hairline">
+      <div className="max-w-6xl mx-auto px-6 md:px-8">
+        <div ref={trackRef} className="mapel-tabs-track flex gap-8 overflow-x-auto hide-scrollbar pt-5">
+          {underline.ready && (
+            <span
+              aria-hidden="true"
+              className="mapel-tabs-underline"
+              style={{
+                width: `${underline.width}px`,
+                transform: `translateX(${underline.left}px)`,
+                backgroundColor: getMapelUnderlineColor(mapel),
+              }}
+            />
+          )}
+          {BELAJAR_MAPELS.map(m => {
+            const active = mapel === m;
+            const tone = getMapelTone(m);
+            return (
+              <button
+                key={m}
+                data-mapel-id={m}
+                onClick={() => setMapel(m)}
+                className="text-left whitespace-nowrap relative pb-3"
+                type="button"
+              >
+                <div className={`font-display font-bold text-xl transition-colors duration-300 ${active ? tone.activeText : "text-ink/40"}`}>{m}</div>
+              </button>
+            );
+          })}
+        </div>
       </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
 // Variant C — Dropdown (mapel pills saja, semester ada di header)
 const MapelDropdown = ({ mapel, setMapel }) => (
@@ -438,6 +482,7 @@ const ChaptersNumbered = ({ chapters, setRoute, mapel }) => (
 // Variant B — SOFT CARDS (3-col grid, soft shadow, photo placeholder)
 const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
   const toneClass = { Matematika: "card-premium-amber", Fisika: "card-premium-blue", Kimia: "card-premium-emerald" }[mapel] || "card-premium-amber";
+  const artClass = { Matematika: "card-premium-art-matematika", Fisika: "card-premium-art-fisika", Kimia: "card-premium-art-kimia" }[mapel] || "card-premium-art-matematika";
   const glowColor = { Matematika: "glow-amber", Fisika: "glow-blue", Kimia: "glow-emerald" }[mapel] || "glow-amber";
   const pillClass = { Matematika: "topic-pill-premium-amber", Fisika: "topic-pill-premium-blue", Kimia: "topic-pill-premium-emerald" }[mapel] || "topic-pill-premium-amber";
   const barColor  = { Matematika: "bg-amber-500", Fisika: "bg-blue-500", Kimia: "bg-emerald-500" }[mapel] || "bg-amber-500";
@@ -460,7 +505,7 @@ const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
         <button
           key={c.id}
           onClick={() => setRoute({ route: "practice", practice: { ...c, mapel } })}
-          className={`text-left card-premium ${toneClass} p-6 group flex flex-col justify-between transition-all`}
+          className={`text-left card-premium card-premium-subject-art ${toneClass} ${artClass} p-6 group flex flex-col justify-between transition-all`}
         >
           {/* Ambient Glows */}
           <div className={`card-premium-glow glow-top-right ${glowColor}`} />
@@ -507,7 +552,7 @@ const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
             )}
 
             {/* Divider & Footer (Progress / CTA) */}
-            <div className="mt-auto pt-4 border-t border-ink/5 flex items-center justify-between w-full">
+            <div className="mt-auto pt-4 flex items-center justify-between w-full">
               {pct > 0 ? (
                 <div className="flex flex-col gap-1.5 flex-1 mr-4">
                   <div className="flex items-center justify-between text-[11px] font-mono font-bold text-ink/60">

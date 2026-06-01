@@ -10,20 +10,20 @@ The active browser entry point is `MAFIKING.html`, served by `server.js`. The fr
 - Practice UI: segmented control (Pilgan | Kanvas), Submit always visible in focus mode, ResultModal with wrong-step visualization, XP toast on correct answers.
 - Lobby: `/` always opens the marketing landing page. `Coba Gratis` enters the app at `Belajar -> Try Out`, while login/sign up can redirect back into the intended app route.
 - Onboarding: after first login/sign-up, non-admin users with incomplete profile data get a mandatory centered profile modal for name, phone, semester, faculty/major, and subject priorities. It cannot be skipped and saves through `/api/auth/profile-onboarding`.
-- Belajar: mapel selector now includes `Try Out`, `Matematika`, `Fisika`, and `Kimia`. Free users can start the free Try Out, while protected chapters and premium pages route through login/package gates.
+- Belajar: mapel selector now includes `Try Out`, `Matematika`, `Fisika`, and `Kimia`. The tabs selector uses a moving underline, with `Try Out` using the ink accent. Free users can start the free 15-question / 15-minute Try Out after a confirmation screen, while protected chapters and premium pages route through login/package gates.
 - Shared: global toast system (`showToast`), `Skeleton` loading states, `OfflineBanner`.
 - Peringkat: app nav includes a `Peringkat` route with an isolated-scroll leaderboard, static table header, and `Semua` / `Top Mingguan` segmented point views.
-- Motion polish: app route transitions, the top-nav active pill, shared segmented controls, landing reveal effects, testimonial marquee, and mission carousel motion use local CSS/JS motion; no new frontend runtime dependency is required.
+- Motion polish: app route transitions, the top-nav active pill, Belajar mapel underline, shared segmented controls, landing reveal effects, testimonial marquee, and mission carousel motion use local CSS/JS motion; no new frontend runtime dependency is required.
 - App backgrounds: Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and their locked access gates share a soft grid/glow page background with per-page color variants from `src/styles.css`.
-- Payment: package selection → Duitku redirect → status polling page (`src/payment.jsx`).
+- Paket: `Semua Paket` and `Paket Saya` render the same `PackageCard` layout; accessible packages show `Mulai`, while locked packages route through payment/login. Payment flow is package selection → Duitku redirect → status polling page (`src/payment.jsx`).
 - Admin mode: role-gated shield toggle button (bottom-right corner). Pressing shield enables admin mode; the top nav then shows an `Admin Panel` entry that opens the full admin page. The admin page can manage Try Out packages, Matematika/Fisika/Kimia chapters and subtopics, users/access, and Gemini usage backend data. On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete.
 - SOP: `SOP-AI-INPUT-SOAL.md` documents the general AI question-entry guide. `SOP-DEEPSEEK-IMPORT-SOAL.md` is the stricter prompt contract for admin file import via DeepSeek.
 - Backend: Express 5, SQLite through `better-sqlite3`, session auth, API routes.
 - Question bank: exported from `../Mafiking/db/database.sqlite` into `db/question-bank.json`.
 - Imported question data at time of writing: 2 chapters, 4 subtopics, 23 problems, 86 problem steps.
 - Available real practice bank: Integral only. The static Belajar UI has more chapter cards, but only `Teknik Integrasi` currently maps to real backend problems.
-- Canvas correction: calls Gemini when `GEMINI_KEY_1` or later keys are configured; profile summary has a fallback when keys are missing.
-- Recommendation engine: profile recommendations are deterministic from correction attempts plus `data/recommendation-catalog.json` (`2026-05-20.purcell-v1`) and `docs/purcell-inspired-question-bank.md`; Gemini may write the report text, but the selected follow-up questions come from the local engine.
+- Canvas correction: OCR/transcription and answer evaluation use Gemini 3.1 Flash Lite when `GEMINI_KEY_1` or later keys are configured; profile summary has a fallback when keys are missing.
+- Recommendation engine: profile recommendations are deterministic from correction attempts plus `data/recommendation-catalog.json` (`2026-05-20.purcell-v1`) and `docs/purcell-inspired-question-bank.md`; Gemma writes the profile narrative text, but the selected follow-up questions come from the local engine.
 
 ## Quick Start
 
@@ -55,11 +55,14 @@ Create `.env` from `.env.example`.
 | `CLERK_PUBLISHABLE_KEY` | Alternative public Clerk key | Server also accepts this name and maps it for the static browser bridge. |
 | `CLERK_SECRET_KEY` | Required for Clerk Google auth | Server-only Clerk key used by `@clerk/express`. Never expose this in client code. |
 | `CLERK_WEBHOOK_SIGNING_SECRET` | Required for production Clerk webhook | Secret used by `svix` to verify Clerk webhook signatures at `/api/webhooks/clerk`. |
-| `GEMINI_KEY_1` ... `GEMINI_KEY_20` | Required for AI correction | Gemini API keys used with fallback rotation. |
-| `GEMINI_MODELS` | No | Comma-separated model preference before built-in fallbacks. |
+| `GEMINI_KEY_1` ... `GEMINI_KEY_20` | Required for AI correction/profile narrative | Gemini API keys used with fallback rotation for Gemini and Gemma models. |
+| `GEMINI_MODELS` | No | Comma-separated model preference for OCR/evaluation before built-in fallbacks. Defaults to Gemini 3.1 Flash Lite. |
+| `GEMMA_PROFILE_MODEL` | No | Gemma model used for profile narrative. Defaults to `gemma-4-31b-it`. |
+| `GEMMA_PROFILE_MODELS` | No | Comma-separated profile narrative model fallback list. Overrides `GEMMA_PROFILE_MODEL`. |
 | `GEMINI_REQUEST_DAILY_LIMIT` | No | Admin monitoring request limit display per Gemini key. Defaults to `1500`. |
 | `GEMINI_TOKEN_DAILY_LIMIT` | No | Admin monitoring token limit display per Gemini key. Defaults to `1000000`. |
-| `AI_PROFILE_PROVIDER` | No | `gemini` by default. Set `9router` to use 9Router only for profile narrative text. |
+| `AI_PROFILE_PROVIDER` | No | Legacy provider label. Profile narrative uses Gemma by default. |
+| `PROFILE_PROVIDER_ALLOW_9ROUTER` | No | Set `true` only to allow temporary 9Router profile narrative override when `AI_PROFILE_PROVIDER=9router`. |
 | `NINEROUTER_BASE_URL` | Required if `AI_PROFILE_PROVIDER=9router` | 9Router OpenAI-compatible base URL, usually `http://127.0.0.1:20128/v1`. |
 | `NINEROUTER_API_KEY` | Required if `AI_PROFILE_PROVIDER=9router` | API key copied from the 9Router dashboard. Server-side only. |
 | `NINEROUTER_MODEL` | No | 9Router fallback model for profile narrative when `NINEROUTER_MODELS` is not set. |
@@ -76,19 +79,17 @@ Create `.env` from `.env.example`.
 | `DUITKU_CALLBACK_URL` | Required for deployed payments | Payment callback URL. |
 | `DUITKU_RETURN_URL` | Required for deployed payments | Browser return URL after payment. |
 
-Without Gemini keys, practice pages still open, but canvas evaluation endpoints return an API-key error. The profile summary endpoint can still return a local fallback summary. If `AI_PROFILE_PROVIDER=9router`, only profile narrative text uses 9Router; catalog recommendation items still come from the local deterministic engine.
+Without Gemini keys, practice pages still open, but canvas evaluation endpoints return an API-key error. The profile summary endpoint can still return a local fallback summary. Profile narrative uses Gemma through the same Gemini API key pool; catalog recommendation items still come from the local deterministic engine.
 
 Clerk CLI setup writes `.env.local`. That file is intentionally ignored by git. The server loads `.env.local` first and then `.env`, without printing secrets. Before testing Google login, create/confirm the Clerk application, enable Google in SSO Connections, and make sure `CLERK_SECRET_KEY` plus one publishable key are present in ignored env files. For production webhooks, copy the Clerk endpoint signing secret into `CLERK_WEBHOOK_SIGNING_SECRET`.
 
-For 9Router model rotation, prefer a tested allowlist:
+For profile narrative, the default model is:
 
 ```env
-AI_PROFILE_PROVIDER=9router
-NINEROUTER_MODEL=kr/claude-haiku-4.5
-NINEROUTER_MODELS=kr/auto,kr/claude-haiku-4.5,kr/deepseek-3.2,kr/qwen3-coder-next,kr/glm-5,kr/minimax-m2.5,kr/minimax-m2.1,ag/gemini-3-flash
+GEMMA_PROFILE_MODEL=gemma-4-31b-it
 ```
 
-`auto` is supported and fetches `GET /v1/models`, but it can hit providers with invalid tokens or unsuitable models. Use `NINEROUTER_MODELS` for production so profile summaries only rotate through verified working models.
+9Router support remains for temporary override only. Set both `AI_PROFILE_PROVIDER=9router` and `PROFILE_PROVIDER_ALLOW_9ROUTER=true` if you intentionally want to use it.
 
 ## Commands
 
@@ -209,13 +210,13 @@ The import script refuses to replace question tables when user progress or corre
 |   |-- clerk-user-sync.js     # Clerk user -> local SQLite user sync and guest merge helpers
 |   |-- log-token-usage.js     # Non-blocking AI token usage logger
 |   `-- recommendation-engine.js # Deterministic weakness scoring and follow-up question picker
-|-- SOP-9ROUTER-PROFILE-SUMMARY.md # Required profile narrative prompt for 9Router/Gemini
+|-- SOP-9ROUTER-PROFILE-SUMMARY.md # Required profile narrative prompt for Gemma/legacy 9Router
 |-- routes/
 |   |-- auth.js                # Register, login, logout, current user
 |   |-- webhooks.js            # Clerk webhook verification and user-created sync
 |   |-- quiz.js                # Chapters, subtopics, problems, full quiz payload
 |   |-- progress.js            # XP, streaks, progress, leaderboard
-|   |-- correction.js          # Gemini transcription, evaluation, profile summary
+|   |-- correction.js          # Gemini transcription/evaluation and Gemma profile summary
 |   |-- admin.js               # Admin CRUD for content/users
 |   |-- admin-import.js        # Admin DeepSeek draft/commit import from PDF/DOCX/TXT/MD
 |   `-- payment.js             # Duitku create/status/callback
@@ -267,7 +268,7 @@ The import script refuses to replace question tables when user progress or corre
 - Everyone opening `/` sees the `Landing` component.
 - The Mafiking logo returns to this landing page from app routes.
 - `Coba Gratis` opens `Belajar` with the `Try Out` tab selected. If the user is already logged in, the same button continues into their account context.
-- The login screen uses the existing auth UI. Sign up temporarily reuses that shell with sign-up labels and a display-name field.
+- The login screen uses the existing auth UI. Sign up temporarily reuses that shell with sign-up labels and a display-name field. `Kembali landing` clears the auth route state and returns to the public landing.
 - The auth screen also includes Clerk Google login/sign-up controls. Clerk is loaded through `src/clerk-auth.jsx`, using `/api/config/clerk` to fetch only the publishable key.
 - Clerk users are synced into local SQLite users on API requests through `@clerk/express`; the local `users.id` remains the source of truth for progress, XP, admin role, and payments.
 - First-time Google users are synced into the local account model, then incomplete non-admin profiles are completed through the mandatory modal in `src/onboarding.jsx`.
@@ -277,8 +278,8 @@ The import script refuses to replace question tables when user progress or corre
 
 - The `Belajar` mapel selector is `Try Out`, `Matematika`, `Fisika`, `Kimia`.
 - The `Try Out` tab exposes the free tryout entry point.
-- Free users can start the free tryout in multiple-choice mode.
-- Pembahasan/canvas review for the free tryout requires login or sign up.
+- Free users open a confirmation screen before starting the free 15-question / 15-minute Try Out session.
+- Pembahasan/canvas review outside the free Try Out session requires login or sign up.
 - Clicking protected subject chapters such as Matematika Integral while logged out opens the login/sign-up gate, then returns to the intended chapter.
 - `Misi Harian`, profile history, and premium learning areas show a package/access gate when the user does not have access.
 - The top nav uses `Beranda` for the app belajar home and `Paket` for package selection; there is no separate `Belajar` nav item.
@@ -305,8 +306,8 @@ The import script refuses to replace question tables when user progress or corre
 1. User enters canvas mode via `ModeSegment`.
 2. User writes on the canvas in `src/practice.jsx` / `src/answer-board.jsx`.
 3. Submit exports the canvas image as PNG data URL.
-4. Frontend posts to `POST /api/correction/evaluate`.
-5. Backend validates image size/type, calls Gemini with key/model fallback, logs successful token usage in `ai_token_usage`, normalizes the JSON response, stores a row in `correction_attempts`, then returns feedback.
+4. Frontend posts to `POST /api/correction/transcribe` for OCR confirmation, then `POST /api/correction/evaluate` after confirmation.
+5. Backend validates image size/type, calls Gemini 3.1 Flash Lite with key fallback, logs successful token usage in `ai_token_usage`, normalizes the JSON response, stores a row in `correction_attempts`, then returns feedback.
 6. Frontend shows the ResultModal and posts progress to `POST /api/progress/submit`.
 
 ### Profile Report
@@ -315,7 +316,7 @@ The import script refuses to replace question tables when user progress or corre
 2. It posts attempts to `/api/correction/profile-summary`.
 3. Backend computes deterministic skill need scores from up to 200 recent canvas correction attempts using wrong frequency, recency, low score, attempt pressure, and prerequisite gap.
 4. Backend adds recent multiple-choice evidence from `practice_attempts` so the narrative can mention repeated wrong subtopics, difficulty, selected answer, and correct answer.
-5. If the AI narrative cooldown allows it, backend sends only the 20 newest correction attempts plus summarized multiple-choice evidence to the configured profile provider.
+5. If the AI narrative cooldown allows it, backend sends only the 20 newest correction attempts plus summarized multiple-choice evidence to Gemma 4 31B, unless a legacy 9Router override is explicitly enabled.
 6. Normal users can refresh the AI narrative at most once per hour; admin user `123` with password `135` bypasses this cooldown.
 7. Backend returns `recommendedItems` from the Purcell-aligned local bank, `skillNeedScores` for debugging/explainability, and `recommendedQuestions` as a backward-compatible string list.
 
@@ -411,9 +412,9 @@ Browser checks:
 - Click `Coba Gratis` - app opens `Belajar` with the `Try Out` tab selected.
 - Click the Mafiking logo from an app route - returns to the public landing page.
 - From `Belajar -> Matematika`, click `Integral` while logged out - login/sign-up gate opens.
-- From `Belajar -> Try Out`, click `Mulai Try Out` - practice opens in multiple-choice mode; clicking canvas/pembahasan while logged out opens the auth gate.
+- From `Belajar -> Try Out`, click `Mulai Try Out` - the Try Out confirmation opens; starting it enters the free 15-question / 15-minute session.
 - Log in as an admin; shield button appears at bottom-right. Pressing it turns yellow and adds `Admin Panel` to the top nav.
-- Click `Admin Panel`, open `Users & Token Monitoring`, and confirm user/access data plus Gemini token cards render.
+- Click `Admin Panel`, open `Users & Token Monitoring`, and confirm user/access data plus Gemini/Gemma token cards render.
 - Open `Belajar` in admin mode — numbered chapter list with ✏/✕ buttons; "+ Tambah Bab Baru" row at bottom. Changes persist to DB.
 - Open `Belajar` in normal mode — chapter cards render normally (no admin buttons).
 - Click `Teknik Integrasi` → practice opens with 23 questions in Pilgan mode.
@@ -435,6 +436,6 @@ Browser checks:
 - Only Integral question data is currently imported. Static chapter cards for other subjects are placeholders.
 - Admin shield visibility is role-gated in the frontend, and admin APIs remain protected by backend middleware. Local development still has localhost admin API bypass unless `LOCAL_ADMIN_MODE=false`.
 - `src/admin-monitoring.jsx` must load before `src/admin.jsx` because it exports `window.AdminMonitoringPanel`.
-- Gemini token "remaining" values are monitoring estimates from configured daily limits, not a live Google quota lookup.
+- Gemini/Gemma token "remaining" values are monitoring estimates from configured daily limits, not a live Google quota lookup.
 - Duitku routes point at sandbox base URL in code. Review payment environment and base URL before production use.
 - `db/mafiking.db` exists but is the wrong file — use `db/database.sqlite`.

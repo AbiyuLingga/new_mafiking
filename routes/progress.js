@@ -1,5 +1,11 @@
 const express = require('express');
 const { isAuthenticated, requireRegisteredUser } = require('../middleware/auth');
+const {
+    calculateTryoutAttemptStats,
+    normalizeTryoutAttemptInput,
+    rankTryoutLeaderboardRows,
+    safeInitials
+} = require('../lib/tryout-ranking');
 const router = express.Router();
 
 // POST /api/progress/submit — submit answer
@@ -235,7 +241,7 @@ router.get('/leaderboard', isAuthenticated, (req, res) => {
         id: u.id,
         display_name: u.display_name,
         fakultas: u.fakultas || '',
-        initials: u.display_name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2),
+        initials: safeInitials(u.display_name),
         xp: u.xp,
         level: u.level,
         badge_tier: u.badge_tier || 0,
@@ -276,7 +282,7 @@ router.get('/leaderboard/weekly', isAuthenticated, (req, res) => {
         id: u.id,
         display_name: u.display_name,
         fakultas: u.fakultas || '',
-        initials: u.display_name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2),
+        initials: safeInitials(u.display_name),
         xp: u.weekly_xp,
         level: u.level,
         badge_tier: u.badge_tier || 0,
@@ -285,6 +291,105 @@ router.get('/leaderboard/weekly', isAuthenticated, (req, res) => {
     }));
 
     res.json(result);
+});
+
+// POST /api/progress/tryout-attempts — simpan hasil tryout dari jawaban user
+router.post('/tryout-attempts', isAuthenticated, requireRegisteredUser, (req, res) => {
+    const db = req.app.locals.db;
+    const userId = req.session.userId;
+    const input = normalizeTryoutAttemptInput(req.body || {});
+
+    if (!input.tryoutId) {
+        return res.status(400).json({ error: 'tryoutId diperlukan' });
+    }
+    if (!input.problemIds.length) {
+        return res.status(400).json({ error: 'Daftar soal tryout kosong' });
+    }
+
+    const placeholders = input.problemIds.map(() => '?').join(',');
+    const problemRows = db.prepare(
+        `SELECT id, answer_text, answer_display, mc_options
+         FROM problems
+         WHERE id IN (${placeholders})`
+    ).all(...input.problemIds);
+    const problemsById = new Map(problemRows.map((problem) => [problem.id, problem]));
+    const orderedProblems = input.problemIds
+        .map((id) => problemsById.get(id))
+        .filter(Boolean);
+
+    if (orderedProblems.length !== input.problemIds.length) {
+        return res.status(400).json({ error: 'Sebagian soal tryout tidak ditemukan' });
+    }
+
+    const stats = calculateTryoutAttemptStats({
+        problems: orderedProblems,
+        answers: input.answers,
+    });
+
+    const info = db.prepare(`
+        INSERT INTO tryout_attempts (
+            user_id,
+            tryout_id,
+            tryout_title,
+            score,
+            correct_count,
+            total_questions,
+            answered_count,
+            duration_seconds,
+            completed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime(?))
+    `).run(
+        userId,
+        input.tryoutId,
+        input.tryoutTitle,
+        stats.score,
+        stats.correctCount,
+        stats.totalQuestions,
+        stats.answeredCount,
+        input.durationSeconds,
+        new Date().toISOString()
+    );
+
+    res.json({
+        ok: true,
+        attempt: {
+            id: info.lastInsertRowid,
+            tryoutId: input.tryoutId,
+            tryoutTitle: input.tryoutTitle,
+            durationSeconds: input.durationSeconds,
+            ...stats,
+        },
+    });
+});
+
+// GET /api/progress/leaderboard/tryout — best attempt per user untuk satu tryout
+router.get('/leaderboard/tryout', isAuthenticated, (req, res) => {
+    const db = req.app.locals.db;
+    const currentUserId = req.session.userId;
+    const tryoutId = String(req.query.tryoutId || 'free-math-tryout-15').trim().slice(0, 120);
+
+    if (!tryoutId) {
+        return res.status(400).json({ error: 'tryoutId diperlukan' });
+    }
+
+    const rows = db.prepare(`
+        SELECT
+            ta.user_id,
+            ta.score,
+            ta.correct_count,
+            ta.total_questions,
+            ta.answered_count,
+            ta.duration_seconds,
+            ta.completed_at,
+            u.display_name,
+            u.fakultas
+        FROM tryout_attempts ta
+        JOIN users u ON u.id = ta.user_id
+        WHERE ta.tryout_id = ? AND u.role != 'admin'
+        ORDER BY ta.score DESC, ta.correct_count DESC, ta.duration_seconds ASC, ta.completed_at ASC, ta.id ASC
+    `).all(tryoutId);
+
+    res.json(rankTryoutLeaderboardRows(rows, currentUserId));
 });
 
 function updateLevel(db, userId) {

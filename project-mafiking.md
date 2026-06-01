@@ -29,13 +29,13 @@ Historical WSL path used by older notes:
 | --- | --- |
 | Runtime | Express serves `MAFIKING.html`; React UMD + Babel standalone loads static JSX files. |
 | Landing | Public landing always opens at `/`, uses the new Google AI Studio-inspired interface, local reveal animations, logo-to-landing behavior, and admin-editable media slots. |
-| Auth | Login works through the existing shell. Sign-up temporarily reuses the auth shell with sign-up labels. Clerk Google auth is available through the auth shell, syncs to local SQLite users, and can prompt first-time Google users for a Mafiking display name. |
-| Belajar | Sections are `Try Out`, `Matematika`, `Fisika`, `Kimia`. Copy uses `Selamat datang pejuang IP 4.0`. |
-| Free Try Out | `Coba Gratis` routes to `Belajar -> Try Out`; free multiple-choice entry opens without login. Canvas/pembahasan requires login/sign-up. |
-| Practice | Multiple-choice-first flow with optional canvas mode and Gemini correction. Unsupported chapters show empty state. |
+| Auth | Login works through the existing shell. Sign-up temporarily reuses the auth shell with sign-up labels. `Kembali landing` clears auth route state. Clerk Google auth is available through the auth shell, syncs to local SQLite users, and can prompt first-time Google users for a Mafiking display name. |
+| Belajar | Sections are `Try Out`, `Matematika`, `Fisika`, `Kimia`. Copy is split/highlighted as `Selamat datang` plus `pejuang IP 4.0`, and the tabs use a sliding underline with `Try Out` in ink. |
+| Free Try Out | `Coba Gratis` routes to `Belajar -> Try Out`; `Mulai` opens a confirmation screen before the free 15-question / 15-minute session. Protected review paths require login/sign-up. |
+| Practice | Multiple-choice-first flow with optional canvas mode; OCR/transcription and answer evaluation use Gemini 3.1 Flash Lite. Unsupported chapters show empty state. |
 | Admin | Role-gated shield adds an `Admin Panel` page entry. Admin page manages content, landing media, users, AI import, and Try Out packages. |
 | Payment | Duitku create/status/callback routes exist; code uses sandbox base URL by default. |
-| Profile | Deterministic recommendation engine plus optional Gemini/9Router narrative text. |
+| Profile | Deterministic recommendation engine plus Gemma 4 31B narrative text, with local fallback. |
 
 ## Routes
 
@@ -99,7 +99,7 @@ Important caveat: `src/admin.jsx` currently references `window.AdminMonitoringPa
 - Key newer tables: `tryout_packages`, `user_access_grants`, `ai_token_usage`, `landing_media`.
 - Clerk auth adds local user columns: `clerk_id`, `email`, and `auth_provider`. Backend helpers live in `middleware/clerk-auth.js`, `lib/clerk-user-sync.js`, and `routes/webhooks.js`.
 - Clerk webhook sync uses `POST /api/webhooks/clerk`; Google onboarding and guest merge use `POST /api/auth/clerk-onboard`.
-- Gemini token usage is logged observationally and displayed from local data/limits, not live Google quota.
+- Gemini/Gemma token usage is logged observationally and displayed from local data/limits, not live Google quota.
 
 ## Recommendation Data
 

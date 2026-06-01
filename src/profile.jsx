@@ -70,6 +70,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
       questionDisplay: item.questionDisplay || item.questionText || "",
       questionText: item.questionText || "",
       answerDisplay: item.answerDisplay || "",
+      mapel: item.mapel || "",
       difficulty: item.difficulty || "",
       purcellReference: item.purcellReference || "",
       reason: item.reason || "",
@@ -81,6 +82,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
       questionDisplay: question,
       questionText: "",
       answerDisplay: "",
+      mapel: "",
       difficulty: "",
       purcellReference: "",
       reason: "",
@@ -93,6 +95,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
       questionDisplay: "Tentukan dy/dx dari x² + y² = 25.",
       questionText: "Tentukan dy/dx dari x² + y² = 25.",
       answerDisplay: "dy/dx = -x/y",
+      mapel: "Matematika",
       difficulty: "Medium",
       purcellReference: "Turunan Implisit",
       reason: "",
@@ -104,6 +107,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
       questionDisplay: "Hitung ∫ x eˣ dx.",
       questionText: "Hitung integral x e^x dx.",
       answerDisplay: "x eˣ - eˣ + C",
+      mapel: "Matematika",
       difficulty: "Medium",
       purcellReference: "Integrasi Parsial",
       reason: "",
@@ -132,13 +136,24 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
 
   function formatAiRefreshStatus(state) {
     if (!state) return "Analisis Aktif";
-    if (state.bypass) return "Admin: tanpa jeda";
+    if (state.bypass) return "Analisis Aktif";
     if (state.used) return "AI baru diperbarui";
     if (state.skipped && state.cooldownSeconds > 0) {
       const minutes = Math.max(1, Math.ceil(state.cooldownSeconds / 60));
       return `Refresh lagi dalam ${minutes} mnt`;
     }
     return "Analisis lokal aktif";
+  }
+
+  function truncateRecommendationText(value, maxLength = 92) {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    return text.length > maxLength ? `${text.slice(0, maxLength).trim()}...` : text;
+  }
+
+  function renderRecommendationQuestionHTML(value) {
+    const text = truncateRecommendationText(value || '');
+    if (window.renderMafikingMathHTML && text) return window.renderMafikingMathHTML(text);
+    return text;
   }
 
   /* Inject spin keyframe once */
@@ -164,9 +179,6 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
               </p>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setRoute("belajar")} className="btn-ink !py-2.5 !px-5 text-sm">
-                Kembali Belajar
-              </button>
               <button onClick={() => loadProfile(true)} className="btn-ghost !py-2.5 !px-5 text-sm">
                 Refresh
               </button>
@@ -389,7 +401,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                         <div key={i} className="ps h-7 rounded-full" style={{ width: `${w}px` }} />
                       ))
                     ) : strengths.length ? strengths.map((tag) => (
-                      <span key={tag} className="tag bg-emerald-50/50 text-ink/70 border border-emerald-900/10 hover:bg-emerald-50/70 transition-colors">
+                      <span key={tag} className="tag border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-colors">
                         {tag}
                       </span>
                     )) : (
@@ -410,7 +422,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                         <div key={i} className="ps h-7 rounded-full" style={{ width: `${w}px` }} />
                       ))
                     ) : weaknesses.length ? weaknesses.map((tag) => (
-                      <span key={tag} className="tag bg-rose-50/45 text-ink/70 border border-rose-900/10 hover:bg-rose-50/65 transition-colors">
+                      <span key={tag} className="tag border border-rose-300 bg-rose-100 text-rose-800 hover:bg-rose-200 transition-colors">
                         {tag}
                       </span>
                     )) : (
@@ -456,21 +468,25 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                     {recommendationRows.map((item, index) => {
                       return (
                         <div key={item.ref || index} className="rounded-xl border border-ink/5 bg-ink/[0.02] p-4 flex items-start gap-4 hover:bg-ink/[0.04] transition-all justify-between">
-                          <div className="flex items-start gap-3 min-w-0">
-                            <span className="text-xs font-mono font-bold text-ink/35 mt-0.5">#{index + 1}</span>
-                            <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
+                              {(item.mapel || item.difficulty) ? (
+                                <p className="text-[10px] uppercase tracking-wider font-black text-ink/70 mb-1">
+                                  {[item.mapel, item.difficulty].filter(Boolean).join(" · ")}
+                                </p>
+                              ) : null}
                               {item.targetSkill ? (
-                                <p className="text-[10px] uppercase tracking-wider font-bold text-ink/35 mb-1">
+                                <p className="mb-1 text-xs font-semibold text-ink/50">
                                   Weakness: {item.targetSkill}
                                 </p>
                               ) : null}
-                              <p className="text-sm font-medium text-ink/80 leading-relaxed whitespace-pre-wrap">
-                                {item.questionDisplay || ''}
-                              </p>
+                              <div
+                                className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xl font-bold text-ink/90 leading-relaxed"
+                                title={item.questionDisplay || ''}
+                                dangerouslySetInnerHTML={{ __html: renderRecommendationQuestionHTML(item.questionDisplay || '') }}
+                              />
                               {item.reason ? (
                                 <p className="text-xs text-ink/50 mt-2 leading-relaxed">{item.reason}</p>
                               ) : null}
-                            </div>
                           </div>
                           <button
                             onClick={() => {
@@ -479,7 +495,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                                   route: "practice",
                                   practice: {
                                     title: item.targetSkill ? `Weakness: ${item.targetSkill}` : "Latihan AI",
-                                    mapel: "Matematika",
+                                    mapel: item.mapel || "Matematika",
                                     problems: [{
                                       id: item.ref,
                                       question_display: item.questionDisplay,

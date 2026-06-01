@@ -12,8 +12,17 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (context?.mode !== "free-math") loadPackages();
+    if (!String(context?.mode || "").startsWith("free-math")) loadPackages();
   }, [context?.mode]);
+
+  if (context?.mode === "free-math-confirm") {
+    return (
+      <TryoutStartConfirmation
+        setRoute={setRoute}
+        context={buildFreeMathTryoutPracticeContext(context)}
+      />
+    );
+  }
 
   if (context?.mode === "free-math") {
     return (
@@ -146,11 +155,8 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
               <div className="kicker mb-2">Paket Try Out</div>
               <h1 className="font-display font-bold text-4xl md:text-5xl tracking-[-0.03em] leading-[1.05]">
                 Pilih paket belajar<br/>
-                sesuai akses yang kamu butuhkan.
+                sesuai kebutuhan kamu.
               </h1>
-              <p className="text-ink/65 text-lg mt-3 max-w-xl">
-                Mulai dari Try Out Gratis, lalu upgrade untuk akses pembahasan dan fitur penuh.
-              </p>
               {isAdmin && (
                 <button
                   onClick={() => setEditPkg({ ...BLANK_PKG, sort_order: packages.length + 1 })}
@@ -207,42 +213,20 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
         <section className="animate-fade-in">
           <div className="max-w-6xl mx-auto px-6 md:px-8 pb-10">
             {packages.filter(hasAccess).length > 0 ? (
-              <div className="space-y-5">
-                {packages.filter(hasAccess).map((pkg) => {
-                  const isFree = pkg.price === "Gratis";
-                  return (
-                    <div key={pkg.id} className="bg-ink text-white rounded-3xl p-8 md:p-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 relative overflow-hidden transition-all hover:shadow-xl hover:translate-y-[-2px] duration-300">
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-full flex items-center justify-center pointer-events-none">
-                        <Icon.Trophy className="w-8 h-8 text-white/10 translate-x-4 -translate-y-4" />
-                      </div>
-                      <div className="relative z-10 flex-1">
-                        <span className={isFree ? "tag-yel tag mb-3" : "bg-white/8 text-white/68 border border-white/12 px-2.5 py-1 rounded-md text-[10px] font-mono tracking-widest uppercase font-bold mb-3 inline-block"}>
-                          {isFree ? "Gratis" : "Premium"}
-                        </span>
-                        <h3 className="font-display font-bold text-2xl md:text-3xl tracking-[-0.02em] mt-2">{pkg.title}</h3>
-                        <p className="text-white/65 mt-1 text-sm max-w-xl">{pkg.description}</p>
-                        
-                        <div className="grid grid-cols-3 gap-5 mt-6 pt-5 border-t border-white/15 max-w-md">
-                          <div>
-                            <div className="text-xs text-white/55">Soal</div>
-                            <div className="font-display font-bold text-xl md:text-2xl tnum">{pkg.questions}</div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-white/55">Waktu</div>
-                            <div className="font-display font-bold text-xl md:text-2xl tnum">{pkg.duration}</div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-white/55">Akses</div>
-                            <div className="font-display font-bold text-xl md:text-2xl">{isFree ? "Selamanya" : "Aktif"}</div>
-                          </div>
-                        </div>
-                      </div>
-                      <button onClick={() => setRoute({ route: "belajar", section: "Try Out" })} className="btn-yel shrink-0 relative z-10 self-end md:self-center group">
-                        Mulai <Icon.Arrow className="transition-transform group-hover:translate-x-1" />
-                      </button>
-                    </div>
-                  );
-                })}
+              <div className="grid md:grid-cols-3 gap-5">
+                {packages.filter(hasAccess).map((pkg) => (
+                  <PackageCard
+                    key={pkg.id}
+                    pkg={pkg}
+                    hasAccess={true}
+                    setRoute={setRoute}
+                    isAdmin={isAdmin}
+                    isLoggedIn={isLoggedIn}
+                    onStartPackage={startTryoutPackage}
+                    adminEdit={{ inlineEdit, saving, startInlineEdit, setInlineEdit, saveInlineEdit }}
+                    onDelete={() => deletePkg(pkg.id)}
+                  />
+                ))}
               </div>
             ) : (
               <div className="text-center py-12 rounded-2xl border hairline bg-white">
@@ -264,6 +248,93 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
           onClose={() => setEditPkg(null)}
         />
       )}
+    </div>
+  );
+};
+
+const TryoutStartConfirmation = ({ setRoute, context }) => {
+  const totalQuestions = Number(context?.total || context?.problemLimit || 15);
+  const timeLimitSeconds = Number(context?.timeLimitSeconds || 15 * 60);
+  const detailItems = [
+    { label: "Durasi", value: context?.est || formatTryoutMinutes(timeLimitSeconds), icon: Icon.Clock },
+    { label: "Jumlah soal", value: `${totalQuestions} soal`, icon: Icon.Target },
+    { label: "Mapel", value: context?.mapel || "Matematika", icon: Icon.Integral },
+    { label: "Status", value: context?.freeTryout ? "Gratis" : "Paket aktif", icon: Icon.CheckCircle },
+  ];
+
+  function startExam() {
+    setRoute({
+      route: "tryout",
+      tryout: {
+        ...context,
+        mode: "free-math",
+      },
+    });
+  }
+
+  return (
+    <div className="app-page-bg app-page-bg--paket min-h-[calc(100vh-72px)]">
+      <section className="max-w-5xl mx-auto px-6 md:px-8 py-12 md:py-16">
+        <button
+          className="inline-flex items-center gap-2 text-sm font-bold text-ink/60 hover:text-ink transition-colors mb-6"
+          onClick={() => setRoute({ route: "belajar", section: "Try Out" })}
+          type="button"
+        >
+          <Icon.ChevL className="w-4 h-4" />
+          Kembali ke Try Out
+        </button>
+
+        <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-6 items-stretch">
+          <section className="bg-ink text-white rounded-[var(--card-radius)] p-7 md:p-10 relative overflow-hidden">
+            <div className="absolute -right-16 -top-16 h-44 w-44 rounded-full bg-yel/20 blur-3xl" />
+            <div className="absolute -left-16 -bottom-20 h-44 w-44 rounded-full bg-white/10 blur-3xl" />
+            <div className="relative z-10">
+              <h1 className="font-display text-3xl md:text-5xl font-extrabold tracking-tight leading-[1.05]">
+                {context?.packageTitle || context?.title || "Tryout pre-test TPB"}
+              </h1>
+              <p className="mt-4 max-w-xl text-sm md:text-base leading-7 text-white/65">
+                Setelah dimulai, timer berjalan otomatis. Pastikan koneksi stabil dan siapkan waktu kosong sampai sesi selesai.
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <button onClick={startExam} className="btn-yel !px-6 !py-3 text-sm" type="button">
+                  Mulai Tryout
+                  <Icon.Arrow className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setRoute({ route: "belajar", section: "Try Out" })}
+                  className="btn-ghost !border-white/15 !text-white hover:!bg-white/10"
+                  type="button"
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <aside className="bg-white border hairline rounded-[var(--card-radius)] p-6 md:p-7">
+            <h2 className="font-display text-xl font-bold tracking-tight">Detail sesi</h2>
+            <div className="mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-2">
+              {detailItems.map((item) => {
+                const DetailIcon = item.icon;
+                return (
+                  <div key={item.label} className="flex items-center gap-3 px-1 py-1">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center text-ink">
+                      <DetailIcon className="w-4 h-4" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[10px] font-mono font-bold uppercase tracking-widest text-ink/40">{item.label}</span>
+                      <span className="block text-sm font-bold text-ink">{item.value}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-5 rounded-xl bg-yel/35 border border-yel/70 px-4 py-3 text-xs font-semibold leading-5 text-ink/70">
+              Jawaban tersimpan selama sesi berjalan.
+            </div>
+          </aside>
+        </div>
+      </section>
     </div>
   );
 };
@@ -453,7 +524,9 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
   const [problemIndex, setProblemIndex] = useState(0);
   const [answers, setAnswers] = useState({});
   const [doubtful, setDoubtful] = useState({});
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [timeLeft, setTimeLeft] = useState(Number(context?.timeLimitSeconds || 15 * 60));
+  const [finishing, setFinishing] = useState(false);
   const timeExpired = timeLeft <= 0;
   const totalProblems = problems.length || Number(context?.problemLimit || 15);
   const activeProblem = problems[problemIndex];
@@ -489,6 +562,8 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
       setProblemIndex(0);
       setAnswers({});
       setDoubtful({});
+      setMobileNavOpen(false);
+      setFinishing(false);
     } catch (caught) {
       setError(caught.message || "Gagal memuat soal tryout.");
     } finally {
@@ -515,11 +590,33 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
 
   function moveProblem(delta) {
     setProblemIndex((current) => Math.min(Math.max(current + delta, 0), Math.max(problems.length - 1, 0)));
+    setMobileNavOpen(false);
   }
 
-  function finishTryout() {
-    showToast("Tryout selesai. Jawaban kamu tersimpan di sesi ini.", "success");
-    setRoute({ route: "belajar", section: "Try Out" });
+  async function finishTryout() {
+    if (finishing || !problems.length) return;
+    setFinishing(true);
+    try {
+      const timeLimitSeconds = Number(context?.timeLimitSeconds || 15 * 60);
+      const durationSeconds = Math.max(0, timeLimitSeconds - Math.max(0, Number(timeLeft || 0)));
+      const payloadAnswers = {};
+      for (const problem of problems) {
+        if (answers[problem.id] != null) payloadAnswers[problem.id] = answers[problem.id];
+      }
+      const result = await MafikingAPI.post("/api/progress/tryout-attempts", {
+        tryoutId: context?.id || "free-math-tryout-15",
+        tryoutTitle: context?.packageTitle || context?.title || "Try Out Matematika",
+        problemIds: problems.map((problem) => problem.id),
+        answers: payloadAnswers,
+        durationSeconds,
+      });
+      const score = result?.attempt?.score;
+      showToast(score == null ? "Tryout selesai. Hasil tersimpan." : `Tryout selesai. Skor kamu ${score}.`, "success");
+      setRoute({ route: "belajar", section: "Try Out" });
+    } catch (caught) {
+      showToast(caught.message || "Gagal menyimpan hasil tryout.", "error");
+      setFinishing(false);
+    }
   }
 
   if (loading) {
@@ -642,10 +739,54 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
         </aside>
       </div>
 
+      {mobileNavOpen && (
+        <div className="tryout-mobile-question-sheet" role="dialog" aria-label="Daftar soal tryout">
+          <div className="tryout-mobile-question-sheet-head">
+            <div>
+              <h2>Daftar Soal</h2>
+              <p>{answeredCount} terjawab · {doubtfulCount} ragu-ragu</p>
+            </div>
+            <button className="tryout-mobile-question-close" onClick={() => setMobileNavOpen(false)} type="button" aria-label="Tutup daftar soal">
+              <Icon.X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="tryout-mobile-question-list">
+            {problems.map((problem, index) => {
+              const isAnswered = answers[problem.id] != null;
+              const isDoubtful = doubtful[problem.id];
+              return (
+                <button
+                  key={`mobile-${problem.id}`}
+                  className={[
+                    "tryout-mobile-question-item",
+                    index === problemIndex ? "is-current" : "",
+                    isAnswered ? "is-answered" : "",
+                    isDoubtful ? "is-doubtful" : "",
+                  ].filter(Boolean).join(" ")}
+                  onClick={() => { setProblemIndex(index); setMobileNavOpen(false); }}
+                  type="button"
+                >
+                  <span className="tryout-mobile-question-number">{index + 1}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <footer className="tryout-bottom-bar">
         <button className="tryout-secondary-action" disabled={problemIndex === 0} onClick={() => moveProblem(-1)} type="button">
           <Icon.ChevL className="w-4 h-4" />
           Sebelumnya
+        </button>
+        <button
+          className={`tryout-mobile-list-action${mobileNavOpen ? " is-active" : ""}`}
+          onClick={() => setMobileNavOpen((current) => !current)}
+          type="button"
+          aria-expanded={mobileNavOpen}
+        >
+          <Icon.Menu className="w-4 h-4" />
+          Soal
         </button>
         <button
           className={`tryout-doubt-action${doubtful[activeProblem.id] ? " is-active" : ""}`}
@@ -656,8 +797,8 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
           Ragu-ragu
         </button>
         {isLastProblem ? (
-          <button className="tryout-finish-action" onClick={finishTryout} type="button">
-            Selesai
+          <button className="tryout-finish-action" disabled={finishing} onClick={finishTryout} type="button">
+            {finishing ? "Menyimpan" : "Selesai"}
             <Icon.Check className="w-4 h-4" />
           </button>
         ) : (
@@ -733,6 +874,11 @@ function formatTryoutClock(seconds) {
   const minutes = Math.floor(safeSeconds / 60);
   const remainder = safeSeconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+}
+
+function formatTryoutMinutes(seconds) {
+  const minutes = Math.max(1, Math.round(Number(seconds || 0) / 60));
+  return `${minutes} mnt`;
 }
 
 // ─── Tryout edit modal ────────────────────────────────────────────────────────

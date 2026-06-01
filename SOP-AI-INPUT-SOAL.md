@@ -106,7 +106,7 @@ Audiens TPB ITB cukup kuat — "Easy" di sini bukan soal sepele, tapi soal satu 
 **Cara penilaian yang sebenarnya berlaku di aplikasi:**
 
 - **Mode Pilgan:** aplikasi mencocokkan `answer_display` dengan opsi yang dipilih siswa (pencocokan setelah normalisasi teks).
-- **Mode Kanvas:** AI koreksi (Gemini) membandingkan tulisan siswa dengan `answer_display`.
+- **Mode Kanvas:** AI koreksi (Gemini 3.1 Flash Lite) membandingkan tulisan siswa dengan `answer_display`.
 - `acceptable_answers` **saat ini belum dipakai** untuk penilaian. Tetap diisi demi kelengkapan data & kompatibilitas, tetapi **sumber kebenaran adalah `answer_display`**.
 
 Maka: `answer_display` wajib bentuk paling baku, benar, dan tersederhanakan.

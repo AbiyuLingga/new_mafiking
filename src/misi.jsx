@@ -427,7 +427,6 @@ const MissionMafikingLatihan = ({ timeline, setRoute, isAdmin, adminEdit, onDele
   const [focusedDay, setFocusedDay] = useState(
     timeline.find((m) => getMissionDisplayStatus(m) === "active")?.day || (timeline[0]?.day || 1)
   );
-  const [carouselPaused, setCarouselPaused] = useState(false);
   const scrollRef = useRef(null);
   const activeRef = useRef(null);
   const marqueeTimeline = timeline.length > 1 ? [...timeline, ...timeline] : timeline;
@@ -462,33 +461,6 @@ const MissionMafikingLatihan = ({ timeline, setRoute, isAdmin, adminEdit, onDele
     container.scrollTo({ left: nextLeft, behavior: "smooth" });
   }, [getLoopPoint, timeline.length]);
 
-  useEffect(() => {
-    if (carouselPaused || timeline.length < 2) return undefined;
-    let frameId = 0;
-    let previousTime = 0;
-
-    const tick = (time) => {
-      const container = scrollRef.current;
-      if (container) {
-        const elapsed = previousTime ? time - previousTime : 0;
-        const loopPoint = getLoopPoint(container);
-        if (loopPoint > 0 && elapsed > 0) {
-          const nextLeft = container.scrollLeft + elapsed * 0.10;
-          if (nextLeft >= loopPoint) {
-            container.scrollLeft = nextLeft - loopPoint;
-          } else {
-            container.scrollLeft = nextLeft;
-          }
-        }
-      }
-      previousTime = time;
-      frameId = window.requestAnimationFrame(tick);
-    };
-
-    frameId = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(frameId);
-  }, [carouselPaused, getLoopPoint, timeline.length]);
-
   const handleScroll = () => {
     if (!scrollRef.current) return;
     const container = scrollRef.current;
@@ -517,12 +489,6 @@ const MissionMafikingLatihan = ({ timeline, setRoute, isAdmin, adminEdit, onDele
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        onMouseEnter={() => setCarouselPaused(true)}
-        onMouseLeave={() => setCarouselPaused(false)}
-        onFocusCapture={() => setCarouselPaused(true)}
-        onBlurCapture={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget)) setCarouselPaused(false);
-        }}
         className="flex gap-4 md:gap-8 overflow-x-auto hide-scrollbar py-8 items-center px-[5vw] md:px-[15vw]"
       >
         {marqueeTimeline.map((mission, index) => {

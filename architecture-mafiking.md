@@ -110,9 +110,10 @@ Fisika
 Kimia
 ```
 
-- The free Try Out entry is open in multiple-choice mode.
-- Free Try Out canvas/pembahasan and protected subject chapters route through login/sign-up.
-- The heading copy is unified as `Selamat datang pejuang IP 4.0`.
+- The free Try Out entry opens a confirmation screen before the 15-question / 15-minute session.
+- Free Try Out review paths outside the session and protected subject chapters route through login/sign-up.
+- The mapel tab underline slides between sections; `Try Out` uses the ink accent while subject tabs use their mapel accent colors.
+- The heading copy is split/highlighted as `Selamat datang` plus `pejuang IP 4.0`.
 - Unsupported subject chapters show an empty state instead of falling back to Integral.
 
 `src/practice.jsx` starts in multiple-choice mode and supports optional canvas mode through `Try Canvas`.
@@ -225,11 +226,11 @@ Clerk integration adds `users.clerk_id`, `users.email`, and `users.auth_provider
 
 ## AI And Recommendations
 
-- Canvas OCR/evaluation uses Gemini key fallback from `GEMINI_KEY_1` through `GEMINI_KEY_20`.
+- Canvas OCR/evaluation uses Gemini 3.1 Flash Lite with key fallback from `GEMINI_KEY_1` through `GEMINI_KEY_20`.
 - Successful AI usage is logged in `ai_token_usage` through `lib/log-token-usage.js`; logging must not break user requests.
 - Profile recommendations are deterministic and catalog-backed through `lib/recommendation-engine.js`.
-- Gemini or 9Router may write narrative text, but should not select final recommendation refs.
-- `NINEROUTER_MODELS` can rotate profile narrative providers when `AI_PROFILE_PROVIDER=9router`.
+- Gemma 4 31B writes profile narrative text by default, but should not select final recommendation refs.
+- 9Router remains a legacy override only when `AI_PROFILE_PROVIDER=9router` and `PROFILE_PROVIDER_ALLOW_9ROUTER=true`.
 
 ## Known Constraints
 

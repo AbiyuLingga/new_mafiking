@@ -14,6 +14,7 @@ const router = express.Router();
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const MAX_BASE64_CHARS = 10_000_000;
 const GEMINI_FLASH_LITE_MODEL = 'gemini-3.1-flash-lite';
+const GEMMA_PROFILE_MODEL = 'gemma-4-31b-it';
 const TRANSCRIBE_MODELS = [
   GEMINI_FLASH_LITE_MODEL,
 ];
@@ -21,7 +22,7 @@ const EVALUATE_MODELS = [
   GEMINI_FLASH_LITE_MODEL,
 ];
 const PROFILE_MODELS = [
-  GEMINI_FLASH_LITE_MODEL,
+  GEMMA_PROFILE_MODEL,
 ];
 const PROFILE_AI_ATTEMPT_LIMIT = 20;
 const PROFILE_RECOMMENDATION_ATTEMPT_LIMIT = 200;
@@ -61,7 +62,7 @@ const EVALUATE_SYSTEM_PROMPT = [
 ].join(' ');
 
 const PROFILE_SYSTEM_PROMPT = [
-  'Kamu wajib membaca dan mengikuti SOP 9Router Profile Summary berikut sebelum menjawab.',
+  'Kamu wajib membaca dan mengikuti SOP Profile Summary berikut sebelum menjawab.',
   PROFILE_NARRATIVE_SOP,
   'strengths dan weaknesses masing-masing maksimal 5 tag; pilih yang paling utama.',
   'Balas hanya JSON valid sesuai schema: strengths, weaknesses, recommendedQuestions, overallSummary. Jangan Markdown, jangan code fence, jangan properti tambahan.'
@@ -209,6 +210,14 @@ function getGeminiKeys() {
 
 function getGeminiModels(base) {
   const env = (process.env.GEMINI_MODELS || '')
+    .split(',')
+    .map((model) => model.trim())
+    .filter(Boolean);
+  return [...new Set([...env, ...base])];
+}
+
+function getProfileModels(base) {
+  const env = (process.env.GEMMA_PROFILE_MODELS || process.env.GEMMA_PROFILE_MODEL || '')
     .split(',')
     .map((model) => model.trim())
     .filter(Boolean);
@@ -535,7 +544,20 @@ function normalizeSkillNeedScores(value) {
   }).filter((score) => score && score.skillId).slice(0, 8);
 }
 
-async function callGeminiWithFallback({ maxOutputTokens, models, parts, schema, systemInstruction, db }) {
+function extractGeneratedText(response) {
+  const directText = typeof response?.text === 'function' ? response.text() : response?.text;
+  if (String(directText || '').trim()) return String(directText || '');
+
+  const parts = Array.isArray(response?.candidates?.[0]?.content?.parts)
+    ? response.candidates[0].content.parts
+    : [];
+  return parts
+    .filter((part) => part && !part.thought && part.text)
+    .map((part) => part.text)
+    .join('');
+}
+
+async function callGeminiWithFallback({ maxOutputTokens, models, parts, provider = 'gemini', schema, systemInstruction, db }) {
   const keys = getGeminiKeys();
   const attempts = [];
 
@@ -565,11 +587,11 @@ async function callGeminiWithFallback({ maxOutputTokens, models, parts, schema, 
           }
         });
 
-        const text = typeof response.text === 'function' ? response.text() : response.text;
+        const text = extractGeneratedText(response);
         const usageMetadata = response.usageMetadata || {};
         const geminiKeyIndex = keyIndex + 1;
         logTokenUsage(db, {
-          provider: 'gemini',
+          provider,
           model,
           keyName: `GEMINI_KEY_${geminiKeyIndex}`,
           tokensUsed: usageMetadata.totalTokenCount
@@ -606,7 +628,7 @@ async function callGeminiWithFallback({ maxOutputTokens, models, parts, schema, 
 }
 
 async function callProfileNarrativeSummary(attempts, db) {
-  if (shouldUse9RouterProfile()) {
+  if (shouldUse9RouterProfile() && process.env.PROFILE_PROVIDER_ALLOW_9ROUTER === 'true') {
     return call9RouterProfileSummary({
       attempts,
       systemInstruction: PROFILE_SYSTEM_PROMPT,
@@ -616,7 +638,8 @@ async function callProfileNarrativeSummary(attempts, db) {
   if (!getGeminiKeys().length) return null;
 
   const result = await callGeminiWithFallback({
-    models: getGeminiModels(PROFILE_MODELS),
+    models: getProfileModels(PROFILE_MODELS),
+    provider: 'gemma',
     schema: PROFILE_SCHEMA,
     systemInstruction: PROFILE_SYSTEM_PROMPT,
     db,
@@ -626,7 +649,7 @@ async function callProfileNarrativeSummary(attempts, db) {
   return {
     keyIndex: result.keyIndex,
     modelUsed: result.modelUsed,
-    provider: 'gemini',
+    provider: 'gemma',
     text: result.text,
   };
 }
@@ -1047,7 +1070,7 @@ router.post('/profile-summary', isAuthenticated, async (req, res) => {
     const forceRefresh = Boolean(req.body?.forceRefresh);
     const refreshState = getProfileAiRefreshState(db, user, new Date());
 
-    if (!refreshState.allowed && !forceRefresh && refreshState.cachedSummary) {
+    if (!forceRefresh && refreshState.cachedSummary) {
       return res.json({
         aiRefresh: serializeProfileAiRefreshState(refreshState, false),
         summary: limitProfileSummaryTags(refreshState.cachedSummary)
@@ -1212,6 +1235,7 @@ function enrichWithDbProblems(db, userId, attempts, multipleChoiceEvidence, summ
 
 module.exports = router;
 module.exports._profileSummaryInternals = {
+  GEMMA_PROFILE_MODEL,
   MAX_LEARNING_TAGS,
   PROFILE_AI_ATTEMPT_LIMIT,
   PROFILE_AI_REFRESH_COOLDOWN_MS,
@@ -1221,6 +1245,8 @@ module.exports._profileSummaryInternals = {
   canBypassProfileAiCooldown,
   compactAttemptsForProfile,
   chooseProfileAttemptSource,
+  extractGeneratedText,
+  getProfileModels,
   getProfileAiRefreshState,
   loadRecentCorrectionAttempts,
   normalizeLearningTags,
