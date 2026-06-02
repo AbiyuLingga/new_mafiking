@@ -213,6 +213,12 @@ const App = () => {
   }, [isAdminAccount, navigate, route]);
 
   React.useEffect(() => {
+    if (isLoggedIn && route === "lobby" && !authMode) {
+      navigate("belajar");
+    }
+  }, [authMode, isLoggedIn, navigate, route]);
+
+  React.useEffect(() => {
     if (route !== "admin" || !isAdminAccount || !isAdmin || window.AdminPage) return undefined;
     let cancelled = false;
     setAdminChunkStatus("loading");
