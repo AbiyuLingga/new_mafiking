@@ -422,7 +422,6 @@ const LandingLegacy = ({ setRoute, tweaks, isAdmin = false, currentUser = null }
             <Logo size={34} />
           </button>
           <nav className="hidden items-center gap-8 text-sm font-semibold text-slate-500 md:flex">
-            <a href="#beranda" className="hover:text-slate-950">Beranda</a>
             <a href="#belajar" className="hover:text-slate-950">Belajar</a>
             <a href="#fitur" className="hover:text-slate-950">Fitur</a>
             <a href="#testimoni" className="hover:text-slate-950">Testimoni</a>
@@ -805,6 +804,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   const [landingMedia, setLandingMedia] = React.useState({});
   const [mediaEditTarget, setMediaEditTarget] = React.useState(null);
   const [soundEnabled, setSoundEnabled] = React.useState(true);
+  const [demoVideoShouldLoad, setDemoVideoShouldLoad] = React.useState(false);
   const demoVideoRef = React.useRef(null);
   const demoVideoFrameRef = React.useRef(null);
   const soundEnabledRef = React.useRef(true);
@@ -852,8 +852,28 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   }, [soundEnabled]);
 
   React.useEffect(() => {
+    setDemoVideoShouldLoad(false);
+    if (!demoVideo) return undefined;
+
+    const frame = demoVideoFrameRef.current;
+    if (!frame || typeof IntersectionObserver !== "function") {
+      setDemoVideoShouldLoad(true);
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      if (!entry || !entry.isIntersecting) return;
+      setDemoVideoShouldLoad(true);
+      observer.disconnect();
+    }, { rootMargin: "720px 0px", threshold: 0 });
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [demoVideo]);
+
+  React.useEffect(() => {
     const video = demoVideoRef.current;
-    if (!video) return undefined;
+    if (!video || !demoVideoShouldLoad) return undefined;
 
     let cleanedUp = false;
     let isVideoVisible = false;
@@ -906,8 +926,6 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
       });
     };
 
-    video.preload = "auto";
-    video.load();
     video.pause();
     video.muted = !soundEnabledRef.current;
     video.volume = 1;
@@ -931,11 +949,15 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
       if (observer) observer.disconnect();
       removeInteractionListeners();
     };
-  }, [demoVideo]);
+  }, [demoVideo, demoVideoShouldLoad]);
 
   const toggleDemoSound = async () => {
     const video = demoVideoRef.current;
     if (!video) return;
+    if (!demoVideoShouldLoad) {
+      setDemoVideoShouldLoad(true);
+      return;
+    }
     const nextEnabled = !soundEnabled;
     soundEnabledRef.current = nextEnabled;
     video.muted = !nextEnabled;
@@ -1011,7 +1033,6 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
               <Logo size={34} />
             </button>
             <div className="hidden items-center space-x-8 md:flex">
-              <button onClick={() => scrollToId("beranda")} className="font-medium text-slate-900" type="button">Beranda</button>
               <button onClick={() => scrollToId("belajar")} className="font-medium text-slate-500 transition-colors hover:text-slate-900" type="button">Belajar</button>
               <button onClick={() => scrollToId("fitur")} className="font-medium text-slate-500 transition-colors hover:text-slate-900" type="button">Fitur</button>
               <button onClick={() => scrollToId("testimoni")} className="font-medium text-slate-500 transition-colors hover:text-slate-900" type="button">Testimoni</button>
@@ -1028,7 +1049,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
         </div>
         {menuOpen && (
           <div className="landing-mobile-menu space-y-1 border-b border-slate-100 bg-white px-4 pb-4 pt-2 md:hidden">
-            {[["beranda", "Beranda"], ["belajar", "Belajar"], ["fitur", "Fitur"], ["testimoni", "Testimoni"]].map(([id, label]) => (
+            {[["belajar", "Belajar"], ["fitur", "Fitur"], ["testimoni", "Testimoni"]].map(([id, label]) => (
               <button key={id} onClick={() => scrollToId(id)} className="block w-full rounded-md px-3 py-2 text-left font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-900" type="button">{label}</button>
             ))}
             <button onClick={startFree} className="btn-ink mt-4 w-full justify-center" type="button">
@@ -1182,14 +1203,15 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
               <div ref={demoVideoFrameRef} className="relative mx-auto mb-16 flex aspect-[848/478] w-full max-w-5xl items-center justify-center overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-950 shadow-2xl">
                 {demoVideo ? (
                   <video
-		                    ref={demoVideoRef}
-		                    src={demoVideo}
-		                    muted={!soundEnabled}
-		                    loop
-		                    preload="auto"
-		                    playsInline
-		                    className="h-full w-full scale-[1.06] object-contain"
-	                  />
+			                    ref={demoVideoRef}
+			                    src={demoVideoShouldLoad ? demoVideo : undefined}
+			                    data-src={demoVideo}
+			                    muted={!soundEnabled}
+			                    loop
+			                    preload="metadata"
+			                    playsInline
+			                    className="h-full w-full scale-[1.06] object-contain"
+		                  />
 	                ) : (
                   <div className="flex h-full w-full flex-col bg-[#0F172A] p-8 opacity-50"><div className="mb-6 flex w-full max-w-sm items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/80 px-4 py-3"><div className="flex gap-2"><div className="h-3 w-3 rounded-full bg-rose-500" /><div className="h-3 w-3 rounded-full bg-amber-500" /><div className="h-3 w-3 rounded-full bg-emerald-500" /></div><div className="font-mono text-xs text-slate-400">canvas_evaluation_ai.js</div></div><div className="flex-grow space-y-6"><div className="h-4 w-1/3 rounded-md bg-slate-800" /><div className="h-4 w-1/2 rounded-md bg-slate-800" /><div className="relative flex h-32 w-full items-center justify-center overflow-hidden rounded-2xl border border-rose-500/30 bg-slate-800/50 shadow-inner"><div className="absolute bottom-0 left-0 top-0 w-1 bg-rose-500" /><span className="font-mono text-sm text-rose-400">Error Detected: Calculation logic drift in Step 3.</span></div></div></div>
 	                )}
@@ -1259,9 +1281,9 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
         </div>
         <LandingFade delay={210} className="relative z-10">
           <div className="mx-auto flex w-full max-w-[1400px] flex-col items-center px-6 text-center md:px-12 lg:px-20">
-            <h2 className="mb-8 text-4xl font-extrabold leading-[1.1] tracking-tight text-white md:text-5xl lg:text-7xl">Siap Mengamankan <br className="hidden md:block" /> <span className="text-[#FDE047]">Nilai A Pertamamu?</span></h2>
+            <h2 className="mb-8 text-4xl font-extrabold leading-[1.1] tracking-tight text-white md:text-5xl lg:text-7xl">Siap Mengamankan <br className="hidden md:block" /> <span className="text-[#FFF44F]">Nilai A Pertamamu?</span></h2>
             <p className="mx-auto mb-12 max-w-2xl text-lg font-medium text-slate-400 lg:text-xl">Jangan tunggu sampai tertinggal materi. Bangun fondasi akademik terkuatmu hari ini juga.</p>
-            <button onClick={startFree} className="mb-8 flex items-center justify-center gap-2 rounded-xl bg-[#FDE047] px-8 py-4 text-lg font-bold text-slate-900 shadow-xl shadow-amber-500/10 transition-all hover:bg-[#FCE76B] active:scale-95" type="button">Mulai Belajar Sekarang <Icon.Arrow className="ml-1 h-5 w-5" /></button>
+            <button onClick={startFree} className="mb-8 flex items-center justify-center gap-2 rounded-full bg-[#FFF44F] px-8 py-4 text-lg font-bold text-slate-900 transition-all hover:bg-[#FFF44F]/90 active:scale-95" type="button">Coba Gratis <Icon.Arrow className="ml-1 h-5 w-5" /></button>
             <div className="mb-10 mt-16 h-px w-full bg-slate-800/80" />
             <div className="grid w-full items-center gap-8 text-sm font-medium text-slate-500 lg:grid-cols-[1fr_auto_1fr]">
               <div className="flex items-center justify-center gap-3 lg:justify-start"><img src="/assets/logo.png" alt="MAFIKING" className="h-8 w-auto brightness-0 invert" /><span className="text-xl font-extrabold tracking-tight text-white">MAFIKING</span></div>
@@ -1320,9 +1342,10 @@ const Dashboard = ({ user, setRoute, tweaks }) => {
   const hour = new Date().getHours();
   const salam = hour < 10 ? "pagi" : hour < 15 ? "siang" : hour < 18 ? "sore" : "malam";
   const firstName = (user.display_name || "Kawan").split(" ")[0];
-  const level = user.level || stats?.level || 1;
-  const xp = stats?.xp || user.xp || 0;
-  const levelProgress = Math.min(100, xp % 100);
+  const progress = normalizeProgressStats(stats || user);
+  const level = progress.level;
+  const xp = progress.xp;
+  const levelProgress = progress.levelProgress;
 
   const allChapters = (() => {
     const cd = window.chapterData;
@@ -1345,9 +1368,9 @@ const Dashboard = ({ user, setRoute, tweaks }) => {
             </div>
             {stats && (
               <div className="flex flex-wrap items-center gap-3">
-                <button className="chip-streak" onClick={() => setRoute("misi")} type="button" title={`Streak ${stats.streak_days} hari`}>
+                <button className="chip-streak" onClick={() => setRoute("lobby")} type="button" title={`Streak ${progress.streakDays} hari`}>
                   <StreakFlame />
-                  <span className="tnum">{stats.streak_days || 0}</span>
+                  <span className="tnum">{progress.streakDays}</span>
                 </button>
                 <div className="chip-level" title={`Level ${level} · ${xp} XP`}>
                   <span className="lvl-badge">L{level}</span>
@@ -1627,8 +1650,9 @@ const Stats = ({ tweaks = {} }) => {
 
 // ─── Logged-in recap section ───────────────────────────────────────────────
 const StudyRecap = ({ attempts = [], stats, summary, user, setRoute }) => {
+  const hasCorrectionHistory = attempts.length > 0;
   const weaknesses = dashboardCollectTags(attempts, "weaknessTags", summary?.weaknesses).slice(0, 5);
-  const recommendations = (summary?.recommendedQuestions || []).slice(0, 3);
+  const recommendations = hasCorrectionHistory ? (summary?.recommendedQuestions || []).slice(0, 3) : [];
   const wrongAttempts = attempts
     .filter((attempt) => attempt && (attempt.isCorrect === false || attempt.evaluation?.isCorrect === false))
     .slice(0, 3);
@@ -1644,11 +1668,7 @@ const StudyRecap = ({ attempts = [], stats, summary, user, setRoute }) => {
   const visibleMistakes = mistakeItems.length ? mistakeItems : [
     { title: "Belum ada kesalahan tercatat", detail: "Kirim satu jawaban canvas agar sistem bisa membaca pola salahmu." },
   ];
-  const visibleRecommendations = recommendations.length ? recommendations : [
-    "Kerjakan satu soal sedang dengan langkah lengkap di canvas.",
-    "Ulangi soal terakhir, lalu bandingkan alasan tiap langkah.",
-    "Pilih satu bab yang belum dimulai dan kerjakan 3 soal pertama.",
-  ];
+  const visibleRecommendations = recommendations;
   const patternItems = weaknesses.length ? weaknesses : ["Konsistensi langkah", "Justifikasi rumus", "Kerapian substitusi"];
 
   const metrics = [
@@ -1698,17 +1718,25 @@ const StudyRecap = ({ attempts = [], stats, summary, user, setRoute }) => {
           <article className="lg:col-span-4 card pad-d bg-white">
             <div className="kicker mb-1">Rekomendasi Soal</div>
             <h3 className="font-display font-bold text-2xl tracking-[-0.02em] mb-5">Latihan berikutnya.</h3>
-            <ol className="grid gap-3">
-              {visibleRecommendations.map((question, index) => (
-                <li key={`${question}-${index}`} className="flex gap-3 rounded-2xl border hairline p-4">
-                  <span className="w-7 h-7 rounded-full bg-ink text-white text-xs font-mono flex items-center justify-center shrink-0">{index + 1}</span>
-                  <span className="text-sm text-ink/70 leading-relaxed">{question}</span>
-                </li>
-              ))}
-            </ol>
-            <button onClick={() => setRoute("belajar")} className="btn-ink mt-5 w-full justify-center">
-              Mulai dari rekomendasi <Icon.Arrow />
-            </button>
+            {visibleRecommendations.length ? (
+              <>
+                <ol className="grid gap-3">
+                  {visibleRecommendations.map((question, index) => (
+                    <li key={`${question}-${index}`} className="flex gap-3 rounded-2xl border hairline p-4">
+                      <span className="w-7 h-7 rounded-full bg-ink text-white text-xs font-mono flex items-center justify-center shrink-0">{index + 1}</span>
+                      <span className="text-sm text-ink/70 leading-relaxed">{question}</span>
+                    </li>
+                  ))}
+                </ol>
+                <button onClick={() => setRoute("belajar")} className="btn-ink mt-5 w-full justify-center">
+                  Mulai dari rekomendasi <Icon.Arrow />
+                </button>
+              </>
+            ) : (
+              <p className="text-sm text-ink/55 leading-relaxed">
+                Rekomendasi akan muncul setelah kamu mengirim jawaban canvas pertama.
+              </p>
+            )}
           </article>
 
           <article className="lg:col-span-3 card pad-d bg-ink text-white overflow-hidden relative">

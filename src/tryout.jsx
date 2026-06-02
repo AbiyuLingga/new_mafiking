@@ -20,6 +20,8 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
       <TryoutStartConfirmation
         setRoute={setRoute}
         context={buildFreeMathTryoutPracticeContext(context)}
+        isLoggedIn={isLoggedIn}
+        isAdmin={isAdmin}
       />
     );
   }
@@ -252,7 +254,7 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
   );
 };
 
-const TryoutStartConfirmation = ({ setRoute, context }) => {
+const TryoutStartConfirmation = ({ setRoute, context, isLoggedIn = false, isAdmin = false }) => {
   const totalQuestions = Number(context?.total || context?.problemLimit || 15);
   const timeLimitSeconds = Number(context?.timeLimitSeconds || 15 * 60);
   const detailItems = [
@@ -263,6 +265,14 @@ const TryoutStartConfirmation = ({ setRoute, context }) => {
   ];
 
   function startExam() {
+    if (!isLoggedIn && !isAdmin) {
+      setRoute({
+        route: "lobby",
+        authMode: "login",
+        authRedirect: { route: "tryout", tryout: context },
+      });
+      return;
+    }
     setRoute({
       route: "tryout",
       tryout: {
@@ -402,9 +412,15 @@ const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, 
   const featureList = Array.isArray(pkg.features)
     ? pkg.features
     : (typeof pkg.features === 'string' ? pkg.features.split('\n').filter(Boolean) : []);
+  const cardClass = feature
+    ? "bg-ink border border-ink text-white shadow-sm"
+    : "bg-white border hairline";
+  const mutedTextClass = feature ? "text-white/62" : "text-ink/60";
+  const subtleTextClass = feature ? "text-white/50" : "text-ink/50";
+  const dividerClass = feature ? "border-white/12" : "hairline";
 
   return (
-    <article className={`rounded-3xl p-7 flex flex-col ${feature ? "bg-ink text-white" : "bg-white border hairline"}`}>
+    <article className={`rounded-3xl p-7 flex flex-col ${cardClass}`}>
       <div className="flex items-center justify-between mb-5">
         <AdminEditablePackageField pkg={pkg} field="badge" isAdmin={isAdmin} adminEdit={adminEdit}>
           <span className={feature ? "tag-yel tag" : "tag"}>{pkg.badge}</span>
@@ -415,22 +431,22 @@ const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, 
         <h3 className="font-display font-bold text-2xl leading-tight tracking-[-0.02em]">{pkg.title}</h3>
       </AdminEditablePackageField>
       <AdminEditablePackageField pkg={pkg} field="description" rows={3} isAdmin={isAdmin} adminEdit={adminEdit}>
-        <p className={`text-sm leading-relaxed mt-2 ${feature ? "text-white/65" : "text-ink/60"}`}>{pkg.description}</p>
+        <p className={`text-sm leading-relaxed mt-2 ${mutedTextClass}`}>{pkg.description}</p>
       </AdminEditablePackageField>
 
-      <div className={`grid grid-cols-2 gap-4 mt-6 pt-5 border-t ${feature ? "border-white/15" : "hairline"}`}>
+      <div className={`grid grid-cols-2 gap-4 mt-6 pt-5 border-t ${dividerClass}`}>
         <AdminEditablePackageField pkg={pkg} field="duration" isAdmin={isAdmin} adminEdit={adminEdit}>
-          <div><div className={`text-xs ${feature ? "text-white/50" : "text-ink/50"}`}>Durasi</div><div className="font-display font-bold text-xl">{pkg.duration}</div></div>
+          <div><div className={`text-xs ${subtleTextClass}`}>Durasi</div><div className="font-display font-bold text-xl">{pkg.duration}</div></div>
         </AdminEditablePackageField>
         <AdminEditablePackageField pkg={pkg} field="questions" isAdmin={isAdmin} adminEdit={adminEdit}>
-          <div><div className={`text-xs ${feature ? "text-white/50" : "text-ink/50"}`}>Soal</div><div className="font-display font-bold text-xl tnum">{pkg.questions}</div></div>
+          <div><div className={`text-xs ${subtleTextClass}`}>Soal</div><div className="font-display font-bold text-xl tnum">{pkg.questions}</div></div>
         </AdminEditablePackageField>
       </div>
 
       <AdminEditablePackageField pkg={pkg} field="features" rows={4} isAdmin={isAdmin} adminEdit={adminEdit}>
         <ul className="space-y-2.5 mt-5 mb-7 flex-1">
           {featureList.map((f, i) => (
-            <li key={i} className={`flex items-start gap-2 text-sm ${feature ? "text-white/85" : "text-ink/75"}`}>
+            <li key={i} className={`flex items-start gap-2 text-sm ${feature ? "text-white/78" : "text-ink/75"}`}>
               <Icon.Check className={`w-4 h-4 mt-0.5 shrink-0 ${feature ? "text-yel" : ""}`} />
               <span>{f}</span>
             </li>
@@ -438,11 +454,11 @@ const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, 
         </ul>
       </AdminEditablePackageField>
 
-      <div className={`pt-5 border-t ${feature ? "border-white/15" : "hairline"} flex items-end justify-between gap-3`}>
+      <div className={`pt-5 border-t ${dividerClass} flex items-end justify-between gap-3`}>
         <div>
           {pkg.original_price && (
             <AdminEditablePackageField pkg={pkg} field="original_price" isAdmin={isAdmin} adminEdit={adminEdit}>
-              <div className={`text-xs line-through ${feature ? "text-white/40" : "text-ink/40"}`}>{pkg.original_price}</div>
+              <div className={`text-xs line-through ${feature ? "text-white/38" : "text-ink/40"}`}>{pkg.original_price}</div>
             </AdminEditablePackageField>
           )}
           <AdminEditablePackageField pkg={pkg} field="price" isAdmin={isAdmin} adminEdit={adminEdit}>
@@ -470,7 +486,7 @@ const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, 
       </div>
 
       {isAdmin && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingTop: 12, borderTop: feature ? '1px solid rgba(255,255,255,0.15)' : '1px solid #e5e7eb' }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingTop: 12, borderTop: feature ? '1px solid rgba(255,255,255,0.12)' : '1px solid #e5e7eb' }}>
           <button onClick={onDelete} className="admin-btn-ghost" style={{ fontSize: 12, color: '#ef4444', flex: 1 }} type="button">Hapus</button>
         </div>
       )}

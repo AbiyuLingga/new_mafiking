@@ -10,8 +10,15 @@ function isAuthenticated(req, res, next) {
 
 function isRegisteredUser(db, userId) {
     if (!db || !userId) return false;
-    const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(userId);
-    return Boolean(user && user.password_hash && user.password_hash !== 'none');
+    const user = db.prepare('SELECT password_hash, clerk_id, auth_provider FROM users WHERE id = ?').get(userId);
+    if (!user) return false;
+
+    const passwordHash = String(user.password_hash || '');
+    if (passwordHash && passwordHash !== 'none') return true;
+
+    const clerkId = String(user.clerk_id || '').trim();
+    const authProvider = String(user.auth_provider || '').trim();
+    return Boolean(clerkId && (authProvider === 'clerk' || authProvider === 'linked'));
 }
 
 function requireRegisteredUser(req, res, next) {

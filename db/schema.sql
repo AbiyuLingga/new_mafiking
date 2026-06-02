@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
     semester INTEGER,
     jurusan TEXT DEFAULT '',
     mapel_prioritas TEXT NOT NULL DEFAULT '[]',
+    referral_source TEXT DEFAULT '',
     onboarding_completed_at DATETIME,
     clerk_id TEXT,
     email TEXT,

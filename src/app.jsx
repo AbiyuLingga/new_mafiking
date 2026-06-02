@@ -122,7 +122,6 @@ const App = () => {
   const confirmLogout = React.useCallback(() => {
     requestConfirm({
       title: "Apakah ingin keluar?",
-      message: "Sesi akun akan ditutup. Progres yang sudah tersimpan tetap aman.",
       confirmLabel: "Ya, logout",
       tone: "danger",
       onConfirm: async () => {
@@ -262,7 +261,7 @@ const App = () => {
           className={route === "practice" || route === "lobby" || isFreeMathTryoutRoute ? "" : "app-route-transition"}
         >
           {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={isAdmin || isAdminAccount} authMode={authMode} authRedirect={authRedirect} onAuthSuccess={handleAuthSuccess} pendingClerkUser={pendingClerkUser} />}
-          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} initialSection={belajarSection} onSectionChange={setBelajarSection} />}
+          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} currentUser={currentUser} initialSection={belajarSection} onSectionChange={setBelajarSection} />}
           {route === "misi" && (
             <ScreenErrorBoundary>
               {hasPremiumAccess
@@ -278,7 +277,7 @@ const App = () => {
             : <AccessGate setRoute={navigate} title="Masuk untuk membuka profil" requireLogin variant="profil" />
           )}
           {route === "payment" && <Payment setRoute={navigate} currentUser={currentUser} context={paymentContext} />}
-          {route === "practice" && <Practice setRoute={navigate} context={practiceContext} isAdmin={isAdmin} isLoggedIn={isLoggedIn} />}
+          {route === "practice" && <Practice setRoute={navigate} context={practiceContext} isAdmin={isAdmin} isLoggedIn={isLoggedIn} isAuthenticated={Boolean(currentUser)} />}
         </div>
       </main>
 
@@ -286,6 +285,7 @@ const App = () => {
 
       {isLoggedIn && !isAdminAccount && currentUser?.profile_needs_completion && window.ProfileOnboardingModal && React.createElement(window.ProfileOnboardingModal, {
         user: currentUser,
+        onRequestLogout: confirmLogout,
         onComplete: (updatedUser) => {
           setCurrentUser(updatedUser);
           setPendingClerkUser(null);
@@ -297,55 +297,47 @@ const App = () => {
           className="mafiking-confirm-overlay"
           role="presentation"
           onClick={(event) => { if (event.target === event.currentTarget) setConfirmAction(null); }}
-          style={{
-            alignItems: "center",
-            background: "rgba(11, 19, 38, .54)",
-            backdropFilter: "blur(4px)",
-            bottom: 0,
-            display: "flex",
-            justifyContent: "center",
-            left: 0,
-            padding: 24,
-            position: "fixed",
-            right: 0,
-            top: 0,
-            zIndex: 20000,
-          }}
         >
           <div
             className="mafiking-confirm-card"
             role="dialog"
             aria-modal="true"
             aria-labelledby="mafiking-confirm-title"
-          style={{
-            animation: "landing-fade-pop 220ms cubic-bezier(.2,.8,.2,1) both",
-            background: "#fffdf1",
-            border: "1px solid rgba(11,19,38,.08)",
-            borderRadius: 6,
-            boxShadow: "-28px -24px 0 rgba(255,244,79,.32), 0 22px 60px rgba(11,19,38,.22)",
-            maxWidth: 360,
-            padding: "34px 40px 32px",
-            width: "min(360px, calc(100vw - 48px))",
-          }}
-        >
-          <h2 id="mafiking-confirm-title" style={{ color: "#0b1326", fontSize: 20, fontWeight: 800, margin: "0 0 14px" }}>{confirmAction.title}</h2>
-          <div style={{ height: 1, background: "rgba(250,204,21,.75)", marginBottom: 20 }} />
-          {confirmAction.message && <p style={{ color: "rgba(11,19,38,.68)", fontSize: 14, lineHeight: 1.6, margin: 0 }}>{confirmAction.message}</p>}
-          <div className="mafiking-confirm-actions" style={{ display: "flex", gap: 16, justifyContent: "flex-end", marginTop: 34 }}>
+            data-tone={confirmAction.tone}
+          >
             <button
-              className="btn-ghost !py-2.5 !px-5 text-sm"
+              className="mafiking-confirm-close"
+              aria-label="Tutup dialog"
               onClick={() => setConfirmAction(null)}
-              style={{ background: "#fffdf1", border: "2px solid rgba(11,19,38,.12)", borderRadius: 999, color: "#0b1326", fontWeight: 800, minWidth: 88, padding: "10px 18px" }}
               type="button"
             >
-              {confirmAction.cancelLabel}
+              <Icon.X className="w-4 h-4" />
             </button>
-            <button
-              className={(confirmAction.tone === "danger" ? "mafiking-confirm-danger" : "btn-ink") + " !py-2.5 !px-5 text-sm"}
-              onClick={runConfirmedAction}
-              style={{ background: "#fff44f", border: "2px solid #fff44f", borderRadius: 999, color: "#0b1326", fontWeight: 800, minWidth: 88, padding: "10px 18px" }}
-              type="button"
-            >
+            <div className="mafiking-confirm-brand">
+              <Logo size={28} />
+            </div>
+            <div className="mafiking-confirm-body">
+              <div className="mafiking-confirm-icon" aria-hidden="true">
+                <Icon.LogOut className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 id="mafiking-confirm-title">{confirmAction.title}</h2>
+                {confirmAction.message && <p>{confirmAction.message}</p>}
+              </div>
+            </div>
+            <div className="mafiking-confirm-actions">
+              <button
+                className="mafiking-confirm-secondary"
+                onClick={() => setConfirmAction(null)}
+                type="button"
+              >
+                {confirmAction.cancelLabel}
+              </button>
+              <button
+                className="mafiking-confirm-primary"
+                onClick={runConfirmedAction}
+                type="button"
+              >
                 {confirmAction.confirmLabel}
               </button>
             </div>

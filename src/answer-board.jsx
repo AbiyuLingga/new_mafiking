@@ -42,7 +42,7 @@
     const [eraserMode, setEraserMode] = useState('stroke');
     const [color, setColor] = useState(COLORS[0].value);
     const [pageTemplate, setPageTemplate] = useState('dots');
-    const [strokeWidth, setStrokeWidth] = useState(18);
+    const [strokeWidth, setStrokeWidth] = useState(10);
     const [panX, setPanX] = useState(0);
     const [zoom, setZoom] = useState(1);
     const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });

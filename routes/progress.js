@@ -45,6 +45,8 @@ router.post('/submit', isAuthenticated, requireRegisteredUser, (req, res) => {
         userId
     });
 
+    const levelBefore = getUserProgressStats(db, userId).level;
+
     // Upsert progress
     const existing = db.prepare(
         'SELECT * FROM user_progress WHERE user_id = ? AND problem_id = ?'
@@ -147,9 +149,22 @@ router.post('/submit', isAuthenticated, requireRegisteredUser, (req, res) => {
     db.prepare('UPDATE users SET streak_days = ?, highest_streak = ?, last_play_date = date(?), last_active = date(?) WHERE id = ?')
         .run(streakDays, highestStreak, todayStr, todayStr, userId);
 
-    const user = db.prepare('SELECT xp, level, streak_days, highest_streak FROM users WHERE id = ?').get(userId);
+    const user = getUserProgressStats(db, userId);
 
-    res.json({ ok: true, xpEarned, xpPenalty, totalXp: user.xp, level: user.level, streakDays: user.streak_days, highestStreak: user.highest_streak });
+    res.json({
+        ok: true,
+        xpEarned,
+        xpPenalty,
+        totalXp: user.xp,
+        level: user.level,
+        streakDays: user.streak_days,
+        highestStreak: user.highest_streak,
+        levelProgress: user.level_progress,
+        xpCurrentLevel: user.xp_current_level,
+        xpNextLevel: user.xp_next_level,
+        xpToNextLevel: user.xp_to_next_level,
+        leveledUp: user.level > levelBefore
+    });
 });
 
 function recordPracticeAttempt(db, {
@@ -205,9 +220,7 @@ router.get('/stats', isAuthenticated, (req, res) => {
     const db = req.app.locals.db;
     const userId = req.session.userId;
 
-    const user = db.prepare(
-        'SELECT xp, level, streak_days FROM users WHERE id = ?'
-    ).get(userId);
+    const user = getUserProgressStats(db, userId);
 
     const totalProblems = db.prepare('SELECT COUNT(*) as count FROM problems').get().count;
     const solvedProblems = db.prepare(
@@ -218,6 +231,11 @@ router.get('/stats', isAuthenticated, (req, res) => {
         xp: user.xp,
         level: user.level,
         streak_days: user.streak_days,
+        highest_streak: user.highest_streak,
+        level_progress: user.level_progress,
+        xp_current_level: user.xp_current_level,
+        xp_next_level: user.xp_next_level,
+        xp_to_next_level: user.xp_to_next_level,
         totalProblems,
         solvedProblems,
         mastery: totalProblems > 0 ? Math.round((solvedProblems / totalProblems) * 100) : 0
@@ -395,7 +413,7 @@ router.get('/leaderboard/tryout', isAuthenticated, (req, res) => {
 function updateLevel(db, userId) {
     const user = db.prepare('SELECT xp FROM users WHERE id = ?').get(userId);
     
-    let newLevel = Math.floor((Math.sqrt(9 + 0.16 * user.xp) - 1) / 2);
+    let newLevel = calculateLevel(user.xp);
     if (newLevel < 1) newLevel = 1;
 
     // Badge tier berubah tiap kelipatan 3 level (micro-reward visual)
@@ -403,6 +421,45 @@ function updateLevel(db, userId) {
     const badgeTier = Math.min(5, Math.floor((newLevel - 1) / 3));
 
     db.prepare('UPDATE users SET level = ?, badge_tier = ? WHERE id = ?').run(newLevel, badgeTier, userId);
+}
+
+function calculateLevel(xp) {
+    const safeXp = Math.max(0, Number(xp) || 0);
+    return Math.max(1, Math.floor((Math.sqrt(9 + 0.16 * safeXp) - 1) / 2));
+}
+
+function xpRequiredForLevel(level) {
+    const safeLevel = Math.max(1, Number(level) || 1);
+    if (safeLevel <= 1) return 0;
+    return 25 * (safeLevel + 2) * (safeLevel - 1);
+}
+
+function getUserProgressStats(db, userId) {
+    const row = db.prepare(
+        'SELECT xp, level, streak_days, highest_streak FROM users WHERE id = ?'
+    ).get(userId) || {};
+    const xp = Math.max(0, Number(row.xp) || 0);
+    const level = calculateLevel(xp);
+    const currentLevelXp = xpRequiredForLevel(level);
+    const nextLevelXp = xpRequiredForLevel(level + 1);
+    const levelRange = Math.max(1, nextLevelXp - currentLevelXp);
+    const levelProgress = Math.max(0, Math.min(100, Math.round(((xp - currentLevelXp) / levelRange) * 100)));
+    const badgeTier = Math.min(5, Math.floor((level - 1) / 3));
+
+    if (Number(row.level) !== level) {
+        db.prepare('UPDATE users SET level = ?, badge_tier = ? WHERE id = ?').run(level, badgeTier, userId);
+    }
+
+    return {
+        xp,
+        level,
+        streak_days: Math.max(0, Number(row.streak_days) || 0),
+        highest_streak: Math.max(0, Number(row.highest_streak) || 0),
+        level_progress: levelProgress,
+        xp_current_level: currentLevelXp,
+        xp_next_level: nextLevelXp,
+        xp_to_next_level: Math.max(0, nextLevelXp - xp)
+    };
 }
 
 module.exports = router;

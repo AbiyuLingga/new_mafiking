@@ -169,7 +169,7 @@
     );
   }
 
-  function EraserButton({ active, eraserMode, onEraserModeChange, onToolChange }) {
+  function EraserButton({ active, disabled = false, eraserMode, onEraserModeChange, onToolChange }) {
     const [menuOpen, setMenuOpen] = useState(false);
     const [menuVisible, setMenuVisible] = useState(false);
     const lastPressAtRef = useRef(0);
@@ -230,6 +230,7 @@
           aria-label={`Eraser ${eraserMode === 'stroke' ? 'Penghapus coretan' : 'Penghapus area'}`}
           aria-pressed={active}
           className={`${toolButtonBase} ${active ? activeToolClass : idleToolClass}`}
+          disabled={disabled}
           onPress={handlePress}
           title={`Eraser: ${eraserMode === 'stroke' ? 'Penghapus coretan' : 'Penghapus area'}`}
         >
@@ -244,6 +245,7 @@
             <BrowserSafeButton
               label="Penghapus coretan"
               className={`rounded-md px-3 py-2 text-left text-sm ${eraserMode === 'stroke' ? 'bg-sky-400/20 text-sky-100' : 'text-neutral-200 hover:bg-white/10'}`}
+              disabled={disabled}
               onPress={() => chooseMode('stroke')}
             >
               Penghapus coretan
@@ -251,6 +253,7 @@
             <BrowserSafeButton
               label="Penghapus area"
               className={`rounded-md px-3 py-2 text-left text-sm ${eraserMode === 'pixel' ? 'bg-sky-400/20 text-sky-100' : 'text-neutral-200 hover:bg-white/10'}`}
+              disabled={disabled}
               onPress={() => chooseMode('pixel')}
             >
               Penghapus area
@@ -268,6 +271,7 @@
       onFocusModeToggle, onOpenTemplatePicker, onRedo, onStrokeWidthChange,
       onSubmit, onToolChange, onUndo, pageTemplateLabel, submitDisabled = false, strokeWidth,
     } = props;
+    const isBusy = Boolean(isSubmitting);
 
     return (
       <div className={`toolbar-surface sticky top-0 z-30 flex w-full flex-wrap items-center justify-center gap-1 border-b border-white/10 bg-neutral-950/95 p-2 shadow-lg shadow-black/30 ${focusMode && focusActions ? 'has-focus-nav' : ''}`}>
@@ -275,7 +279,7 @@
           <div className="toolbar-focus-nav-edge is-left">
             <BrowserSafeButton
               className="toolbar-focus-nav-button"
-              disabled={focusActions.backDisabled || isSubmitting}
+              disabled={focusActions.backDisabled || isBusy}
               label="Kembali ke soal sebelumnya"
               onPress={focusActions.onBack}
               title="Kembali"
@@ -286,23 +290,25 @@
           </div>
         ) : null}
 
-        <ToolButton active={activeTool === 'pen'} label="Pen" onClick={() => onToolChange('pen')}>
+        <ToolButton active={activeTool === 'pen'} disabled={isBusy} label="Pen" onClick={() => onToolChange('pen')}>
           <TBIcon.Pen />
         </ToolButton>
 
         <EraserButton
           active={activeTool === 'eraser'}
+          disabled={isBusy}
           eraserMode={eraserMode}
           onEraserModeChange={onEraserModeChange}
           onToolChange={onToolChange}
         />
 
-        <ToolButton active={activeTool === 'lasso'} label="Lasso" onClick={() => onToolChange('lasso')}>
+        <ToolButton active={activeTool === 'lasso'} disabled={isBusy} label="Lasso" onClick={() => onToolChange('lasso')}>
           <TBIcon.Lasso />
         </ToolButton>
 
         <BrowserSafeButton
           className={`${toolButtonBase} ${idleToolClass} relative px-2`}
+          disabled={isBusy}
           label={`Template halaman: ${pageTemplateLabel}`}
           onPress={onOpenTemplatePicker}
           title={`Template halaman: ${pageTemplateLabel}`}
@@ -318,6 +324,7 @@
             <BrowserSafeButton
               aria-label={`Color ${preset.name}`}
               className={`size-8 rounded-full border transition ${color === preset.value ? 'border-white ring-2 ring-sky-300/80' : 'border-white/20 hover:border-white/50'}`}
+              disabled={isBusy}
               key={preset.value}
               onPress={() => onColorChange(preset.value)}
               style={{ backgroundColor: preset.value }}
@@ -333,6 +340,7 @@
             className="h-2 w-20 accent-sky-300 md:w-28"
             max="30"
             min="1"
+            disabled={isBusy}
             onChange={(event) => onStrokeWidthChange(Number(event.target.value))}
             type="range"
             value={strokeWidth}
@@ -342,15 +350,15 @@
 
         <div className="mx-1 h-8 w-px bg-white/10" />
 
-        <ToolButton disabled={!canUndo} label="Undo" onClick={onUndo}><TBIcon.Undo /></ToolButton>
-        <ToolButton disabled={!canRedo} label="Redo" onClick={onRedo}><TBIcon.Redo /></ToolButton>
-        <ToolButton label="Clear Canvas" onClick={onClear}><TBIcon.Trash /></ToolButton>
+        <ToolButton disabled={!canUndo || isBusy} label="Undo" onClick={onUndo}><TBIcon.Undo /></ToolButton>
+        <ToolButton disabled={!canRedo || isBusy} label="Redo" onClick={onRedo}><TBIcon.Redo /></ToolButton>
+        <ToolButton disabled={isBusy} label="Clear Canvas" onClick={onClear}><TBIcon.Trash /></ToolButton>
 
         <div className="toolbar-action-separator h-8 w-px bg-white/10" />
 
         <ToolButton
           active={focusMode}
-          disabled={isSubmitting}
+          disabled={isBusy}
           label={focusMode ? 'Keluar mode fokus' : 'Mode fokus'}
           onClick={onFocusModeToggle}
         >
@@ -359,19 +367,19 @@
 
         <BrowserSafeButton
           className={`${toolButtonBase} toolbar-submit-button`}
-          disabled={isSubmitting || submitDisabled}
+          disabled={isBusy || submitDisabled}
           label="Submit jawaban ke AI"
           onPress={onSubmit}
           title={submitDisabled && focusMode ? "Tulis dulu di kanvas untuk submit" : "Submit ke AI"}
         >
-          {isSubmitting ? <TBIcon.Spin /> : <span>Submit -&gt;</span>}
+          {isBusy ? <TBIcon.Spin /> : <span>Submit -&gt;</span>}
         </BrowserSafeButton>
 
         {focusMode && focusActions ? (
           <div className="toolbar-focus-nav-edge is-right">
             <BrowserSafeButton
               className={focusActions.nextPrimary ? 'toolbar-focus-nav-button is-primary' : 'toolbar-focus-nav-button'}
-              disabled={(focusActions.nextPrimary ? isSubmitting : focusActions.nextDisabled) || isSubmitting}
+              disabled={(focusActions.nextPrimary ? isBusy : focusActions.nextDisabled) || isBusy}
               label={focusActions.nextLabel || 'Next'}
               onPress={focusActions.onNext}
               title={focusActions.nextLabel || 'Next'}

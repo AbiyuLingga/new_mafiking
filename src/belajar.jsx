@@ -35,7 +35,13 @@ const getInitialBelajarMapel = () => {
   return "Try Out";
 };
 
-const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, initialSection = null, onSectionChange = null }) => {
+function getTwoWordDisplayName(user) {
+  const name = String(user?.display_name || user?.username || "").trim();
+  if (!name || name.startsWith("Tamu_")) return "";
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).join(" ");
+}
+
+const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = null, initialSection = null, onSectionChange = null }) => {
   const [mapel, setMapelState] = useState(normalizeBelajarSection(initialSection) || getInitialBelajarMapel);
   const [semester, setSemester] = useState(1);
   const [dbInit, setDbInit] = useState(null);
@@ -84,6 +90,7 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, initialSection
     : (chapterData[mapel] || []);
   const chapters = allMapelChapters.filter(c => c.semester === semester);
   const isTryOutSection = mapel === "Try Out";
+  const greetingName = isLoggedIn ? getTwoWordDisplayName(currentUser) : "";
 
   return (
     <div className="app-page-bg app-page-bg--belajar min-h-[calc(100vh-72px)]">
@@ -94,7 +101,13 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, initialSection
             <SemesterKicker semester={semester} setSemester={setSemester} />
             <h1 className="font-display font-bold text-4xl md:text-5xl tracking-[-0.03em] leading-[1.05]">
               Selamat datang<br />
-              <span className="hi-yel-word">pejuang</span> <span className="hi-yel-word">IP 4.0</span>
+              {greetingName ? (
+                <span className="hi-yel-word">{greetingName}</span>
+              ) : (
+                <React.Fragment>
+                  <span className="hi-yel-word">pejuang</span> <span className="hi-yel-word">IP 4.0</span>
+                </React.Fragment>
+              )}
             </h1>
           </div>
         </div>
@@ -116,8 +129,8 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, initialSection
             const inProgress = chapters.filter(c => c.progress > 0).length;
             const pct = totalSoal > 0 ? (doneSoal / totalSoal) * 100 : 0;
             const M = MAPEL_META[mapel];
-            const toneClass = { amber: "tone-icon-amber", blue: "tone-icon-blue", emerald: "tone-icon-emerald" }[M.color] || "tone-icon-amber";
-            const barTone = { amber: "bar-amber", blue: "bar-blue", emerald: "bar-emerald" }[M.color] || "bar-amber";
+            const toneClass = { amber: "tone-icon-amber", blue: "tone-icon-blue", emerald: "tone-icon-emerald", rose: "tone-icon-rose" }[M.color] || "tone-icon-amber";
+            const barTone = { amber: "bar-amber", blue: "bar-blue", emerald: "bar-emerald", rose: "bar-rose" }[M.color] || "bar-amber";
             return (
               <div className="flex items-start gap-4 mb-6">
                 <div
@@ -301,6 +314,13 @@ const mapelToneClasses = {
     activeUnderline: "bg-emerald-500",
     toneIcon: "tone-icon-emerald",
   },
+  rose: {
+    activeButton: "bg-white text-ink border-transparent border-b-2 border-b-rose-500",
+    activePill: "bg-white text-ink border-transparent border-b-2 border-b-rose-500",
+    activeText: "text-ink",
+    activeUnderline: "bg-rose-500",
+    toneIcon: "tone-icon-rose",
+  },
 };
 
 const getMapelTone = (mapelName) => {
@@ -315,6 +335,7 @@ const getMapelUnderlineColor = (mapelName) => {
     amber: "#f59e0b",
     blue: "#3b82f6",
     emerald: "#10b981",
+    rose: "#ef4444",
   }[color] || "#f59e0b";
 };
 
@@ -481,12 +502,12 @@ const ChaptersNumbered = ({ chapters, setRoute, mapel }) => (
 
 // Variant B — SOFT CARDS (3-col grid, soft shadow, photo placeholder)
 const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
-  const toneClass = { Matematika: "card-premium-amber", Fisika: "card-premium-blue", Kimia: "card-premium-emerald" }[mapel] || "card-premium-amber";
+  const toneClass = { Matematika: "card-premium-amber", Fisika: "card-premium-blue", Kimia: "card-premium-rose" }[mapel] || "card-premium-amber";
   const artClass = { Matematika: "card-premium-art-matematika", Fisika: "card-premium-art-fisika", Kimia: "card-premium-art-kimia" }[mapel] || "card-premium-art-matematika";
-  const glowColor = { Matematika: "glow-amber", Fisika: "glow-blue", Kimia: "glow-emerald" }[mapel] || "glow-amber";
-  const pillClass = { Matematika: "topic-pill-premium-amber", Fisika: "topic-pill-premium-blue", Kimia: "topic-pill-premium-emerald" }[mapel] || "topic-pill-premium-amber";
-  const barColor  = { Matematika: "bg-amber-500", Fisika: "bg-blue-500", Kimia: "bg-emerald-500" }[mapel] || "bg-amber-500";
-  const ctaClass  = { Matematika: "btn-premium-cta-amber", Fisika: "btn-premium-cta-blue", Kimia: "btn-premium-cta-emerald" }[mapel] || "btn-premium-cta-amber";
+  const glowColor = { Matematika: "glow-amber", Fisika: "glow-blue", Kimia: "glow-rose" }[mapel] || "glow-amber";
+  const pillClass = { Matematika: "topic-pill-premium-amber", Fisika: "topic-pill-premium-blue", Kimia: "topic-pill-premium-rose" }[mapel] || "topic-pill-premium-amber";
+  const barColor  = { Matematika: "bg-amber-500", Fisika: "bg-blue-500", Kimia: "bg-rose-500" }[mapel] || "bg-amber-500";
+  const ctaClass  = { Matematika: "btn-premium-cta-amber", Fisika: "btn-premium-cta-blue", Kimia: "btn-premium-cta-rose" }[mapel] || "btn-premium-cta-amber";
 
   const M = MAPEL_META[mapel];
   const SubjectIcon = M ? M.icon : null;

@@ -346,8 +346,8 @@ Most API routes require either a local session or a verified Clerk Bearer token.
 | `POST` | `/api/webhooks/clerk` | Clerk webhook, verified with `CLERK_WEBHOOK_SIGNING_SECRET`, for user-created sync. |
 | `GET` | `/api/quiz/init` | Chapters, subtopics, and problem counts. |
 | `GET` | `/api/quiz/subtopics/:id/full` | Subtopic with full problems and steps. |
-| `POST` | `/api/progress/submit` | Save correctness, XP, level, streak. |
-| `GET` | `/api/progress/stats` | Current user's progress stats. |
+| `POST` | `/api/progress/submit` | Save correctness, XP, level, streak, and return updated progress metadata. |
+| `GET` | `/api/progress/stats` | Current user's real XP, level, daily streak, mastery, and progress toward the next level. |
 | `GET` | `/api/correction/attempts` | Recent correction attempts. |
 | `POST` | `/api/correction/transcribe` | Transcribe canvas image. |
 | `POST` | `/api/correction/evaluate` | Evaluate answer and store attempt. |

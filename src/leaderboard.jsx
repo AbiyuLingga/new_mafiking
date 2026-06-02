@@ -108,15 +108,15 @@ const Leaderboard = () => {
             {podiumRows.map((user) => {
               const isChampion = user.rank === 1;
               const placeClass = isChampion
-                ? "bg-yel border-amber-300 shadow-lg h-[240px] lg:h-[270px]"
-                : "bg-white border-slate-200 shadow-sm h-[210px] lg:h-[230px]";
+                ? "bg-yel border-amber-300 shadow-lg h-[270px] lg:h-[300px]"
+                : "bg-white border-slate-200 shadow-sm h-[240px] lg:h-[260px]";
               const avatarClass = isChampion
                 ? "h-24 w-24 bg-ink text-white text-3xl"
                 : "h-20 w-20 bg-slate-700 text-white text-2xl";
               return (
                 <div
                   key={`podium-${user.id}-${user.rank}`}
-                  className={`relative flex flex-col items-center rounded-[2rem] border p-6 text-center ${placeClass}`}
+                  className={`relative flex flex-col items-center rounded-[2rem] border p-6 text-center overflow-visible ${placeClass}`}
                 >
                   <div className={`absolute -top-4 flex h-9 w-9 items-center justify-center rounded-full font-black ring-4 ring-white ${
                     isChampion ? "bg-ink text-white" : "bg-slate-100 text-slate-700"
@@ -126,13 +126,15 @@ const Leaderboard = () => {
                   <div className={`mb-4 flex shrink-0 items-center justify-center rounded-full font-black tracking-wider ${avatarClass}`}>
                     {user.initials}
                   </div>
-                  <h2 className="line-clamp-2 text-base font-black leading-tight text-ink lg:text-lg">
+                  <h2 className="leaderboard-podium-name text-base font-black text-ink lg:text-lg">
                     {user.display_name}
                   </h2>
-                  <p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-slate-500">
-                    {user.fakultas || "MAFIKING"}
-                  </p>
-                  <div className="mt-auto">
+                  {user.fakultas && (
+                    <p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-slate-500">
+                      {user.fakultas}
+                    </p>
+                  )}
+                  <div className="mt-4">
                     <div className={`font-black ${isChampion ? "text-3xl" : "text-2xl"} text-ink`}>
                       {renderPrimaryMetric(user)}
                     </div>
@@ -192,7 +194,9 @@ const Leaderboard = () => {
                   </div>
                   <div className="min-w-0">
                     <div className="truncate text-sm font-black text-ink sm:text-base">{user.display_name}</div>
-                    <div className="text-[11px] font-bold uppercase tracking-widest text-slate-500">{user.fakultas || "MAFIKING"}</div>
+                    {user.fakultas && (
+                      <div className="text-[11px] font-bold uppercase tracking-widest text-slate-500">{user.fakultas}</div>
+                    )}
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 text-right">

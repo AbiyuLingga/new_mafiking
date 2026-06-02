@@ -4,8 +4,24 @@ const xss = require('xss');
 const { mergeGuestIntoUser, readUser } = require('../lib/clerk-user-sync');
 const router = express.Router();
 
-const FACULTY_OPTIONS = new Set(['FMIPA', 'SITH-R', 'SITH-S', 'SF', 'FITB', 'FTSL', 'FTI', 'FTMD', 'FTTM', 'STEI-K', 'STEI-R', 'SAPPK']);
+const FACULTY_OPTIONS = new Set(['FMIPA', 'FITB', 'FTMD', 'FTTM', 'FTSL', 'FTI', 'SF', 'SAPPK', 'SITH-S', 'SITH-R', 'STEI-R', 'STEI-K']);
 const PRIORITY_SUBJECTS = new Set(['Matematika', 'Fisika', 'Kimia']);
+const REFERRAL_OPTIONS = new Set(['Instagram', 'WhatsApp/Line', 'Teman', 'Orang Tua']);
+const REFERRAL_OTHER_PREFIX = 'Lainnya: ';
+const MAJOR_OPTIONS_BY_FACULTY = {
+    FMIPA: new Set(['Matematika', 'Fisika', 'Astronomi', 'Kimia', 'Aktuaria']),
+    'SITH-R': new Set(['Rekayasa Hayati', 'Rekayasa Pertanian', 'Rekayasa Kehutanan', 'Teknologi Pasca Panen']),
+    'SITH-S': new Set(['Biologi', 'Mikrobiologi']),
+    SF: new Set(['Sains dan Teknologi Farmasi', 'Farmasi Klinik dan Komunitas']),
+    FITB: new Set(['Teknik Geologi', 'Teknik Geodesi dan Geomatika', 'Meteorologi', 'Oseanografi']),
+    FTSL: new Set(['Teknik Sipil', 'Teknik Lingkungan', 'Teknik Kelautan', 'Rekayasa Infrastruktur Lingkungan', 'Teknik dan Pengelolaan Sumber Daya Air']),
+    FTI: new Set(['Teknik Kimia', 'Teknik Fisika', 'Teknik Industri', 'Manajemen Rekayasa Industri', 'Teknik Bioenergi dan Kemurgi', 'Teknik Pangan']),
+    FTMD: new Set(['Teknik Mesin', 'Teknik Dirgantara', 'Teknik Material']),
+    FTTM: new Set(['Teknik Pertambangan', 'Teknik Perminyakan', 'Teknik Geofisika', 'Teknik Metalurgi']),
+    'STEI-K': new Set(['Teknik Informatika', 'Sistem dan Teknologi Informasi']),
+    'STEI-R': new Set(['Teknik Elektro', 'Teknik Tenaga Listrik', 'Teknik Telekomunikasi', 'Teknik Biomedis']),
+    SAPPK: new Set(['Arsitektur', 'Perencanaan Wilayah dan Kota']),
+};
 
 function parseMapelPrioritas(value) {
     if (Array.isArray(value)) return value;
@@ -29,16 +45,28 @@ function normalizeMapelPrioritas(value) {
     return unique;
 }
 
+function isValidReferralSource(value) {
+    const referral = String(value || '').trim();
+    if (REFERRAL_OPTIONS.has(referral)) return true;
+    if (!referral.startsWith(REFERRAL_OTHER_PREFIX)) return false;
+    const other = referral.slice(REFERRAL_OTHER_PREFIX.length).trim();
+    return other.length > 0 && other.length <= 80;
+}
+
 function isProfileComplete(user) {
     if (!user || user.role === 'admin') return true;
     const displayName = String(user.display_name || '').trim();
-    const phone = String(user.phone_number || '').trim();
     const semester = Number(user.semester || 0);
     const subjects = normalizeMapelPrioritas(user.mapel_prioritas);
+    const fakultas = String(user.fakultas || '').trim();
+    const jurusan = String(user.jurusan || '').trim();
+    const referralSource = String(user.referral_source || '').trim();
     if (!displayName || displayName.startsWith('Tamu_')) return false;
-    if (!phone || semester < 1 || semester > 8 || subjects.length < 1) return false;
-    if (semester === 1) return FACULTY_OPTIONS.has(String(user.fakultas || '').trim());
-    return Boolean(String(user.jurusan || '').trim());
+    if (semester < 1 || semester > 2 || subjects.length < 1) return false;
+    if (!isValidReferralSource(referralSource)) return false;
+    if (!FACULTY_OPTIONS.has(fakultas)) return false;
+    if (semester === 1) return true;
+    return Boolean(MAJOR_OPTIONS_BY_FACULTY[fakultas] && MAJOR_OPTIONS_BY_FACULTY[fakultas].has(jurusan));
 }
 
 function toPublicUser(user, session) {
@@ -231,15 +259,20 @@ router.post('/profile-onboarding', (req, res) => {
     const semester = Number(req.body.semester || 0);
     const fakultas = xss(String(req.body.fakultas || '').trim());
     const jurusan = xss(String(req.body.jurusan || '').trim());
+    const referralSource = xss(String(req.body.referral || req.body.referral_source || '').trim());
     const mapelPrioritas = normalizeMapelPrioritas(req.body.mapel_prioritas || req.body.mapelPrioritas);
 
     if (!displayName) return res.status(400).json({ error: 'Nama lengkap wajib diisi.' });
     if (displayName.length > 100) return res.status(400).json({ error: 'Nama terlalu panjang (max 100 karakter).' });
-    if (!/^[0-9+\-\s]{8,20}$/.test(phoneNumber)) return res.status(400).json({ error: 'No. HP harus 8-20 karakter dan hanya boleh angka, spasi, +, atau -.' });
-    if (!Number.isInteger(semester) || semester < 1 || semester > 8) return res.status(400).json({ error: 'Semester wajib dipilih.' });
-    if (semester === 1 && !FACULTY_OPTIONS.has(fakultas)) return res.status(400).json({ error: 'Fakultas wajib dipilih.' });
-    if (semester !== 1 && (!jurusan || jurusan.length > 100)) return res.status(400).json({ error: 'Jurusan wajib diisi dan maksimal 100 karakter.' });
+    if (phoneNumber && !/^[0-9+\-\s]{8,20}$/.test(phoneNumber)) return res.status(400).json({ error: 'No. HP harus 8-20 karakter dan hanya boleh angka, spasi, +, atau -.' });
+    if (!Number.isInteger(semester) || semester < 1 || semester > 2) return res.status(400).json({ error: 'Semester wajib dipilih.' });
+    if (!FACULTY_OPTIONS.has(fakultas)) return res.status(400).json({ error: 'Fakultas wajib dipilih.' });
+    if (semester === 2 && (!jurusan || jurusan.length > 100)) return res.status(400).json({ error: 'Jurusan wajib diisi dan maksimal 100 karakter.' });
+    if (semester === 2 && (!MAJOR_OPTIONS_BY_FACULTY[fakultas] || !MAJOR_OPTIONS_BY_FACULTY[fakultas].has(jurusan))) {
+        return res.status(400).json({ error: 'Jurusan tidak sesuai dengan fakultas yang dipilih.' });
+    }
     if (mapelPrioritas.length < 1 || mapelPrioritas.length > 3) return res.status(400).json({ error: 'Pilih 1 sampai 3 mapel prioritas.' });
+    if (!isValidReferralSource(referralSource)) return res.status(400).json({ error: 'Pilih sumber kamu mengenal Mafiking.' });
 
     const db = req.app.locals.db;
     try {
@@ -258,15 +291,17 @@ router.post('/profile-onboarding', (req, res) => {
                 fakultas = ?,
                 jurusan = ?,
                 mapel_prioritas = ?,
+                referral_source = ?,
                 onboarding_completed_at = CURRENT_TIMESTAMP
             WHERE id = ?
         `).run(
             displayName,
             phoneNumber,
             semester,
-            semester === 1 ? fakultas : '',
+            fakultas,
             semester === 1 ? '' : jurusan,
             JSON.stringify(mapelPrioritas),
+            referralSource,
             userId
         );
 
@@ -291,7 +326,7 @@ router.get('/me', (req, res) => {
 
     const db = req.app.locals.db;
     const user = db.prepare(
-        'SELECT id, username, display_name, fakultas, phone_number, semester, jurusan, mapel_prioritas, onboarding_completed_at, role, xp, level, badge_tier, streak_days, highest_streak, last_active, email, auth_provider FROM users WHERE id = ?'
+        'SELECT id, username, display_name, fakultas, phone_number, semester, jurusan, mapel_prioritas, referral_source, onboarding_completed_at, role, xp, level, badge_tier, streak_days, highest_streak, last_active, email, auth_provider FROM users WHERE id = ?'
     ).get(userId);
 
     if (!user) {

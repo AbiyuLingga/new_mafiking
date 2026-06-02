@@ -344,7 +344,7 @@ The route receives a raw JSON body before the normal Express JSON parser, verifi
 - `GET /api/progress/leaderboard`
 - `GET /api/progress/leaderboard/weekly`
 
-Computes XP, penalties, level, badge tier, streaks, solved counts, mastery, and leaderboards.
+Computes XP, penalties, level, badge tier, streaks, solved counts, mastery, and leaderboards. `/api/progress/stats` is the source of truth for gamified UI chips: it returns real `xp`, `level`, `streak_days`, `highest_streak`, `level_progress`, and next-level XP metadata from SQLite.
 
 #### `routes/correction.js`
 

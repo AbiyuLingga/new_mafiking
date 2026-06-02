@@ -62,6 +62,7 @@ for (const migration of [
   "ALTER TABLE users ADD COLUMN semester INTEGER",
   "ALTER TABLE users ADD COLUMN jurusan TEXT DEFAULT ''",
   "ALTER TABLE users ADD COLUMN mapel_prioritas TEXT DEFAULT '[]'",
+  "ALTER TABLE users ADD COLUMN referral_source TEXT DEFAULT ''",
   "ALTER TABLE users ADD COLUMN onboarding_completed_at DATETIME",
   "ALTER TABLE users ADD COLUMN highest_streak INTEGER DEFAULT 0",
   "ALTER TABLE users ADD COLUMN last_play_date DATE",
@@ -318,9 +319,9 @@ const loginLimiter = rateLimit({
   legacyHeaders: false
 });
 const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
+  windowMs: 15 * 60 * 1000,
   max: 5,
-  message: { error: 'Terlalu banyak percobaan registrasi. Coba lagi dalam 1 jam.' },
+  message: { error: 'Terlalu banyak percobaan registrasi. Coba lagi dalam 15 menit.' },
   standardHeaders: true,
   legacyHeaders: false
 });

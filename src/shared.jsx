@@ -65,6 +65,31 @@ const Icon = {
       <circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/>
     </svg>
   ),
+  Refresh: ({ className = "w-4 h-4" }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 11a8 8 0 0 0-14.2-4.9L4 8" />
+      <path d="M4 4v4h4" />
+      <path d="M4 13a8 8 0 0 0 14.2 4.9L20 16" />
+      <path d="M20 20v-4h-4" />
+    </svg>
+  ),
+  SwitchAccount: ({ className = "w-4 h-4" }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 7a4 4 0 1 1 8 0" />
+      <path d="M5 21a7 7 0 0 1 14 0" />
+      <path d="M4 10h4l-2-2" />
+      <path d="M6 8v6" />
+      <path d="M20 14h-4l2 2" />
+      <path d="M18 16v-6" />
+    </svg>
+  ),
+  LogOut: ({ className = "w-4 h-4" }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 17l5-5-5-5" />
+      <path d="M15 12H3" />
+      <path d="M21 4v16" />
+    </svg>
+  ),
   Menu: ({ className = "w-4 h-4" }) => (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
       <path d="M4 8h16M4 16h16"/>
@@ -145,7 +170,7 @@ const MAPEL_META = {
   "Try Out": { code: "TRY", icon: Icon.Trophy, color: "amber" },
   Matematika: { code: "MAT", icon: Icon.Integral, color: "amber" },
   Fisika: { code: "FIS", icon: Icon.Atom, color: "blue" },
-  Kimia: { code: "KIM", icon: Icon.Flask, color: "emerald" },
+  Kimia: { code: "KIM", icon: Icon.Flask, color: "rose" },
 };
 
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -173,6 +198,14 @@ const StreakFlame = ({ className = "" }) => (
     className={`streak-flame-img${className ? ` ${className}` : ""}`}
   />
 );
+
+const normalizeProgressStats = (stats) => {
+  const xp = Math.max(0, Number(stats?.xp) || 0);
+  const level = Math.max(1, Number(stats?.level) || 1);
+  const streakDays = Math.max(0, Number(stats?.streak_days) || 0);
+  const levelProgress = Math.max(0, Math.min(100, Number(stats?.level_progress) || 0));
+  return { xp, level, streakDays, levelProgress };
+};
 
 // ─── Top Nav ──────────────────────────────────────────────────────────────
 const SlidingSegmented = ({ options, value, onChange, className = "" }) => {
@@ -236,6 +269,7 @@ const SlidingSegmented = ({ options, value, onChange, className = "" }) => {
 const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn = false, isAdminMode = false, onLogoClick, onAdminPanelOpen }) => {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [progressStats, setProgressStats] = useState(null);
   const navRef = useRef(null);
   const previousActiveLinkRef = useRef("");
   const [activePill, setActivePill] = useState({ left: 0, width: 0, ready: false, moving: false, direction: 1, trail: 0, motionKey: 0 });
@@ -245,6 +279,40 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  useEffect(() => {
+    if (!gamified || !isLoggedIn || !window.MafikingAPI) {
+      setProgressStats(null);
+      return undefined;
+    }
+
+    let alive = true;
+    const loadProgressStats = () => {
+      window.MafikingAPI.get("/api/progress/stats")
+        .then((stats) => {
+          if (alive) setProgressStats(stats);
+        })
+        .catch(() => {
+          if (alive) setProgressStats(null);
+        });
+    };
+    const handleProgressUpdated = (event) => {
+      if (event?.detail?.stats) {
+        setProgressStats(event.detail.stats);
+        return;
+      }
+      loadProgressStats();
+    };
+
+    loadProgressStats();
+    window.addEventListener("focus", loadProgressStats);
+    window.addEventListener("mafiking:progress-updated", handleProgressUpdated);
+    return () => {
+      alive = false;
+      window.removeEventListener("focus", loadProgressStats);
+      window.removeEventListener("mafiking:progress-updated", handleProgressUpdated);
+    };
+  }, [gamified, isLoggedIn]);
 
   const links = [
     { id: "belajar", label: "Beranda" },
@@ -323,6 +391,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
   const isInk = navStyle === "ink";
   const isWhite = navStyle === "white";
   const showPublicCtas = !gamified && !isLoggedIn;
+  const navProgress = progressStats ? normalizeProgressStats(progressStats) : null;
   const goHome = () => {
     setRoute({ route: "lobby", publicLanding: true });
   };
@@ -407,16 +476,16 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
           )}
         </nav>
         <div className="flex items-center gap-2">
-          {gamified && (
+          {gamified && isLoggedIn && navProgress && (
             <div className="flex items-center gap-2 mr-1">
-              <button onClick={() => setRoute("misi")} className="chip-streak" title="Runtunan 12 hari">
+              <button onClick={() => setRoute("lobby")} className="chip-streak" title={`Runtunan ${navProgress.streakDays} hari`}>
+                <span className="tnum">{navProgress.streakDays}</span>
                 <StreakFlame />
-                <span className="tnum">12</span>
               </button>
-              <div className="chip-level hidden lg:inline-flex" title="Level 4 · 60% menuju L5">
-                <span className="lvl-badge">L4</span>
-                <div className="lvl-bar"><div style={{ width: "60%" }}></div></div>
-                <span className="text-[10px] font-mono text-ink/45 tnum hidden xl:inline">60%</span>
+              <div className="chip-level hidden lg:inline-flex" title={`Level ${navProgress.level} · ${navProgress.xp} XP`}>
+                <span className="lvl-badge">L{navProgress.level}</span>
+                <div className="lvl-bar"><div style={{ width: `${navProgress.levelProgress}%` }}></div></div>
+                <span className="text-[10px] font-mono text-ink/45 tnum hidden xl:inline">{navProgress.levelProgress}%</span>
               </div>
             </div>
           )}

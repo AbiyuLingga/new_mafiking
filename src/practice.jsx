@@ -1,9 +1,31 @@
 // Practice route — choice (multiple choice) default, optional canvas mode.
 
 const CANVAS_DEMO_VIDEO_SRC = "/assets/saas_demo_video.mp4";
+const OCR_TRUST_STREAK_KEY = "mafiking:canvas-ocr-trust-streak";
+const OCR_TRUST_THRESHOLD = 4;
+const OCR_AUTO_ACCEPT_MS = 12000;
 
-const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
+function readOcrTrustStreak() {
+  try {
+    const value = Number(window.localStorage && window.localStorage.getItem(OCR_TRUST_STREAK_KEY));
+    return Number.isFinite(value) && value > 0 ? Math.min(99, Math.floor(value)) : 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
+function writeOcrTrustStreak(value) {
+  const normalized = Math.max(0, Math.min(99, Math.floor(Number(value) || 0)));
+  try {
+    window.localStorage && window.localStorage.setItem(OCR_TRUST_STREAK_KEY, String(normalized));
+  } catch (_) { }
+  return normalized;
+}
+
+const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthenticated = false }) => {
   const boardRef = useRef(null);
+  const ocrPrefetchRef = useRef({ token: null, promise: null, result: null });
+  const confirmingOcrRef = useRef(false);
   const [mode, setMode] = useState("choice"); // "choice" | "canvas"
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -16,6 +38,10 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
   const [submitting, setSubmitting] = useState(false);
   const [showResultModal, setShowResultModal] = useState(false);
   const [ocrReview, setOcrReview] = useState(null);
+  const [canvasProcess, setCanvasProcess] = useState(null);
+  const [canvasProcessSlow, setCanvasProcessSlow] = useState(false);
+  const [ocrTrustStreak, setOcrTrustStreak] = useState(readOcrTrustStreak);
+  const [ocrPrefetchActive, setOcrPrefetchActive] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [showCanvasIntro, setShowCanvasIntro] = useState(() => !context?.disableCanvasIntro);
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(() => {
@@ -26,7 +52,33 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
   const isTimedTryout = Number(context?.timeLimitSeconds || 0) > 0;
   const timeExpired = isTimedTryout && timeLeftSeconds === 0;
 
+  function resetOcrPrefetch() {
+    ocrPrefetchRef.current = { token: null, promise: null, result: null };
+    setOcrPrefetchActive(false);
+  }
+
+  function setStoredOcrTrustStreak(nextValue) {
+    const normalized = writeOcrTrustStreak(nextValue);
+    setOcrTrustStreak(normalized);
+    return normalized;
+  }
+
+  function resetOcrTrustStreak() {
+    setStoredOcrTrustStreak(0);
+  }
+
   function dismissCanvasIntro() { setShowCanvasIntro(false); }
+  function requiresLogin() {
+    return !context?.isPreview && !isAuthenticated && !isLoggedIn && !isAdmin;
+  }
+  function requestLogin() {
+    showToast("Masuk atau sign up dulu.", "error");
+    setRoute({
+      route: "lobby",
+      authMode: "login",
+      authRedirect: { route: "practice", practice: context },
+    });
+  }
   function requiresLoginForDiscussion() {
     return context?.freeTryout && !isLoggedIn && !isAdmin;
   }
@@ -39,7 +91,9 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
     });
   }
   function requiresLoginForAnswer() {
-    return !context?.isPreview && !isLoggedIn && !isAdmin;
+    const requires = !context?.isPreview && !isAuthenticated && !isLoggedIn && !isAdmin;
+    console.log('[DEBUG requiresLoginForAnswer]', { isPreview: context?.isPreview, isAuthenticated, isLoggedIn, isAdmin, requires });
+    return requires;
   }
   function requestAnswerLogin() {
     showToast("Masuk atau sign up dulu untuk cek jawaban.", "error");
@@ -91,8 +145,25 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
     setBoardDirty(false);
     setError("");
     setOcrReview(null);
+    setCanvasProcess(null);
+    resetOcrPrefetch();
     setShowResultModal(false);
   }, [problemIndex, session?.subtopic?.id]);
+
+  useEffect(() => {
+    setCanvasProcessSlow(false);
+    if (!canvasProcess) return undefined;
+    const timer = window.setTimeout(() => setCanvasProcessSlow(true), 12000);
+    return () => window.clearTimeout(timer);
+  }, [canvasProcess]);
+
+  useEffect(() => {
+    if (!ocrReview?.trustedFastPath || !ocrReview?.detectedAnswerLatex || submitting || canvasProcess) return undefined;
+    const timer = window.setTimeout(() => {
+      confirmCanvasTranscription({ autoAccepted: true });
+    }, OCR_AUTO_ACCEPT_MS);
+    return () => window.clearTimeout(timer);
+  }, [ocrReview?.ocrToken, ocrReview?.trustedFastPath, submitting, canvasProcess]);
 
   const problem = session?.problems?.[problemIndex];
   const totalProblems = session?.problems?.length || 0;
@@ -202,11 +273,76 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
         selectedChoiceIndex,
       }).then((res) => {
         if (res && res.leveledUp) showToast(`Naik ke Level ${res.level}! 🎉`, "success", 5000);
+        window.dispatchEvent(new CustomEvent("mafiking:progress-updated"));
       }).catch(() => null);
     }
   }
 
+  function buildCanvasEvaluationPayload(review) {
+    return {
+      confirmedAnswerLatex: review.detectedAnswerLatex,
+      expectedAnswer: problem.answer_display,
+      imageBase64: review.imageBase64,
+      mimeType: review.imageMimeType || getDataUrlMimeType(review.imageBase64) || "image/png",
+      problemId: problem.id,
+      questionId: problem.id,
+      questionText: problem.question_display || problem.question_text,
+      topicTags: [session?.subtopic?.title].filter(Boolean),
+    };
+  }
+
+  function requestCanvasEvaluation(review) {
+    return MafikingAPI.post("/api/correction/evaluate", buildCanvasEvaluationPayload(review));
+  }
+
+  function startTrustedCanvasPrefetch(review) {
+    if (!review?.ocrToken || !review.detectedAnswerLatex) return;
+    const token = review.ocrToken;
+    setOcrPrefetchActive(true);
+    const promise = requestCanvasEvaluation(review)
+      .then((result) => {
+        if (ocrPrefetchRef.current.token === token) ocrPrefetchRef.current.result = result;
+        return result;
+      })
+      .catch((error) => {
+        if (ocrPrefetchRef.current.token === token) ocrPrefetchRef.current.error = error;
+        return null;
+      })
+      .finally(() => {
+        if (ocrPrefetchRef.current.token === token) setOcrPrefetchActive(false);
+      });
+    ocrPrefetchRef.current = { token, promise, result: null, error: null };
+  }
+
+  function saveCanvasEvaluationResult(review, evaluationResponse) {
+    const attempt = {
+      completedAt: new Date().toISOString(),
+      confirmedAnswerLatex: review.detectedAnswerLatex,
+      evaluation: evaluationResponse.evaluation,
+      feedback: evaluationResponse.feedback,
+      imageBase64: review.imageBase64,
+      mode: "canvas",
+      strokeSnapshot: review.strokeSnapshot,
+    };
+    setAttemptsByProblem((prev) => ({ ...prev, [problem.id]: attempt }));
+    setBoardDirty(false);
+    setOcrReview(null);
+    resetOcrPrefetch();
+    setShowResultModal(true);
+    const isCorrect = Boolean(evaluationResponse.evaluation?.isCorrect);
+    if (isCorrect) showToast("Jawaban benar! Progress tersimpan.", "success");
+    MafikingAPI.post("/api/progress/submit", {
+      correct: isCorrect,
+      hintsUsed: 0,
+      mode: "canvas",
+      problemId: problem.id,
+    })
+      .then(() => window.dispatchEvent(new CustomEvent("mafiking:progress-updated")))
+      .catch(() => null);
+  }
+
   async function submitCanvas() {
+    console.log('[DEBUG submitCanvas] Called', { isPreview: context?.isPreview, isAuthenticated, isLoggedIn, isAdmin });
     if (!problem) return;
     if (timeExpired) { setError("Waktu try out sudah habis."); return; }
     if (context?.isPreview) { setError("Canvas correction tidak tersedia di mode preview."); return; }
@@ -215,80 +351,82 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
       setError("");
       setShowResultModal(false);
       setOcrReview(null);
+      resetOcrPrefetch();
       const imageBase64 = boardRef.current && boardRef.current.exportImage({
-        maxDimension: 900,
+        maxDimension: 700,
         mimeType: "image/webp",
-        quality: 0.82,
+        quality: 0.7,
       });
       if (!imageBase64 || !boardDirty) { setError("Tulis jawaban di canvas terlebih dulu."); return; }
       const imageMimeType = getDataUrlMimeType(imageBase64) || "image/png";
       const strokeSnapshot = boardRef.current && boardRef.current.exportSnapshot && boardRef.current.exportSnapshot();
       setSubmitting(true);
+      setCanvasProcess("transcribing");
       const transcription = await MafikingAPI.post("/api/correction/transcribe", {
         imageBase64,
         mimeType: imageMimeType,
         questionText: problem.question_display || problem.question_text,
       });
-      setOcrReview({
+      const trustedFastPath = ocrTrustStreak >= OCR_TRUST_THRESHOLD;
+      const review = {
         ...transcription,
         imageBase64,
         imageMimeType,
+        ocrToken: `${Date.now()}-${problem.id}`,
         strokeSnapshot,
-      });
-      showToast("Tulisan terbaca. Konfirmasi dulu sebelum dikoreksi.", "success");
+        trustedFastPath,
+      };
+      setOcrReview(review);
+      if (trustedFastPath) startTrustedCanvasPrefetch(review);
+      showToast(
+        trustedFastPath
+          ? "Tulisan terbaca. Koreksi mulai disiapkan sambil menunggu konfirmasi."
+          : "Tulisan terbaca. Konfirmasi dulu sebelum dikoreksi.",
+        "success"
+      );
     } catch (caught) {
       handleCorrectionError(caught);
     } finally {
+      setCanvasProcess(null);
       setSubmitting(false);
     }
   }
 
-  async function confirmCanvasTranscription() {
-    if (!problem || !ocrReview) return;
-    if (!ocrReview.detectedAnswerLatex) {
+  async function confirmCanvasTranscription(options = {}) {
+    if (confirmingOcrRef.current || !problem || !ocrReview) return;
+    const review = ocrReview;
+    if (!review.detectedAnswerLatex) {
       setError("Gemini belum menemukan teks jawaban yang bisa dikonfirmasi.");
       return;
     }
+    confirmingOcrRef.current = true;
+    setStoredOcrTrustStreak(ocrTrustStreak + 1);
     try {
       setError("");
       setShowResultModal(false);
       setSubmitting(true);
-      const evaluation = await MafikingAPI.post("/api/correction/evaluate", {
-        confirmedAnswerLatex: ocrReview.detectedAnswerLatex,
-        expectedAnswer: problem.answer_display,
-        imageBase64: ocrReview.imageBase64,
-        mimeType: ocrReview.imageMimeType || getDataUrlMimeType(ocrReview.imageBase64) || "image/png",
-        problemId: problem.id,
-        questionId: problem.id,
-        questionText: problem.question_display || problem.question_text,
-        topicTags: [session?.subtopic?.title].filter(Boolean),
-      });
-      const attempt = {
-        completedAt: new Date().toISOString(),
-        confirmedAnswerLatex: ocrReview.detectedAnswerLatex,
-        evaluation: evaluation.evaluation,
-        feedback: evaluation.feedback,
-        imageBase64: ocrReview.imageBase64,
-        mode: "canvas",
-        strokeSnapshot: ocrReview.strokeSnapshot,
-      };
-      setAttemptsByProblem((prev) => ({ ...prev, [problem.id]: attempt }));
-      setBoardDirty(false);
-      setOcrReview(null);
-      setShowResultModal(true);
-      const isCorrect = Boolean(evaluation.evaluation?.isCorrect);
-      if (isCorrect) showToast("Jawaban benar! Progress tersimpan.", "success");
-      MafikingAPI.post("/api/progress/submit", {
-        correct: isCorrect,
-        hintsUsed: 0,
-        mode: "canvas",
-        problemId: problem.id,
-      }).catch(() => null);
+      setCanvasProcess("evaluating");
+      const prefetch = ocrPrefetchRef.current;
+      let evaluation = null;
+      if (prefetch.token === review.ocrToken) {
+        evaluation = prefetch.result || (prefetch.promise ? await prefetch.promise : null);
+      }
+      if (!evaluation) evaluation = await requestCanvasEvaluation(review);
+      saveCanvasEvaluationResult(review, evaluation);
+      if (options.autoAccepted) showToast("Konfirmasi otomatis setelah 12 detik.", "success", 2500);
     } catch (caught) {
       handleCorrectionError(caught);
     } finally {
+      confirmingOcrRef.current = false;
+      setCanvasProcess(null);
       setSubmitting(false);
     }
+  }
+
+  function cancelCanvasTranscription() {
+    resetOcrTrustStreak();
+    resetOcrPrefetch();
+    setOcrReview(null);
   }
 
   function handleCorrectionError(caught) {
@@ -377,6 +515,8 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
         attempt={activeAttempt}
         boardDirty={boardDirty}
         boardRef={boardRef}
+        canvasProcess={canvasProcess}
+        canvasProcessSlow={canvasProcessSlow}
         error={error}
         focusMode={focusMode}
         isAdmin={isAdmin}
@@ -387,9 +527,10 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
         onMoveProblem={moveProblem}
         onProblemSelect={setProblemIndex}
         onReloadSession={loadPractice}
-        onCancelOcr={() => setOcrReview(null)}
+        onCancelOcr={cancelCanvasTranscription}
         onConfirmOcr={confirmCanvasTranscription}
         onSubmit={submitCanvas}
+        ocrPrefetchActive={ocrPrefetchActive}
         ocrReview={ocrReview}
         problem={problem}
         problemIndex={problemIndex}
@@ -423,8 +564,15 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false }) => {
         isAdmin={isAdmin}
         onBack={() => setRoute(context?.backRoute || "belajar")}
         onChoiceSelect={setSelectedChoiceIndex}
-        onHintToggle={() => setShowHint((v) => !v)}
+        onHintToggle={() => {
+          if (requiresLogin()) { requestLogin(); return; }
+          setShowHint((v) => !v);
+        }}
         onMoveProblem={moveProblem}
+        onSkip={() => {
+          if (requiresLogin()) { requestLogin(); return; }
+          moveProblem(1);
+        }}
         onProblemSelect={setProblemIndex}
         onReloadSession={loadPractice}
         onSubmit={submitChoice}
@@ -1016,7 +1164,7 @@ const ChapterSwitcher = ({ chapter, chapters, fallbackTitle, onSelect }) => {
 
 // ─── Choice (Pilgan) view ─────────────────────────────────────────────────
 const ChoiceView = ({
-  attempt, error, isAdmin, onBack, onChoiceSelect, onHintToggle, onMoveProblem,
+  attempt, error, isAdmin, onBack, onChoiceSelect, onHintToggle, onMoveProblem, onSkip,
   onReloadSession, onSubmit, onSwitchMode, problem, problemIndex, selectedChoiceIndex,
   problems, onProblemSelect, showHint, totalProblems, subtopicTitle, currentChapter, availableChapters,
   onChapterSelect, getChoices, getCorrectChoiceIndex,
@@ -1310,7 +1458,7 @@ const ChoiceView = ({
               <button
                 className="mafiking-soft-button mafiking-action-right"
                 disabled={problemIndex >= totalProblems - 1}
-                onClick={() => onMoveProblem(1)}
+                onClick={() => (onSkip ? onSkip() : onMoveProblem(1))}
                 type="button"
               >
                 Lewati
@@ -1579,10 +1727,35 @@ const SolutionStepsPanel = ({ attempt, problem, isAdmin, onStepSaved }) => {
 };
 
 // ─── Canvas view ──────────────────────────────────────────────────────────
+const CanvasProcessOverlay = ({ phase, slow }) => {
+  if (!phase) return null;
+  const isEvaluating = phase === "evaluating";
+  return (
+    <div className="canvas-processing-backdrop" role="status" aria-live="polite" aria-busy="true">
+      <section className="canvas-processing-card">
+        <div className="canvas-processing-spinner" aria-hidden="true" />
+        <div>
+          <div className="canvas-processing-step">
+            {isEvaluating ? "Langkah 2 dari 2" : "Langkah 1 dari 2"}
+          </div>
+          <h2>{isEvaluating ? "AI sedang mengoreksi jawaban Anda" : "AI sedang membaca tulisan Anda"}</h2>
+          <p>
+            {slow
+              ? "Masih memproses. Canvas sedang dianalisis, jangan tutup halaman."
+              : isEvaluating
+                ? "Membandingkan jawaban Anda dengan soal dan mencari bagian yang perlu diperbaiki."
+                : "Mengubah tulisan tangan di canvas menjadi teks matematika yang bisa dikonfirmasi."}
+          </p>
+        </div>
+      </section>
+    </div>
+  );
+};
+
 const CanvasView = ({
-  attempt, boardDirty, boardRef, error, focusMode, isAdmin, onBackToChoice, onSwitchMode,
+  attempt, boardDirty, boardRef, canvasProcess, canvasProcessSlow, error, focusMode, isAdmin, onBackToChoice, onSwitchMode,
   onBoardDirtyChange, onCancelOcr, onConfirmOcr, onFocusModeToggle, onMoveProblem, onProblemSelect,
-  onReloadSession, onSubmit, ocrReview, problem,
+  onReloadSession, onSubmit, ocrPrefetchActive, ocrReview, problem,
   problemIndex, problems, showResultModal, submitting, totalProblems, onCloseResult,
   subtopicTitle, setRoute,
 }) => {
@@ -1631,6 +1804,7 @@ const CanvasView = ({
 
   return (
     <div className={`mafiking-practice mafiking-canvas-practice ${focusMode ? "is-focus-mode" : ""}`}>
+      <CanvasProcessOverlay phase={canvasProcess} slow={canvasProcessSlow} />
       {!focusMode ? (
         <div className="mafiking-session-bar">
           <button className="mafiking-back-button" onClick={() => setRoute("belajar")} type="button">
@@ -1715,7 +1889,7 @@ const CanvasView = ({
           <div className="mafiking-canvas-card-actions">
             <button
               className="mafiking-soft-button"
-              disabled={problemIndex === 0}
+              disabled={problemIndex === 0 || submitting}
               onClick={() => onMoveProblem(-1)}
               type="button"
             >
@@ -1724,7 +1898,7 @@ const CanvasView = ({
             </button>
             <button
               className="mafiking-soft-button"
-              disabled={problemIndex >= totalProblems - 1}
+              disabled={problemIndex >= totalProblems - 1 || submitting}
               onClick={() => onMoveProblem(1)}
               type="button"
             >
@@ -1748,12 +1922,15 @@ const CanvasView = ({
         boardDirty={boardDirty}
         focusMode={focusMode}
         focusActions={{
-          backDisabled: problemIndex === 0,
-          nextDisabled: problemIndex >= totalProblems - 1,
+          backDisabled: problemIndex === 0 || submitting,
+          nextDisabled: problemIndex >= totalProblems - 1 || submitting,
           nextLabel: "lewati",
           nextPrimary: false,
           onBack: () => onMoveProblem(-1),
-          onNext: () => onMoveProblem(1),
+          onNext: () => {
+            if (requiresLogin()) { requestLogin(); return; }
+            onMoveProblem(1);
+          },
         }}
         isSubmitting={submitting}
         onDirtyChange={onBoardDirtyChange}
@@ -1775,13 +1952,6 @@ const CanvasView = ({
         )}
       />
 
-      {submitting && !focusMode ? (
-        <section className="mafiking-loading-card">
-          <div className="mafiking-answer-heading">{ocrReview ? "Mengevaluasi jawaban" : "Membaca tulisan canvas"}</div>
-          <p>{ocrReview ? "Gemini sedang mengecek langkah pengerjaan berdasarkan teks yang sudah dikonfirmasi." : "Gemini sedang mengubah tulisan tangan menjadi teks LaTeX untuk dikonfirmasi."}</p>
-        </section>
-      ) : null}
-
       {isAdmin && (
         <div className="admin-problem-footer">
           <button onClick={adminDeleteProblem} className="admin-btn-ghost" style={{ color: '#ef4444' }} type="button">
@@ -1794,9 +1964,10 @@ const CanvasView = ({
         <ResultModal attempt={attempt} onClose={onCloseResult} />
       ) : null}
 
-      {ocrReview ? (
+      {ocrReview && canvasProcess !== "evaluating" ? (
         <OcrConfirmModal
           ocrReview={ocrReview}
+          ocrPrefetchActive={ocrPrefetchActive}
           onCancel={onCancelOcr}
           onConfirm={onConfirmOcr}
           submitting={submitting}
@@ -2277,6 +2448,32 @@ function Eq({ value }) {
   });
 }
 
+function splitMathDisplayLines(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return [];
+  return raw
+    .replace(/\\begin\{(?:aligned|align|array|gathered)\}/g, "\n")
+    .replace(/\\end\{(?:aligned|align|array|gathered)\}/g, "\n")
+    .replace(/\\\\/g, "\n")
+    .split(/\n+/)
+    .map((line) => line.trim().replace(/^&+|&+$/g, "").replace(/\s*&\s*/g, " ").trim())
+    .filter(Boolean);
+}
+
+function MultilineEq({ value }) {
+  const lines = splitMathDisplayLines(value);
+  if (!lines.length) return null;
+  return (
+    <div className="result-answer-lines">
+      {lines.map((line, idx) => (
+        <div className="result-answer-line" key={`${line}-${idx}`}>
+          <Eq value={line} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function renderNarrativeHTML(plain, latex) {
   let text = String(plain || "").trim();
   if (!text) text = String(latex || "").trim();
@@ -2293,9 +2490,10 @@ function MathNarrative({ plain, latex }) {
   });
 }
 
-const OcrConfirmModal = ({ ocrReview, onCancel, onConfirm, submitting }) => {
+const OcrConfirmModal = ({ ocrPrefetchActive = false, ocrReview, onCancel, onConfirm, submitting }) => {
   const confidence = Math.round(Math.max(0, Math.min(1, Number(ocrReview?.readingConfidence) || 0)) * 100);
   const unclearParts = Array.isArray(ocrReview?.unclearParts) ? ocrReview.unclearParts.filter(Boolean) : [];
+  const trustedFastPath = Boolean(ocrReview?.trustedFastPath);
 
   return (
     <div className="canvas-result-modal-backdrop" role="presentation">
@@ -2321,7 +2519,14 @@ const OcrConfirmModal = ({ ocrReview, onCancel, onConfirm, submitting }) => {
         <div className="ocr-meta-row">
           <span>Keyakinan baca: {confidence}%</span>
           {ocrReview?.needsUserConfirmation ? <span>Perlu konfirmasi user</span> : null}
+          {trustedFastPath ? <span>Auto acc 12 detik</span> : null}
         </div>
+
+        {trustedFastPath ? (
+          <div className="ocr-fastpath-box">
+            {ocrPrefetchActive ? "Koreksi sedang disiapkan di background." : "Koreksi sudah disiapkan. Jika jawaban terbaca benar, hasil akan muncul lebih cepat."}
+          </div>
+        ) : null}
 
         {unclearParts.length ? (
           <div className="ocr-unclear-box">
@@ -2337,7 +2542,7 @@ const OcrConfirmModal = ({ ocrReview, onCancel, onConfirm, submitting }) => {
             Kembali ke canvas
           </button>
           <button className="mafiking-primary-button" disabled={submitting || !ocrReview?.detectedAnswerLatex} onClick={onConfirm} type="button">
-            {submitting ? "Mengoreksi..." : "Benar, lanjut koreksi"}
+            {submitting ? "Mengoreksi..." : ocrPrefetchActive ? "Benar, pakai koreksi siap" : "Benar, lanjut koreksi"}
           </button>
         </div>
       </article>
@@ -2561,14 +2766,9 @@ const ResultModal = ({ attempt, onClose }) => {
       <article className="canvas-result-modal result-markdown" aria-label="Hasil koreksi jawaban">
         <button aria-label="Tutup hasil koreksi" className="canvas-result-modal-close" onClick={onClose} type="button">×</button>
 
-        <div className="flex items-center gap-3 mb-4">
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0 ${isCorrect ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-            {isCorrect ? "✓" : "!"}
-          </div>
-          <div>
-            <div className="kicker mb-0.5">Hasil Koreksi</div>
-            <h2 className="font-display font-bold text-2xl leading-none">Skor {score}/100</h2>
-          </div>
+        <div className="mb-4">
+          <div className="kicker mb-0.5">Hasil Koreksi</div>
+          <h2 className="font-display font-bold text-2xl leading-none">Skor {score}/100</h2>
         </div>
 
         {currentStep === "redline" ? (
@@ -2585,8 +2785,9 @@ const ResultModal = ({ attempt, onClose }) => {
         ) : (
           <React.Fragment>
             {detectedAnswer ? (
-              <div className="bg-ink/[0.04] rounded-xl px-4 py-3 mb-4 text-sm">
-                <span className="font-semibold text-ink/60">Terbaca:</span> <Eq value={detectedAnswer} />
+              <div className="result-answer-card">
+                <div className="result-answer-label">Jawaban Anda:</div>
+                <MultilineEq value={detectedAnswer} />
               </div>
             ) : null}
 
@@ -2598,31 +2799,52 @@ const ResultModal = ({ attempt, onClose }) => {
 
             {wrongSteps.length ? (
               <div>
-                <div className="kicker mb-2">Pembahasan bagian yang salah</div>
+                <div className="kicker mb-2">Poin yang perlu diperbaiki</div>
                 <div className="result-step-list">
-                  {wrongSteps.map((item, idx) => (
-                    <div className="result-step-card" key={idx}>
-                      <div className="flex items-start gap-3">
-                        <span className="inline-flex w-6 h-6 rounded-full bg-red-100 text-red-600 text-xs font-bold items-center justify-center shrink-0 mt-0.5">
-                          {item.stepNumber || idx + 1}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          {item.studentStepLatex || item.studentStep ? (
-                            <p className="text-sm mb-1"><span className="font-semibold text-ink/60">Tulisan:</span> <Eq value={item.studentStepLatex || item.studentStep} /></p>
-                          ) : null}
-                          <p className="text-sm font-semibold mb-1">
-                            <MathNarrative plain={item.issuePlain || item.issue} latex={item.issueLatex} />
-                          </p>
-                          {item.correctStepLatex ? <p className="text-sm mb-1"><span className="font-semibold text-ink/60">Seharusnya:</span> <Eq value={item.correctStepLatex} /></p> : null}
-                          {item.hintPlain || item.hintLatex || item.hint ? (
-                            <p className="text-xs text-ink/60">
-                              Petunjuk: <MathNarrative plain={item.hintPlain || item.hint} latex={item.hintLatex} />
-                            </p>
-                          ) : null}
+                  {wrongSteps.map((item, idx) => {
+                    const studentStep = item.studentStepPlain || item.studentStepLatex || item.studentStep;
+                    const correctStep = item.correctStepPlain || item.correctStepLatex || item.correctStep;
+                    return (
+                      <div className="result-step-card" key={idx}>
+                        <div className="result-step-heading">
+                          <span className="result-step-number">{item.stepNumber || idx + 1}</span>
+                          <span>Bagian salah</span>
                         </div>
+                        <ul className="result-step-points">
+                          {studentStep ? (
+                            <li className="result-step-point">
+                              <span className="result-step-point-label">Jawaban Anda</span>
+                              <div className="result-step-point-body">
+                                <MultilineEq value={studentStep} />
+                              </div>
+                            </li>
+                          ) : null}
+                          <li className="result-step-point">
+                            <span className="result-step-point-label">Masalah</span>
+                            <div className="result-step-point-body">
+                              <MathNarrative plain={item.issuePlain || item.issue} latex={item.issueLatex} />
+                            </div>
+                          </li>
+                          {correctStep ? (
+                            <li className="result-step-point">
+                              <span className="result-step-point-label">Seharusnya</span>
+                              <div className="result-step-point-body">
+                                <MultilineEq value={correctStep} />
+                              </div>
+                            </li>
+                          ) : null}
+                          {item.hintPlain || item.hintLatex || item.hint ? (
+                            <li className="result-step-point">
+                              <span className="result-step-point-label">Petunjuk</span>
+                              <div className="result-step-point-body result-step-point-muted">
+                                <MathNarrative plain={item.hintPlain || item.hint} latex={item.hintLatex} />
+                              </div>
+                            </li>
+                          ) : null}
+                        </ul>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ) : null}

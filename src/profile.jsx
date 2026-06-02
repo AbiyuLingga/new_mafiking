@@ -30,6 +30,12 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
       setAttempts(correctionAttempts);
       setLoading(false);
 
+      if (!correctionAttempts.length) {
+        setSummary(null);
+        setAiRefresh(null);
+        return;
+      }
+
       // Panggil AI summary di background, tampilkan spinner kecil di seksinya saja
       setSummaryLoading(true);
       try {
@@ -62,8 +68,9 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
     ? summary.strengths.map(formatLearningLabel)
     : collectTags(attempts, "strengthTags"));
 
-  const recommendations = summary?.recommendedQuestions || [];
-  const recommendedItems = Array.isArray(summary?.recommendedItems) ? summary.recommendedItems : [];
+  const hasCorrectionHistory = attempts.length > 0;
+  const recommendations = hasCorrectionHistory ? (summary?.recommendedQuestions || []) : [];
+  const recommendedItems = hasCorrectionHistory && Array.isArray(summary?.recommendedItems) ? summary.recommendedItems : [];
   const dataRecommendationRows = recommendedItems.length
     ? recommendedItems.map((item) => ({
       ref: item.ref || "",
@@ -156,6 +163,24 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
     return text;
   }
 
+  function getProfileDisplayName() {
+    return String(user?.display_name || user?.username || "Memuat profil").trim();
+  }
+
+  function getProfileEmail() {
+    const email = String(user?.email || "").trim();
+    if (email) return email;
+    const username = String(user?.username || "").trim();
+    return username.includes("@") ? username : "";
+  }
+
+  function getProfileInitial() {
+    const name = getProfileDisplayName();
+    const parts = name.split(/\s+/).filter(Boolean);
+    const first = parts[0]?.[0] || "M";
+    return first.toUpperCase();
+  }
+
   /* Inject spin keyframe once */
   React.useEffect(() => {
     if (document.getElementById("profile-spin-style")) return;
@@ -170,29 +195,36 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
       <section className="pt-12 pb-6">
         <div className="max-w-6xl mx-auto px-6 md:px-8">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b hairline pb-6">
-            <div>
-              <h1 className="font-display font-bold text-4xl md:text-5xl tracking-[-0.03em] leading-none mb-3">
-                Raport Belajar
-              </h1>
-              <p className="text-ink/60 text-sm md:text-base">
-                {user?.display_name || "Memuat profil"} · Level {user?.level || stats?.level || 1}
-              </p>
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-700 text-3xl font-semibold text-white">
+                {getProfileInitial()}
+              </div>
+              <div className="min-w-0">
+                <h1 className="truncate text-lg font-bold leading-tight text-ink">
+                  {getProfileDisplayName()}
+                </h1>
+                {getProfileEmail() ? (
+                  <p className="mt-1 truncate text-sm font-medium text-ink/55">{getProfileEmail()}</p>
+                ) : null}
+                <p className="mt-1 text-xs font-medium text-ink/35">Klik foto untuk menggantinya</p>
+              </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => loadProfile(true)} className="btn-ghost !py-2.5 !px-5 text-sm">
-                Refresh
+              <button
+                onClick={() => loadProfile(true)}
+                className="btn-ghost !h-11 !w-11 !p-0 text-sm inline-flex items-center justify-center"
+                aria-label="Refresh raport"
+                title="Refresh"
+                type="button"
+              >
+                <Icon.Refresh className="w-4 h-4" />
               </button>
-              {typeof onRequestLogout === "function" && (
-                <button onClick={onRequestLogout} className="btn-ghost !py-2.5 !px-5 text-sm">
-                  Logout
-                </button>
-              )}
             </div>
           </div>
         </div>
       </section>
 
-      <section className="pb-20">
+      <section className="pb-28">
         <div className="max-w-6xl mx-auto px-6 md:px-8">
           {error && (
             <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800 mb-6">
@@ -591,6 +623,29 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
           )}
         </div>
       </section>
+
+      {typeof onRequestLogout === "function" && (
+        <div className="fixed inset-x-0 bottom-0 z-40 pointer-events-none px-4 pb-4 md:px-6 md:pb-6">
+          <div className="mx-auto flex max-w-6xl items-end justify-between gap-4">
+            <button
+              onClick={onRequestLogout}
+              className="pointer-events-auto inline-flex items-center gap-2 rounded-full border hairline bg-white/95 px-4 py-3 text-sm font-bold text-ink shadow-lg shadow-ink/10 backdrop-blur transition hover:bg-white"
+              type="button"
+            >
+              <Icon.SwitchAccount className="w-4 h-4" />
+              Switch account
+            </button>
+            <button
+              onClick={onRequestLogout}
+              className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-ink px-4 py-3 text-sm font-bold text-white shadow-lg shadow-ink/20 transition hover:bg-ink/90"
+              type="button"
+            >
+              Logout
+              <Icon.LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

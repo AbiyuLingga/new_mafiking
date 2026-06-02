@@ -72,7 +72,7 @@ const EVALUATION_SCHEMA = {
   type: 'object',
   properties: {
     isCorrect: { type: 'boolean' },
-    score: { type: 'integer', minimum: 0, maximum: 100 },
+    score: { type: 'integer' },
     detectedAnswerText: { type: 'string' },
     detectedAnswerLatex: { type: 'string' },
     needsResubmission: { type: 'boolean' },
@@ -178,12 +178,12 @@ const PROFILE_SCHEMA = {
 
 function boxSchema() {
   return {
-    type: ['object', 'null'],
+    type: 'object',
     properties: {
-      x: { type: 'number', minimum: 0, maximum: 100 },
-      y: { type: 'number', minimum: 0, maximum: 100 },
-      width: { type: 'number', minimum: 0, maximum: 100 },
-      height: { type: 'number', minimum: 0, maximum: 100 }
+      x: { type: 'number' },
+      y: { type: 'number' },
+      width: { type: 'number' },
+      height: { type: 'number' }
     }
   };
 }
