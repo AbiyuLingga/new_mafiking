@@ -1,6 +1,6 @@
 // Practice route — choice (multiple choice) default, optional canvas mode.
 
-const CANVAS_DEMO_VIDEO_SRC = "/assets/landing/demo-video-848w-20260602.mp4";
+const CANVAS_DEMO_IMAGE_SRC = "/assets/landing/simulasi-tryout.jpg?v=202606011620";
 const OCR_TRUST_STREAK_KEY = "mafiking:canvas-ocr-trust-streak";
 const OCR_TRUST_THRESHOLD = 4;
 const OCR_AUTO_ACCEPT_MS = 12000;
@@ -2862,29 +2862,6 @@ const ResultModal = ({ attempt, onClose }) => {
 
 // ─── Canvas intro modal ────────────────────────────────────────────────────
 const CanvasIntroModal = ({ onDismiss, onOpenCanvas }) => {
-  const demoVideoRef = useRef(null);
-  const [soundEnabled, setSoundEnabled] = useState(false);
-
-  useEffect(() => {
-    const video = demoVideoRef.current;
-    if (!video) return;
-    video.muted = !soundEnabled;
-  }, [soundEnabled]);
-
-  async function toggleDemoSound() {
-    const video = demoVideoRef.current;
-    if (!video) return;
-    const nextEnabled = !soundEnabled;
-    video.muted = !nextEnabled;
-    try {
-      await video.play();
-      setSoundEnabled(nextEnabled);
-    } catch (_) {
-      video.muted = true;
-      setSoundEnabled(false);
-    }
-  }
-
   return (
     <div className="canvas-intro-backdrop" role="presentation">
       <section
@@ -2897,30 +2874,14 @@ const CanvasIntroModal = ({ onDismiss, onOpenCanvas }) => {
           <Icon.X className="w-4 h-4" />
         </button>
 
-        <div className="canvas-demo-video" aria-label="Video demo mode canvas">
-          <video
-            autoPlay
+        <div className="canvas-demo-video" aria-label="Preview demo mode canvas">
+          <img
+            alt="Preview demo mode canvas"
             className="canvas-demo-media"
-            muted
-            loop
-            playsInline
-            preload="auto"
-            ref={demoVideoRef}
-            src={CANVAS_DEMO_VIDEO_SRC}
+            decoding="async"
+            loading="lazy"
+            src={CANVAS_DEMO_IMAGE_SRC}
           />
-          <button
-            className="canvas-demo-sound-button"
-            onClick={toggleDemoSound}
-            type="button"
-            aria-label={soundEnabled ? "Matikan suara demo" : "Nyalakan suara demo"}
-          >
-            {soundEnabled ? (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /></svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg>
-            )}
-            <span>{soundEnabled ? "Sound on" : "Sound off"}</span>
-          </button>
         </div>
 
         <div>

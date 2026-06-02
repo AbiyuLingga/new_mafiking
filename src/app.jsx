@@ -29,6 +29,23 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "ctaStyle": "dark"
 }/*EDITMODE-END*/;
 
+const AdminChunkFallback = ({ status }) => (
+  <section className="app-page-bg app-page-bg--admin min-h-[calc(100vh-72px)] px-6 md:px-8 py-10 md:py-12">
+    <div className="admin-page-shell">
+      <div className="admin-step-edit">
+        <div className="font-display font-bold text-xl">
+          {status === "error" ? "Panel admin gagal dimuat." : "Memuat panel admin..."}
+        </div>
+        <p className="text-sm text-ink/55 mt-2">
+          {status === "error"
+            ? "Muat ulang halaman atau kembali ke Belajar lalu buka admin lagi."
+            : "Modul admin dipisah dari bundle utama agar halaman awal lebih ringan."}
+        </p>
+      </div>
+    </div>
+  </section>
+);
+
 const App = () => {
   const [route, setRoute] = React.useState("lobby");
   const [practiceContext, setPracticeContext] = React.useState(null);
@@ -46,6 +63,7 @@ const App = () => {
   const [belajarSection, setBelajarSection] = React.useState(null);
   const [activePackages, setActivePackages] = React.useState([]);
   const [confirmAction, setConfirmAction] = React.useState(null);
+  const [adminChunkStatus, setAdminChunkStatus] = React.useState(() => window.AdminPage ? "ready" : "idle");
   const isGuest = currentUser && currentUser.display_name?.startsWith("Tamu_");
   const isLoggedIn = currentUser && !isGuest;
   const isAdminAccount = currentUser?.role === "admin";
@@ -194,6 +212,23 @@ const App = () => {
     }
   }, [isAdminAccount, navigate, route]);
 
+  React.useEffect(() => {
+    if (route !== "admin" || !isAdminAccount || !isAdmin || window.AdminPage) return undefined;
+    let cancelled = false;
+    setAdminChunkStatus("loading");
+    const adminChunkPromise = window.__mafikingAdminChunkPromise || import("./generated-admin.jsx");
+    window.__mafikingAdminChunkPromise = adminChunkPromise;
+    adminChunkPromise
+      .then(() => {
+        if (!cancelled) setAdminChunkStatus(window.AdminPage ? "ready" : "error");
+      })
+      .catch((error) => {
+        console.error("[admin-chunk]", error);
+        if (!cancelled) setAdminChunkStatus("error");
+      });
+    return () => { cancelled = true; };
+  }, [isAdmin, isAdminAccount, route]);
+
   const handleLogoClick = React.useCallback(() => {
     confirmLandingReturn();
   }, [confirmLandingReturn]);
@@ -271,7 +306,11 @@ const App = () => {
           )}
           {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} context={tryoutContext} />}
           {route === "leaderboard" && window.Leaderboard && React.createElement(window.Leaderboard)}
-          {route === "admin" && isAdminAccount && isAdmin && window.AdminPage && React.createElement(window.AdminPage, { setRoute: navigate })}
+          {route === "admin" && isAdminAccount && isAdmin && (
+            window.AdminPage
+              ? React.createElement(window.AdminPage, { setRoute: navigate })
+              : <AdminChunkFallback status={adminChunkStatus} />
+          )}
           {route === "profile" && (isLoggedIn
             ? <Profile setRoute={navigate} isAdmin={isAdmin || isAdminAccount} onRequestLanding={confirmLandingReturn} onRequestLogout={confirmLogout} />
             : <AccessGate setRoute={navigate} title="Masuk untuk membuka profil" requireLogin variant="profil" />

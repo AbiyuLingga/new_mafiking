@@ -1,6 +1,7 @@
 node_modules/
 dist/
 src/generated-app.jsx
+src/generated-admin.jsx
 .env
 .env*
 !.env.example

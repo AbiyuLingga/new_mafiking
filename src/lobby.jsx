@@ -578,10 +578,10 @@ const LandingLegacy = ({ setRoute, tweaks, isAdmin = false, currentUser = null }
             <div>
               <p className="kicker mb-3 text-white/45">Demo simulasi</p>
               <h2 className="text-4xl font-black leading-tight md:text-5xl">Coba alur latihan sebelum memilih paket.</h2>
-              <p className="mt-5 text-lg leading-8 text-white/60">Video demo tetap memakai aset Mafiking lama sesuai catatan zip. Nanti CMS media bisa dibuat terpisah melalui Admin Panel.</p>
+              <p className="mt-5 text-lg leading-8 text-white/60">Preview demo memakai aset ringan agar halaman awal tetap cepat. Media video bisa diaktifkan lagi dari Admin Panel saat aset baru siap.</p>
             </div>
             <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5">
-              <video src="/assets/landing/demo-video-848w-20260602.mp4" autoPlay muted loop playsInline className="aspect-video h-full w-full object-cover" />
+              <img src="/assets/landing/simulasi-tryout.jpg?v=202606011620" alt="Preview demo simulasi tryout" className="aspect-video h-full w-full object-cover" loading="lazy" decoding="async" />
             </div>
           </div>
         </section>
@@ -738,9 +738,9 @@ const LandingEditableMedia = ({ enabled, slot, mediaType = "image", label, onEdi
 );
 
 const LANDING_DEMO_VIDEO_OPTIMIZED = {
-  mp4: "/assets/landing/demo-video-848w-20260602.mp4",
-  webm: "/assets/landing/demo-video-848w-20260602.webm",
-  poster: "/assets/landing/demo-video-poster-20260602.jpg",
+  mp4: "",
+  webm: "",
+  poster: "/assets/landing/simulasi-tryout.jpg?v=202606011620",
 };
 
 const LANDING_DEMO_VIDEO_ALIASES = {
@@ -2251,32 +2251,7 @@ const UniqueFeatures = ({ setRoute, isAdmin = false }) => (
   </section>
 );
 
-const VideoDemo = () => {
-  const videoRef = React.useRef(null);
-  const [soundEnabled, setSoundEnabled] = React.useState(false);
-
-  React.useEffect(() => {
-    const video = videoRef.current;
-    if (video) {
-      video.muted = !soundEnabled;
-    }
-  }, [soundEnabled]);
-
-  const toggleSound = async () => {
-    const video = videoRef.current;
-    if (!video) return;
-    const nextEnabled = !soundEnabled;
-    video.muted = !nextEnabled;
-    try {
-      await video.play();
-      setSoundEnabled(nextEnabled);
-    } catch (_) {
-      video.muted = true;
-      setSoundEnabled(false);
-    }
-  };
-
-  return (
+const VideoDemo = () => (
     <section className="sec-y text-white" style={{ backgroundColor: '#0b1326' }}>
       <div className="max-w-4xl mx-auto px-6 md:px-8 text-center">
         {/* Header */}
@@ -2294,30 +2269,13 @@ const VideoDemo = () => {
         <div 
           className="relative rounded-[1.25rem] overflow-hidden border border-white/5 bg-slate-950 aspect-[16/9] shadow-2xl max-w-3xl mx-auto"
         >
-          <video 
-            ref={videoRef}
-            src="/assets/landing/demo-video-848w-20260602.mp4"
-            autoPlay 
-            muted
-            loop 
-            playsInline
+          <img
+            src="/assets/landing/simulasi-tryout.jpg?v=202606011620"
+            alt="Preview fitur canvas dan koreksi AI"
             className="w-full h-full object-cover"
+            loading="lazy"
+            decoding="async"
           />
-
-          {/* Sound Toggle Overlay Button */}
-          <button 
-            onClick={toggleSound}
-            className="absolute top-4 left-4 bg-white/90 hover:bg-white text-ink font-bold text-xs py-1.5 px-3 rounded-full shadow-lg flex items-center gap-1.5 z-10 transition-colors"
-            type="button"
-            aria-label={soundEnabled ? "Matikan suara demo" : "Nyalakan suara demo"}
-          >
-            {soundEnabled ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
-            )}
-            <span className="font-mono text-[10px]">{soundEnabled ? "SOUND ON" : "SOUND OFF"}</span>
-          </button>
         </div>
 
         {/* Quick process layout below the video */}
@@ -2337,7 +2295,6 @@ const VideoDemo = () => {
         </div>
       </div>
     </section>
-  );
-};
+);
 
 window.Lobby = Lobby;
