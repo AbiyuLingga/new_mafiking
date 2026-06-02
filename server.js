@@ -1,6 +1,7 @@
 const express = require('express');
 const session = require('express-session');
 const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 const fs = require('fs');
 const rateLimit = require('express-rate-limit');
@@ -43,8 +44,13 @@ const {
   shouldLogRequestTiming,
 } = require('./lib/performance');
 const { createRequestGuard } = require('./lib/request-guard');
+const { helmetCspOptions } = require('./lib/csp');
+const { createCsrfProtection } = require('./lib/csrf-protection');
+const { SQLiteSessionStore } = require('./lib/sqlite-session-store');
+const auditLog = require('./lib/audit-log');
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
+const sessionMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
 const distDir = path.join(__dirname, 'dist');
 const distIndexPath = path.join(distDir, 'index.html');
 const legacyAppHtmlPath = path.join(__dirname, 'MAFIKING.html');
@@ -315,20 +321,11 @@ app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https:", "https://cdn.jsdelivr.net"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
-      imgSrc: ["'self'", "data:", "https:"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
-      connectSrc: ["'self'", "https:", "https://unpkg.com"],
-      frameSrc: ["'self'", "https:"],
-      objectSrc: ["'none'"],
-      workerSrc: ["'self'", "blob:"]
-    }
+  contentSecurityPolicy: helmetCspOptions(),
+  crossOriginEmbedderPolicy: false,
+  reportingEndpoints: {
+    csp: '/api/csp-report',
   },
-  crossOriginEmbedderPolicy: false
 }));
 
 app.post('/api/webhooks/clerk', express.raw({ type: '*/*' }), webhookRoutes.handleClerkWebhook);
@@ -340,16 +337,24 @@ if (isProduction && !process.env.SESSION_SECRET) {
 }
 
 app.use(session({
+  name: isProduction ? '__Host-mafiking.sid' : 'mafiking.sid',
+  store: new SQLiteSessionStore({
+    db,
+    ttlMs: sessionMaxAgeMs,
+  }),
   secret: process.env.SESSION_SECRET || 'new-mafiking-local-dev-only',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: sessionMaxAgeMs,
     httpOnly: true,
     secure: 'auto',
     sameSite: 'strict'
   }
 }));
+app.use(cookieParser());
+
+const { csrfProtection, csrfTokenRoute } = createCsrfProtection();
 
 if (clerkMiddleware && process.env.CLERK_SECRET_KEY) {
   app.use(clerkMiddleware());
@@ -401,6 +406,29 @@ app.get('/api/config/clerk', (_req, res) => {
   const publishableKey = String(process.env.VITE_CLERK_PUBLISHABLE_KEY || process.env.CLERK_PUBLISHABLE_KEY || '').trim();
   res.json({ enabled: Boolean(publishableKey), publishableKey });
 });
+
+app.get('/api/csrf-token', csrfTokenRoute);
+app.use(csrfProtection);
+
+// CSP violation report endpoint. Browsers POST JSON-encoded reports here when
+// a Content-Security-Policy directive is violated. Always returns 204 to keep
+// the channel quiet for the browser.
+app.post(
+  ['/api/csp-report', '/api/csp-report/'],
+  express.json({ type: ['application/csp-report', 'application/reports+json', 'application/json'], limit: '32kb' }),
+  (req, res) => {
+    try {
+      const body = req.body || {};
+      const report = body['csp-report'] || body.report || body;
+      if (report && typeof report === 'object') {
+        auditLog.logCspReport(report);
+      }
+    } catch (_) {
+      // Never let a log write fail the request.
+    }
+    res.status(204).end();
+  }
+);
 
 app.post('/api/performance/vitals', performanceLimiter, (req, res) => {
   const normalized = normalizeVitalsPayload({
