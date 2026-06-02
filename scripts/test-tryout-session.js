@@ -25,6 +25,6 @@ assert.deepStrictEqual(verified.session.problemIds, [10, 11, 12]);
 
 assert.strictEqual(verifyTryoutSessionToken(token, { userId: 7, now: now.getTime() }).ok, false);
 assert.strictEqual(verifyTryoutSessionToken(`${token.slice(0, -1)}x`, { userId: 42, now: now.getTime() }).ok, false);
-assert.strictEqual(verifyTryoutSessionToken(token, { userId: 42, now: now.getTime() + (16 * 60 * 1000) }).ok, false);
+assert.strictEqual(verifyTryoutSessionToken(token, { userId: 42, now: now.getTime() + (31 * 60 * 1000) }).ok, false);
 
 console.log('Tryout session tests passed');

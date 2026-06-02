@@ -1,8 +1,9 @@
 // MAFIKING Tryout — minimalist
 
-const BLANK_PKG = { title: '', description: '', price: 'Gratis', original_price: '', badge: '', duration: '60 mnt', questions: 30, features: '', tone: 'default', sort_order: 0 };
+const BLANK_PKG = { tryout_id: '', title: '', description: '', price: 'Gratis', original_price: '', badge: '', duration: '60 mnt', questions: 30, features: '', tone: 'default', sort_order: 0 };
 
 const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
+  const mode = String(context?.mode || "");
   const [tab, setTab] = useState("beli");
   const [packages, setPackages] = useState([]);
   const [activePackages, setActivePackages] = useState([]);
@@ -12,25 +13,45 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!String(context?.mode || "").startsWith("free-math")) loadPackages();
-  }, [context?.mode]);
+    if (!isTryoutSessionMode(mode)) loadPackages();
+  }, [mode]);
 
-  if (context?.mode === "free-math-confirm") {
+  if (mode === "tryout-review") {
+    return (
+      <TryoutReviewView
+        setRoute={setRoute}
+        context={context}
+      />
+    );
+  }
+
+  if (mode === "tryout-preview") {
+    return (
+      <TryoutPreviewView
+        setRoute={setRoute}
+        context={context}
+      />
+    );
+  }
+
+  if (mode === "free-math-confirm" || mode === "tryout-confirm") {
     return (
       <TryoutStartConfirmation
         setRoute={setRoute}
-        context={buildFreeMathTryoutPracticeContext(context)}
+        context={buildTryoutSessionContext(context)}
         isLoggedIn={isLoggedIn}
         isAdmin={isAdmin}
       />
     );
   }
 
-  if (context?.mode === "free-math") {
+  if (mode === "free-math" || mode === "tryout-exam") {
     return (
       <FreeMathTryoutExam
         setRoute={setRoute}
-        context={buildFreeMathTryoutPracticeContext(context)}
+        context={buildTryoutSessionContext(context)}
+        isLoggedIn={isLoggedIn}
+        isAdmin={isAdmin}
       />
     );
   }
@@ -49,7 +70,9 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
 
   function hasAccess(pkg) {
     if (!pkg) return false;
+    if (isAdmin) return true;
     if (pkg.price === "Gratis") return true;
+    if (activePackages.includes(pkg.tryout_id || pkg.tryoutId)) return true;
     return activePackages.includes(pkg.title) || 
            activePackages.some(title => ["Trial 7 Hari", "Bulanan", "Semester"].includes(title));
   }
@@ -93,13 +116,14 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
       features: featureText.split('\n').map(s => s.trim()).filter(Boolean),
       tone: source.tone,
       sort_order: source.sort_order,
+      tryout_id: source.tryout_id || source.tryoutId || '',
     };
   }
 
   function startTryoutPackage(pkg) {
     setRoute({
-      route: "practice",
-      practice: buildTryoutPracticeContext(pkg),
+      route: "tryout",
+      tryout: buildTryoutSessionContextFromPackage(pkg, "tryout-confirm"),
     });
   }
 
@@ -255,17 +279,37 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
 };
 
 const TryoutStartConfirmation = ({ setRoute, context, isLoggedIn = false, isAdmin = false }) => {
+  const tryoutId = getTryoutContextId(context);
+  const [historyState, setHistoryState] = useState({ loading: false, attempt: null });
   const totalQuestions = Number(context?.total || context?.problemLimit || 15);
-  const timeLimitSeconds = Number(context?.timeLimitSeconds || 15 * 60);
+  const timeLimitSeconds = Number(context?.timeLimitSeconds || 30 * 60);
+  const mapelValue = String(context?.mapel || "").trim();
   const detailItems = [
     { label: "Durasi", value: context?.est || formatTryoutMinutes(timeLimitSeconds), icon: Icon.Clock },
     { label: "Jumlah soal", value: `${totalQuestions} soal`, icon: Icon.Target },
-    { label: "Mapel", value: context?.mapel || "Matematika", icon: Icon.Integral },
+    ...(mapelValue ? [{ label: "Mapel", value: mapelValue, icon: Icon.Integral }] : []),
     { label: "Status", value: context?.freeTryout ? "Gratis" : "Paket aktif", icon: Icon.CheckCircle },
   ];
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!isLoggedIn || isAdmin || !tryoutId) {
+      setHistoryState({ loading: false, attempt: null });
+      return () => { cancelled = true; };
+    }
+    setHistoryState({ loading: true, attempt: null });
+    fetchLatestTryoutAttempt(tryoutId)
+      .then((attempt) => {
+        if (!cancelled) setHistoryState({ loading: false, attempt });
+      })
+      .catch(() => {
+        if (!cancelled) setHistoryState({ loading: false, attempt: null });
+      });
+    return () => { cancelled = true; };
+  }, [isLoggedIn, isAdmin, tryoutId]);
+
   function startExam() {
-    if (!isLoggedIn && !isAdmin) {
+    if (!isLoggedIn && !isAdmin && !context?.freeTryout) {
       setRoute({
         route: "lobby",
         authMode: "login",
@@ -277,9 +321,33 @@ const TryoutStartConfirmation = ({ setRoute, context, isLoggedIn = false, isAdmi
       route: "tryout",
       tryout: {
         ...context,
-        mode: "free-math",
+        mode: context?.mode === "free-math-confirm" ? "free-math" : "tryout-exam",
+        sessionSeed: context?.sessionSeed || createTryoutSessionSeed(tryoutId),
       },
     });
+  }
+
+  if (historyState.loading) {
+    return (
+      <div className="app-page-bg app-page-bg--paket min-h-[calc(100vh-72px)]">
+        <section className="max-w-5xl mx-auto px-6 md:px-8 py-12 md:py-16">
+          <Skeleton className="h-5 w-40 mb-6" />
+          <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-6 items-stretch">
+            <Skeleton className="h-72 rounded-[var(--card-radius)]" />
+            <Skeleton className="h-72 rounded-[var(--card-radius)]" />
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (historyState.attempt) {
+    return (
+      <TryoutReviewView
+        setRoute={setRoute}
+        context={{ ...context, mode: "tryout-review", attempt: historyState.attempt }}
+      />
+    );
   }
 
   return (
@@ -494,31 +562,45 @@ const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, 
   );
 };
 
-function buildTryoutPracticeContext(pkg) {
+function buildTryoutSessionContextFromPackage(pkg, mode = "tryout-confirm") {
   const isFree = String(pkg?.price || "").toLowerCase() === "gratis" || String(pkg?.title || "").toLowerCase().includes("gratis");
+  const tryoutId = getPackageTryoutId(pkg);
+  const total = Number(pkg?.questions || 0);
+  const timeLimitSeconds = parseTryoutDurationSeconds(pkg?.duration, isFree ? 30 * 60 : 90 * 60);
   return {
-    id: 1,
-    num: 1,
-    title: "Teknik Integrasi",
-    mapel: "Matematika",
+    id: tryoutId,
+    tryout_id: tryoutId,
+    mode,
+    num: pkg?.id || tryoutId,
+    title: pkg?.title || "Try Out",
+    mapel: isFree ? "Matematika" : "",
     semester: 1,
-    est: pkg?.duration || "45 mnt",
-    total: Number(pkg?.questions || 23),
+    est: pkg?.duration || formatTryoutMinutes(timeLimitSeconds),
+    total: total > 0 ? total : undefined,
     progress: 0,
-    topics: [pkg?.title || "Try Out", "Integral", isFree ? "Pembahasan setelah login" : "Paket aktif"],
+    topics: [pkg?.title || "Try Out", "Try Out", isFree ? "Gratis" : "Paket aktif"],
     freeTryout: isFree,
     packageTitle: pkg?.title || "Try Out",
+    isTryoutSession: true,
+    problemLimit: total > 0 ? total : undefined,
+    timeLimitSeconds,
+    disableCanvasIntro: true,
+    disableCanvasMode: true,
+    backRoute: { route: "belajar", section: "Try Out" },
+    sessionSeed: pkg?.sessionSeed || null,
   };
 }
 
 function buildFreeMathTryoutPracticeContext(context) {
+  const tryoutId = context?.tryout_id || context?.tryoutId || context?.id || "free-math-tryout-15";
   return {
-    id: context?.id || "free-math-tryout-15",
+    id: tryoutId,
+    tryout_id: tryoutId,
     num: "TO-01",
     title: context?.title || "Try Out Matematika",
     mapel: "Matematika",
     semester: Number(context?.semester || 1),
-    est: context?.est || "15 mnt",
+    est: context?.est || "30 mnt",
     total: Number(context?.total || context?.problemLimit || 15),
     progress: 0,
     topics: context?.topics || ["Try Out Gratis", "Matematika"],
@@ -526,14 +608,54 @@ function buildFreeMathTryoutPracticeContext(context) {
     isTryoutSession: true,
     tryoutMode: "math",
     problemLimit: Number(context?.problemLimit || 15),
-    timeLimitSeconds: Number(context?.timeLimitSeconds || 15 * 60),
+    timeLimitSeconds: Number(context?.timeLimitSeconds || 30 * 60),
     disableCanvasIntro: true,
     disableCanvasMode: true,
     backRoute: { route: "belajar", section: "Try Out" },
+    packageTitle: context?.packageTitle || context?.title || "Try Out Matematika",
+    sessionSeed: context?.sessionSeed || null,
   };
 }
 
-const FreeMathTryoutExam = ({ setRoute, context }) => {
+function buildTryoutSessionContext(context) {
+  if (String(context?.mode || "").startsWith("free-math")) return buildFreeMathTryoutPracticeContext(context);
+  const tryoutId = getTryoutContextId(context);
+  const total = Number(context?.total || context?.problemLimit || 0);
+  const timeLimitSeconds = Number(context?.timeLimitSeconds || parseTryoutDurationSeconds(context?.est || context?.duration, 60 * 60));
+  const hasExplicitMapel = Object.prototype.hasOwnProperty.call(context || {}, "mapel");
+  return {
+    id: tryoutId,
+    tryout_id: tryoutId,
+    mode: context?.mode || "tryout-confirm",
+    title: context?.title || context?.packageTitle || "Try Out",
+    mapel: hasExplicitMapel ? String(context?.mapel || "") : "Matematika",
+    semester: Number(context?.semester || 1),
+    est: context?.est || formatTryoutMinutes(timeLimitSeconds),
+    total: total > 0 ? total : undefined,
+    progress: 0,
+    topics: context?.topics || [context?.packageTitle || context?.title || "Try Out", "Try Out"],
+    freeTryout: Boolean(context?.freeTryout),
+    isTryoutSession: true,
+    packageTitle: context?.packageTitle || context?.title || "Try Out",
+    problemLimit: total > 0 ? total : undefined,
+    timeLimitSeconds,
+    disableCanvasIntro: true,
+    disableCanvasMode: true,
+    backRoute: context?.backRoute || { route: "belajar", section: "Try Out" },
+    attempt: context?.attempt || null,
+    sessionSeed: context?.sessionSeed || null,
+  };
+}
+
+const FreeMathTryoutExam = ({ setRoute, context, isLoggedIn = false, isAdmin = false }) => {
+  const tryoutId = getTryoutContextId(context);
+  const sessionSeedRef = useRef({ tryoutId: "", seed: "" });
+  if (sessionSeedRef.current.tryoutId !== tryoutId) {
+    sessionSeedRef.current = {
+      tryoutId,
+      seed: context?.sessionSeed || createTryoutSessionSeed(tryoutId),
+    };
+  }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [problems, setProblems] = useState([]);
@@ -541,7 +663,7 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
   const [answers, setAnswers] = useState({});
   const [doubtful, setDoubtful] = useState({});
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(Number(context?.timeLimitSeconds || 15 * 60));
+  const [timeLeft, setTimeLeft] = useState(Number(context?.timeLimitSeconds || 30 * 60));
   const [finishing, setFinishing] = useState(false);
   const [sessionInfo, setSessionInfo] = useState(null);
   const timeExpired = timeLeft <= 0;
@@ -549,7 +671,7 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
   const activeProblem = problems[problemIndex];
   const selectedChoiceIndex = activeProblem ? answers[activeProblem.id] : null;
 
-  useEffect(() => { loadTryoutProblems(); }, [context?.id]);
+  useEffect(() => { loadTryoutProblems(); }, [tryoutId]);
 
   useEffect(() => {
     const expiresAtMs = Date.parse(sessionInfo?.expiresAt || "");
@@ -557,8 +679,8 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
       setTimeLeft(Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000)));
       return;
     }
-    setTimeLeft(Number(sessionInfo?.timeLimitSeconds || context?.timeLimitSeconds || 15 * 60));
-  }, [context?.id, context?.timeLimitSeconds, sessionInfo?.expiresAt, sessionInfo?.timeLimitSeconds]);
+    setTimeLeft(Number(sessionInfo?.timeLimitSeconds || context?.timeLimitSeconds || 30 * 60));
+  }, [tryoutId, context?.timeLimitSeconds, sessionInfo?.expiresAt, sessionInfo?.timeLimitSeconds]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -570,7 +692,7 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
       }
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [context?.id, sessionInfo?.expiresAt]);
+  }, [tryoutId, sessionInfo?.expiresAt]);
 
   useEffect(() => {
     if (timeLeft === 0 && problems.length && !finishing) finishTryout();
@@ -580,9 +702,36 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
     setLoading(true);
     setError("");
     try {
-      const session = await MafikingAPI.get(`/api/quiz/tryout/free-math-session?limit=${Number(context?.problemLimit || 15)}`);
-      const nextProblems = Array.isArray(session.problems) ? session.problems : [];
-      setSessionInfo(session);
+      const data = await MafikingAPI.get(`/api/tryouts/${encodeURIComponent(tryoutId)}/full`);
+      const questions = Array.isArray(data.questions) ? data.questions : [];
+      const requestedLimit = Number(context?.problemLimit || context?.total || 0);
+      const limit = requestedLimit > 0 ? Math.min(requestedLimit, questions.length) : questions.length;
+      const sessionSeed = sessionSeedRef.current.seed;
+      const selectedProblems = questions.slice(0, limit);
+      const shuffledProblems = shuffleTryoutChoices(
+        selectedProblems,
+        hashTryoutValue(`questions:${tryoutId}:${sessionSeed}`)
+      );
+      const nextProblems = shuffledProblems.map((problem, index) => {
+        const choices = getBaseTryoutChoices(problem, shuffledProblems);
+        return {
+          ...problem,
+          sessionChoices: shuffleTryoutChoices(
+            choices,
+            hashTryoutValue(`choices:${tryoutId}:${sessionSeed}:${problem.id}:${index}`)
+          ),
+        };
+      });
+      const tryoutMeta = data.tryout || {};
+      const session = data.session || {};
+      setSessionInfo({
+        id: session.id || session.tryoutId || tryoutId,
+        title: session.title || session.tryoutTitle || tryoutMeta.title || context?.packageTitle || context?.title || "Try Out",
+        timeLimitSeconds: Number(session.timeLimitSeconds || data.timeLimitSeconds || context?.timeLimitSeconds || 30 * 60),
+        startedAt: session.startedAt || null,
+        expiresAt: session.expiresAt || null,
+        sessionToken: session.sessionToken || "",
+      });
       setProblems(nextProblems);
       setProblemIndex(0);
       setAnswers({});
@@ -597,15 +746,7 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
   }
 
   function getChoices(problem) {
-    if (!problem) return [];
-    try {
-      if (Array.isArray(problem.mc_options) && problem.mc_options.length) return problem.mc_options;
-      if (typeof problem.mc_options === "string" && problem.mc_options.trim()) {
-        const parsed = JSON.parse(problem.mc_options);
-        if (Array.isArray(parsed) && parsed.length) return parsed;
-      }
-    } catch (_) {}
-    return buildTryoutGeneratedChoices(problem, problems);
+    return getSessionTryoutChoices(problem, problems);
   }
 
   function selectChoice(choiceIndex) {
@@ -622,11 +763,13 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
     if (finishing || !problems.length) return;
     setFinishing(true);
     try {
-      const timeLimitSeconds = Number(sessionInfo?.timeLimitSeconds || context?.timeLimitSeconds || 15 * 60);
+      const timeLimitSeconds = Number(sessionInfo?.timeLimitSeconds || context?.timeLimitSeconds || 30 * 60);
       const durationSeconds = Math.max(0, timeLimitSeconds - Math.max(0, Number(timeLeft || 0)));
       const payloadAnswers = {};
+      const choiceMap = {};
       for (const problem of problems) {
         if (answers[problem.id] != null) payloadAnswers[problem.id] = answers[problem.id];
+        choiceMap[problem.id] = getChoices(problem);
       }
       const result = await MafikingAPI.post("/api/progress/tryout-attempts", {
         tryoutId: sessionInfo?.id || context?.id || "free-math-tryout-15",
@@ -634,13 +777,48 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
         sessionToken: sessionInfo?.sessionToken || "",
         problemIds: problems.map((problem) => problem.id),
         answers: payloadAnswers,
+        choiceMap,
         durationSeconds,
       });
       const score = result?.attempt?.score;
       showToast(score == null ? "Tryout selesai. Hasil tersimpan." : `Tryout selesai. Skor kamu ${score}.`, "success");
-      setRoute({ route: "belajar", section: "Try Out" });
+      setRoute({
+        route: "tryout",
+        tryout: {
+          ...context,
+          id: tryoutId,
+          tryout_id: tryoutId,
+          mode: "tryout-review",
+          attempt: result?.attempt || null,
+        },
+      });
     } catch (caught) {
-      showToast(caught.message || "Gagal menyimpan hasil tryout.", "error");
+      const message = caught.message || "Gagal menyimpan hasil tryout.";
+      if (message.toLowerCase().includes("sudah pernah")) {
+        const attempt = await fetchLatestTryoutAttempt(tryoutId).catch(() => null);
+        if (attempt) {
+          setRoute({
+            route: "tryout",
+            tryout: {
+              ...context,
+              id: tryoutId,
+              tryout_id: tryoutId,
+              mode: "tryout-review",
+              attempt,
+            },
+          });
+          return;
+        }
+      }
+      if (message.toLowerCase().includes("login") && !isLoggedIn && !isAdmin) {
+        setRoute({
+          route: "lobby",
+          authMode: "login",
+          authRedirect: { route: "tryout", tryout: { ...context, id: tryoutId, tryout_id: tryoutId, mode: "tryout-confirm" } },
+        });
+        return;
+      }
+      showToast(message, "error");
       setFinishing(false);
     }
   }
@@ -714,6 +892,7 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
             <div className="tryout-question-text">
               <Eq value={activeProblem.question_display || activeProblem.question_text || "Soal belum memiliki teks."} />
             </div>
+            <TryoutQuestionMedia question={activeProblem} />
             <div className="tryout-choice-list">
               {choices.map((choice, choiceIndex) => (
                 <button
@@ -838,12 +1017,414 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
   );
 };
 
+const TryoutPreviewView = ({ setRoute, context }) => {
+  const tryoutId = getTryoutContextId(context);
+  const [state, setState] = useState({ loading: true, error: "", snapshot: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    setState({ loading: true, error: "", snapshot: null });
+    MafikingAPI.get(`/api/tryouts/${encodeURIComponent(tryoutId)}/full`)
+      .then((data) => {
+        if (cancelled) return;
+        const questions = Array.isArray(data.questions) ? data.questions : [];
+        setState({
+          loading: false,
+          error: "",
+          snapshot: buildTryoutPreviewSnapshot({
+            tryoutId,
+            tryoutTitle: data?.tryout?.title || context?.packageTitle || context?.title || "Preview Try Out",
+            questions,
+          }),
+        });
+      })
+      .catch((caught) => {
+        if (!cancelled) setState({ loading: false, error: caught.message || "Gagal memuat preview Try Out.", snapshot: null });
+      });
+    return () => { cancelled = true; };
+  }, [tryoutId]);
+
+  if (state.loading) {
+    return (
+      <div className="tryout-exam-shell tryout-review-shell" aria-busy="true">
+        <header className="tryout-exam-topbar">
+          <Skeleton className="h-5 w-52" />
+          <Skeleton className="h-9 w-24 rounded-xl" />
+        </header>
+        <main className="tryout-review-main">
+          <Skeleton className="h-24 rounded-2xl" />
+          <Skeleton className="h-80 rounded-2xl" />
+        </main>
+      </div>
+    );
+  }
+
+  if (state.error) {
+    return (
+      <div className="tryout-exam-shell tryout-review-shell">
+        <header className="tryout-exam-topbar">
+          <button className="tryout-back-btn" onClick={() => setRoute({ route: "admin" })} type="button" aria-label="Kembali">
+            <Icon.ChevL className="w-4 h-4" />
+          </button>
+          <div>
+            <h1>Preview Try Out</h1>
+            <p>GAGAL MEMUAT</p>
+          </div>
+        </header>
+        <main className="tryout-review-main">
+          <section className="tryout-question-card">
+            <div className="mafiking-answer-heading">{state.error}</div>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <TryoutReviewView
+      setRoute={setRoute}
+      context={context}
+      preview
+      snapshot={state.snapshot}
+      backRoute={{ route: "admin" }}
+    />
+  );
+};
+
+const TryoutReviewView = ({ setRoute, context, preview = false, snapshot: snapshotOverride = null, backRoute = null }) => {
+  const attempt = context?.attempt || {};
+  const snapshot = snapshotOverride || attempt.reviewSnapshot || context?.reviewSnapshot || null;
+  const stats = snapshot?.stats || attempt || {};
+  const questions = Array.isArray(snapshot?.questions) ? snapshot.questions : [];
+  const title = snapshot?.tryoutTitle || attempt.tryoutTitle || context?.packageTitle || context?.title || "Try Out";
+  const score = Number(stats.score || 0);
+  const correctCount = Number(stats.correctCount || stats.correct_count || 0);
+  const totalQuestions = Number(stats.totalQuestions || stats.total_questions || questions.length || 0);
+  const answeredCount = Number(stats.answeredCount || stats.answered_count || 0);
+  const durationSeconds = Number(snapshot?.durationSeconds || attempt.durationSeconds || attempt.duration_seconds || 0);
+  const targetBackRoute = backRoute || context?.backRoute || { route: "belajar", section: "Try Out" };
+
+  return (
+    <div className="tryout-exam-shell tryout-review-shell">
+      <header className="tryout-exam-topbar">
+        <div className="tryout-title-group">
+          <button className="tryout-back-btn" onClick={() => setRoute(targetBackRoute)} type="button" aria-label="Kembali">
+            <Icon.ChevL className="w-4 h-4" />
+          </button>
+          <div>
+            <h1>{title}</h1>
+            <p>{preview ? "PREVIEW SOAL" : "RIWAYAT TRY OUT"}</p>
+          </div>
+        </div>
+        <div className="tryout-review-score">
+          <span>{preview ? `${totalQuestions} soal` : `Skor ${score}`}</span>
+        </div>
+      </header>
+
+      <main className="tryout-review-main">
+        <section className="tryout-review-summary" aria-label="Ringkasan hasil Try Out">
+          <div>
+            <span className="tryout-review-summary-label">{preview ? "Mode" : "Nilai"}</span>
+            <strong>{preview ? "Preview" : score}</strong>
+          </div>
+          <div>
+            <span className="tryout-review-summary-label">Benar</span>
+            <strong>{preview ? "-" : `${correctCount}/${totalQuestions}`}</strong>
+          </div>
+          <div>
+            <span className="tryout-review-summary-label">Terjawab</span>
+            <strong>{preview ? "-" : `${answeredCount}/${totalQuestions}`}</strong>
+          </div>
+          <div>
+            <span className="tryout-review-summary-label">Durasi</span>
+            <strong>{durationSeconds ? formatTryoutClock(durationSeconds) : "-"}</strong>
+          </div>
+        </section>
+
+        {questions.length === 0 ? (
+          <section className="tryout-question-card">
+            <div className="mafiking-answer-heading">Belum ada snapshot soal untuk Try Out ini.</div>
+          </section>
+        ) : (
+          <div className="tryout-review-list">
+            {questions.map((question, index) => (
+              <TryoutReviewQuestion
+                key={question.id || index}
+                index={index}
+                question={question}
+                preview={preview}
+              />
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+const TryoutReviewQuestion = ({ question, index, preview }) => {
+  const choices = Array.isArray(question.choices) ? question.choices : [];
+  const selectedChoiceIndex = Number.isInteger(question.selectedChoiceIndex) ? question.selectedChoiceIndex : null;
+  const correctChoiceIndex = Number.isInteger(question.correctChoiceIndex) ? question.correctChoiceIndex : -1;
+  const hasChoices = choices.length > 0;
+
+  return (
+    <article className="tryout-review-card">
+      <div className="mafiking-question-meta">
+        <span>Soal {index + 1}</span>
+        <span className="mafiking-difficulty">{question.difficulty || "Easy"}</span>
+        {!preview && (
+          <span className={question.isCorrect ? "tryout-review-status is-correct" : "tryout-review-status is-wrong"}>
+            {question.isCorrect ? "Benar" : selectedChoiceIndex == null ? "Tidak dijawab" : "Salah"}
+          </span>
+        )}
+      </div>
+
+      <p className="mafiking-question-title">
+        <Eq value={question.questionDisplay || question.question_display || question.questionText || question.question_text || "Soal belum memiliki teks."} />
+      </p>
+      <TryoutQuestionMedia question={question} />
+
+      {hasChoices ? (
+        <div className="mafiking-choice-list">
+          {choices.map((choice, choiceIndex) => {
+            const isSelected = selectedChoiceIndex === choiceIndex;
+            const isCorrect = correctChoiceIndex === choiceIndex;
+            return (
+              <div
+                key={`${question.id || index}-${choiceIndex}`}
+                className="mafiking-choice-option"
+                data-selected={isSelected ? "true" : undefined}
+                data-correct={isCorrect ? "true" : undefined}
+                data-wrong={isSelected && !isCorrect ? "true" : undefined}
+              >
+                <span className="mafiking-choice-letter">{String.fromCharCode(65 + choiceIndex)}</span>
+                <span className="mafiking-choice-text"><Eq value={choice} /></span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="tryout-review-answer-grid">
+          {!preview && (
+            <div>
+              <div className="mafiking-answer-heading">Jawaban Anda</div>
+              <p>{question.selectedAnswer ? <Eq value={question.selectedAnswer} /> : "Tidak dijawab"}</p>
+            </div>
+          )}
+          <div>
+            <div className="mafiking-answer-heading">Jawaban benar</div>
+            <p><Eq value={question.correctAnswer || question.answer_display || "-"} /></p>
+          </div>
+        </div>
+      )}
+
+      <TryoutReviewSteps steps={question.steps || []} />
+    </article>
+  );
+};
+
+const TryoutQuestionMedia = ({ question }) => {
+  const imageUrl = String(question?.imageUrl || question?.image_url || "").trim();
+  if (!imageUrl) return null;
+  const imageAlt = String(question?.imageAlt || question?.image_alt || "Gambar soal").trim() || "Gambar soal";
+  return (
+    <figure className="tryout-question-media">
+      <img src={imageUrl} alt={imageAlt} loading="lazy" />
+    </figure>
+  );
+};
+
+const TryoutReviewSteps = ({ steps }) => {
+  const safeSteps = Array.isArray(steps) ? steps.filter((step) => step && (step.title || step.content)) : [];
+  if (!safeSteps.length) {
+    return <div className="mafiking-locked-steps"><p>Belum ada pembahasan untuk soal ini.</p></div>;
+  }
+  return (
+    <div className="tryout-review-steps">
+      <div className="mafiking-solution-header">
+        <div className="mafiking-answer-heading">Pembahasan</div>
+        <span className="mafiking-step-count">{safeSteps.length} langkah</span>
+      </div>
+      <div className="mafiking-step-list">
+        {safeSteps.map((step, idx) => (
+          <div className="mafiking-step-row" key={step.id || idx}>
+            <div className="mafiking-step-index">{idx + 1}</div>
+            <div className="mafiking-step-content">
+              <h3>{step.title || `Langkah ${idx + 1}`}</h3>
+              {step.content && <div className="mafiking-formula-box"><Eq value={step.content} /></div>}
+              {step.why && (
+                <div className="mafiking-step-note note-why">
+                  <span className="mafiking-step-note-label">Kenapa langkah ini?</span>
+                  <p>{step.why}</p>
+                </div>
+              )}
+              {step.intuition && (
+                <div className="mafiking-step-note note-intuition">
+                  <span className="mafiking-step-note-label">Cara memahaminya</span>
+                  <p>{step.intuition}</p>
+                </div>
+              )}
+              {step.mistakes && (
+                <div className="mafiking-step-note note-mistakes">
+                  <span className="mafiking-step-note-label">Hati-hati</span>
+                  <p>{step.mistakes}</p>
+                  {step.mistake_result && <p className="mafiking-step-note-result">{step.mistake_result}</p>}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const TryoutFlagIcon = ({ className = "w-4 h-4" }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
     <path d="M6 21V5" />
     <path d="M6 5h10l-1.5 4L16 13H6" />
   </svg>
 );
+
+function isTryoutSessionMode(mode) {
+  const value = String(mode || "");
+  return value === "free-math-confirm"
+    || value === "free-math"
+    || value === "tryout-confirm"
+    || value === "tryout-exam"
+    || value === "tryout-review"
+    || value === "tryout-preview";
+}
+
+function getTryoutContextId(context) {
+  return String(context?.tryout_id || context?.tryoutId || context?.id || "free-math-tryout-15").trim() || "free-math-tryout-15";
+}
+
+function getPackageTryoutId(pkg) {
+  const explicit = String(pkg?.tryout_id || pkg?.tryoutId || "").trim();
+  if (explicit) return explicit;
+  const source = String(pkg?.title || "tryout").trim().toLowerCase();
+  const slug = source
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return slug ? `tryout-${slug}` : "tryout-package";
+}
+
+function parseTryoutDurationSeconds(value, fallbackSeconds) {
+  const text = String(value || "").toLowerCase();
+  const number = Number((text.match(/\d+/) || [])[0] || 0);
+  if (!number) return Number(fallbackSeconds || 30 * 60);
+  if (text.includes("jam")) return number * 60 * 60;
+  return number * 60;
+}
+
+async function fetchLatestTryoutAttempt(tryoutId) {
+  const data = await MafikingAPI.get(`/api/progress/tryout-attempts/latest?tryoutId=${encodeURIComponent(tryoutId)}`);
+  return data?.attempt || null;
+}
+
+function parseTryoutArray(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : [];
+  } catch (_) {
+    return String(value || "").split("\n").map((item) => item.trim()).filter(Boolean);
+  }
+}
+
+function getBaseTryoutChoices(question, allQuestions) {
+  const options = parseTryoutArray(question?.mc_options);
+  return options.length ? options : buildTryoutGeneratedChoices(question, allQuestions);
+}
+
+function getSessionTryoutChoices(question, allQuestions) {
+  const sessionChoices = parseTryoutArray(question?.sessionChoices);
+  return sessionChoices.length ? sessionChoices : getBaseTryoutChoices(question, allQuestions);
+}
+
+function getTryoutChoicesForReview(question, allQuestions) {
+  const options = parseTryoutArray(question?.mc_options || question?.choices);
+  return options.length ? options : buildTryoutGeneratedChoices(question, allQuestions);
+}
+
+function getTryoutCorrectAnswer(question) {
+  const acceptable = parseTryoutArray(question?.acceptable_answers);
+  return String(question?.answer_display || question?.correctAnswer || acceptable[0] || "").trim();
+}
+
+function getTryoutCorrectChoiceIndexForReview(question, choices) {
+  const correctAnswer = getTryoutCorrectAnswer(question);
+  const normalizedCorrect = normalizeTryoutAnswer(correctAnswer);
+  if (!normalizedCorrect) return -1;
+  return choices.findIndex((choice) => normalizeTryoutAnswer(choice) === normalizedCorrect);
+}
+
+function normalizeTryoutStepsForPreview(steps) {
+  return (Array.isArray(steps) ? steps : []).map((step, idx) => ({
+    id: step.id || idx,
+    title: step.title || `Langkah ${idx + 1}`,
+    content: step.content || "",
+    why: step.why || "",
+    intuition: step.intuition || "",
+    mistakes: step.mistakes || "",
+    mistake_result: step.mistake_result || "",
+  })).filter((step) => step.title || step.content);
+}
+
+function buildTryoutPreviewSnapshot({ tryoutId, tryoutTitle, questions }) {
+  const safeQuestions = Array.isArray(questions) ? questions : [];
+  return {
+    tryoutId,
+    tryoutTitle,
+    durationSeconds: 0,
+    stats: {
+      score: 0,
+      correctCount: 0,
+      totalQuestions: safeQuestions.length,
+      answeredCount: 0,
+    },
+    questions: safeQuestions.map((question, index) => {
+      const choices = getTryoutChoicesForReview(question, safeQuestions);
+      const correctChoiceIndex = getTryoutCorrectChoiceIndexForReview(question, choices);
+      return {
+        id: question.id,
+        sourceIndex: Number(question.sort_order || index + 1),
+        questionText: question.question_text || "",
+        questionDisplay: question.question_display || "",
+        imageUrl: question.image_url || question.imageUrl || "",
+        imageAlt: question.image_alt || question.imageAlt || "",
+        difficulty: question.difficulty || "Easy",
+        questionType: question.question_type || "mc",
+        choices,
+        selectedChoiceIndex: null,
+        selectedAnswer: "",
+        correctChoiceIndex,
+        correctAnswer: correctChoiceIndex >= 0 ? choices[correctChoiceIndex] : getTryoutCorrectAnswer(question),
+        isCorrect: false,
+        steps: normalizeTryoutStepsForPreview(question.steps),
+      };
+    }),
+  };
+}
+
+function createTryoutSessionSeed(tryoutId) {
+  const parts = [String(tryoutId || "tryout"), String(Date.now())];
+  try {
+    if (window.crypto && window.crypto.getRandomValues) {
+      const values = new Uint32Array(2);
+      window.crypto.getRandomValues(values);
+      parts.push(String(values[0]), String(values[1]));
+      return parts.join(":");
+    }
+  } catch (_) {}
+  parts.push(String(Math.random()).slice(2));
+  return parts.join(":");
+}
 
 function normalizeTryoutText(value) {
   return String(value || "")
@@ -914,6 +1495,9 @@ const TryoutEditModal = ({ pkg, saving, onChange, onSave, onClose }) => (
       <button className="canvas-intro-close" onClick={onClose} type="button">×</button>
       <h2 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 16px' }}>{pkg.id ? 'Edit Paket Tryout' : 'Tambah Paket Tryout'}</h2>
       <form onSubmit={onSave} style={{ display: 'grid', gap: 10 }}>
+        <label style={{ fontSize: 12 }}>ID Try Out
+          <input className="admin-inline-input" value={pkg.tryout_id || ''} onChange={e => onChange({ tryout_id: e.target.value })} placeholder="contoh: tryout-gratis-tpb" />
+        </label>
         <label style={{ fontSize: 12 }}>Judul
           <input className="admin-inline-input" value={pkg.title} onChange={e => onChange({ title: e.target.value })} required />
         </label>

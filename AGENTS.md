@@ -108,7 +108,7 @@ Do:
 - Use existing utility classes, card styles, icon globals, and layout patterns.
 - Keep the `practice` route free of the global top navigation unless the user explicitly asks to restore it.
 - Keep the `lobby` route using its own marketing header; do not add the global app `Nav` to the public landing.
-- Keep logged-out access behavior: the free Try Out confirmation and 15-question / 15-minute session can open, but protected review paths and subject chapters should route through login/sign-up.
+- Keep logged-out access behavior: the free Try Out confirmation and 15-question / 30-minute session can open, but protected review paths and subject chapters should route through login/sign-up.
 - Keep tweaks defaults in `src/app.jsx` aligned with the user's selected defaults:
   - `heroLayout: "split"`
   - `density: "normal"`
@@ -149,7 +149,7 @@ Important behavior:
 When editing this area, browser-smoke at least:
 
 1. `/ -> Coba Gratis` opens `Belajar -> Try Out`.
-2. `Belajar -> Try Out -> Mulai Try Out` opens the free Try Out confirmation, then starts the 15-question / 15-minute session.
+2. `Belajar -> Try Out -> Mulai Try Out` opens the free Try Out confirmation, then starts the 15-question / 30-minute session.
 3. Logged-out protected review paths still open the login/sign-up gate.
 4. `Belajar -> Matematika -> Teknik Integrasi` opens multiple-choice practice with 23 questions and a `Try Canvas` entry when the user is logged in.
 5. `Belajar -> Bentuk Tak Tentu & Integral Tak Wajar` shows empty state.

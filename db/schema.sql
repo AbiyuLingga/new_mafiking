@@ -134,11 +134,66 @@ CREATE TABLE IF NOT EXISTS tryout_attempts (
     total_questions INTEGER NOT NULL DEFAULT 0,
     answered_count INTEGER NOT NULL DEFAULT 0,
     duration_seconds INTEGER NOT NULL DEFAULT 0,
+    answers_json TEXT NOT NULL DEFAULT '{}',
+    review_snapshot_json TEXT NOT NULL DEFAULT '{}',
     completed_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_tryout_attempts_tryout_score
     ON tryout_attempts (tryout_id, score DESC, correct_count DESC, duration_seconds ASC, completed_at ASC);
+
+CREATE INDEX IF NOT EXISTS idx_tryout_attempts_user_tryout
+    ON tryout_attempts (user_id, tryout_id, completed_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS tryout_packages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tryout_id TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    price TEXT NOT NULL DEFAULT 'Gratis',
+    original_price TEXT DEFAULT NULL,
+    badge TEXT DEFAULT '',
+    duration TEXT DEFAULT '60 mnt',
+    questions INTEGER DEFAULT 30,
+    features TEXT DEFAULT '[]',
+    tone TEXT DEFAULT 'default',
+    sort_order INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS tryout_questions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tryout_id TEXT NOT NULL,
+    question_text TEXT DEFAULT '',
+    question_display TEXT NOT NULL,
+    answer_display TEXT NOT NULL,
+    acceptable_answers TEXT NOT NULL DEFAULT '[]',
+    difficulty TEXT DEFAULT 'Easy',
+    question_type TEXT DEFAULT 'mc',
+    mc_options TEXT DEFAULT '[]',
+    image_url TEXT DEFAULT '',
+    image_alt TEXT DEFAULT '',
+    sort_order INTEGER DEFAULT 0,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_tryout_questions_tryout
+    ON tryout_questions (tryout_id, sort_order, id);
+
+CREATE TABLE IF NOT EXISTS tryout_question_steps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tryout_question_id INTEGER NOT NULL REFERENCES tryout_questions(id) ON DELETE CASCADE,
+    step_order INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    why TEXT,
+    intuition TEXT,
+    mistakes TEXT,
+    mistake_result TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_tryout_question_steps_question
+    ON tryout_question_steps (tryout_question_id, step_order, id);
 
 CREATE TABLE IF NOT EXISTS profile_ai_refreshes (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

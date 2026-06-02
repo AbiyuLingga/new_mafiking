@@ -7,9 +7,10 @@ const router = express.Router();
 
 router.use(isAuthenticated, isAdmin);
 
-const ACCESS_TYPES = new Set(['tryout', 'subscription', 'package', 'manual']);
+const ACCESS_TYPES = new Set(['tryout', 'mission', 'subscription', 'package', 'manual']);
 const USER_ROLES = new Set(['admin', 'user']);
 const DEFAULT_ADMIN_RESET_PASSWORD = '123456';
+const SAFE_MEDIA_PATH_RE = /^\/(?:assets|tryout-media)\/[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$/;
 
 function parsePositiveId(value) {
     const id = Number(value);
@@ -25,6 +26,45 @@ function normalizeAccessValue(value) {
     const accessValue = String(value || '').trim();
     if (!accessValue || accessValue.length > 120) return null;
     return accessValue;
+}
+
+function slugifyTryoutId(value, fallback = 'tryout') {
+    const slug = String(value || fallback)
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80);
+    return slug || fallback;
+}
+
+function normalizeTryoutId(value, fallback = '') {
+    const raw = String(value || '').trim();
+    const normalized = slugifyTryoutId(raw, fallback);
+    return normalized && normalized.length <= 120 ? normalized : '';
+}
+
+function readTryoutQuestion(db, questionId) {
+    return db.prepare('SELECT * FROM tryout_questions WHERE id = ?').get(questionId);
+}
+
+function normalizeJsonArray(value) {
+    if (typeof value === 'string') {
+        try {
+            const parsed = JSON.parse(value);
+            return Array.isArray(parsed) ? parsed : value.split('\n').map((item) => item.trim()).filter(Boolean);
+        } catch (_) {
+            return value.split('\n').map((item) => item.trim()).filter(Boolean);
+        }
+    }
+    return Array.isArray(value) ? value.map((item) => String(item || '').trim()).filter(Boolean) : [];
+}
+
+function normalizeMediaPath(value) {
+    const mediaPath = String(value || '').trim();
+    if (!mediaPath) return '';
+    return SAFE_MEDIA_PATH_RE.test(mediaPath) && mediaPath.length <= 240 ? mediaPath : '';
 }
 
 function readUser(db, userId) {
@@ -275,11 +315,13 @@ router.get('/tryout-packages', (req, res) => {
 router.post('/tryout-packages', (req, res) => {
     try {
         const db = req.app.locals.db;
-        const { title, description, price, original_price, badge, duration, questions, features, tone, sort_order } = req.body;
+        const { tryout_id, title, description, price, original_price, badge, duration, questions, features, tone, sort_order } = req.body;
+        const tryoutId = normalizeTryoutId(tryout_id, title || 'tryout');
+        if (!tryoutId) return res.status(400).json({ error: 'ID Try Out tidak valid.' });
         const featuresJson = typeof features === 'string' ? features : JSON.stringify(Array.isArray(features) ? features : []);
         const result = db.prepare(
-            'INSERT INTO tryout_packages (title, description, price, original_price, badge, duration, questions, features, tone, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?)'
-        ).run(xss(title||''), xss(description||''), xss(price||'Gratis'), original_price ? xss(original_price) : null, xss(badge||''), xss(duration||''), Number(questions)||0, featuresJson, tone||'default', Number(sort_order)||0);
+            'INSERT INTO tryout_packages (tryout_id, title, description, price, original_price, badge, duration, questions, features, tone, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+        ).run(tryoutId, xss(title||''), xss(description||''), xss(price||'Gratis'), original_price ? xss(original_price) : null, xss(badge||''), xss(duration||''), Number(questions)||0, featuresJson, tone||'default', Number(sort_order)||0);
         res.json({ ok: true, id: result.lastInsertRowid });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -287,11 +329,15 @@ router.post('/tryout-packages', (req, res) => {
 router.put('/tryout-packages/:id', (req, res) => {
     try {
         const db = req.app.locals.db;
-        const { title, description, price, original_price, badge, duration, questions, features, tone, sort_order } = req.body;
+        const { tryout_id, title, description, price, original_price, badge, duration, questions, features, tone, sort_order } = req.body;
+        const current = db.prepare('SELECT id, tryout_id, title FROM tryout_packages WHERE id = ?').get(req.params.id);
+        if (!current) return res.status(404).json({ error: 'Paket Try Out tidak ditemukan.' });
+        const tryoutId = normalizeTryoutId(tryout_id || current.tryout_id, title || current.title || `tryout-${current.id}`);
+        if (!tryoutId) return res.status(400).json({ error: 'ID Try Out tidak valid.' });
         const featuresJson = typeof features === 'string' ? features : JSON.stringify(Array.isArray(features) ? features : []);
         db.prepare(
-            'UPDATE tryout_packages SET title=?, description=?, price=?, original_price=?, badge=?, duration=?, questions=?, features=?, tone=?, sort_order=? WHERE id=?'
-        ).run(xss(title||''), xss(description||''), xss(price||'Gratis'), original_price ? xss(original_price) : null, xss(badge||''), xss(duration||''), Number(questions)||0, featuresJson, tone||'default', Number(sort_order)||0, req.params.id);
+            'UPDATE tryout_packages SET tryout_id=?, title=?, description=?, price=?, original_price=?, badge=?, duration=?, questions=?, features=?, tone=?, sort_order=? WHERE id=?'
+        ).run(tryoutId, xss(title||''), xss(description||''), xss(price||'Gratis'), original_price ? xss(original_price) : null, xss(badge||''), xss(duration||''), Number(questions)||0, featuresJson, tone||'default', Number(sort_order)||0, req.params.id);
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -301,6 +347,250 @@ router.delete('/tryout-packages/:id', (req, res) => {
         req.app.locals.db.prepare('DELETE FROM tryout_packages WHERE id=?').run(req.params.id);
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== TRYOUT QUESTIONS =====
+router.get('/tryout-questions', (req, res) => {
+    try {
+        const db = req.app.locals.db;
+        const tryoutId = normalizeTryoutId(req.query.tryoutId || req.query.tryout_id);
+        if (!tryoutId) return res.status(400).json({ error: 'tryoutId diperlukan.' });
+        res.json(db.prepare(`
+            SELECT *
+            FROM tryout_questions
+            WHERE tryout_id = ?
+            ORDER BY sort_order, id
+        `).all(tryoutId));
+    } catch (e) {
+        console.error('GET /tryout-questions error:', e);
+        res.status(500).json({ error: 'Gagal memuat soal Try Out.' });
+    }
+});
+
+router.post('/tryout-questions', (req, res) => {
+    try {
+        const db = req.app.locals.db;
+        const tryoutId = normalizeTryoutId(req.body.tryout_id || req.body.tryoutId);
+        if (!tryoutId) return res.status(400).json({ error: 'tryoutId diperlukan.' });
+
+        const questionDisplay = String(req.body.question_display || '').trim();
+        const answerDisplay = String(req.body.answer_display || '').trim();
+        if (!questionDisplay) return res.status(400).json({ error: 'Soal wajib diisi.' });
+        if (!answerDisplay) return res.status(400).json({ error: 'Jawaban benar wajib diisi.' });
+
+        const acceptableAnswers = normalizeJsonArray(req.body.acceptable_answers);
+        const mcOptions = normalizeJsonArray(req.body.mc_options);
+        const imageUrl = normalizeMediaPath(req.body.image_url || req.body.imageUrl);
+        const imageAlt = String(req.body.image_alt || req.body.imageAlt || '').trim().slice(0, 180);
+        const questionType = String(req.body.question_type || (mcOptions.length ? 'mc' : 'open')).trim() === 'open' ? 'open' : 'mc';
+        const result = db.prepare(`
+            INSERT INTO tryout_questions (
+                tryout_id, question_text, question_display, answer_display, acceptable_answers,
+                difficulty, question_type, mc_options, image_url, image_alt, sort_order, created_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            tryoutId,
+            String(req.body.question_text || '').trim(),
+            questionDisplay,
+            answerDisplay,
+            JSON.stringify(acceptableAnswers.length ? acceptableAnswers : [answerDisplay]),
+            String(req.body.difficulty || 'Easy').trim() || 'Easy',
+            questionType,
+            JSON.stringify(questionType === 'mc' ? mcOptions : []),
+            imageUrl,
+            imageAlt,
+            Number(req.body.sort_order) || 0,
+            req.session.userId || null
+        );
+        res.json({ ok: true, id: result.lastInsertRowid });
+    } catch (e) {
+        console.error('POST /tryout-questions error:', e);
+        res.status(500).json({ error: 'Gagal menyimpan soal Try Out.' });
+    }
+});
+
+router.put('/tryout-questions/:id', (req, res) => {
+    try {
+        const db = req.app.locals.db;
+        const questionId = parsePositiveId(req.params.id);
+        if (!questionId) return res.status(400).json({ error: 'ID soal tidak valid.' });
+        const existing = readTryoutQuestion(db, questionId);
+        if (!existing) return res.status(404).json({ error: 'Soal Try Out tidak ditemukan.' });
+
+        const tryoutId = normalizeTryoutId(req.body.tryout_id || req.body.tryoutId || existing.tryout_id);
+        const questionDisplay = String(req.body.question_display || '').trim();
+        const answerDisplay = String(req.body.answer_display || '').trim();
+        if (!tryoutId) return res.status(400).json({ error: 'tryoutId diperlukan.' });
+        if (!questionDisplay) return res.status(400).json({ error: 'Soal wajib diisi.' });
+        if (!answerDisplay) return res.status(400).json({ error: 'Jawaban benar wajib diisi.' });
+
+        const acceptableAnswers = normalizeJsonArray(req.body.acceptable_answers);
+        const mcOptions = normalizeJsonArray(req.body.mc_options);
+        const imageUrl = normalizeMediaPath(req.body.image_url || req.body.imageUrl);
+        const imageAlt = String(req.body.image_alt || req.body.imageAlt || '').trim().slice(0, 180);
+        const questionType = String(req.body.question_type || existing.question_type || 'mc').trim() === 'open' ? 'open' : 'mc';
+        db.prepare(`
+            UPDATE tryout_questions
+            SET tryout_id = ?, question_text = ?, question_display = ?, answer_display = ?,
+                acceptable_answers = ?, difficulty = ?, question_type = ?, mc_options = ?,
+                image_url = ?, image_alt = ?, sort_order = ?
+            WHERE id = ?
+        `).run(
+            tryoutId,
+            String(req.body.question_text || '').trim(),
+            questionDisplay,
+            answerDisplay,
+            JSON.stringify(acceptableAnswers.length ? acceptableAnswers : [answerDisplay]),
+            String(req.body.difficulty || 'Easy').trim() || 'Easy',
+            questionType,
+            JSON.stringify(questionType === 'mc' ? mcOptions : []),
+            imageUrl,
+            imageAlt,
+            Number(req.body.sort_order) || 0,
+            questionId
+        );
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('PUT /tryout-questions error:', e);
+        res.status(500).json({ error: 'Gagal memperbarui soal Try Out.' });
+    }
+});
+
+router.patch('/tryout-questions/:id/sort', (req, res) => {
+    try {
+        const questionId = parsePositiveId(req.params.id);
+        if (!questionId) return res.status(400).json({ error: 'ID soal tidak valid.' });
+        req.app.locals.db.prepare('UPDATE tryout_questions SET sort_order = ? WHERE id = ?').run(Number(req.body.sort_order) || 0, questionId);
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('PATCH /tryout-questions sort error:', e);
+        res.status(500).json({ error: 'Gagal memindahkan soal Try Out.' });
+    }
+});
+
+router.delete('/tryout-questions/:id', (req, res) => {
+    try {
+        const questionId = parsePositiveId(req.params.id);
+        if (!questionId) return res.status(400).json({ error: 'ID soal tidak valid.' });
+        req.app.locals.db.prepare('DELETE FROM tryout_questions WHERE id = ?').run(questionId);
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('DELETE /tryout-questions error:', e);
+        res.status(500).json({ error: 'Gagal menghapus soal Try Out.' });
+    }
+});
+
+router.get('/tryout-questions/:id/steps', (req, res) => {
+    try {
+        const questionId = parsePositiveId(req.params.id);
+        if (!questionId) return res.status(400).json({ error: 'ID soal tidak valid.' });
+        res.json(req.app.locals.db.prepare(`
+            SELECT *
+            FROM tryout_question_steps
+            WHERE tryout_question_id = ?
+            ORDER BY step_order, id
+        `).all(questionId));
+    } catch (e) {
+        console.error('GET /tryout-question steps error:', e);
+        res.status(500).json({ error: 'Gagal memuat pembahasan Try Out.' });
+    }
+});
+
+router.post('/tryout-questions/:id/steps', (req, res) => {
+    try {
+        const questionId = parsePositiveId(req.params.id);
+        if (!questionId) return res.status(400).json({ error: 'ID soal tidak valid.' });
+        const db = req.app.locals.db;
+        if (!readTryoutQuestion(db, questionId)) return res.status(404).json({ error: 'Soal Try Out tidak ditemukan.' });
+        const result = db.prepare(`
+            INSERT INTO tryout_question_steps (
+                tryout_question_id, step_order, title, content, why, intuition, mistakes, mistake_result
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            questionId,
+            Number(req.body.step_order) || 1,
+            String(req.body.title || '').trim(),
+            String(req.body.content || '').trim(),
+            String(req.body.why || '').trim(),
+            String(req.body.intuition || '').trim(),
+            String(req.body.mistakes || '').trim(),
+            String(req.body.mistake_result || '').trim()
+        );
+        res.json({ ok: true, id: result.lastInsertRowid });
+    } catch (e) {
+        console.error('POST /tryout-question steps error:', e);
+        res.status(500).json({ error: 'Gagal menyimpan pembahasan Try Out.' });
+    }
+});
+
+router.put('/tryout-question-steps/:id', (req, res) => {
+    try {
+        const stepId = parsePositiveId(req.params.id);
+        if (!stepId) return res.status(400).json({ error: 'ID langkah tidak valid.' });
+        req.app.locals.db.prepare(`
+            UPDATE tryout_question_steps
+            SET step_order = ?, title = ?, content = ?, why = ?, intuition = ?, mistakes = ?, mistake_result = ?
+            WHERE id = ?
+        `).run(
+            Number(req.body.step_order) || 1,
+            String(req.body.title || '').trim(),
+            String(req.body.content || '').trim(),
+            String(req.body.why || '').trim(),
+            String(req.body.intuition || '').trim(),
+            String(req.body.mistakes || '').trim(),
+            String(req.body.mistake_result || '').trim(),
+            stepId
+        );
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('PUT /tryout-question steps error:', e);
+        res.status(500).json({ error: 'Gagal memperbarui pembahasan Try Out.' });
+    }
+});
+
+router.delete('/tryout-question-steps/:id', (req, res) => {
+    try {
+        const stepId = parsePositiveId(req.params.id);
+        if (!stepId) return res.status(400).json({ error: 'ID langkah tidak valid.' });
+        req.app.locals.db.prepare('DELETE FROM tryout_question_steps WHERE id = ?').run(stepId);
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('DELETE /tryout-question steps error:', e);
+        res.status(500).json({ error: 'Gagal menghapus pembahasan Try Out.' });
+    }
+});
+
+router.get('/tryout-attempts', (req, res) => {
+    try {
+        const tryoutId = normalizeTryoutId(req.query.tryoutId || req.query.tryout_id);
+        if (!tryoutId) return res.status(400).json({ error: 'tryoutId diperlukan.' });
+        const rows = req.app.locals.db.prepare(`
+            SELECT ta.id, ta.user_id, ta.tryout_id, ta.tryout_title, ta.score, ta.correct_count,
+                   ta.total_questions, ta.answered_count, ta.duration_seconds, ta.completed_at,
+                   u.display_name, u.username, u.fakultas, u.semester, u.jurusan
+            FROM tryout_attempts ta
+            JOIN users u ON u.id = ta.user_id
+            WHERE ta.tryout_id = ?
+            ORDER BY ta.completed_at DESC, ta.id DESC
+        `).all(tryoutId);
+        res.json(rows);
+    } catch (e) {
+        console.error('GET /tryout-attempts error:', e);
+        res.status(500).json({ error: 'Gagal memuat hasil Try Out.' });
+    }
+});
+
+router.delete('/tryout-attempts/:id', (req, res) => {
+    try {
+        const attemptId = parsePositiveId(req.params.id);
+        if (!attemptId) return res.status(400).json({ error: 'ID riwayat tidak valid.' });
+        const info = req.app.locals.db.prepare('DELETE FROM tryout_attempts WHERE id = ?').run(attemptId);
+        if (info.changes === 0) return res.status(404).json({ error: 'Riwayat Try Out tidak ditemukan.' });
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('DELETE /tryout-attempts error:', e);
+        res.status(500).json({ error: 'Gagal menghapus riwayat Try Out.' });
+    }
 });
 
 // ===== USERS =====
@@ -429,7 +719,15 @@ router.get('/users', (req, res) => {
             FROM users
             ORDER BY id
         `).all();
-        res.json(users);
+        const grantsByUser = rowsByUserId(db.prepare(`
+            SELECT id, user_id, access_type, access_value, granted_at
+            FROM user_access_grants
+            ORDER BY granted_at DESC, id DESC
+        `).all());
+        res.json(users.map((user) => ({
+            ...user,
+            access_grants: grantsByUser[String(user.id)] || [],
+        })));
     } catch (e) { console.error('GET /users error:', e); res.status(500).json({ error: e.message }); }
 });
 
@@ -496,6 +794,30 @@ router.post('/users/:id/grant-access', (req, res) => {
     } catch (e) {
         console.error('POST /users/grant-access error:', e);
         res.status(500).json({ error: 'Gagal memberi akses user.' });
+    }
+});
+
+router.delete('/users/:id/access-grants/:grantId', (req, res) => {
+    try {
+        const userId = parsePositiveId(req.params.id);
+        const grantId = parsePositiveId(req.params.grantId);
+        if (!userId) return res.status(400).json({ error: 'ID user tidak valid.' });
+        if (!grantId) return res.status(400).json({ error: 'ID akses tidak valid.' });
+
+        const db = req.app.locals.db;
+        const user = readUser(db, userId);
+        if (!user) return res.status(404).json({ error: 'User tidak ditemukan.' });
+
+        const info = db.prepare(`
+            DELETE FROM user_access_grants
+            WHERE id = ? AND user_id = ?
+        `).run(grantId, userId);
+        if (info.changes === 0) return res.status(404).json({ error: 'Akses user tidak ditemukan.' });
+
+        res.json({ ok: true, id: grantId, deleted: info.changes });
+    } catch (e) {
+        console.error('DELETE /users/access-grants error:', e);
+        res.status(500).json({ error: 'Gagal mencabut akses user.' });
     }
 });
 

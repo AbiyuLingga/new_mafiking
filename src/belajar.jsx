@@ -121,7 +121,7 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
         <div className="max-w-6xl mx-auto px-6 md:px-8 py-10">
           {isTryOutSection ? (
             <div key={`cards-${mapel}`}>
-              <TryOutBelajarPanel setRoute={setRoute} isLoggedIn={isLoggedIn} />
+              <TryOutBelajarPanel setRoute={setRoute} isLoggedIn={isLoggedIn} isAdmin={isAdmin} />
             </div>
           ) : (() => {
             const totalSoal = chapters.reduce((s, c) => s + c.total, 0);
@@ -173,7 +173,45 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
 };
 
 // ─── Semester kicker (header) ─────────────────────────────────────────────
-const TryOutBelajarPanel = ({ setRoute, isLoggedIn }) => {
+const PREMIUM_TRYOUT_ID = "tryout-premium-tpb-prep";
+const PREMIUM_TRYOUT_FALLBACK = {
+  tryout_id: PREMIUM_TRYOUT_ID,
+  title: "Tryout Premium: The Trinity TPB",
+  duration: "90 mnt",
+  questions: 30,
+  price: "Rp 100.000",
+};
+
+function parseBelajarTryoutDurationSeconds(value, fallbackSeconds) {
+  const text = String(value || "").toLowerCase();
+  const number = Number((text.match(/\d+/) || [])[0] || 0);
+  if (!number) return Number(fallbackSeconds || 90 * 60);
+  return text.includes("jam") ? number * 60 * 60 : number * 60;
+}
+
+const TryOutBelajarPanel = ({ setRoute, isLoggedIn, isAdmin = false }) => {
+  const [premiumPackage, setPremiumPackage] = useState(PREMIUM_TRYOUT_FALLBACK);
+  const [activePackages, setActivePackages] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      MafikingAPI.get('/api/tryout-packages').catch(() => []),
+      MafikingAPI.get('/api/payment/active-packages').catch(() => []),
+    ]).then(([packages, active]) => {
+      if (cancelled) return;
+      const premium = (Array.isArray(packages) ? packages : []).find((pkg) => pkg.tryout_id === PREMIUM_TRYOUT_ID);
+      if (premium) setPremiumPackage({ ...PREMIUM_TRYOUT_FALLBACK, ...premium });
+      setActivePackages(Array.isArray(active) ? active : []);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const hasPremiumAccess = isAdmin
+    || activePackages.includes(premiumPackage.title)
+    || activePackages.includes(premiumPackage.tryout_id)
+    || activePackages.some((title) => ["Trial 7 Hari", "Bulanan", "Semester"].includes(title));
+
   const startPractice = () => {
     setRoute({
       route: "tryout",
@@ -183,13 +221,43 @@ const TryOutBelajarPanel = ({ setRoute, isLoggedIn }) => {
         title: "Try Out Matematika",
         mapel: "Matematika",
         semester: 1,
-        est: "15 mnt",
+        est: "30 mnt",
         total: 15,
         problemLimit: 15,
-        timeLimitSeconds: 15 * 60,
+        timeLimitSeconds: 30 * 60,
         topics: ["Try Out Gratis", "Matematika"],
         freeTryout: true,
         isTryoutSession: true,
+      },
+    });
+  };
+
+  const startPremiumTryout = () => {
+    if (!hasPremiumAccess) {
+      showToast("Akses Try Out premium belum aktif untuk akun ini.", "error");
+      return;
+    }
+    const timeLimitSeconds = parseBelajarTryoutDurationSeconds(premiumPackage.duration, 90 * 60);
+    setRoute({
+      route: "tryout",
+      tryout: {
+        id: premiumPackage.tryout_id || PREMIUM_TRYOUT_ID,
+        tryout_id: premiumPackage.tryout_id || PREMIUM_TRYOUT_ID,
+        mode: "tryout-confirm",
+        title: premiumPackage.title || PREMIUM_TRYOUT_FALLBACK.title,
+        mapel: "",
+        semester: 1,
+        est: premiumPackage.duration || "90 mnt",
+        total: Number(premiumPackage.questions || 30),
+        problemLimit: Number(premiumPackage.questions || 30),
+        timeLimitSeconds,
+        topics: [premiumPackage.title || PREMIUM_TRYOUT_FALLBACK.title, "Premium"],
+        freeTryout: false,
+        isTryoutSession: true,
+        packageTitle: premiumPackage.title || PREMIUM_TRYOUT_FALLBACK.title,
+        disableCanvasIntro: true,
+        disableCanvasMode: true,
+        backRoute: { route: "belajar", section: "Try Out" },
       },
     });
   };
@@ -207,7 +275,7 @@ const TryOutBelajarPanel = ({ setRoute, isLoggedIn }) => {
             </span>
             <div className="h-8 min-w-[3.75rem] px-2 rounded-lg bg-white/5 flex items-center justify-center gap-1 text-[10px] font-mono font-bold tracking-widest uppercase text-white/65 border border-white/10">
               <Icon.Clock className="w-3 h-3" />
-              15 mnt
+              30 mnt
             </div>
           </div>
 
@@ -224,6 +292,39 @@ const TryOutBelajarPanel = ({ setRoute, isLoggedIn }) => {
             </button>
           </div>
 
+        </div>
+      </section>
+      <section className="relative overflow-hidden rounded-[var(--card-radius)] bg-ink p-6 text-white group flex flex-col justify-between transition-all">
+        <div className="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-yel/15 blur-3xl" />
+        <div className="absolute -bottom-16 -left-12 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
+
+        <div className="relative z-10 flex flex-col h-full">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[10px] font-mono font-bold tracking-widest uppercase bg-white text-ink px-2.5 py-1 rounded-md border border-white">
+              Premium
+            </span>
+            <div className="h-8 min-w-[3.75rem] px-2 rounded-lg bg-white/5 flex items-center justify-center gap-1 text-[10px] font-mono font-bold tracking-widest uppercase text-white/65 border border-white/10">
+              <Icon.Clock className="w-3 h-3" />
+              {premiumPackage.duration || "90 mnt"}
+            </div>
+          </div>
+
+          <h2 className="font-display font-extrabold text-2xl leading-tight tracking-tight mb-3 text-white">
+            {premiumPackage.title || "Tryout Premium"}
+          </h2>
+          <div className="mt-auto pt-4 border-t border-white/10 flex items-center justify-between gap-3 w-full">
+            <span className="text-xs font-mono font-bold text-white/50">
+              {hasPremiumAccess ? "Akses aktif" : "Perlu akses"}
+            </span>
+            <button
+              onClick={startPremiumTryout}
+              className={hasPremiumAccess ? "btn-yel !px-4 !py-2 text-xs shrink-0" : "inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-bold text-white/65 hover:bg-white/10 transition-colors shrink-0"}
+              type="button"
+            >
+              {hasPremiumAccess ? "Mulai" : "Terkunci"}
+              {hasPremiumAccess ? <Icon.Arrow className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" /> : <Icon.Lock className="w-3.5 h-3.5" />}
+            </button>
+          </div>
         </div>
       </section>
     </div>

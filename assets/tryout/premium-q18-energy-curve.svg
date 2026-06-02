@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="380" viewBox="0 0 560 380" role="img" aria-labelledby="title desc">
+  <title id="title">Kurva energi reaksi eksoterm</title>
+  <desc id="desc">Kurva energi reaksi eksoterm dengan tanda X menunjukkan selisih energi dari reaktan ke puncak.</desc>
+  <defs>
+    <marker id="axis-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#0b1326"/></marker>
+    <marker id="red-arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#dc2626"/></marker>
+  </defs>
+  <rect width="560" height="380" rx="22" fill="#ffffff"/>
+  <g transform="translate(82 42)" fill="none" stroke-linecap="round">
+    <line x1="0" y1="280" x2="430" y2="280" stroke="#0b1326" stroke-width="4" marker-end="url(#axis-arrow)"/>
+    <line x1="0" y1="280" x2="0" y2="20" stroke="#0b1326" stroke-width="4" marker-end="url(#axis-arrow)"/>
+    <path d="M38 143 L90 143 C135 143 150 82 196 82 C244 82 270 220 340 220 L388 220" stroke="#2563eb" stroke-width="7"/>
+    <line x1="38" y1="143" x2="196" y2="143" stroke="#94a3b8" stroke-width="4" stroke-dasharray="10 9"/>
+    <line x1="196" y1="143" x2="196" y2="82" stroke="#dc2626" stroke-width="5" marker-start="url(#red-arrow)" marker-end="url(#red-arrow)"/>
+    <text x="218" y="119" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#dc2626">X</text>
+    <text x="-30" y="34" font-family="Arial, sans-serif" font-size="28" fill="#0b1326">E</text>
+    <text x="350" y="314" font-family="Arial, sans-serif" font-size="28" fill="#0b1326">Progres</text>
+  </g>
+</svg>

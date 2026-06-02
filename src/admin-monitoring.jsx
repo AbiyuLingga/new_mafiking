@@ -4,11 +4,22 @@ const {
 } = React;
 
 const ADMIN_MONITORING_ACCESS_TYPES = [
-  ['tryout', 'Try Out'],
-  ['subscription', 'Langganan'],
-  ['package', 'Paket'],
-  ['manual', 'Manual'],
+  ['tryout', 'Try Out', 'tryout-premium-tpb-prep'],
+  ['mission', 'Misi Harian', 'daily-missions'],
 ];
+
+function adminMonitoringAccessValueForType(type) {
+  const match = ADMIN_MONITORING_ACCESS_TYPES.find(([id]) => id === type);
+  return match ? match[2] : '';
+}
+
+function adminMonitoringAccessLabel(grant) {
+  if (!grant) return '';
+  const match = ADMIN_MONITORING_ACCESS_TYPES.find(
+    ([id, _label, value]) => id === grant.access_type && value === grant.access_value
+  );
+  return match ? match[1] : grant.access_type + ': ' + grant.access_value;
+}
 
 function adminMonitoringToast(message, type) {
   if (typeof showToast === 'function') showToast(message, type || 'info');
@@ -55,7 +66,7 @@ function AdminMonitoringAccessBadges({ grants }) {
     <div className="flex flex-wrap gap-1">
       {grants.slice(0, 4).map((grant) => (
         <span key={grant.id} className="tag">
-          {grant.access_type}: {grant.access_value}
+          {adminMonitoringAccessLabel(grant)}
         </span>
       ))}
       {grants.length > 4 && <span className="tag">+{grants.length - 4}</span>}
@@ -127,13 +138,13 @@ const AdminMonitoringPanel = () => {
   }, []);
 
   function readGrantDraft(userId) {
-    return grantDrafts[userId] || { access_type: 'tryout', access_value: '' };
+    return grantDrafts[userId] || { access_type: 'tryout', revoke_grant_id: '' };
   }
 
   function patchGrantDraft(userId, patch) {
     setGrantDrafts((current) => ({
       ...current,
-      [userId]: { ...(current[userId] || { access_type: 'tryout', access_value: '' }), ...patch },
+      [userId]: { ...(current[userId] || { access_type: 'tryout', revoke_grant_id: '' }), ...patch },
     }));
   }
 
@@ -152,21 +163,44 @@ const AdminMonitoringPanel = () => {
 
   async function grantAccess(user) {
     const draft = readGrantDraft(user.id);
-    if (!draft.access_value || !draft.access_value.trim()) {
-      adminMonitoringToast('Isi nilai akses dulu.', 'error');
+    const accessValue = adminMonitoringAccessValueForType(draft.access_type);
+    if (!accessValue) {
+      adminMonitoringToast('Pilihan akses tidak valid.', 'error');
       return;
     }
     setBusyUserId(user.id);
     try {
       await MafikingAPI.post('/api/admin/users/' + user.id + '/grant-access', {
         access_type: draft.access_type,
-        access_value: draft.access_value.trim(),
+        access_value: accessValue,
       });
       adminMonitoringToast('Akses diberikan untuk ' + user.display_name + '.', 'success');
-      patchGrantDraft(user.id, { access_value: '' });
       await loadDashboard();
     } catch (e) {
       adminMonitoringToast(e.message || 'Gagal memberi akses.', 'error');
+    } finally {
+      setBusyUserId(null);
+    }
+  }
+
+  async function revokeAccess(user, grantId) {
+    const normalizedGrantId = String(grantId || '').trim();
+    if (!normalizedGrantId) {
+      adminMonitoringToast('Pilih akses yang ingin dicabut.', 'error');
+      return;
+    }
+    const grant = (user.access_grants || []).find((item) => String(item.id) === normalizedGrantId);
+    if (!grant) {
+      adminMonitoringToast('Akses user tidak ditemukan.', 'error');
+      return;
+    }
+    setBusyUserId(user.id);
+    try {
+      await MafikingAPI.del('/api/admin/users/' + user.id + '/access-grants/' + normalizedGrantId);
+      adminMonitoringToast('Akses ' + adminMonitoringAccessLabel(grant) + ' dicabut dari ' + user.display_name + '.', 'success');
+      await loadDashboard();
+    } catch (e) {
+      adminMonitoringToast(e.message || 'Gagal mencabut akses.', 'error');
     } finally {
       setBusyUserId(null);
     }
@@ -254,6 +288,10 @@ const AdminMonitoringPanel = () => {
             <tbody>
               {users.map((user) => {
                 const draft = readGrantDraft(user.id);
+                const userGrants = Array.isArray(user.access_grants) ? user.access_grants : [];
+                const selectedRevokeGrantId = userGrants.some((grant) => String(grant.id) === String(draft.revoke_grant_id))
+                  ? String(draft.revoke_grant_id)
+                  : (userGrants[0] ? String(userGrants[0].id) : '');
                 return (
                   <tr key={user.id} className={user.role === 'admin' ? 'admin-row-admin' : ''}>
                     <td>
@@ -276,31 +314,51 @@ const AdminMonitoringPanel = () => {
                     <td style={{ minWidth: 180 }}>
                       <AdminMonitoringAccessBadges grants={user.access_grants} />
                     </td>
-                    <td style={{ minWidth: 300 }}>
-                      <div className="flex gap-2">
-                        <select
-                          className="admin-input"
-                          style={{ minWidth: 108 }}
-                          value={draft.access_type}
-                          onChange={(event) => patchGrantDraft(user.id, { access_type: event.target.value })}
-                        >
-                          {ADMIN_MONITORING_ACCESS_TYPES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-                        </select>
-                        <input
-                          className="admin-input"
-                          placeholder="tryout-semester-1"
-                          value={draft.access_value}
-                          onChange={(event) => patchGrantDraft(user.id, { access_value: event.target.value })}
-                        />
-                        <button
-                          className="admin-btn-primary"
-                          style={{ padding: '4px 10px', fontSize: 12 }}
-                          disabled={busyUserId === user.id}
-                          onClick={() => grantAccess(user)}
-                          type="button"
-                        >
-                          Beri
-                        </button>
+                    <td style={{ minWidth: 430 }}>
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <div className="flex gap-2 items-center">
+                          <select
+                            className="admin-input"
+                            style={{ minWidth: 130 }}
+                            value={draft.access_type}
+                            onChange={(event) => patchGrantDraft(user.id, { access_type: event.target.value })}
+                          >
+                            {ADMIN_MONITORING_ACCESS_TYPES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                          </select>
+                          <button
+                            className="admin-btn-primary"
+                            style={{ padding: '4px 10px', fontSize: 12 }}
+                            disabled={busyUserId === user.id}
+                            onClick={() => grantAccess(user)}
+                            type="button"
+                          >
+                            Beri
+                          </button>
+                        </div>
+                        <div className="flex gap-2 items-center">
+                          <select
+                            className="admin-input"
+                            style={{ minWidth: 150 }}
+                            value={selectedRevokeGrantId}
+                            disabled={!userGrants.length || busyUserId === user.id}
+                            onChange={(event) => patchGrantDraft(user.id, { revoke_grant_id: event.target.value })}
+                          >
+                            {userGrants.length
+                              ? userGrants.map((grant) => (
+                                <option key={grant.id} value={grant.id}>{adminMonitoringAccessLabel(grant)}</option>
+                              ))
+                              : <option value="">Belum ada akses</option>}
+                          </select>
+                          <button
+                            className="admin-btn-ghost"
+                            style={{ padding: '4px 10px', fontSize: 12 }}
+                            disabled={!userGrants.length || busyUserId === user.id}
+                            onClick={() => revokeAccess(user, selectedRevokeGrantId)}
+                            type="button"
+                          >
+                            Cabut
+                          </button>
+                        </div>
                       </div>
                     </td>
                     <td>

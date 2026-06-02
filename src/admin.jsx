@@ -1271,6 +1271,7 @@ const AdminTryoutPackageModal = ({ pkg, onDone, onClose }) => {
     }
   }
   const [form, setForm] = useAdminState({
+    tryout_id: (pkg && pkg.tryout_id) || '',
     title: (pkg && pkg.title) || '',
     description: (pkg && pkg.description) || '',
     price: (pkg && pkg.price) || 'Gratis',
@@ -1295,6 +1296,7 @@ const AdminTryoutPackageModal = ({ pkg, onDone, onClose }) => {
         features: String(form.features || '').split('\n').map((item) => item.trim()).filter(Boolean),
         questions: Number(form.questions) || 0,
         sort_order: Number(form.sort_order) || 0,
+        tryout_id: String(form.tryout_id || '').trim(),
       });
       showToast(isEdit ? 'Paket Try Out diperbarui.' : 'Paket Try Out ditambahkan.', 'success');
       onDone(); onClose();
@@ -1307,6 +1309,9 @@ const AdminTryoutPackageModal = ({ pkg, onDone, onClose }) => {
 
   return (
     <AdminModal title={isEdit ? 'Edit Paket Try Out' : 'Tambah Paket Try Out'} onClose={onClose}>
+      <AdminField label="ID Try Out" required>
+        <AdminInput value={form.tryout_id} onChange={(e) => setForm({ ...form, tryout_id: e.target.value })} placeholder="tryout-gratis-tpb" />
+      </AdminField>
       <AdminField label="Judul Paket" required error={err}>
         <AdminInput value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Tryout Gratis TPB" />
       </AdminField>
@@ -1353,10 +1358,680 @@ const AdminTryoutPackageModal = ({ pkg, onDone, onClose }) => {
   );
 };
 
-const AdminTryoutPackagesPanel = () => {
+function readAdminTryoutList(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
+  try {
+    const parsed = JSON.parse(value || '[]');
+    return Array.isArray(parsed) ? parsed.map((item) => String(item || '').trim()).filter(Boolean) : [];
+  } catch (e) {
+    return String(value || '').split('\n').map((item) => item.trim()).filter(Boolean);
+  }
+}
+
+function adminTryoutListLines(value) {
+  return readAdminTryoutList(value).join('\n');
+}
+
+function getAdminTryoutId(pkg) {
+  return String((pkg && (pkg.tryout_id || pkg.tryoutId)) || '').trim();
+}
+
+function openAdminTryoutPreview(pkg, setRoute) {
+  const tryoutId = getAdminTryoutId(pkg);
+  if (!tryoutId) {
+    showToast('ID Try Out belum tersedia.', 'error');
+    return;
+  }
+  const target = {
+    route: 'tryout',
+    tryout: {
+      id: tryoutId,
+      tryout_id: tryoutId,
+      mode: 'tryout-preview',
+      title: pkg.title || 'Preview Try Out',
+      packageTitle: pkg.title || 'Preview Try Out',
+      backRoute: { route: 'admin' },
+    },
+  };
+  if (typeof setRoute === 'function') {
+    setRoute(target);
+  } else if (typeof window.__mafikingNavigate === 'function') {
+    window.__mafikingNavigate(target);
+  } else {
+    showToast('Navigasi preview belum siap.', 'error');
+  }
+}
+
+function formatAdminTryoutDuration(seconds) {
+  const safe = Math.max(0, Number(seconds || 0));
+  const minutes = Math.floor(safe / 60);
+  const remainder = safe % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
+}
+
+const AdminTryoutQuestionModal = ({ pkg, question, defaultSortOrder, onDone, onClose, onEditSteps, onDelete }) => {
+  const isEdit = Boolean(question && question.id);
+  const tryoutId = getAdminTryoutId(pkg);
+  const [form, setForm] = useAdminState({
+    question_text: (question && question.question_text) || '',
+    question_display: (question && question.question_display) || '',
+    answer_display: (question && question.answer_display) || '',
+    acceptable_answers: question ? adminTryoutListLines(question.acceptable_answers) : '',
+    difficulty: (question && question.difficulty) || 'Easy',
+    question_type: (question && question.question_type) || 'mc',
+    mc_options: question ? adminTryoutListLines(question.mc_options) : '',
+    image_url: (question && question.image_url) || '',
+    image_alt: (question && question.image_alt) || '',
+    sort_order: (question && question.sort_order != null) ? question.sort_order : defaultSortOrder || 0,
+  });
+  const [saving, setSaving] = useAdminState(false);
+  const [err, setErr] = useAdminState('');
+
+  async function save() {
+    if (!tryoutId) { setErr('ID Try Out belum tersedia.'); return; }
+    if (!form.question_display.trim()) { setErr('Soal wajib diisi.'); return; }
+    if (!form.answer_display.trim()) { setErr('Jawaban benar wajib diisi.'); return; }
+    setSaving(true); setErr('');
+    try {
+      const payload = {
+        tryout_id: tryoutId,
+        question_text: form.question_text,
+        question_display: form.question_display,
+        answer_display: form.answer_display,
+        acceptable_answers: form.acceptable_answers.split('\n').map((item) => item.trim()).filter(Boolean),
+        difficulty: form.difficulty,
+        question_type: form.question_type,
+        mc_options: form.question_type === 'mc'
+          ? form.mc_options.split('\n').map((item) => item.trim()).filter(Boolean)
+          : [],
+        image_url: form.image_url,
+        image_alt: form.image_alt,
+        sort_order: Number(form.sort_order) || 0,
+      };
+      const url = isEdit ? '/api/admin/tryout-questions/' + question.id : '/api/admin/tryout-questions';
+      await MafikingAPI[isEdit ? 'put' : 'post'](url, payload);
+      showToast(isEdit ? 'Soal Try Out diperbarui.' : 'Soal Try Out ditambahkan.', 'success');
+      onDone();
+      onClose();
+    } catch (e) {
+      setErr(e.message || 'Gagal menyimpan soal Try Out.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <AdminModal title={isEdit ? 'Edit Soal Try Out' : 'Tambah Soal Try Out'} onClose={onClose} wide>
+      <div className="admin-two-col">
+        <div>
+          <AdminField label="ID Try Out">
+            <AdminInput value={tryoutId} disabled />
+          </AdminField>
+          <AdminField label="Tipe">
+            <AdminSelect
+              value={form.question_type}
+              onChange={(e) => setForm({ ...form, question_type: e.target.value })}
+              options={[{ value: 'mc', label: 'Pilihan Ganda' }, { value: 'open', label: 'Uraian' }]}
+            />
+          </AdminField>
+          <AdminField label="Kesulitan">
+            <AdminSelect
+              value={form.difficulty}
+              onChange={(e) => setForm({ ...form, difficulty: e.target.value })}
+              options={['Easy', 'Medium', 'Hard']}
+            />
+          </AdminField>
+          <AdminField label="Urutan">
+            <AdminInput type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: Number(e.target.value) })} />
+          </AdminField>
+        </div>
+        <div>
+          <AdminField label="Soal (display)" required error={err}>
+            <AlignToggle value={form.question_display} onChange={(value) => setForm({ ...form, question_display: value })} />
+            <AdminTextarea rows={5} value={form.question_display} onChange={(e) => setForm({ ...form, question_display: e.target.value })} />
+          </AdminField>
+          <AdminField label="Soal teks polos">
+            <AdminTextarea rows={2} value={form.question_text} onChange={(e) => setForm({ ...form, question_text: e.target.value })} />
+          </AdminField>
+          <AdminField label="Gambar soal (URL lokal)">
+            <AdminInput value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} placeholder="/assets/tryout/q6-displacement.svg" />
+          </AdminField>
+          <AdminField label="Alt gambar">
+            <AdminInput value={form.image_alt} onChange={(e) => setForm({ ...form, image_alt: e.target.value })} placeholder="Diagram perpindahan" />
+          </AdminField>
+        </div>
+      </div>
+      <AdminField label="Jawaban benar" required>
+        <AdminInput value={form.answer_display} onChange={(e) => setForm({ ...form, answer_display: e.target.value })} />
+      </AdminField>
+      <AdminField label="Jawaban diterima (satu per baris)">
+        <AdminTextarea rows={3} value={form.acceptable_answers} onChange={(e) => setForm({ ...form, acceptable_answers: e.target.value })} />
+      </AdminField>
+      {form.question_type === 'mc' && (
+        <AdminField label="Pilihan jawaban (satu per baris)">
+          <AdminTextarea rows={5} value={form.mc_options} onChange={(e) => setForm({ ...form, mc_options: e.target.value })} />
+        </AdminField>
+      )}
+      <div className="admin-form-actions" style={{ flexWrap: 'wrap', gap: 8 }}>
+        {isEdit && onDelete && <button className="admin-btn-ghost" style={{ color: '#ef4444', marginRight: 'auto' }} onClick={onDelete} type="button">Hapus Soal</button>}
+        {isEdit && onEditSteps && <button className="admin-btn-ghost" onClick={onEditSteps} type="button">Edit Pembahasan</button>}
+        <button className="admin-btn-ghost" onClick={onClose} type="button">Batal</button>
+        <button className="admin-btn-primary" disabled={saving} onClick={save} type="button">
+          {saving ? 'Menyimpan...' : isEdit ? 'Simpan Soal' : 'Tambah Soal'}
+        </button>
+      </div>
+    </AdminModal>
+  );
+};
+
+const AdminTryoutStepRow = ({ step, onRefresh }) => {
+  const [editing, setEditing] = useAdminState(false);
+  const [form, setForm] = useAdminState({ ...step });
+  const [saving, setSaving] = useAdminState(false);
+
+  async function saveStep() {
+    setSaving(true);
+    try {
+      await MafikingAPI.put('/api/admin/tryout-question-steps/' + step.id, form);
+      showToast('Pembahasan diperbarui.', 'success');
+      setEditing(false);
+      onRefresh();
+    } catch (e) {
+      showToast(e.message || 'Gagal menyimpan pembahasan.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteStep() {
+    if (!adminConfirmDelete('langkah pembahasan ini')) return;
+    try {
+      await MafikingAPI.del('/api/admin/tryout-question-steps/' + step.id);
+      showToast('Pembahasan dihapus.', 'success');
+      onRefresh();
+    } catch (e) {
+      showToast(e.message || 'Gagal menghapus pembahasan.', 'error');
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="admin-step-row">
+        <div className="admin-step-num">{step.step_order}</div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-sm">{step.title}</div>
+          <div className="text-xs text-ink/60 truncate">{step.content}</div>
+        </div>
+        <div className="flex gap-1 shrink-0">
+          <button className="admin-icon-btn" title="Edit" onClick={() => setEditing(true)} type="button"><AdminIcon.Pencil /></button>
+          <button className="admin-icon-btn admin-icon-btn-danger" title="Hapus" onClick={deleteStep} type="button"><AdminIcon.Trash /></button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="admin-step-edit">
+      <div className="admin-two-col-sm">
+        <AdminField label="Urutan"><AdminInput type="number" value={form.step_order} onChange={(e) => setForm({ ...form, step_order: Number(e.target.value) })} /></AdminField>
+        <AdminField label="Judul"><AdminInput value={form.title || ''} onChange={(e) => setForm({ ...form, title: e.target.value })} /></AdminField>
+      </div>
+      <AdminField label="Isi"><AdminTextarea rows={3} value={form.content || ''} onChange={(e) => setForm({ ...form, content: e.target.value })} /></AdminField>
+      <AdminField label="Alasan"><AdminTextarea rows={2} value={form.why || ''} onChange={(e) => setForm({ ...form, why: e.target.value })} /></AdminField>
+      <AdminField label="Intuisi"><AdminTextarea rows={2} value={form.intuition || ''} onChange={(e) => setForm({ ...form, intuition: e.target.value })} /></AdminField>
+      <AdminField label="Kesalahan umum"><AdminTextarea rows={2} value={form.mistakes || ''} onChange={(e) => setForm({ ...form, mistakes: e.target.value })} /></AdminField>
+      <AdminField label="Hasil salah"><AdminInput value={form.mistake_result || ''} onChange={(e) => setForm({ ...form, mistake_result: e.target.value })} /></AdminField>
+      <div className="admin-form-actions">
+        <button className="admin-btn-ghost" onClick={() => setEditing(false)} type="button">Batal</button>
+        <button className="admin-btn-primary" disabled={saving} onClick={saveStep} type="button">{saving ? 'Menyimpan...' : 'Simpan'}</button>
+      </div>
+    </div>
+  );
+};
+
+const AdminTryoutAddStepForm = ({ questionId, currentCount, onDone }) => {
+  const [form, setForm] = useAdminState({ step_order: currentCount + 1, title: '', content: '', why: '', intuition: '', mistakes: '', mistake_result: '' });
+  const [saving, setSaving] = useAdminState(false);
+
+  async function save() {
+    if (!form.title.trim() || !form.content.trim()) {
+      showToast('Judul dan isi wajib diisi.', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      await MafikingAPI.post('/api/admin/tryout-questions/' + questionId + '/steps', form);
+      showToast('Pembahasan ditambahkan.', 'success');
+      onDone();
+    } catch (e) {
+      showToast(e.message || 'Gagal menambah pembahasan.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="admin-step-edit" style={{ borderColor: 'var(--yel)', borderWidth: 2 }}>
+      <div className="kicker mb-2">Langkah Baru</div>
+      <div className="admin-two-col-sm">
+        <AdminField label="Urutan"><AdminInput type="number" value={form.step_order} onChange={(e) => setForm({ ...form, step_order: Number(e.target.value) })} /></AdminField>
+        <AdminField label="Judul"><AdminInput value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></AdminField>
+      </div>
+      <AdminField label="Isi"><AdminTextarea rows={3} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /></AdminField>
+      <AdminField label="Alasan"><AdminTextarea rows={2} value={form.why} onChange={(e) => setForm({ ...form, why: e.target.value })} /></AdminField>
+      <div className="admin-form-actions">
+        <button className="admin-btn-primary" disabled={saving} onClick={save} type="button">{saving ? 'Menyimpan...' : '+ Tambah Pembahasan'}</button>
+      </div>
+    </div>
+  );
+};
+
+const AdminTryoutStepsModal = ({ question, onClose }) => {
+  const [steps, setSteps] = useAdminState([]);
+  const [loading, setLoading] = useAdminState(true);
+  const [showAdd, setShowAdd] = useAdminState(false);
+
+  const load = useAdminCallback(() => {
+    setLoading(true);
+    MafikingAPI.get('/api/admin/tryout-questions/' + question.id + '/steps')
+      .then(setSteps)
+      .catch(() => setSteps([]))
+      .finally(() => setLoading(false));
+  }, [question.id]);
+
+  useAdminEffect(() => { load(); }, [load]);
+
+  return (
+    <AdminModal title="Pembahasan Try Out" onClose={onClose} wide>
+      <p className="text-sm text-ink/60 mb-4">{question.question_display}</p>
+      {loading ? (
+        <div className="flex gap-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-14 flex-1" />)}</div>
+      ) : steps.length === 0 ? (
+        <p className="text-sm text-ink/55">Belum ada pembahasan untuk soal ini.</p>
+      ) : (
+        <div className="flex flex-col gap-2 mb-4">
+          {steps.map((step) => <AdminTryoutStepRow key={step.id} step={step} onRefresh={load} />)}
+        </div>
+      )}
+      {showAdd ? (
+        <AdminTryoutAddStepForm questionId={question.id} currentCount={steps.length} onDone={() => { setShowAdd(false); load(); }} />
+      ) : (
+        <button className="admin-btn-ghost w-full mt-2" onClick={() => setShowAdd(true)} type="button">
+          + Tambah Pembahasan
+        </button>
+      )}
+    </AdminModal>
+  );
+};
+
+const AdminTryoutImportPanel = ({ pkg, onImported }) => {
+  const tryoutId = getAdminTryoutId(pkg);
+  const [inputMode, setInputMode] = useAdminState('file');
+  const [importMode, setImportMode] = useAdminState('ai_complete');
+  const [file, setFile] = useAdminState(null);
+  const [sourceText, setSourceText] = useAdminState('');
+  const [answerKey, setAnswerKey] = useAdminState('');
+  const [draft, setDraft] = useAdminState(null);
+  const [source, setSource] = useAdminState(null);
+  const [loading, setLoading] = useAdminState(false);
+  const [importing, setImporting] = useAdminState(false);
+  const [err, setErr] = useAdminState('');
+
+  function updateQuestion(idx, nextQuestion) {
+    setDraft((prev) => ({
+      ...prev,
+      questions: prev.questions.map((question, questionIdx) => questionIdx === idx ? nextQuestion : question),
+    }));
+  }
+
+  function removeQuestion(idx) {
+    setDraft((prev) => ({ ...prev, questions: prev.questions.filter((_, questionIdx) => questionIdx !== idx) }));
+  }
+
+  async function createDraft() {
+    if (!tryoutId) { setErr('ID Try Out belum tersedia.'); return; }
+    if (inputMode === 'file' && !file) { setErr('Pilih file soal dulu.'); return; }
+    if (inputMode === 'latex' && !sourceText.trim()) { setErr('Tempel teks soal dulu.'); return; }
+    setLoading(true); setErr('');
+    try {
+      const formData = new FormData();
+      if (inputMode === 'file') formData.append('source', file);
+      else formData.append('source_text', sourceText);
+      formData.append('mode', importMode);
+      formData.append('tryout_id', tryoutId);
+      formData.append('admin_answer_key', answerKey);
+      const response = await fetch('/api/admin/import/draft', {
+        method: 'POST',
+        credentials: 'same-origin',
+        body: formData,
+      });
+      const data = await parseAdminApiResponse(response);
+      setSource(data.source || null);
+      setDraft({
+        ...(data.draft || {}),
+        questions: ((data.draft && data.draft.questions) || []).map(normalizeImportQuestionForUi),
+      });
+      showToast('Draft import Try Out dibuat.', 'success');
+    } catch (e) {
+      setErr(e.message || 'Gagal membuat draft.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function commitDraft() {
+    if (!draft || !draft.questions.length) { setErr('Tidak ada draft soal.'); return; }
+    setImporting(true); setErr('');
+    try {
+      const response = await fetch('/api/admin/import/commit', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tryout_id: tryoutId, questions: draft.questions }),
+      });
+      const data = await parseAdminApiResponse(response);
+      showToast((data.inserted || []).length + ' soal Try Out berhasil diimport.', 'success');
+      setDraft(null);
+      setSource(null);
+      setFile(null);
+      if (onImported) onImported();
+    } catch (e) {
+      setErr(e.message || 'Gagal import soal Try Out.');
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div className="admin-import-panel">
+      <section className="admin-import-setup">
+        <div className="admin-import-title-row">
+          <div>
+            <div className="kicker">Import Soal Try Out</div>
+            <h3>{pkg.title}</h3>
+          </div>
+          <span className="tag">{tryoutId || 'ID belum ada'}</span>
+        </div>
+
+        <div className="admin-import-input-toggle">
+          <button className={`admin-import-toggle-btn${inputMode === 'file' ? ' is-active' : ''}`} onClick={() => setInputMode('file')} type="button">
+            <AdminIcon.Upload /> Upload File
+          </button>
+          <button className={`admin-import-toggle-btn${inputMode === 'latex' ? ' is-active' : ''}`} onClick={() => setInputMode('latex')} type="button">
+            <AdminIcon.Code /> Tempel Teks
+          </button>
+        </div>
+
+        <AdminField label="Mode import">
+          <AdminSelect
+            value={importMode}
+            onChange={(e) => setImportMode(e.target.value)}
+            options={[
+              { value: 'ai_complete', label: 'AI melengkapi' },
+              { value: 'hybrid', label: 'Kunci admin + AI' },
+              { value: 'manual', label: 'Manual extraction' },
+            ]}
+          />
+        </AdminField>
+
+        {inputMode === 'file' ? (
+          <AdminField label="File soal" required error={err}>
+            <label className="admin-import-file-picker">
+              <AdminIcon.Upload />
+              <span>{file ? file.name : 'Pilih PDF, DOCX, TXT, atau MD'}</span>
+              <input
+                accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
+                onChange={(e) => setFile((e.target.files && e.target.files[0]) || null)}
+                type="file"
+              />
+            </label>
+          </AdminField>
+        ) : (
+          <AdminField label="Kode LaTeX / teks soal" required error={err}>
+            <textarea
+              className="admin-import-latex-input"
+              rows={10}
+              value={sourceText}
+              onChange={(e) => setSourceText(e.target.value)}
+              placeholder="Tempel soal, pilihan, dan pembahasan di sini."
+            />
+          </AdminField>
+        )}
+
+        <AdminField label="Kunci jawaban admin (opsional)">
+          <AdminTextarea rows={3} value={answerKey} onChange={(e) => setAnswerKey(e.target.value)} />
+        </AdminField>
+
+        <div className="admin-form-actions">
+          <button className="admin-btn-primary" disabled={loading} onClick={createDraft} type="button">
+            {loading ? 'Membuat draft...' : <React.Fragment><AdminIcon.Spark /> Buat Draft</React.Fragment>}
+          </button>
+        </div>
+      </section>
+
+      {source && (
+        <div className="admin-import-source">
+          <strong>{source.filename}</strong>
+          <span>{source.extracted_chars} karakter terbaca</span>
+          <p>{source.preview}</p>
+        </div>
+      )}
+
+      {draft && (
+        <section className="admin-import-preview">
+          <div className="admin-import-title-row">
+            <div>
+              <div className="kicker">Preview Draft</div>
+              <h3>{draft.questions.length} soal siap direview</h3>
+            </div>
+            <button className="admin-btn-primary" disabled={importing || draft.questions.length === 0} onClick={commitDraft} type="button">
+              {importing ? 'Mengimport...' : 'Import ke Try Out'}
+            </button>
+          </div>
+          {draft.warnings && draft.warnings.length > 0 && <p className="admin-import-warning">{draft.warnings.join(' · ')}</p>}
+          <div className="admin-import-question-list">
+            {draft.questions.map((question, idx) => (
+              <ImportQuestionPreviewCard
+                index={idx}
+                key={question.source_index || idx}
+                onChange={(nextQuestion) => updateQuestion(idx, nextQuestion)}
+                onRemove={() => removeQuestion(idx)}
+                question={question}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+};
+
+const AdminTryoutQuestionsPanel = ({ pkg, setRoute, onBack }) => {
+  const tryoutId = getAdminTryoutId(pkg);
+  const [questions, setQuestions] = useAdminState([]);
+  const [loading, setLoading] = useAdminState(true);
+  const [modal, setModal] = useAdminState(null);
+  const [showImport, setShowImport] = useAdminState(false);
+
+  const loadQuestions = useAdminCallback(async () => {
+    if (!tryoutId) { setQuestions([]); setLoading(false); return; }
+    setLoading(true);
+    try {
+      setQuestions(await MafikingAPI.get('/api/admin/tryout-questions?tryoutId=' + encodeURIComponent(tryoutId)));
+    } catch (e) {
+      showToast(e.message || 'Gagal memuat soal Try Out.', 'error');
+      setQuestions([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [tryoutId]);
+
+  useAdminEffect(() => { loadQuestions(); }, [loadQuestions]);
+
+  async function deleteQuestion(question) {
+    if (!adminConfirmDelete('soal Try Out #' + (question.sort_order || question.id))) return;
+    try {
+      await MafikingAPI.del('/api/admin/tryout-questions/' + question.id);
+      showToast('Soal Try Out dihapus.', 'success');
+      loadQuestions();
+    } catch (e) {
+      showToast(e.message || 'Gagal menghapus soal Try Out.', 'error');
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="admin-pane-header">
+        <div>
+          <span className="kicker">Soal Try Out</span>
+          <div className="text-xs text-ink/45 mt-1">{pkg.title} · {tryoutId || 'ID belum ada'}</div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className="admin-btn-ghost" onClick={onBack} type="button">Kembali</button>
+          <button className="admin-btn-ghost" onClick={() => openAdminTryoutPreview(pkg, setRoute)} type="button">Preview</button>
+          <button className="admin-btn-ghost" onClick={() => setShowImport((value) => !value)} type="button">
+            <AdminIcon.Upload /> {showImport ? 'Tutup Import' : 'Import'}
+          </button>
+          <button className="admin-btn-primary" onClick={() => setModal({ type: 'question', target: null })} type="button">+ Soal</button>
+        </div>
+      </div>
+
+      {showImport && <AdminTryoutImportPanel pkg={pkg} onImported={() => { setShowImport(false); loadQuestions(); }} />}
+
+      {loading ? (
+        <div className="flex flex-col gap-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+      ) : questions.length === 0 ? (
+        <p className="text-sm text-ink/55">Belum ada soal untuk Try Out ini.</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {questions.map((question, idx) => (
+            <div className="admin-tree-row" key={question.id}>
+              <div className="admin-step-num">{Number(question.sort_order) || idx + 1}</div>
+              <div className="flex-1 min-w-0">
+                <div className="admin-tree-label">{question.question_display || question.question_text || 'Soal tanpa teks'}</div>
+                <div className="text-xs text-ink/45 mt-1">{question.question_type || 'mc'} · {question.difficulty || 'Easy'}</div>
+              </div>
+              <div className="flex gap-1 shrink-0">
+                <button className="admin-icon-btn" title="Pembahasan" onClick={() => setModal({ type: 'steps', target: question })} type="button"><AdminIcon.Steps /></button>
+                <button className="admin-icon-btn" title="Edit" onClick={() => setModal({ type: 'question', target: question })} type="button"><AdminIcon.Pencil /></button>
+                <button className="admin-icon-btn admin-icon-btn-danger" title="Hapus" onClick={() => deleteQuestion(question)} type="button"><AdminIcon.Trash /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modal && modal.type === 'question' && (
+        <AdminTryoutQuestionModal
+          pkg={pkg}
+          question={modal.target}
+          defaultSortOrder={questions.length + 1}
+          onDone={loadQuestions}
+          onClose={() => setModal(null)}
+          onDelete={() => modal.target && deleteQuestion(modal.target).then(() => setModal(null))}
+          onEditSteps={() => modal.target && setModal({ type: 'steps', target: modal.target })}
+        />
+      )}
+      {modal && modal.type === 'steps' && (
+        <AdminTryoutStepsModal question={modal.target} onClose={() => setModal(null)} />
+      )}
+    </div>
+  );
+};
+
+const AdminTryoutResultsPanel = ({ pkg, onBack }) => {
+  const tryoutId = getAdminTryoutId(pkg);
+  const [attempts, setAttempts] = useAdminState([]);
+  const [loading, setLoading] = useAdminState(true);
+  const [busyId, setBusyId] = useAdminState(null);
+
+  const loadAttempts = useAdminCallback(async () => {
+    if (!tryoutId) { setAttempts([]); setLoading(false); return; }
+    setLoading(true);
+    try {
+      setAttempts(await MafikingAPI.get('/api/admin/tryout-attempts?tryoutId=' + encodeURIComponent(tryoutId)));
+    } catch (e) {
+      showToast(e.message || 'Gagal memuat hasil Try Out.', 'error');
+      setAttempts([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [tryoutId]);
+
+  useAdminEffect(() => { loadAttempts(); }, [loadAttempts]);
+
+  async function deleteAttempt(attempt) {
+    if (!adminConfirmDelete('riwayat Try Out milik ' + (attempt.display_name || attempt.username || 'user'))) return;
+    setBusyId(attempt.id);
+    try {
+      await MafikingAPI.del('/api/admin/tryout-attempts/' + attempt.id);
+      showToast('Riwayat Try Out dihapus. User bisa try out ulang.', 'success');
+      loadAttempts();
+    } catch (e) {
+      showToast(e.message || 'Gagal menghapus riwayat Try Out.', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div>
+      <div className="admin-pane-header mb-3">
+        <div>
+          <span className="kicker">Hasil Try Out</span>
+          <div className="text-xs text-ink/45 mt-1">{pkg.title} · {tryoutId || 'ID belum ada'}</div>
+        </div>
+        <button className="admin-btn-ghost" onClick={onBack} type="button">Kembali</button>
+      </div>
+      {loading ? (
+        <div className="flex flex-col gap-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+      ) : attempts.length === 0 ? (
+        <p className="text-sm text-ink/55">Belum ada user yang submit Try Out ini.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="admin-table">
+            <thead>
+              <tr><th>User</th><th>Akademik</th><th>Skor</th><th>Benar</th><th>Terjawab</th><th>Durasi</th><th>Submit</th><th></th></tr>
+            </thead>
+            <tbody>
+              {attempts.map((attempt) => (
+                <tr key={attempt.id}>
+                  <td>
+                    <div className="font-semibold">{attempt.display_name || attempt.username || 'User'}</div>
+                    <div className="text-xs text-ink/45">{attempt.username || '-'}</div>
+                  </td>
+                  <td className="text-xs text-ink/60">{attempt.semester ? 'S' + attempt.semester : '-'} {attempt.fakultas || attempt.jurusan || ''}</td>
+                  <td className="tnum font-semibold">{attempt.score}</td>
+                  <td className="tnum">{attempt.correct_count}/{attempt.total_questions}</td>
+                  <td className="tnum">{attempt.answered_count}/{attempt.total_questions}</td>
+                  <td className="tnum">{formatAdminTryoutDuration(attempt.duration_seconds)}</td>
+                  <td className="text-xs text-ink/55 whitespace-nowrap">{attempt.completed_at || '-'}</td>
+                  <td>
+                    <button
+                      className="admin-btn-danger"
+                      disabled={busyId === attempt.id}
+                      onClick={() => deleteAttempt(attempt)}
+                      style={{ padding: '4px 10px', fontSize: 12 }}
+                      type="button"
+                    >
+                      {busyId === attempt.id ? 'Hapus...' : 'Hapus Riwayat'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AdminTryoutPackagesPanel = ({ setRoute }) => {
   const [packages, setPackages] = useAdminState([]);
   const [loading, setLoading] = useAdminState(true);
   const [modal, setModal] = useAdminState(null);
+  const [detail, setDetail] = useAdminState(null);
 
   const loadPackages = useAdminCallback(async () => {
     setLoading(true);
@@ -1387,6 +2062,14 @@ const AdminTryoutPackagesPanel = () => {
     return <div className="flex flex-col gap-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
   }
 
+  if (detail && detail.type === 'questions') {
+    return <AdminTryoutQuestionsPanel pkg={detail.pkg} setRoute={setRoute} onBack={() => { setDetail(null); loadPackages(); }} />;
+  }
+
+  if (detail && detail.type === 'results') {
+    return <AdminTryoutResultsPanel pkg={detail.pkg} onBack={() => { setDetail(null); loadPackages(); }} />;
+  }
+
   return (
     <div>
       <div className="admin-pane-header mb-3">
@@ -1404,10 +2087,13 @@ const AdminTryoutPackagesPanel = () => {
             <div className="admin-tree-row" key={pkg.id}>
               <div className="flex-1 min-w-0">
                 <div className="admin-tree-label">{pkg.title}</div>
-                <div className="text-xs text-ink/45 mt-1">{pkg.price} - {pkg.duration || '-'} - {Number(pkg.questions) || 0} soal</div>
+                <div className="text-xs text-ink/45 mt-1">{pkg.price} - {pkg.duration || '-'} - {Number(pkg.questions) || 0} soal - {pkg.tryout_id || 'ID belum ada'}</div>
               </div>
               <span className="tag">{pkg.badge || 'Paket'}</span>
               <div className="flex gap-1 shrink-0">
+                <button className="admin-btn-ghost" style={{ padding: '4px 9px', fontSize: 12 }} onClick={() => setDetail({ type: 'questions', pkg })} type="button">Soal</button>
+                <button className="admin-btn-ghost" style={{ padding: '4px 9px', fontSize: 12 }} onClick={() => openAdminTryoutPreview(pkg, setRoute)} type="button">Preview</button>
+                <button className="admin-btn-ghost" style={{ padding: '4px 9px', fontSize: 12 }} onClick={() => setDetail({ type: 'results', pkg })} type="button">Hasil</button>
                 <button className="admin-icon-btn" title="Edit" onClick={() => setModal({ target: pkg })} type="button"><AdminIcon.Pencil /></button>
                 <button className="admin-icon-btn admin-icon-btn-danger" title="Hapus" onClick={() => deletePackage(pkg)} type="button"><AdminIcon.Trash /></button>
               </div>
@@ -1422,6 +2108,34 @@ const AdminTryoutPackagesPanel = () => {
   );
 };
 
+const ADMIN_USER_QUICK_ACCESS = [
+  { key: 'tryout-premium', label: 'Try Out Premium', access_type: 'tryout', access_value: 'tryout-premium-tpb-prep' },
+  { key: 'daily-missions', label: 'Misi Harian', access_type: 'mission', access_value: 'daily-missions' },
+];
+
+function hasAdminUserAccessGrant(user, access) {
+  const grants = Array.isArray(user?.access_grants) ? user.access_grants : [];
+  return grants.some((grant) => (
+    String(grant.access_type || '') === access.access_type
+    && String(grant.access_value || '') === access.access_value
+  ));
+}
+
+function AdminUserAccessBadges({ user }) {
+  const grants = Array.isArray(user?.access_grants) ? user.access_grants : [];
+  if (!grants.length) return <span className="text-ink/40 text-xs">-</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {grants.slice(0, 3).map((grant) => (
+        <span className="tag" key={grant.id || `${grant.access_type}-${grant.access_value}`}>
+          {grant.access_type}: {grant.access_value}
+        </span>
+      ))}
+      {grants.length > 3 && <span className="tag">+{grants.length - 3}</span>}
+    </div>
+  );
+}
+
 const AdminUsersPanel = () => {
   const [users, setUsers] = useAdminState([]);
   const [loading, setLoading] = useAdminState(true);
@@ -1429,10 +2143,20 @@ const AdminUsersPanel = () => {
   const [newPw, setNewPw] = useAdminState('');
   const [pwSaving, setPwSaving] = useAdminState(false);
   const [deleteBusyId, setDeleteBusyId] = useAdminState(null);
+  const [grantBusyKey, setGrantBusyKey] = useAdminState('');
 
-  useAdminEffect(() => {
-    MafikingAPI.get('/api/admin/users').then(setUsers).catch(() => setUsers([])).finally(() => setLoading(false));
+  const loadUsers = useAdminCallback(async () => {
+    setLoading(true);
+    try {
+      setUsers(await MafikingAPI.get('/api/admin/users'));
+    } catch (_) {
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useAdminEffect(() => { loadUsers(); }, [loadUsers]);
 
   async function resetPassword() {
     if (!newPw || newPw.length < 8) { showToast('Password minimal 8 karakter.', 'error'); return; }
@@ -1467,6 +2191,23 @@ const AdminUsersPanel = () => {
     }
   }
 
+  async function grantQuickAccess(user, access) {
+    const busyKey = `${user.id}:${access.key}`;
+    setGrantBusyKey(busyKey);
+    try {
+      await MafikingAPI.post('/api/admin/users/' + user.id + '/grant-access', {
+        access_type: access.access_type,
+        access_value: access.access_value,
+      });
+      showToast('Akses ' + access.label + ' diberikan ke ' + (user.display_name || user.username) + '.', 'success');
+      await loadUsers();
+    } catch (e) {
+      showToast(e.message || 'Gagal memberi akses.', 'error');
+    } finally {
+      setGrantBusyKey('');
+    }
+  }
+
   function parsePrioritySubjects(value) {
     if (Array.isArray(value)) return value;
     try {
@@ -1490,7 +2231,7 @@ const AdminUsersPanel = () => {
     <div>
       <div className="overflow-x-auto">
         <table className="admin-table">
-          <thead><tr><th>Nama</th><th>Username</th><th>No. HP</th><th>Akademik</th><th>Prioritas</th><th>Role</th><th>Lv</th><th>XP</th><th>Streak</th><th></th></tr></thead>
+          <thead><tr><th>Nama</th><th>Username</th><th>No. HP</th><th>Akademik</th><th>Prioritas</th><th>Role</th><th>Akses</th><th>Beri Akses</th><th>Lv</th><th>XP</th><th>Streak</th><th></th></tr></thead>
           <tbody>
             {users.map((u) => {
               const priorities = parsePrioritySubjects(u.mapel_prioritas);
@@ -1506,6 +2247,27 @@ const AdminUsersPanel = () => {
                     </div>
                   </td>
                   <td><span className={'tag' + (u.role === 'admin' ? ' tag-ink' : '')}>{u.role}</span></td>
+                  <td style={{ minWidth: 180 }}><AdminUserAccessBadges user={u} /></td>
+                  <td style={{ minWidth: 240 }}>
+                    <div className="flex flex-wrap gap-2">
+                      {ADMIN_USER_QUICK_ACCESS.map((access) => {
+                        const granted = hasAdminUserAccessGrant(u, access);
+                        const busyKey = `${u.id}:${access.key}`;
+                        return (
+                          <button
+                            key={access.key}
+                            className={granted ? 'admin-btn-ghost' : 'admin-btn-primary'}
+                            style={{ padding: '4px 10px', fontSize: 12 }}
+                            disabled={granted || grantBusyKey === busyKey}
+                            onClick={() => grantQuickAccess(u, access)}
+                            type="button"
+                          >
+                            {granted ? 'Sudah ' + access.label : grantBusyKey === busyKey ? 'Memberi...' : access.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </td>
                   <td className="tnum text-center">{u.level}</td>
                   <td className="tnum">{u.xp}</td>
                   <td className="tnum">{u.streak_days}h</td>
@@ -1546,7 +2308,7 @@ const AdminUsersPanel = () => {
 };
 
 // ─── Full admin panel ─────────────────────────────────────────────────────────
-const AdminPanelContent = () => {
+const AdminPanelContent = ({ setRoute }) => {
   const [tab, setTab] = useAdminState('chapters');
   const [contentArea, setContentArea] = useAdminState('Try Out');
   const [chapters, setChapters] = useAdminState([]);
@@ -1704,7 +2466,7 @@ const AdminPanelContent = () => {
             </div>
           </div>
           {contentArea === 'Try Out' ? (
-            <AdminTryoutPackagesPanel />
+            <AdminTryoutPackagesPanel setRoute={setRoute} />
           ) : (
         <div className="admin-two-pane">
           <div>
@@ -1855,7 +2617,7 @@ const AdminPage = ({ setRoute }) => (
         </button>
       </div>
       <div className="admin-page-shell">
-        <AdminPanelContent />
+        <AdminPanelContent setRoute={setRoute} />
       </div>
     </div>
   </section>

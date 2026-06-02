@@ -2293,6 +2293,11 @@ function normalizeKatexInput(value) {
 function canRenderAsSingleMath(value) {
   const text = normalizeKatexInput(value);
   if (!text) return false;
+  const proseProbe = text
+    .replace(/\\[a-zA-Z]+(?:\{[^}]*\})?/g, " ")
+    .replace(/[\d\s+\-*/=().,;:{}[\]^_]/g, " ");
+  const proseWords = proseProbe.match(/[A-Za-zÀ-ÿ]{3,}/g) || [];
+  if (proseWords.length >= 3) return false;
   if (/\\[a-zA-Z]+|[\^_{}]|[∫√ΣΠ∞≤≥≠≈]/.test(text)) return true;
   if (/^[\d\s+\-*/=().,]+$/.test(text)) return true;
   return false;
@@ -2307,6 +2312,13 @@ function renderKatexToString(latex, displayMode = false) {
     throwOnError: false,
     strict: "ignore",
     trust: false,
+    macros: {
+      "\\degree": "^{\\circ}",
+      "\\R": "\\mathbb{R}",
+      "\\N": "\\mathbb{N}",
+      "\\Z": "\\mathbb{Z}",
+      "\\Q": "\\mathbb{Q}",
+    },
   });
   if (/katex-error/.test(html)) {
     throw new Error("KaTeX gagal merender input");
@@ -2317,6 +2329,97 @@ function renderKatexToString(latex, displayMode = false) {
 const ALIGN_WRAP_RE = /^\{\\(raggedright|centering|raggedleft)\s([\s\S]+)\}$/;
 const ALIGN_MAP = { raggedright: "left", centering: "center", raggedleft: "right" };
 
+function findLatexClosingDelimiter(source, startIndex, delimiter) {
+  for (let i = startIndex; i < source.length; i += 1) {
+    if (source[i] === "\\" && i + 1 < source.length) {
+      i += 1;
+      continue;
+    }
+    if (source.startsWith(delimiter, i)) return i;
+  }
+  return -1;
+}
+
+function splitLatexSegments(raw) {
+  const source = String(raw || "");
+  const segments = [];
+  let buffer = "";
+  let i = 0;
+
+  function pushText() {
+    if (buffer) {
+      segments.push({ type: "text", value: buffer });
+      buffer = "";
+    }
+  }
+
+  while (i < source.length) {
+    const char = source[i];
+    const prev = i > 0 ? source[i - 1] : "";
+
+    if (source.startsWith("\\(", i)) {
+      const end = source.indexOf("\\)", i + 2);
+      if (end !== -1) {
+        pushText();
+        segments.push({ type: "math", value: source.slice(i + 2, end), displayMode: false });
+        i = end + 2;
+        continue;
+      }
+    }
+
+    if (source.startsWith("\\[", i)) {
+      const end = source.indexOf("\\]", i + 2);
+      if (end !== -1) {
+        pushText();
+        segments.push({ type: "math", value: source.slice(i + 2, end), displayMode: true });
+        i = end + 2;
+        continue;
+      }
+    }
+
+    if (source.startsWith("$$", i) && prev !== "\\") {
+      const end = findLatexClosingDelimiter(source, i + 2, "$$");
+      if (end !== -1) {
+        pushText();
+        segments.push({ type: "math", value: source.slice(i + 2, end), displayMode: true });
+        i = end + 2;
+        continue;
+      }
+    }
+
+    if (char === "$" && prev !== "\\") {
+      const end = findLatexClosingDelimiter(source, i + 1, "$");
+      if (end !== -1) {
+        pushText();
+        segments.push({ type: "math", value: source.slice(i + 1, end), displayMode: false });
+        i = end + 1;
+        continue;
+      }
+    }
+
+    buffer += char;
+    i += 1;
+  }
+
+  pushText();
+  return segments;
+}
+
+function renderLatexSegmentsHTML(raw) {
+  const segments = splitLatexSegments(raw);
+  if (!segments.some((segment) => segment.type === "math")) return null;
+  return segments.map((segment) => {
+    if (segment.type !== "math") return escapeHtml(segment.value).replace(/\n/g, "<br>");
+    const latex = String(segment.value || "").trim();
+    if (!latex) return "";
+    try {
+      return renderKatexToString(latex, Boolean(segment.displayMode));
+    } catch (_) {
+      return escapeHtml(renderEquation(latex));
+    }
+  }).join("");
+}
+
 function renderMafikingMathHTML(value) {
   const raw = String(value || "");
 
@@ -2325,6 +2428,11 @@ function renderMafikingMathHTML(value) {
     const align = ALIGN_MAP[alignMatch[1]];
     const inner = renderMafikingMathHTML(alignMatch[2]);
     return `<span style="display:block;text-align:${align}">${inner}</span>`;
+  }
+
+  if (typeof katex !== "undefined" && katex && typeof katex.renderToString === "function") {
+    const inlineMath = renderLatexSegmentsHTML(raw);
+    if (inlineMath != null) return inlineMath;
   }
 
   const text = normalizeKatexInput(raw);

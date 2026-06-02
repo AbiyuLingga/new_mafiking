@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="420" viewBox="0 0 560 420" role="img" aria-labelledby="title desc">
+  <title id="title">Osilasi pegas dan massa</title>
+  <desc id="desc">Beban bermassa m tergantung pada pegas dengan konstanta k.</desc>
+  <rect width="560" height="420" rx="22" fill="#ffffff"/>
+  <g stroke="#0b1326" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M190 70 L370 70"/>
+    <path d="M190 70 L180 90 M210 70 L200 90 M230 70 L220 90 M250 70 L240 90 M270 70 L260 90 M290 70 L280 90 M310 70 L300 90 M330 70 L320 90 M350 70 L340 90 M370 70 L360 90"/>
+    <path d="M280 70 C250 90 310 110 280 130 C250 150 310 170 280 190 C250 210 310 230 280 250 C250 270 310 290 280 310"/>
+    <rect x="220" y="310" width="120" height="80" rx="10" fill="#dcfce7"/>
+  </g>
+  <text x="320" y="190" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#0b1326">k</text>
+  <text x="280" y="360" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#0b1326">m</text>
+</svg>

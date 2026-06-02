@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="460" height="220" viewBox="0 0 460 220" role="img" aria-labelledby="title desc">
+  <title id="title">Diagram balok 2 kilogram ditarik gaya 10 Newton</title>
+  <desc id="desc">Balok bermassa 2 kilogram di atas lantai mendatar licin ditarik ke kanan oleh gaya F sama dengan 10 Newton.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#0b1326"/>
+    </marker>
+  </defs>
+  <rect width="460" height="220" fill="#ffffff"/>
+  <g stroke="#0b1326" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="88" y1="148" x2="360" y2="148"/>
+    <rect x="145" y="84" width="96" height="64" fill="#ffffff"/>
+    <line x1="241" y1="116" x2="326" y2="116" marker-end="url(#arrow)"/>
+  </g>
+  <text x="193" y="123" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="19" fill="#0b1326">2 kg</text>
+  <text x="337" y="123" font-family="Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#0b1326">F = 10 N</text>
+</svg>

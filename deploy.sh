@@ -207,6 +207,13 @@ else
   printf "%s\n" "$DEPS_HASH" > .deploy-deps.sha
 fi
 
+if [ -f db/tryout-bank.json ]; then
+  echo "Mengimpor bank Try Out bundled secara aman..."
+  npm run import:tryouts
+else
+  echo "db/tryout-bank.json tidak ada, skip import Try Out bundled."
+fi
+
 if [ -f /etc/letsencrypt/live/mafiking.com/fullchain.pem ] && [ -f /etc/letsencrypt/live/mafiking.com/privkey.pem ]; then
   $SUDO tee "/etc/nginx/sites-available/$APP_NAME" >/dev/null <<EOF
 server {

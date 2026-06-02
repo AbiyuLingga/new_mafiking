@@ -59,11 +59,28 @@ function getSubtopic(db, subtopicId) {
   `).get(Number(subtopicId));
 }
 
+function normalizeTryoutId(value) {
+  return String(value || '').trim();
+}
+
+function getTryoutTarget(db, tryoutId) {
+  const normalizedId = normalizeTryoutId(tryoutId);
+  if (!normalizedId) return null;
+  const pkg = db.prepare('SELECT tryout_id, title FROM tryout_packages WHERE tryout_id = ?').get(normalizedId);
+  return {
+    id: 1,
+    tryout_id: normalizedId,
+    title: (pkg && pkg.title) || normalizedId,
+    chapter_title: 'Try Out',
+  };
+}
+
 router.post('/draft', uploadSingle, async (req, res) => {
   try {
     const db = req.app.locals.db;
-    const subtopic = getSubtopic(db, req.body.subtopic_id);
-    if (!subtopic) return res.status(400).json({ error: 'Subtopik tujuan wajib dipilih.' });
+    const tryoutTarget = getTryoutTarget(db, req.body.tryout_id);
+    const subtopic = tryoutTarget || getSubtopic(db, req.body.subtopic_id);
+    if (!subtopic) return res.status(400).json({ error: 'Tujuan import wajib dipilih.' });
 
     const mode = normalizeMode(req.body.mode);
 
@@ -111,6 +128,64 @@ router.post('/draft', uploadSingle, async (req, res) => {
 router.post('/commit', (req, res) => {
   try {
     const db = req.app.locals.db;
+    const tryoutId = normalizeTryoutId(req.body.tryout_id);
+    if (tryoutId) {
+      const target = getTryoutTarget(db, tryoutId);
+      if (!target) return res.status(400).json({ error: 'Try Out tujuan wajib dipilih.' });
+
+      const questions = normalizeQuestionsForCommit(1, req.body.questions);
+      const insertQuestion = db.prepare(`
+        INSERT INTO tryout_questions (
+          tryout_id, question_text, question_display, answer_display,
+          acceptable_answers, difficulty, question_type, mc_options,
+          sort_order, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const insertStep = db.prepare(`
+        INSERT INTO tryout_question_steps (
+          tryout_question_id, step_order, title, content, why, intuition, mistakes, mistake_result
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const maxSort = db.prepare('SELECT COALESCE(MAX(sort_order), 0) AS max_sort FROM tryout_questions WHERE tryout_id = ?');
+
+      const commitTryout = db.transaction((rows) => {
+        const inserted = [];
+        let nextSort = Number(maxSort.get(tryoutId).max_sort || 0);
+        rows.forEach((question) => {
+          nextSort += 1;
+          const questionInfo = insertQuestion.run(
+            tryoutId,
+            question.question_text,
+            question.question_display,
+            question.answer_display,
+            JSON.stringify(question.acceptable_answers),
+            question.difficulty,
+            question.question_type,
+            JSON.stringify(question.mc_options),
+            nextSort,
+            req.session.userId || null
+          );
+          const questionId = Number(questionInfo.lastInsertRowid);
+          question.steps.forEach((step, stepIdx) => {
+            insertStep.run(
+              questionId,
+              Number(step.step_order || stepIdx + 1),
+              step.title,
+              step.content,
+              step.why || '',
+              step.intuition || '',
+              step.mistakes || '',
+              step.mistake_result || ''
+            );
+          });
+          inserted.push({ id: questionId, source_index: question.source_index, sort_order: nextSort });
+        });
+        return inserted;
+      });
+
+      return res.json({ ok: true, inserted: commitTryout(questions) });
+    }
+
     const subtopicId = Number(req.body.subtopic_id);
     const targetSubtopic = getSubtopic(db, subtopicId);
     if (!targetSubtopic) return res.status(400).json({ error: 'Subtopik tujuan wajib dipilih.' });

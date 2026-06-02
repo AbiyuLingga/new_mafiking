@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="420" viewBox="0 0 560 420" role="img" aria-labelledby="title desc">
+  <title id="title">Sistem katrol bermassa</title>
+  <desc id="desc">Katrol silinder pejal bermassa M dengan balok m1 dan m2 menggantung pada dua sisi tali.</desc>
+  <rect width="560" height="420" rx="22" fill="#ffffff"/>
+  <g stroke="#0b1326" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M190 70 L370 70" fill="none"/>
+    <path d="M190 70 L180 90 M210 70 L200 90 M230 70 L220 90 M250 70 L240 90 M270 70 L260 90 M290 70 L280 90 M310 70 L300 90 M330 70 L320 90 M350 70 L340 90 M370 70 L360 90"/>
+    <path d="M280 70 L280 120" fill="none"/>
+    <circle cx="280" cy="175" r="72" fill="#e5e7eb"/>
+    <circle cx="280" cy="175" r="8" fill="#0b1326"/>
+    <path d="M208 175 L208 292 M352 175 L352 238" fill="none"/>
+    <rect x="168" y="292" width="80" height="80" rx="8" fill="#dbeafe"/>
+    <rect x="312" y="238" width="80" height="80" rx="8" fill="#fee2e2"/>
+  </g>
+  <text x="302" y="184" text-anchor="start" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#0b1326">M</text>
+  <text x="208" y="344" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#0b1326">m1</text>
+  <text x="352" y="290" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#0b1326">m2</text>
+</svg>

@@ -10,13 +10,13 @@ The active browser entry point is `MAFIKING.html`, served by `server.js`. The fr
 - Practice UI: segmented control (Pilgan | Kanvas), Submit always visible in focus mode, ResultModal with wrong-step visualization, XP toast on correct answers.
 - Lobby: `/` always opens the marketing landing page. `Coba Gratis` enters the app at `Belajar -> Try Out`, while login/sign up can redirect back into the intended app route.
 - Onboarding: after first login/sign-up, non-admin users with incomplete profile data get a mandatory centered profile modal for name, phone, semester, faculty/major, and subject priorities. It cannot be skipped and saves through `/api/auth/profile-onboarding`.
-- Belajar: mapel selector now includes `Try Out`, `Matematika`, `Fisika`, and `Kimia`. The tabs selector uses a moving underline, with `Try Out` using the ink accent. Free users can start the free 15-question / 15-minute Try Out after a confirmation screen, while protected chapters and premium pages route through login/package gates.
+- Belajar: mapel selector now includes `Try Out`, `Matematika`, `Fisika`, and `Kimia`. The tabs selector uses a moving underline, with `Try Out` using the ink accent. Free users can start the free 15-question / 30-minute Try Out after a confirmation screen. The Try Out tab also shows the premium Try Out card, but only users with an active package/manual grant can open it. Submitted Try Out sessions reopen as a history/review view with the user's selected answers and the saved solution snapshot.
 - Shared: global toast system (`showToast`), `Skeleton` loading states, `OfflineBanner`.
 - Peringkat: app nav includes a `Peringkat` route with an isolated-scroll leaderboard, static table header, and `Semua` / `Top Mingguan` segmented point views.
 - Motion polish: app route transitions, the top-nav active pill, Belajar mapel underline, shared segmented controls, landing reveal effects, testimonial marquee, and mission carousel motion use local CSS/JS motion; no new frontend runtime dependency is required.
 - App backgrounds: Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and their locked access gates share a soft grid/glow page background with per-page color variants from `src/styles.css`.
 - Paket: `Semua Paket` and `Paket Saya` render the same `PackageCard` layout; accessible packages show `Mulai`, while locked packages route through payment/login. Payment flow is package selection → Duitku redirect → status polling page (`src/payment.jsx`).
-- Admin mode: role-gated shield toggle button (bottom-right corner). Pressing shield enables admin mode; the top nav then shows an `Admin Panel` entry that opens the full admin page. The admin page can manage Try Out packages, Matematika/Fisika/Kimia chapters and subtopics, users/access, and Gemini usage backend data. On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete.
+- Admin mode: role-gated shield toggle button (bottom-right corner). Pressing shield enables admin mode; the top nav then shows an `Admin Panel` entry that opens the full admin page. The admin page can manage Try Out packages, per-package Try Out questions/import/results, Matematika/Fisika/Kimia chapters and subtopics, users/access, and Gemini usage backend data. The Users tab has quick manual grants for premium Try Out and daily missions. On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete.
 - SOP: `SOP-AI-INPUT-SOAL.md` documents the general AI question-entry guide. `SOP-DEEPSEEK-IMPORT-SOAL.md` is the stricter prompt contract for admin file import via DeepSeek.
 - Backend: Express 5, SQLite through `better-sqlite3`, session auth, API routes.
 - Question bank: exported from `../Mafiking/db/database.sqlite` into `db/question-bank.json`.
@@ -107,6 +107,8 @@ GEMMA_PROFILE_MODEL=gemma-4-31b-it
 | `npm run export:questions` | Export question tables from the old Mafiking SQLite database into `db/question-bank.json`. |
 | `npm run import:questions` | Import `db/question-bank.json` into `db/database.sqlite`. |
 | `npm run import:questions -- --force` | Replace question tables even if existing progress/correction rows reference old problems. |
+| `npm run export:tryouts` | Export local Try Out packages/questions/steps into `db/tryout-bank.json`. |
+| `npm run import:tryouts` | Import bundled Try Out data into SQLite; skips replacing a Try Out when user attempts already exist. |
 
 ## Production Deployment
 
@@ -114,6 +116,13 @@ Nevacloud production should run only this checkout from `/root/new_mafiking`.
 The canonical PM2 process and Nginx site name is `new_mafiking`; legacy
 process/site names such as `mafiking` and `new-mafiking` should be removed when
 deploying so `mafiking.com` cannot accidentally point at an older app process.
+
+`deploy.sh` does not overwrite the server database by default. It runs
+`npm run import:tryouts` after dependencies are ready so bundled Try Out content
+from `db/tryout-bank.json` reaches production safely. The import script updates
+package metadata and replaces questions only for Try Outs that do not yet have
+submitted `tryout_attempts`. Use `FORCE_IMPORT=1 npm run import:tryouts` only
+when intentionally accepting that risk.
 
 ## Admin Account
 
@@ -277,8 +286,8 @@ The import script refuses to replace question tables when user progress or corre
 ### Belajar / Free Entry
 
 - The `Belajar` mapel selector is `Try Out`, `Matematika`, `Fisika`, `Kimia`.
-- The `Try Out` tab exposes the free tryout entry point.
-- Free users open a confirmation screen before starting the free 15-question / 15-minute Try Out session.
+- The `Try Out` tab exposes the free tryout entry point plus a premium Try Out entry point.
+- Free users open a confirmation screen before starting the free 15-question / 30-minute Try Out session. Premium Try Out opens only for users with a matching paid package/manual access grant or admin role.
 - Pembahasan/canvas review outside the free Try Out session requires login or sign up.
 - Clicking protected subject chapters such as Matematika Integral while logged out opens the login/sign-up gate, then returns to the intended chapter.
 - `Misi Harian`, profile history, and premium learning areas show a package/access gate when the user does not have access.
@@ -352,6 +361,9 @@ Most API routes require either a local session or a verified Clerk Bearer token.
 | `POST` | `/api/correction/transcribe` | Transcribe canvas image. |
 | `POST` | `/api/correction/evaluate` | Evaluate answer and store attempt. |
 | `POST` | `/api/correction/profile-summary` | Generate or fallback profile summary. |
+| `GET` | `/api/tryouts/:tryoutId/full` | Load one Try Out package/question bank with solution steps. |
+| `GET` | `/api/progress/tryout-attempts/latest` | Load the current registered user's latest attempt for one Try Out. |
+| `POST` | `/api/progress/tryout-attempts` | Submit a registered user's Try Out answers; rejects duplicate submissions until admin reset. |
 | `GET/POST` | `/api/admin/chapters` | List or create chapters (admin only). |
 | `PUT/DELETE` | `/api/admin/chapters/:id` | Update or delete chapter (admin only). |
 | `GET/POST` | `/api/admin/subtopics` | List or create subtopics (admin only). |
@@ -361,15 +373,21 @@ Most API routes require either a local session or a verified Clerk Bearer token.
 | `GET/POST` | `/api/admin/problems/:id/steps` | List or create steps (admin only). |
 | `PUT/DELETE` | `/api/admin/steps/:id` | Update or delete step (admin only). |
 | `GET/POST/PUT/DELETE` | `/api/admin/tryout-packages` | Manage Try Out package cards (admin only). |
+| `GET/POST/PUT/DELETE` | `/api/admin/tryout-questions` | Manage per-package Try Out questions (admin only). |
+| `GET/POST` | `/api/admin/tryout-questions/:id/steps` | List or create Try Out solution steps (admin only). |
+| `PUT/DELETE` | `/api/admin/tryout-question-steps/:id` | Update or delete Try Out solution steps (admin only). |
+| `GET` | `/api/admin/tryout-attempts` | List submitted Try Out scores for one package (admin only). |
+| `DELETE` | `/api/admin/tryout-attempts/:id` | Delete one Try Out attempt so the user can retake it (admin only). |
 | `GET` | `/api/admin/users` | List users (admin only). |
 | `PUT` | `/api/admin/users/:id/password` | Reset user password (admin only). |
 | `GET` | `/api/admin/dashboard-data` | Combined user/access and Gemini usage dashboard data (admin only). |
 | `POST` | `/api/admin/users/:id/reset-password` | Reset a user password to `123456` (admin only). |
 | `POST` | `/api/admin/users/:id/grant-access` | Add a manual user access grant (admin only). |
+| `DELETE` | `/api/admin/users/:id/access-grants/:grantId` | Revoke one existing manual user access grant (admin only). |
 | `POST` | `/api/admin/users/:id/role` | Promote or demote Admin Panel access by setting user role (admin only). |
 | `DELETE` | `/api/admin/users/:id` | Delete a non-admin user account (admin only; self/admin deletion is blocked). |
-| `POST` | `/api/admin/import/draft` | Upload file and ask DeepSeek for a reviewable import draft (admin only). |
-| `POST` | `/api/admin/import/commit` | Insert reviewed draft questions and steps into SQLite (admin only). |
+| `POST` | `/api/admin/import/draft` | Upload file and ask DeepSeek for a reviewable import draft for a subtopic or Try Out package (admin only). |
+| `POST` | `/api/admin/import/commit` | Insert reviewed draft questions and steps into SQLite for a subtopic or Try Out package (admin only). |
 | `POST` | `/api/payment/create` | Create Duitku invoice. |
 | `GET` | `/api/payment/status/:merchantOrderId` | Check payment status. |
 | `POST` | `/api/payment/callback` | Duitku server callback. |
@@ -412,9 +430,9 @@ Browser checks:
 - Click `Coba Gratis` - app opens `Belajar` with the `Try Out` tab selected.
 - Click the Mafiking logo from an app route - returns to the public landing page.
 - From `Belajar -> Matematika`, click `Integral` while logged out - login/sign-up gate opens.
-- From `Belajar -> Try Out`, click `Mulai Try Out` - the Try Out confirmation opens; starting it enters the free 15-question / 15-minute session.
+- From `Belajar -> Try Out`, click `Mulai Try Out` - the Try Out confirmation opens; starting it enters the free 15-question / 30-minute session.
 - Log in as an admin; shield button appears at bottom-right. Pressing it turns yellow and adds `Admin Panel` to the top nav.
-- Click `Admin Panel`, open `Users & Token Monitoring`, and confirm user/access data plus Gemini/Gemma token cards render.
+- Click `Admin Panel`, open `Pengguna` or `Users & Token Monitoring`, and confirm user/access data plus quick manual grant/revoke controls render.
 - Open `Belajar` in admin mode — numbered chapter list with ✏/✕ buttons; "+ Tambah Bab Baru" row at bottom. Changes persist to DB.
 - Open `Belajar` in normal mode — chapter cards render normally (no admin buttons).
 - Click `Teknik Integrasi` → practice opens with 23 questions in Pilgan mode.
@@ -438,4 +456,5 @@ Browser checks:
 - `src/admin-monitoring.jsx` must load before `src/admin.jsx` because it exports `window.AdminMonitoringPanel`.
 - Gemini/Gemma token "remaining" values are monitoring estimates from configured daily limits, not a live Google quota lookup.
 - Duitku routes point at sandbox base URL in code. Review payment environment and base URL before production use.
+- Before production deploy, confirm `db/tryout-bank.json` contains the intended Try Out content and run `npm run import:tryouts` against a temporary DB if the bank changed.
 - `db/mafiking.db` exists but is the wrong file — use `db/database.sqlite`.

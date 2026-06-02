@@ -12,7 +12,7 @@ This document describes the current architecture of `new_mafiking`. It is intent
 - A multiple-choice-first practice flow with optional stylus canvas mode.
 - Gemini-powered canvas correction.
 - Deterministic Purcell-aligned follow-up recommendations for profile reports.
-- Import/export scripts for question-bank portability.
+- Import/export scripts for practice and Try Out bank portability.
 
 High-level runtime:
 
@@ -195,8 +195,9 @@ The global `Nav` is intentionally not rendered while `route === "practice"` or `
 - The app route shell uses a small vertical fade/slide transition. `src/shared.jsx` measures nav and segmented-control buttons so the active oval moves instead of teleporting. `src/belajar.jsx` separately measures the active mapel tab so its underline slides between `Try Out`, `Matematika`, `Fisika`, and `Kimia`; the `Try Out` underline uses the ink accent.
 - Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and locked access gates use shared `.app-page-bg` variants from `src/styles.css` for the soft grid/glow background while keeping page-specific content/layout components unchanged.
 - The leaderboard is currently frontend-static display data; `routes/progress.js` already exposes leaderboard APIs but this first page does not consume them yet.
-- Logged-out users can open the free Try Out confirmation and start the free 15-question / 15-minute session.
+- Logged-out users can open the free Try Out confirmation and start the free 15-question / 30-minute session.
 - Free Try Out review paths outside the session and protected subject chapters route through login/sign-up with an auth redirect back to the intended route.
+- Try Out packages are backed by `tryout_packages.tryout_id` plus per-package rows in `tryout_questions` and `tryout_question_steps`. The Belajar Try Out tab shows both free and premium entries; premium opens only when admin role, paid product title, subscription title, or manual `user_access_grants` value matches the package. The exam route loads `/api/tryouts/:tryoutId/full`; after a registered user submits, `/api/progress/tryout-attempts` stores answers and a review snapshot. Reopening the same Try Out reads `/api/progress/tryout-attempts/latest` and shows history/review instead of a timer. Admin reset deletes only the specific `tryout_attempts` row so the user can retake that Try Out.
 - Premium-only pages such as Misi Harian show an access gate when the user lacks an active package.
 
 ### Tweaks
@@ -378,7 +379,7 @@ Admin-only CRUD for:
 - Problem steps.
 - Users' passwords.
 - Dashboard data for user progress/access grants and Gemini usage.
-- Manual user access grants.
+- Manual user access grants, including quick grant/revoke controls for premium Try Out (`tryout-premium-tpb-prep`) and daily missions (`daily-missions`).
 - Admin role promotion/demotion and guarded deletion of non-admin user accounts.
 - Read-only landing media delivery for the promo image, feature images, and demo video through `GET /api/landing-media`.
 - Try Out package CRUD separated from Matematika/Fisika/Kimia chapter/subtopic CRUD.
@@ -440,10 +441,14 @@ docs/purcell-inspired-question-bank.md
 | `subtopics` | Chapter subdivisions. |
 | `problems` | Questions, answer display, acceptable answers, type, options. |
 | `problem_steps` | Worked solution steps and mistake metadata. |
+| `tryout_packages` | Package cards plus stable `tryout_id` used by Try Out sessions. |
+| `tryout_questions` | Per-`tryout_id` question bank used by Try Out exams. |
+| `tryout_question_steps` | Worked solution steps for Try Out review snapshots and admin preview. |
+| `tryout_attempts` | Per-user submitted Try Out scores, answers JSON, and immutable review snapshots. |
 | `payments` | Duitku invoice/status records. |
 | `user_progress` | Per-user per-problem attempts, solved state, XP. |
 | `correction_attempts` | Canvas correction outputs and normalized evaluation JSON. |
-| `user_access_grants` | Manual admin grants such as tryout or subscription access. |
+| `user_access_grants` | Manual admin grants such as tryout, mission, package, or subscription access. |
 | `ai_token_usage` | Successful AI provider token usage for admin monitoring. |
 | `landing_media` | Admin-managed image/video slots used by the public landing page. |
 
@@ -457,6 +462,9 @@ users 1 -> many user_progress
 users 1 -> many correction_attempts
 users 1 -> many user_access_grants
 users 1 -> many payments
+users 1 -> many tryout_attempts
+tryout_packages 1 -> many tryout_questions by tryout_id
+tryout_questions 1 -> many tryout_question_steps
 problems 1 -> many user_progress
 problems 1 -> many correction_attempts, nullable on delete
 ```
@@ -576,6 +584,18 @@ problem_steps
 
 Import script replaces those four tables in a transaction after checking whether existing progress/correction rows reference current problems.
 
+### Try Out Bank Export/Import Flow
+
+```text
+Local db/database.sqlite
+  -> scripts/export-tryout-bank.js
+  -> db/tryout-bank.json
+  -> scripts/import-tryout-bank.js
+  -> db/database.sqlite or production DB
+```
+
+The Try Out import updates package metadata and replaces questions only for Try Outs without submitted `tryout_attempts`, unless `--force` or `FORCE_IMPORT=1` is used. `deploy.sh` runs `npm run import:tryouts` after dependencies are ready so production receives bundled Try Out content without overwriting user history by default.
+
 ## Security and Safety Notes
 
 - Helmet CSP allows the current CDN-based frontend runtime. Tightening CSP requires changing the frontend delivery model first.
@@ -584,7 +604,7 @@ Import script replaces those four tables in a transaction after checking whether
 - Login/register/correction are rate-limited.
 - Registration fields are sanitized with `xss`.
 - Admin routes require role check.
-- Admin monitoring endpoints validate user IDs/access payloads and use parameterized SQL.
+- Admin monitoring endpoints validate user IDs/access payloads, verify access grants belong to the selected user before revoking, and use parameterized SQL.
 - The frontend only renders the admin shield for `currentUser.role === "admin"`; shield activation adds an Admin Panel route entry, while backend middleware remains the real authorization boundary.
 - Gemini image input is limited to PNG, JPEG, WEBP, and 10,000,000 base64 characters.
 - Payment callbacks verify Duitku MD5 callback signatures.
@@ -609,6 +629,7 @@ Important: `npm run build` does not prove that `MAFIKING.html` bundled a product
 - There is no automated unit/integration test suite yet.
 - There is no versioned database migration system yet.
 - Static Belajar chapter cards outnumber imported backend question data.
+- Try Out content is portable through `db/tryout-bank.json`; SQLite runtime files remain ignored and are not the source of truth for deployment.
 - Practice is multiple-choice-first; canvas correction is still available but no longer the default entry mode.
 - Auto-guest users can accumulate during browser/API testing.
 - Payment route uses sandbox URL by default in code.

@@ -1,6 +1,7 @@
 const express = require('express');
 const { isAuthenticated, requireRegisteredUser } = require('../middleware/auth');
 const {
+    buildTryoutReviewSnapshot,
     calculateTryoutAttemptStats,
     normalizeTryoutAttemptInput,
     rankTryoutLeaderboardRows,
@@ -316,6 +317,79 @@ router.get('/leaderboard/weekly', isAuthenticated, (req, res) => {
 });
 
 // POST /api/progress/tryout-attempts — simpan hasil tryout dari jawaban user
+function parseTryoutAttemptRow(row) {
+    if (!row) return null;
+    let reviewSnapshot = null;
+    try {
+        reviewSnapshot = JSON.parse(row.review_snapshot_json || '{}');
+    } catch (_) {
+        reviewSnapshot = null;
+    }
+    let answers = {};
+    try {
+        answers = JSON.parse(row.answers_json || '{}');
+    } catch (_) {
+        answers = {};
+    }
+    return {
+        id: row.id,
+        tryoutId: row.tryout_id,
+        tryoutTitle: row.tryout_title,
+        score: Number(row.score) || 0,
+        correctCount: Number(row.correct_count) || 0,
+        totalQuestions: Number(row.total_questions) || 0,
+        answeredCount: Number(row.answered_count) || 0,
+        durationSeconds: Number(row.duration_seconds) || 0,
+        completedAt: row.completed_at,
+        answers,
+        reviewSnapshot
+    };
+}
+
+function loadTryoutQuestionsWithSteps(db, tryoutId, questionIds) {
+    const placeholders = questionIds.map(() => '?').join(',');
+    const questionRows = db.prepare(
+        `SELECT id, tryout_id, question_text, question_display, answer_display,
+                acceptable_answers, difficulty, question_type, mc_options,
+                image_url, image_alt, sort_order
+         FROM tryout_questions
+         WHERE tryout_id = ? AND id IN (${placeholders})`
+    ).all(tryoutId, ...questionIds);
+    const questionsById = new Map(questionRows.map((question) => [question.id, question]));
+    const stepsStmt = db.prepare(`
+        SELECT id, tryout_question_id, step_order, title, content, why, intuition, mistakes, mistake_result
+        FROM tryout_question_steps
+        WHERE tryout_question_id = ?
+        ORDER BY step_order, id
+    `);
+    return questionIds
+        .map((id) => questionsById.get(id))
+        .filter(Boolean)
+        .map((question) => ({ ...question, steps: stepsStmt.all(question.id) }));
+}
+
+// GET /api/progress/tryout-attempts/latest - review terakhir user untuk satu tryout
+router.get('/tryout-attempts/latest', isAuthenticated, requireRegisteredUser, (req, res) => {
+    try {
+        const db = req.app.locals.db;
+        const userId = req.session.userId;
+        const tryoutId = String(req.query.tryoutId || '').trim().slice(0, 120);
+        if (!tryoutId) return res.status(400).json({ error: 'tryoutId diperlukan' });
+
+        const row = db.prepare(`
+            SELECT *
+            FROM tryout_attempts
+            WHERE user_id = ? AND tryout_id = ?
+            ORDER BY completed_at DESC, id DESC
+            LIMIT 1
+        `).get(userId, tryoutId);
+        res.json({ attempt: parseTryoutAttemptRow(row) });
+    } catch (e) {
+        console.error('GET /tryout-attempts/latest error:', e);
+        res.status(500).json({ error: 'Gagal memuat riwayat Try Out.' });
+    }
+});
+
 router.post('/tryout-attempts', isAuthenticated, requireRegisteredUser, (req, res) => {
     const db = req.app.locals.db;
     const userId = req.session.userId;
@@ -340,7 +414,15 @@ router.post('/tryout-attempts', isAuthenticated, requireRegisteredUser, (req, re
         }
         tryoutId = verified.session.tryoutId;
         tryoutTitle = verified.session.tryoutTitle || input.tryoutTitle;
-        problemIds = verified.session.problemIds;
+        const verifiedIds = verified.session.problemIds;
+        const verifiedSet = new Set(verifiedIds.map(String));
+        const submittedIds = input.problemIds;
+        const submittedMatchesSession = submittedIds.length === verifiedIds.length
+            && submittedIds.every((id) => verifiedSet.has(String(id)));
+        if (!submittedMatchesSession) {
+            return res.status(400).json({ error: 'Daftar soal tryout tidak cocok dengan sesi.' });
+        }
+        problemIds = submittedIds;
         durationSeconds = Math.min(input.durationSeconds, Number(verified.session.timeLimitSeconds) || input.durationSeconds);
     }
 
@@ -348,25 +430,31 @@ router.post('/tryout-attempts', isAuthenticated, requireRegisteredUser, (req, re
         return res.status(400).json({ error: 'Daftar soal tryout kosong' });
     }
 
-    const placeholders = problemIds.map(() => '?').join(',');
-    const problemRows = db.prepare(
-        `SELECT id, answer_text, answer_display, mc_options
-         FROM problems
-         WHERE id IN (${placeholders})`
-    ).all(...problemIds);
-    const problemsById = new Map(problemRows.map((problem) => [problem.id, problem]));
-    const orderedProblems = problemIds
-        .map((id) => problemsById.get(id))
-        .filter(Boolean);
+    const existing = db.prepare(`
+        SELECT id
+        FROM tryout_attempts
+        WHERE user_id = ? AND tryout_id = ?
+        LIMIT 1
+    `).get(userId, tryoutId);
+    if (existing) {
+        return res.status(409).json({ error: 'Try Out ini sudah pernah disubmit. Minta admin menghapus riwayat jika perlu ulang.' });
+    }
+
+    const orderedProblems = loadTryoutQuestionsWithSteps(db, tryoutId, problemIds);
 
     if (orderedProblems.length !== problemIds.length) {
         return res.status(400).json({ error: 'Sebagian soal tryout tidak ditemukan' });
     }
 
-    const stats = calculateTryoutAttemptStats({
-        problems: orderedProblems,
+    const reviewSnapshot = buildTryoutReviewSnapshot({
+        tryoutId,
+        tryoutTitle,
+        questions: orderedProblems,
         answers: input.answers,
+        choiceMap: input.choiceMap,
+        durationSeconds
     });
+    const stats = reviewSnapshot.stats || calculateTryoutAttemptStats({ problems: orderedProblems, answers: input.answers, choiceMap: input.choiceMap });
 
     const info = db.prepare(`
         INSERT INTO tryout_attempts (
@@ -378,8 +466,10 @@ router.post('/tryout-attempts', isAuthenticated, requireRegisteredUser, (req, re
             total_questions,
             answered_count,
             duration_seconds,
+            answers_json,
+            review_snapshot_json,
             completed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime(?))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime(?))
     `).run(
         userId,
         tryoutId,
@@ -389,6 +479,8 @@ router.post('/tryout-attempts', isAuthenticated, requireRegisteredUser, (req, re
         stats.totalQuestions,
         stats.answeredCount,
         durationSeconds,
+        JSON.stringify(input.answers),
+        JSON.stringify(reviewSnapshot),
         new Date().toISOString()
     );
 
@@ -400,6 +492,7 @@ router.post('/tryout-attempts', isAuthenticated, requireRegisteredUser, (req, re
             tryoutTitle,
             durationSeconds,
             ...stats,
+            reviewSnapshot,
         },
     });
 });

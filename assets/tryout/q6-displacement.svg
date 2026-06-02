@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="300" viewBox="0 0 420 300" role="img" aria-labelledby="title desc">
+  <title id="title">Diagram perpindahan 3 meter ke timur dan 4 meter ke utara</title>
+  <desc id="desc">Segitiga siku-siku dengan sisi alas 3 meter ke timur, sisi tegak 4 meter ke utara, dan sisi miring perpindahan.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#0b1326"/>
+    </marker>
+    <marker id="arrow-dashed" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#0b1326"/>
+    </marker>
+  </defs>
+  <rect width="420" height="300" fill="#ffffff"/>
+  <g transform="translate(86 228)" stroke="#0b1326" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="0" y1="0" x2="150" y2="0" marker-end="url(#arrow)"/>
+    <line x1="150" y1="0" x2="150" y2="-180" marker-end="url(#arrow)"/>
+    <line x1="0" y1="0" x2="150" y2="-180" stroke-dasharray="9 8" marker-end="url(#arrow-dashed)"/>
+  </g>
+  <text x="161" y="258" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="20" fill="#0b1326">3 m (Timur)</text>
+  <text x="251" y="141" font-family="Georgia, 'Times New Roman', serif" font-size="20" fill="#0b1326">4 m (Utara)</text>
+  <text x="142" y="112" font-family="Georgia, 'Times New Roman', serif" font-size="22" font-style="italic" fill="#0b1326">&#916;r</text>
+</svg>

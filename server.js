@@ -92,6 +92,12 @@ for (const migration of [
   "ALTER TABLE daily_missions ADD COLUMN release_date TEXT DEFAULT ''",
   "ALTER TABLE ai_token_usage ADD COLUMN tokens_used INTEGER DEFAULT 0",
   "ALTER TABLE ai_token_usage ADD COLUMN created_at DATETIME",
+  "ALTER TABLE tryout_packages ADD COLUMN tryout_id TEXT DEFAULT ''",
+  "CREATE INDEX IF NOT EXISTS idx_tryout_packages_tryout_id ON tryout_packages (tryout_id)",
+  "ALTER TABLE tryout_questions ADD COLUMN image_url TEXT DEFAULT ''",
+  "ALTER TABLE tryout_questions ADD COLUMN image_alt TEXT DEFAULT ''",
+  "ALTER TABLE tryout_attempts ADD COLUMN answers_json TEXT DEFAULT '{}'",
+  "ALTER TABLE tryout_attempts ADD COLUMN review_snapshot_json TEXT DEFAULT '{}'",
   `CREATE TABLE IF NOT EXISTS landing_media (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     slot TEXT UNIQUE NOT NULL,
@@ -115,7 +121,40 @@ for (const migration of [
     completed_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE INDEX IF NOT EXISTS idx_tryout_attempts_tryout_score
-    ON tryout_attempts (tryout_id, score DESC, correct_count DESC, duration_seconds ASC, completed_at ASC)`
+    ON tryout_attempts (tryout_id, score DESC, correct_count DESC, duration_seconds ASC, completed_at ASC)`,
+  `CREATE INDEX IF NOT EXISTS idx_tryout_attempts_user_tryout
+    ON tryout_attempts (user_id, tryout_id, completed_at DESC, id DESC)`,
+  `CREATE TABLE IF NOT EXISTS tryout_questions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tryout_id TEXT NOT NULL,
+    question_text TEXT DEFAULT '',
+    question_display TEXT NOT NULL,
+    answer_display TEXT NOT NULL,
+    acceptable_answers TEXT NOT NULL DEFAULT '[]',
+    difficulty TEXT DEFAULT 'Easy',
+    question_type TEXT DEFAULT 'mc',
+    mc_options TEXT DEFAULT '[]',
+    image_url TEXT DEFAULT '',
+    image_alt TEXT DEFAULT '',
+    sort_order INTEGER DEFAULT 0,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_tryout_questions_tryout
+    ON tryout_questions (tryout_id, sort_order, id)`,
+  `CREATE TABLE IF NOT EXISTS tryout_question_steps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tryout_question_id INTEGER NOT NULL REFERENCES tryout_questions(id) ON DELETE CASCADE,
+    step_order INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    why TEXT,
+    intuition TEXT,
+    mistakes TEXT,
+    mistake_result TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_tryout_question_steps_question
+    ON tryout_question_steps (tryout_question_id, step_order, id)`
 ]) {
   try {
     db.exec(migration);
@@ -230,6 +269,7 @@ CREATE TABLE IF NOT EXISTS daily_missions (
 db.exec(`
 CREATE TABLE IF NOT EXISTS tryout_packages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tryout_id TEXT NOT NULL DEFAULT '',
   title TEXT NOT NULL DEFAULT '',
   description TEXT NOT NULL DEFAULT '',
   price TEXT NOT NULL DEFAULT 'Gratis',
@@ -256,13 +296,16 @@ if (db.prepare('SELECT COUNT(*) as n FROM daily_missions').get().n === 0) {
 
 // Seed default tryout packages if table is empty
 if (db.prepare('SELECT COUNT(*) as n FROM tryout_packages').get().n === 0) {
-  const ins = db.prepare('INSERT INTO tryout_packages (title, description, price, original_price, badge, duration, questions, features, tone, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?)');
+  const ins = db.prepare('INSERT INTO tryout_packages (tryout_id, title, description, price, original_price, badge, duration, questions, features, tone, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
   [
-    ['Tryout Bundling: Semester 1','Evaluasi lengkap Matematika, Fisika, dan Kimia untuk persiapan UAS.','Rp 50.000',null,'Populer','180 mnt',90,JSON.stringify(['3 Mata pelajaran dasar','Sistem CBT seperti UAS','Analisis butir soal AI','Pembahasan video eksklusif']),'default',1],
-    ['Tryout Premium: TPB Prep','Simulasi TPB ITB tingkat tinggi dengan arsip soal 5 tahun terakhir.','Rp 100.000','Rp 150.000','Terlengkap','240 mnt',120,JSON.stringify(['Prediksi akurasi tinggi','Konsultasi Zoom mentor','Skoring adaptif IRT','Sertifikat pencapaian']),'feature',2],
-    ['Tryout Gratis: Bab 1-2','Coba sistem CBT kami secara gratis untuk Kalkulus Dasar.','Gratis',null,'Promo','60 mnt',30,JSON.stringify(['1 mata pelajaran','Hasil keluar instan','Pembahasan teks dasar']),'default',3],
+    ['tryout-bundling-semester-1','Tryout Bundling: Semester 1','Evaluasi lengkap Matematika, Fisika, dan Kimia untuk persiapan UAS.','Rp 50.000',null,'Populer','180 mnt',90,JSON.stringify(['3 Mata pelajaran dasar','Sistem CBT seperti UAS','Analisis butir soal AI','Pembahasan video eksklusif']),'default',1],
+    ['tryout-premium-tpb-prep','Tryout Premium: The Trinity TPB','Simulasi pre-test TPB ITB berisi Matematika, Fisika, dan Kimia.','Rp 100.000','Rp 150.000','Terlengkap','90 mnt',30,JSON.stringify(['30 soal campuran TPB','Urutan soal dan opsi diacak','Hasil keluar instan','Pembahasan step-by-step']),'feature',2],
+    ['tryout-gratis-bab-1-2','Tryout Gratis: Bab 1-2','Coba sistem CBT kami secara gratis untuk Kalkulus Dasar.','Gratis',null,'Promo','30 mnt',15,JSON.stringify(['1 mata pelajaran','Hasil keluar instan','Pembahasan teks dasar']),'default',3],
   ].forEach(r => ins.run(...r));
 }
+
+ensureTryoutPackageIds(db);
+seedInitialTryoutQuestions(db);
 
 ensureFixedAdminUser(db);
 
@@ -461,6 +504,7 @@ app.use((req, res, next) => {
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/quiz', require('./routes/quiz'));
+app.use('/api/tryouts', require('./routes/tryouts'));
 
 function currentJakartaDate() {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -490,14 +534,34 @@ function canReadMissionDrafts(req) {
   return isLocalAdminMode(req);
 }
 
-function serializeMissionForViewer(row, { canSeeDrafts = false } = {}) {
+function hasMissionManualAccess(database, userId) {
+  if (!userId) return false;
+  try {
+    const row = database.prepare(`
+      SELECT id
+      FROM user_access_grants
+      WHERE user_id = ?
+        AND (
+          (access_type = 'mission' AND access_value IN ('daily-missions', 'misi-harian'))
+          OR (access_type = 'manual' AND access_value IN ('daily-missions', 'misi-harian'))
+        )
+      LIMIT 1
+    `).get(userId);
+    return Boolean(row);
+  } catch (_) {
+    return false;
+  }
+}
+
+function serializeMissionForViewer(row, { canSeeDrafts = false, hasManualAccess = false } = {}) {
   const released = isReleasedMission(row);
   const effectiveStatus = effectiveMissionStatus(row, released);
-  if (canSeeDrafts) {
+  if (canSeeDrafts || hasManualAccess) {
     return {
       ...row,
-      effective_status: effectiveStatus,
-      is_released: released,
+      status: hasManualAccess && row.status !== 'completed' ? 'active' : row.status,
+      effective_status: hasManualAccess && row.status !== 'completed' ? 'active' : effectiveStatus,
+      is_released: hasManualAccess || released,
     };
   }
   if (released || row.status === 'completed') {
@@ -522,8 +586,9 @@ app.get('/api/missions', (req, res) => {
   try {
     const wantsAdmin = req.query.admin === '1';
     const canSeeDrafts = wantsAdmin && canReadMissionDrafts(req);
+    const hasManualAccess = !canSeeDrafts && hasMissionManualAccess(db, req.session && req.session.userId);
     const rows = db.prepare('SELECT * FROM daily_missions ORDER BY sort_order, day').all();
-    res.json(rows.map((row) => serializeMissionForViewer(row, { canSeeDrafts })));
+    res.json(rows.map((row) => serializeMissionForViewer(row, { canSeeDrafts, hasManualAccess })));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -688,4 +753,118 @@ function ensureFixedAdminUser(database) {
   database.prepare(
     "INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, 'Admin 123', 'admin')"
   ).run(username, passwordHash);
+}
+
+function slugifyTryoutId(value, fallback) {
+  const base = String(value || fallback || 'tryout')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return base || String(fallback || 'tryout');
+}
+
+function ensureTryoutPackageIds(database) {
+  let rows = [];
+  try {
+    rows = database.prepare('SELECT id, title, tryout_id FROM tryout_packages ORDER BY id').all();
+  } catch (_) {
+    return;
+  }
+  const used = new Set(rows.map((row) => String(row.tryout_id || '').trim()).filter(Boolean));
+  const update = database.prepare('UPDATE tryout_packages SET tryout_id = ? WHERE id = ?');
+  for (const row of rows) {
+    if (String(row.tryout_id || '').trim()) continue;
+    const base = slugifyTryoutId(row.title, `tryout-${row.id}`);
+    let candidate = base;
+    let suffix = 2;
+    while (used.has(candidate)) {
+      candidate = `${base}-${suffix}`;
+      suffix += 1;
+    }
+    used.add(candidate);
+    update.run(candidate, row.id);
+  }
+}
+
+function seedInitialTryoutQuestions(database) {
+  let existingTryoutQuestions = 0;
+  try {
+    existingTryoutQuestions = Number(database.prepare('SELECT COUNT(*) AS count FROM tryout_questions').get().count) || 0;
+  } catch (_) {
+    return;
+  }
+  if (existingTryoutQuestions > 0) return;
+
+  const sourceProblems = database.prepare(`
+    SELECT id, question_text, question_display, answer_display, acceptable_answers, difficulty, question_type, mc_options, sort_order
+    FROM problems
+    ORDER BY sort_order, id
+  `).all();
+  if (!sourceProblems.length) return;
+
+  const sourceStepsByProblem = new Map();
+  const sourceSteps = database.prepare(`
+    SELECT problem_id, step_order, title, content, why, intuition, mistakes, mistake_result
+    FROM problem_steps
+    ORDER BY problem_id, step_order, id
+  `).all();
+  for (const step of sourceSteps) {
+    if (!sourceStepsByProblem.has(step.problem_id)) sourceStepsByProblem.set(step.problem_id, []);
+    sourceStepsByProblem.get(step.problem_id).push(step);
+  }
+
+  const packages = database.prepare("SELECT tryout_id, title, questions FROM tryout_packages WHERE tryout_id <> '' ORDER BY sort_order, id").all();
+  const targets = [
+    { tryout_id: 'free-math-tryout-15', questions: 15 },
+    ...packages,
+  ];
+  const insertQuestion = database.prepare(`
+    INSERT INTO tryout_questions (
+      tryout_id, question_text, question_display, answer_display, acceptable_answers,
+      difficulty, question_type, mc_options, sort_order, created_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+  `);
+  const insertStep = database.prepare(`
+    INSERT INTO tryout_question_steps (
+      tryout_question_id, step_order, title, content, why, intuition, mistakes, mistake_result
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const seed = database.transaction(() => {
+    for (const target of targets) {
+      const tryoutId = String(target.tryout_id || '').trim();
+      if (!tryoutId) continue;
+      const limit = Math.max(1, Math.min(Number(target.questions) || 15, sourceProblems.length));
+      sourceProblems.slice(0, limit).forEach((problem, index) => {
+        const info = insertQuestion.run(
+          tryoutId,
+          problem.question_text || '',
+          problem.question_display || '',
+          problem.answer_display || '',
+          problem.acceptable_answers || '[]',
+          problem.difficulty || 'Easy',
+          problem.question_type || 'mc',
+          problem.mc_options || '[]',
+          index + 1
+        );
+        const tryoutQuestionId = Number(info.lastInsertRowid);
+        for (const step of sourceStepsByProblem.get(problem.id) || []) {
+          insertStep.run(
+            tryoutQuestionId,
+            Number(step.step_order) || 1,
+            step.title || '',
+            step.content || '',
+            step.why || '',
+            step.intuition || '',
+            step.mistakes || '',
+            step.mistake_result || ''
+          );
+        }
+      });
+    }
+  });
+  seed();
 }

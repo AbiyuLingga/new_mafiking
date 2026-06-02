@@ -233,15 +233,21 @@ const App = () => {
     );
   }
 
-  const navRoute = route === "tryout" && String(tryoutContext?.mode || "").startsWith("free-math")
+  const tryoutMode = String(tryoutContext?.mode || "");
+  const isTryoutFullscreenRoute = route === "tryout" && (
+    tryoutMode === "free-math" ||
+    tryoutMode === "tryout-exam" ||
+    tryoutMode === "tryout-review" ||
+    tryoutMode === "tryout-preview"
+  );
+  const navRoute = route === "tryout" && (tryoutMode.startsWith("free-math") || tryoutMode.startsWith("tryout-"))
     ? "belajar"
     : route;
-  const isFreeMathTryoutRoute = route === "tryout" && String(tryoutContext?.mode || "").startsWith("free-math");
 
   return (
     <div className="min-h-screen flex flex-col bg-paper text-ink">
       <OfflineBanner />
-      {route !== "practice" && route !== "lobby" && !(route === "tryout" && tryoutContext?.mode === "free-math") && (
+      {route !== "practice" && route !== "lobby" && !isTryoutFullscreenRoute && (
         <Nav
           route={navRoute}
           setRoute={navigate}
@@ -258,7 +264,7 @@ const App = () => {
         <div
           key={`${route}:${authMode || ""}:${tryoutContext?.id || ""}`}
           data-screen-label={routeLabel(route)}
-          className={route === "practice" || route === "lobby" || isFreeMathTryoutRoute ? "" : "app-route-transition"}
+          className={route === "practice" || route === "lobby" || isTryoutFullscreenRoute ? "" : "app-route-transition"}
         >
           {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={isAdmin || isAdminAccount} authMode={authMode} authRedirect={authRedirect} onAuthSuccess={handleAuthSuccess} pendingClerkUser={pendingClerkUser} />}
           {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} currentUser={currentUser} initialSection={belajarSection} onSectionChange={setBelajarSection} />}

@@ -356,7 +356,17 @@ router.get('/active-packages', async (req, res) => {
             WHERE user_id = ? AND status = 'SUCCESS'
         `).all(userId);
 
+        const grants = db.prepare(`
+            SELECT access_type, access_value
+            FROM user_access_grants
+            WHERE user_id = ?
+        `).all(userId);
+
         const activeProducts = payments.map(p => p.product_details);
+        for (const grant of grants) {
+            const value = String(grant.access_value || '').trim();
+            if (value) activeProducts.push(value);
+        }
         res.json(activeProducts);
     } catch (err) {
         console.error('Failed to get active packages:', err);

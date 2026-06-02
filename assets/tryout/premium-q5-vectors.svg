@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="360" viewBox="0 0 560 360" role="img" aria-labelledby="title desc">
+  <title id="title">Resultan dua gaya tegak lurus</title>
+  <desc id="desc">Dua vektor gaya F1 sebesar 4 N dan F2 sebesar 3 N saling tegak lurus dengan resultan R.</desc>
+  <defs>
+    <marker id="arrow-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#0b1326"/></marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#2563eb"/></marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#dc2626"/></marker>
+  </defs>
+  <rect width="560" height="360" rx="22" fill="#ffffff"/>
+  <g stroke-width="8" stroke-linecap="round" fill="none">
+    <path d="M130 250 L430 250" stroke="#2563eb" marker-end="url(#arrow-blue)"/>
+    <path d="M130 250 L130 80" stroke="#dc2626" marker-end="url(#arrow-red)"/>
+    <path d="M130 250 L430 80" stroke="#0b1326" stroke-dasharray="16 13" marker-end="url(#arrow-ink)"/>
+  </g>
+  <text x="292" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#2563eb">F1 = 4 N</text>
+  <text x="84" y="165" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#dc2626" transform="rotate(-90 84 165)">F2 = 3 N</text>
+  <text x="315" y="120" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#0b1326">R</text>
+</svg>
