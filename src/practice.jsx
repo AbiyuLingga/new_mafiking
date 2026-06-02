@@ -1,6 +1,6 @@
 // Practice route — choice (multiple choice) default, optional canvas mode.
 
-const CANVAS_DEMO_VIDEO_SRC = "/assets/saas_demo_video.mp4";
+const CANVAS_DEMO_VIDEO_SRC = "/assets/landing/demo-video-848w-20260602.mp4";
 const OCR_TRUST_STREAK_KEY = "mafiking:canvas-ocr-trust-streak";
 const OCR_TRUST_THRESHOLD = 4;
 const OCR_AUTO_ACCEPT_MS = 12000;

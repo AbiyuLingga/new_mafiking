@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const axios = require('axios');
 const { isRegisteredUser } = require('../middleware/auth');
+const { setPublicApiCache } = require('../lib/performance');
 const router = express.Router();
 
 const DUITKU_BASE_URL = 'https://api-sandbox.duitku.com/api'; // ganti ke https://api-prod.duitku.com/api saat production
@@ -34,12 +35,14 @@ function verifyCallbackSignature(merchantCode, amount, merchantOrderId, apiKey, 
     return expected === received;
 }
 
-function hasDuitkuCredentials() {
+function hasDuitkuCredentials(env = process.env) {
+    const merchantCode = env.DUITKU_MERCHANT_CODE;
+    const apiKey = env.DUITKU_API_KEY;
     return Boolean(
-        MERCHANT_CODE &&
-        API_KEY &&
-        MERCHANT_CODE !== 'mock' &&
-        MERCHANT_CODE !== 'YOUR_DUITKU_MERCHANT_CODE'
+        merchantCode &&
+        apiKey &&
+        merchantCode !== 'mock' &&
+        merchantCode !== 'YOUR_DUITKU_MERCHANT_CODE'
     );
 }
 
@@ -55,7 +58,7 @@ function isMockPaymentEnabled(env = process.env) {
     if (env.NODE_ENV === 'production' && !isTruthyEnv(env.PAYMENT_ALLOW_MOCK_IN_PRODUCTION)) return false;
     if (isTruthyEnv(env.PAYMENT_MOCK_MODE)) return true;
     if (isFalseyEnv(env.PAYMENT_MOCK_MODE)) return false;
-    return env.NODE_ENV !== 'production' && !hasDuitkuCredentials();
+    return env.NODE_ENV !== 'production' && !hasDuitkuCredentials(env);
 }
 
 function mockTokenSecret() {
@@ -163,6 +166,27 @@ function paymentStatusPayload(payment, status) {
         updatedAt: payment.updated_at,
     };
 }
+
+function paymentGatewayState(env = process.env) {
+    const mockMode = isMockPaymentEnabled(env);
+    const providerReady = hasDuitkuCredentials(env);
+    const active = providerReady || mockMode;
+    return {
+        active,
+        mockMode,
+        provider: 'duitku',
+        providerReady,
+        message: active
+            ? 'Payment gateway siap digunakan.'
+            : 'Payment gateway sedang dalam proses aktivasi. Pembelian akan dibuka setelah akses payment provider aktif.',
+    };
+}
+
+// GET /api/payment/config
+router.get('/config', (_req, res) => {
+    setPublicApiCache(res, 30, 120);
+    res.json(paymentGatewayState());
+});
 
 // POST /api/payment/create
 router.post('/create', async (req, res) => {
@@ -520,6 +544,7 @@ router.__test = {
     resolvePaymentItem,
     signMockPayment,
     verifyMockPaymentToken,
+    paymentGatewayState,
 };
 
 module.exports = router;

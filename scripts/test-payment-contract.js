@@ -5,6 +5,7 @@ const {
     buildMockPaymentUrl,
     escapeHtml,
     isMockPaymentEnabled,
+    paymentGatewayState,
     isRegisteredPaymentUser,
     resolvePaymentItem,
     signMockPayment,
@@ -16,6 +17,7 @@ assert.strictEqual(typeof resolvePaymentItem, 'function', 'resolvePaymentItem mu
 assert.strictEqual(typeof isRegisteredPaymentUser, 'function', 'isRegisteredPaymentUser must be exported for contract tests');
 assert.strictEqual(typeof isMockPaymentEnabled, 'function', 'isMockPaymentEnabled must be exported for contract tests');
 assert.strictEqual(typeof verifyMockPaymentToken, 'function', 'verifyMockPaymentToken must be exported for contract tests');
+assert.strictEqual(typeof paymentGatewayState, 'function', 'paymentGatewayState must be exported for contract tests');
 
 const userDb = {
     prepare(sql) {
@@ -109,5 +111,11 @@ assert.strictEqual(verifyMockPaymentToken({ ...mockOrder, token }), true);
 assert.strictEqual(verifyMockPaymentToken({ ...mockOrder, amount: 1, token }), false);
 assert.match(buildMockPaymentUrl(mockOrder), /^\/api\/payment\/mock-gateway\?merchantOrderId=MFK-2-123456&token=[a-f0-9]{64}$/);
 assert.strictEqual(escapeHtml('<img src=x onerror=alert(1)>'), '&lt;img src=x onerror=alert(1)&gt;');
+
+const gatewayState = paymentGatewayState({ NODE_ENV: 'production', PAYMENT_MOCK_MODE: 'false' });
+assert.strictEqual(gatewayState.active, false);
+assert.strictEqual(gatewayState.mockMode, false);
+assert.strictEqual(gatewayState.providerReady, false);
+assert.match(gatewayState.message, /aktivasi/);
 
 console.log('Payment contract tests passed');

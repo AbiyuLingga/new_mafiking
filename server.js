@@ -36,6 +36,13 @@ try {
 const app = express();
 const webhookRoutes = require('./routes/webhooks');
 const { isLocalAdminMode } = require('./middleware/admin');
+const {
+  createPerformanceStore,
+  normalizeVitalsPayload,
+  setPublicApiCache,
+  shouldLogRequestTiming,
+} = require('./lib/performance');
+const { createRequestGuard } = require('./lib/request-guard');
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 const distDir = path.join(__dirname, 'dist');
@@ -260,6 +267,7 @@ if (db.prepare('SELECT COUNT(*) as n FROM tryout_packages').get().n === 0) {
 ensureFixedAdminUser(db);
 
 app.locals.db = db;
+app.locals.performanceStore = createPerformanceStore();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
@@ -304,19 +312,8 @@ if (clerkMiddleware && process.env.CLERK_SECRET_KEY) {
   app.use(clerkMiddleware());
 }
 app.use(require('./middleware/clerk-auth').clerkAuthMiddleware);
-
-app.get('/api/health', (_req, res) => {
-  const counts = {
-    chapters: db.prepare('SELECT COUNT(*) AS count FROM chapters').get().count,
-    problems: db.prepare('SELECT COUNT(*) AS count FROM problems').get().count
-  };
-  res.json({ ok: true, service: 'new-mafiking', counts });
-});
-
-app.get('/api/config/clerk', (_req, res) => {
-  const publishableKey = String(process.env.VITE_CLERK_PUBLISHABLE_KEY || process.env.CLERK_PUBLISHABLE_KEY || '').trim();
-  res.json({ enabled: Boolean(publishableKey), publishableKey });
-});
+app.use(apiRequestTiming);
+app.use(createRequestGuard());
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -339,10 +336,87 @@ const correctionLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false
 });
+const performanceLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  message: { error: 'Terlalu banyak telemetry request. Coba lagi sebentar.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+app.get('/api/health', (_req, res) => {
+  setPublicApiCache(res, 15, 60);
+  const counts = {
+    chapters: db.prepare('SELECT COUNT(*) AS count FROM chapters').get().count,
+    problems: db.prepare('SELECT COUNT(*) AS count FROM problems').get().count
+  };
+  res.json({ ok: true, service: 'new-mafiking', counts });
+});
+
+app.get('/api/config/clerk', (_req, res) => {
+  setPublicApiCache(res, 60, 300);
+  const publishableKey = String(process.env.VITE_CLERK_PUBLISHABLE_KEY || process.env.CLERK_PUBLISHABLE_KEY || '').trim();
+  res.json({ enabled: Boolean(publishableKey), publishableKey });
+});
+
+app.post('/api/performance/vitals', performanceLimiter, (req, res) => {
+  const normalized = normalizeVitalsPayload({
+    ...(req.body || {}),
+    userAgent: req.get('user-agent') || req.body?.userAgent || '',
+  });
+  for (const metric of normalized.metrics) {
+    req.app.locals.performanceStore?.recordVital({
+      ...metric,
+      userId: req.session?.userId || null,
+    });
+  }
+  res.status(204).end();
+});
+
+app.get('/api/performance/summary', (req, res) => {
+  if (!(req.session?.role === 'admin' || isLocalAdminMode(req))) {
+    return res.status(403).json({ error: 'Akses admin diperlukan' });
+  }
+  res.json(req.app.locals.performanceStore?.summary() || { requestsCount: 0, vitalsCount: 0 });
+});
 
 app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth/register', registerLimiter);
 app.use('/api/correction', correctionLimiter);
+
+function apiRequestTiming(req, res, next) {
+  if (!req.path.startsWith('/api/')) return next();
+  const start = process.hrtime.bigint();
+  const originalWriteHead = res.writeHead;
+
+  function durationMs() {
+    return Number(process.hrtime.bigint() - start) / 1e6;
+  }
+
+  res.writeHead = function writeHeadWithTiming(...args) {
+    if (!res.headersSent) {
+      res.setHeader('X-Response-Time', `${durationMs().toFixed(1)}ms`);
+    }
+    return originalWriteHead.apply(this, args);
+  };
+
+  res.on('finish', () => {
+    const roundedDuration = Math.round(durationMs() * 10) / 10;
+    const payload = {
+      method: req.method,
+      path: req.path,
+      statusCode: res.statusCode,
+      durationMs: roundedDuration,
+      userId: req.session?.userId || null,
+    };
+    req.app.locals.performanceStore?.recordRequest(payload);
+    if (shouldLogRequestTiming(payload)) {
+      console.info('[api-timing]', `${payload.method} ${payload.path}`, `${payload.statusCode}`, `${payload.durationMs}ms`, `user=${payload.userId || '-'}`);
+    }
+  });
+
+  return next();
+}
 
 // Hapus guest user yang tidak pernah login lebih dari 7 hari, tiap 24 jam
 setInterval(() => {
@@ -363,6 +437,8 @@ app.use((req, res, next) => {
     req.path === '/api/config/clerk' ||
     req.path === '/api/payment/callback' ||
     req.path === '/api/landing-media' ||
+    req.path === '/api/performance/vitals' ||
+    req.path === '/api/payment/config' ||
     req.path === '/api/quiz/init' ||
     req.path === '/api/tryout-packages' ||
     req.path === '/api/webhooks/clerk' ||
@@ -453,12 +529,14 @@ app.get('/api/missions', (req, res) => {
 
 app.get('/api/tryout-packages', (req, res) => {
   try {
+    setPublicApiCache(res, 30, 120);
     res.json(db.prepare('SELECT * FROM tryout_packages ORDER BY sort_order, id').all());
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/landing-media', (_req, res) => {
   try {
+    setPublicApiCache(res, 60, 300);
     const rows = db.prepare(`
       SELECT slot, media_type, url, original_name, mime_type, size_bytes, updated_at
       FROM landing_media

@@ -7,6 +7,7 @@ const {
     FREE_MATH_TRYOUT_TITLE,
     createTryoutSession,
 } = require('../lib/tryout-session');
+const { setPublicApiCache } = require('../lib/performance');
 const router = express.Router();
 
 // GET /api/quiz/chapters
@@ -28,6 +29,7 @@ router.get('/chapters/:id/subtopics', isAuthenticated, (req, res) => {
 // GET /api/quiz/init — all chapters with subtopics + problem counts in 1 call (public)
 router.get('/init', (req, res) => {
     const db = req.app.locals.db;
+    setPublicApiCache(res, 60, 300);
     const chapters = db.prepare('SELECT * FROM chapters ORDER BY sort_order, id').all();
     const subtopics = db.prepare('SELECT * FROM subtopics ORDER BY sort_order, id').all();
     const counts = db.prepare(

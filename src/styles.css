@@ -1557,7 +1557,7 @@ button:focus-visible, a:focus-visible {
   position: absolute;
   top: 0; right: 0;
   width: 240px; height: 200px;
-  background-image: url('../assets/card-bg.png');
+  background-image: url('../assets/card-bg.webp');
   background-repeat: no-repeat;
   background-position: top right;
   background-size: cover;
@@ -5338,7 +5338,7 @@ button:focus-visible, a:focus-visible {
   background: #fff;
   border: 1.5px solid rgba(11, 19, 38, 0.08);
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  --chapter-corner-art: url('../assets/card-matematika.png');
+  --chapter-corner-art: url('../assets/card-matematika.webp');
   --chapter-card-bg: #fffdf1;
   --chapter-corner-size: 390px;
   --chapter-corner-width: min(190px, 46%);
@@ -5352,7 +5352,7 @@ button:focus-visible, a:focus-visible {
   right: 0;
   width: 240px;
   height: 200px;
-  background-image: url('../assets/card-bg.png');
+  background-image: url('../assets/card-bg.webp');
   background-repeat: no-repeat;
   background-position: top right;
   background-size: cover;
@@ -5421,17 +5421,17 @@ button:focus-visible, a:focus-visible {
 }
 
 .card-premium-art-matematika {
-  --chapter-corner-art: url('../assets/card-matematika.png');
+  --chapter-corner-art: url('../assets/card-matematika.webp');
   --chapter-card-bg: #fffdf0;
 }
 
 .card-premium-art-fisika {
-  --chapter-corner-art: url('../assets/card-fisika.png');
+  --chapter-corner-art: url('../assets/card-fisika.webp');
   --chapter-card-bg: #edfaff;
 }
 
 .card-premium-art-kimia {
-  --chapter-corner-art: url('../assets/card-kimia.png');
+  --chapter-corner-art: url('../assets/card-kimia.webp');
   --chapter-card-bg: #fff1f2;
 }
 

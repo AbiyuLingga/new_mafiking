@@ -465,7 +465,7 @@ const LandingLegacy = ({ setRoute, tweaks, isAdmin = false, currentUser = null }
               <div className="mt-9 grid max-w-2xl grid-cols-2 gap-4 text-sm text-slate-500 md:grid-cols-4">
                 {[
                   ["100+", "Pengguna Aktif"],
-                  ["100+", "Soal Latihan"],
+                  ["20+", "Soal Latihan"],
                   ["98%", "lebih terarah"],
                   ["24/7", "akses belajar"],
                 ].map(([value, label]) => (
@@ -581,7 +581,7 @@ const LandingLegacy = ({ setRoute, tweaks, isAdmin = false, currentUser = null }
               <p className="mt-5 text-lg leading-8 text-white/60">Video demo tetap memakai aset Mafiking lama sesuai catatan zip. Nanti CMS media bisa dibuat terpisah melalui Admin Panel.</p>
             </div>
             <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5">
-              <video src="/assets/saas_demo_video.mp4" autoPlay muted loop playsInline className="aspect-video h-full w-full object-cover" />
+              <video src="/assets/landing/demo-video-848w-20260602.mp4" autoPlay muted loop playsInline className="aspect-video h-full w-full object-cover" />
             </div>
           </div>
         </section>
@@ -2296,7 +2296,7 @@ const VideoDemo = () => {
         >
           <video 
             ref={videoRef}
-            src="/assets/saas_demo_video.mp4"
+            src="/assets/landing/demo-video-848w-20260602.mp4"
             autoPlay 
             muted
             loop 

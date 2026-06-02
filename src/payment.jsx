@@ -27,6 +27,7 @@ const Payment = ({ setRoute, currentUser, context }) => {
   const emailRef = useRef(null);
   const [selected, setSelected] = useState("bulanan");
   const [loading, setLoading] = useState(false);
+  const [gatewayConfig, setGatewayConfig] = useState(null);
   const [errors, setErrors] = useState({});
 
   const isGuestUser = (user) => {
@@ -55,6 +56,21 @@ const Payment = ({ setRoute, currentUser, context }) => {
     setName(getInitialName());
   }, [currentUser]);
 
+  useEffect(() => {
+    let cancelled = false;
+    MafikingAPI.get("/api/payment/config")
+      .then((config) => { if (!cancelled) setGatewayConfig(config); })
+      .catch(() => {
+        if (!cancelled) {
+          setGatewayConfig({
+            active: false,
+            message: "Status payment gateway belum bisa dicek. Coba lagi sebentar atau hubungi admin.",
+          });
+        }
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   const params = new URLSearchParams(window.location.search);
   const merchantOrderId = params.get("merchantOrderId");
 
@@ -73,7 +89,8 @@ const Payment = ({ setRoute, currentUser, context }) => {
     return PAKET_LIST.find((paket) => paket.id === selected) || null;
   }, [isTryoutCheckout, currentPkg, selected]);
 
-  const canPay = Boolean(selectedPackage) && !loading;
+  const gatewayReady = gatewayConfig ? Boolean(gatewayConfig.active) : false;
+  const canPay = Boolean(selectedPackage) && !loading && gatewayReady;
 
   if (merchantOrderId) {
     return <PaymentStatus merchantOrderId={merchantOrderId} setRoute={setRoute} />;
@@ -139,8 +156,9 @@ const Payment = ({ setRoute, currentUser, context }) => {
               {isTryoutCheckout ? "Konfirmasi pembelian." : "Mulai belajar lebih serius."}
             </h1>
             <p className="text-sm md:text-base text-ink/60 leading-relaxed mb-8 max-w-xl">
-              Cek paket, isi kontak pembelian, lalu lanjut ke Duitku untuk QRIS atau transfer bank.
+              Cek paket, isi kontak pembelian, lalu lanjut ke payment gateway untuk QRIS atau transfer bank.
             </p>
+            <PaymentGatewayNotice config={gatewayConfig} />
 
             {isTryoutCheckout ? (
               <div className="card pad-d bg-white border hairline rounded-3xl p-6 mb-6 relative overflow-hidden">
@@ -268,7 +286,7 @@ const Payment = ({ setRoute, currentUser, context }) => {
             onClick={handleBeli}
             type="button"
           >
-            {loading ? "Memproses..." : `Bayar ${selectedPackage ? formatRupiah(selectedPackage.price) : "Sekarang"}`}
+            {loading ? "Memproses..." : gatewayReady ? `Bayar ${selectedPackage ? formatRupiah(selectedPackage.price) : "Sekarang"}` : "Payment belum aktif"}
             {!loading && <Icon.Arrow className="w-4 h-4 transition-transform group-hover:translate-x-1" />}
           </button>
 
@@ -289,10 +307,32 @@ const Payment = ({ setRoute, currentUser, context }) => {
           onClick={handleBeli}
           type="button"
         >
-          {loading ? "Memproses..." : "Bayar"}
+          {loading ? "Memproses..." : gatewayReady ? "Bayar" : "Belum aktif"}
           {!loading && <Icon.Arrow className="w-4 h-4" />}
         </button>
       </div>
+    </div>
+  );
+};
+
+const PaymentGatewayNotice = ({ config }) => {
+  if (!config) {
+    return (
+      <div className="mb-6 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-ink/60" aria-busy="true">
+        Mengecek kesiapan payment gateway...
+      </div>
+    );
+  }
+  if (config.active) {
+    return (
+      <div className="mb-6 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+        {config.mockMode ? "Mode sandbox aktif untuk pengujian pembayaran." : "Payment gateway siap digunakan."}
+      </div>
+    );
+  }
+  return (
+    <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold leading-relaxed text-amber-900" role="status">
+      {config.message || "Payment gateway sedang dalam proses aktivasi. Pembelian akan dibuka setelah provider aktif."}
     </div>
   );
 };
@@ -322,8 +362,8 @@ const OrderSummary = ({ selectedPackage, isTryoutCheckout }) => (
 
 const TrustNote = () => (
   <div className="text-center text-xs text-ink/55 mt-4 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
-    <span className="inline-flex items-center gap-1.5"><Icon.CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Dibayar via Duitku</span>
-    <span className="inline-flex items-center gap-1.5"><Icon.CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Akses aktif otomatis</span>
+    <span className="inline-flex items-center gap-1.5"><Icon.CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Diproses via payment gateway</span>
+    <span className="inline-flex items-center gap-1.5"><Icon.CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Akses aktif setelah pembayaran terkonfirmasi</span>
   </div>
 );
 
