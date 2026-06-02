@@ -461,6 +461,24 @@ function apiRequestTiming(req, res, next) {
   return next();
 }
 
+function createGuestSessionUser(database) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const suffix = `${Date.now().toString(36)}-${Math.floor(Math.random() * 100000).toString(36)}-${attempt}`;
+    const guestName = `Tamu_${suffix}`;
+    try {
+      const info = database.prepare(
+        "INSERT INTO users (username, password_hash, display_name, role) VALUES (?, 'none', ?, 'user')"
+      ).run(guestName, guestName);
+      return Number(info.lastInsertRowid);
+    } catch (error) {
+      lastError = error;
+      if (error && error.code !== 'SQLITE_CONSTRAINT_UNIQUE') break;
+    }
+  }
+  throw lastError || new Error('Gagal membuat guest user.');
+}
+
 // Hapus guest user yang tidak pernah login lebih dari 7 hari, tiap 24 jam
 setInterval(() => {
   try {
@@ -489,12 +507,8 @@ app.use((req, res, next) => {
   ) return next();
   if (req.session.userId) return next();
 
-  const guestName = `Tamu_${Math.floor(Math.random() * 10000)}`;
   try {
-    const info = db.prepare(
-      "INSERT INTO users (username, password_hash, display_name, role) VALUES (?, 'none', ?, 'user')"
-    ).run(guestName, guestName);
-    req.session.userId = Number(info.lastInsertRowid);
+    req.session.userId = createGuestSessionUser(db);
     req.session.role = 'user';
   } catch (error) {
     console.error('Auto-guest error:', error);

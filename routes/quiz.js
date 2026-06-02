@@ -1,5 +1,5 @@
 const express = require('express');
-const { isAuthenticated, requireRegisteredUser } = require('../middleware/auth');
+const { isAuthenticated } = require('../middleware/auth');
 const { getTryoutChoices } = require('../lib/tryout-ranking');
 const {
     FREE_MATH_TIME_LIMIT_SECONDS,
@@ -101,38 +101,33 @@ router.get('/subtopics/:id/full', isAuthenticated, (req, res) => {
     res.json({ subtopic, problems });
 });
 
-// GET /api/quiz/tryout/free-math-session — 15 soal Matematika DB-backed dengan deadline server
-router.get('/tryout/free-math-session', isAuthenticated, requireRegisteredUser, (req, res) => {
+// GET /api/quiz/tryout/free-math-session — compatibility endpoint for older cached clients.
+router.get('/tryout/free-math-session', isAuthenticated, (req, res) => {
     const db = req.app.locals.db;
     const userId = req.session.userId;
     const limit = Math.max(1, Math.min(15, Number(req.query.limit) || 15));
 
     const rows = db.prepare(`
         SELECT
-            p.id,
-            p.subtopic_id,
-            p.question_text,
-            p.question_display,
-            p.difficulty,
-            p.question_type,
-            p.mc_options,
-            p.answer_text,
-            p.answer_display,
-            s.id AS source_subtopic_id,
-            s.title AS source_subtopic_title,
-            c.id AS source_chapter_id,
-            c.title AS source_chapter_title,
-            c.mapel AS source_mapel
-        FROM problems p
-        JOIN subtopics s ON s.id = p.subtopic_id
-        JOIN chapters c ON c.id = s.chapter_id
-        WHERE lower(coalesce(c.mapel, 'matematika')) = 'matematika'
+            id,
+            tryout_id,
+            question_text,
+            question_display,
+            difficulty,
+            question_type,
+            mc_options,
+            answer_display,
+            image_url,
+            image_alt,
+            sort_order
+        FROM tryout_questions
+        WHERE tryout_id = ?
         ORDER BY RANDOM()
         LIMIT ?
-    `).all(limit);
+    `).all(FREE_MATH_TRYOUT_ID, limit);
 
     if (!rows.length) {
-        return res.status(404).json({ error: 'Belum ada soal Matematika untuk tryout gratis' });
+        return res.status(404).json({ error: 'Belum ada soal Try Out gratis' });
     }
 
     const { session, token } = createTryoutSession({
@@ -149,13 +144,10 @@ router.get('/tryout/free-math-session', isAuthenticated, requireRegisteredUser, 
         difficulty: row.difficulty,
         question_type: row.question_type,
         mc_options: getTryoutChoices(row, rows),
-        sourceSubtopic: {
-            id: row.source_subtopic_id,
-            title: row.source_subtopic_title,
-            chapterId: row.source_chapter_id,
-            chapterTitle: row.source_chapter_title,
-            mapel: row.source_mapel,
-        },
+        answer_display: row.answer_display,
+        image_url: row.image_url || '',
+        image_alt: row.image_alt || '',
+        sourceSubtopic: null,
     }));
 
     res.json({
