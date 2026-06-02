@@ -35,6 +35,7 @@ try {
 
 const app = express();
 const webhookRoutes = require('./routes/webhooks');
+const { isLocalAdminMode } = require('./middleware/admin');
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 const distDir = path.join(__dirname, 'dist');
@@ -357,7 +358,16 @@ setInterval(() => {
 
 app.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
-  if (req.path === '/api/health' || req.path === '/api/config/clerk' || req.path === '/api/payment/callback' || req.path === '/api/landing-media' || req.path === '/api/webhooks/clerk') return next();
+  if (
+    req.path === '/api/health' ||
+    req.path === '/api/config/clerk' ||
+    req.path === '/api/payment/callback' ||
+    req.path === '/api/landing-media' ||
+    req.path === '/api/quiz/init' ||
+    req.path === '/api/tryout-packages' ||
+    req.path === '/api/webhooks/clerk' ||
+    req.path.startsWith('/api/payment/mock-')
+  ) return next();
   if (req.session.userId) return next();
 
   const guestName = `Tamu_${Math.floor(Math.random() * 10000)}`;
@@ -401,14 +411,7 @@ function effectiveMissionStatus(row, released) {
 
 function canReadMissionDrafts(req) {
   if (req.session && req.session.role === 'admin') return true;
-  if (isProduction || process.env.LOCAL_ADMIN_MODE === 'false') return false;
-  const forwardedFor = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-  const candidates = [req.ip, req.socket && req.socket.remoteAddress, forwardedFor].filter(Boolean);
-  return candidates.some((value) => (
-    value === '127.0.0.1' ||
-    value === '::1' ||
-    value === '::ffff:127.0.0.1'
-  ));
+  return isLocalAdminMode(req);
 }
 
 function serializeMissionForViewer(row, { canSeeDrafts = false } = {}) {

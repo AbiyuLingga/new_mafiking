@@ -6,6 +6,10 @@ const {
     rankTryoutLeaderboardRows,
     safeInitials
 } = require('../lib/tryout-ranking');
+const {
+    FREE_MATH_TRYOUT_ID,
+    verifyTryoutSessionToken,
+} = require('../lib/tryout-session');
 const router = express.Router();
 
 // POST /api/progress/submit — submit answer
@@ -320,22 +324,42 @@ router.post('/tryout-attempts', isAuthenticated, requireRegisteredUser, (req, re
     if (!input.tryoutId) {
         return res.status(400).json({ error: 'tryoutId diperlukan' });
     }
-    if (!input.problemIds.length) {
+
+    let tryoutId = input.tryoutId;
+    let tryoutTitle = input.tryoutTitle;
+    let problemIds = input.problemIds;
+    let durationSeconds = input.durationSeconds;
+
+    if (input.tryoutId === FREE_MATH_TRYOUT_ID || input.sessionToken) {
+        if (!input.sessionToken) {
+            return res.status(400).json({ error: 'Token sesi tryout diperlukan' });
+        }
+        const verified = verifyTryoutSessionToken(input.sessionToken, { userId });
+        if (!verified.ok) {
+            return res.status(403).json({ error: verified.error });
+        }
+        tryoutId = verified.session.tryoutId;
+        tryoutTitle = verified.session.tryoutTitle || input.tryoutTitle;
+        problemIds = verified.session.problemIds;
+        durationSeconds = Math.min(input.durationSeconds, Number(verified.session.timeLimitSeconds) || input.durationSeconds);
+    }
+
+    if (!problemIds.length) {
         return res.status(400).json({ error: 'Daftar soal tryout kosong' });
     }
 
-    const placeholders = input.problemIds.map(() => '?').join(',');
+    const placeholders = problemIds.map(() => '?').join(',');
     const problemRows = db.prepare(
         `SELECT id, answer_text, answer_display, mc_options
          FROM problems
          WHERE id IN (${placeholders})`
-    ).all(...input.problemIds);
+    ).all(...problemIds);
     const problemsById = new Map(problemRows.map((problem) => [problem.id, problem]));
-    const orderedProblems = input.problemIds
+    const orderedProblems = problemIds
         .map((id) => problemsById.get(id))
         .filter(Boolean);
 
-    if (orderedProblems.length !== input.problemIds.length) {
+    if (orderedProblems.length !== problemIds.length) {
         return res.status(400).json({ error: 'Sebagian soal tryout tidak ditemukan' });
     }
 
@@ -358,13 +382,13 @@ router.post('/tryout-attempts', isAuthenticated, requireRegisteredUser, (req, re
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime(?))
     `).run(
         userId,
-        input.tryoutId,
-        input.tryoutTitle,
+        tryoutId,
+        tryoutTitle,
         stats.score,
         stats.correctCount,
         stats.totalQuestions,
         stats.answeredCount,
-        input.durationSeconds,
+        durationSeconds,
         new Date().toISOString()
     );
 
@@ -372,9 +396,9 @@ router.post('/tryout-attempts', isAuthenticated, requireRegisteredUser, (req, re
         ok: true,
         attempt: {
             id: info.lastInsertRowid,
-            tryoutId: input.tryoutId,
-            tryoutTitle: input.tryoutTitle,
-            durationSeconds: input.durationSeconds,
+            tryoutId,
+            tryoutTitle,
+            durationSeconds,
             ...stats,
         },
     });

@@ -1,10 +1,21 @@
 const assert = require('assert');
 const paymentRouter = require('../routes/payment');
 
-const { isRegisteredPaymentUser, resolvePaymentItem, SUBSCRIPTION_PACKAGES } = paymentRouter.__test || {};
+const {
+    buildMockPaymentUrl,
+    escapeHtml,
+    isMockPaymentEnabled,
+    isRegisteredPaymentUser,
+    resolvePaymentItem,
+    signMockPayment,
+    SUBSCRIPTION_PACKAGES,
+    verifyMockPaymentToken,
+} = paymentRouter.__test || {};
 
 assert.strictEqual(typeof resolvePaymentItem, 'function', 'resolvePaymentItem must be exported for contract tests');
 assert.strictEqual(typeof isRegisteredPaymentUser, 'function', 'isRegisteredPaymentUser must be exported for contract tests');
+assert.strictEqual(typeof isMockPaymentEnabled, 'function', 'isMockPaymentEnabled must be exported for contract tests');
+assert.strictEqual(typeof verifyMockPaymentToken, 'function', 'verifyMockPaymentToken must be exported for contract tests');
 
 const userDb = {
     prepare(sql) {
@@ -86,5 +97,17 @@ assert.throws(
     () => resolvePaymentItem({ body: { purchaseType: 'tryout', tryoutPackageId: 9 }, db: { prepare: () => ({ get: () => ({ id: 9, title: 'Gratis', price: 'Gratis' }) }) } }),
     /Paket gratis tidak perlu pembayaran/
 );
+
+assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'production' }), false);
+assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'production', PAYMENT_MOCK_MODE: 'true' }), false);
+assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'production', PAYMENT_MOCK_MODE: 'true', PAYMENT_ALLOW_MOCK_IN_PRODUCTION: 'true' }), true);
+assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'development', PAYMENT_MOCK_MODE: 'false' }), false);
+
+const mockOrder = { merchantOrderId: 'MFK-2-123456', amount: 99000 };
+const token = signMockPayment(mockOrder);
+assert.strictEqual(verifyMockPaymentToken({ ...mockOrder, token }), true);
+assert.strictEqual(verifyMockPaymentToken({ ...mockOrder, amount: 1, token }), false);
+assert.match(buildMockPaymentUrl(mockOrder), /^\/api\/payment\/mock-gateway\?merchantOrderId=MFK-2-123456&token=[a-f0-9]{64}$/);
+assert.strictEqual(escapeHtml('<img src=x onerror=alert(1)>'), '&lt;img src=x onerror=alert(1)&gt;');
 
 console.log('Payment contract tests passed');

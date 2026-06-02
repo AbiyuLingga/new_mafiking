@@ -20,11 +20,13 @@
     "test:profile-summary": "node scripts/test-profile-summary-window.js",
     "test:ai-profile": "node scripts/test-ai-profile-provider.js",
     "test:auth-registered-user": "node scripts/test-auth-registered-user.js",
+    "test:admin-local-mode": "node scripts/test-admin-local-mode.js",
     "test:payment-contract": "node scripts/test-payment-contract.js",
     "test:tryout-ranking": "node scripts/test-tryout-ranking.js",
+    "test:tryout-session": "node scripts/test-tryout-session.js",
     "export:questions": "node scripts/export-question-bank.js",
     "import:questions": "node scripts/import-question-bank.js",
-    "check": "node --check server.js && node --check middleware/auth.js && node --check routes/correction.js && node --check routes/admin-import.js && node --check routes/payment.js && node --check routes/progress.js && node --check lib/admin-import.js && node --check lib/recommendation-engine.js && node --check lib/ai-profile-provider.js && node --check lib/tryout-ranking.js && node --check scripts/export-question-bank.js && node --check scripts/import-question-bank.js && node --check scripts/test-recommendation-engine.js && node --check scripts/test-profile-summary-window.js && node --check scripts/test-ai-profile-provider.js && node --check scripts/test-auth-registered-user.js && node --check scripts/test-payment-contract.js && node --check scripts/test-tryout-ranking.js && npm run test:admin-import && npm run test:recommendations && npm run test:profile-summary && npm run test:ai-profile && npm run test:auth-registered-user && npm run test:payment-contract && npm run test:tryout-ranking"
+    "check": "node --check server.js && node --check middleware/auth.js && node --check middleware/admin.js && node --check routes/correction.js && node --check routes/admin-import.js && node --check routes/payment.js && node --check routes/quiz.js && node --check routes/progress.js && node --check lib/admin-import.js && node --check lib/recommendation-engine.js && node --check lib/ai-profile-provider.js && node --check lib/tryout-ranking.js && node --check lib/tryout-session.js && node --check scripts/export-question-bank.js && node --check scripts/import-question-bank.js && node --check scripts/test-recommendation-engine.js && node --check scripts/test-profile-summary-window.js && node --check scripts/test-ai-profile-provider.js && node --check scripts/test-auth-registered-user.js && node --check scripts/test-admin-local-mode.js && node --check scripts/test-payment-contract.js && node --check scripts/test-tryout-ranking.js && node --check scripts/test-tryout-session.js && npm run test:admin-import && npm run test:recommendations && npm run test:profile-summary && npm run test:ai-profile && npm run test:auth-registered-user && npm run test:admin-local-mode && npm run test:payment-contract && npm run test:tryout-ranking && npm run test:tryout-session"
   },
   "dependencies": {
     "@clerk/express": "^2.1.22",

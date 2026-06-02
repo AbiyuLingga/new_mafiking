@@ -34,7 +34,67 @@ function verifyCallbackSignature(merchantCode, amount, merchantOrderId, apiKey, 
     return expected === received;
 }
 
-const useMockMode = !MERCHANT_CODE || !API_KEY || MERCHANT_CODE === 'mock' || MERCHANT_CODE === 'YOUR_DUITKU_MERCHANT_CODE' || MERCHANT_CODE === '';
+function hasDuitkuCredentials() {
+    return Boolean(
+        MERCHANT_CODE &&
+        API_KEY &&
+        MERCHANT_CODE !== 'mock' &&
+        MERCHANT_CODE !== 'YOUR_DUITKU_MERCHANT_CODE'
+    );
+}
+
+function isTruthyEnv(value) {
+    return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+}
+
+function isFalseyEnv(value) {
+    return ['0', 'false', 'no', 'off'].includes(String(value || '').trim().toLowerCase());
+}
+
+function isMockPaymentEnabled(env = process.env) {
+    if (env.NODE_ENV === 'production' && !isTruthyEnv(env.PAYMENT_ALLOW_MOCK_IN_PRODUCTION)) return false;
+    if (isTruthyEnv(env.PAYMENT_MOCK_MODE)) return true;
+    if (isFalseyEnv(env.PAYMENT_MOCK_MODE)) return false;
+    return env.NODE_ENV !== 'production' && !hasDuitkuCredentials();
+}
+
+function mockTokenSecret() {
+    return process.env.PAYMENT_MOCK_SECRET || process.env.SESSION_SECRET || API_KEY || 'new-mafiking-local-payment-mock';
+}
+
+function signMockPayment({ merchantOrderId, amount }) {
+    return crypto
+        .createHmac('sha256', mockTokenSecret())
+        .update(`${merchantOrderId}:${Number(amount) || 0}`)
+        .digest('hex');
+}
+
+function verifyMockPaymentToken({ merchantOrderId, amount, token }) {
+    if (!merchantOrderId || !token) return false;
+    const expected = signMockPayment({ merchantOrderId, amount });
+    const expectedBuffer = Buffer.from(expected);
+    const receivedBuffer = Buffer.from(String(token));
+    return expectedBuffer.length === receivedBuffer.length && crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
+}
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+    }[char]));
+}
+
+function encodeQuery(value) {
+    return encodeURIComponent(String(value || ''));
+}
+
+function buildMockPaymentUrl({ merchantOrderId, amount }) {
+    const token = signMockPayment({ merchantOrderId, amount });
+    return `/api/payment/mock-gateway?merchantOrderId=${encodeQuery(merchantOrderId)}&token=${encodeQuery(token)}`;
+}
 
 function paymentError(message, statusCode = 400) {
     const error = new Error(message);
@@ -134,8 +194,8 @@ router.post('/create', async (req, res) => {
     const buyerEmail = String(email).trim().substring(0, 255);
     const buyerName = String(name).trim().substring(0, 50);
 
-    if (useMockMode) {
-        const mockPaymentUrl = `/api/payment/mock-gateway?merchantOrderId=${merchantOrderId}&amount=${intAmount}&product=${encodeURIComponent(productDetails)}`;
+    if (isMockPaymentEnabled()) {
+        const mockPaymentUrl = buildMockPaymentUrl({ merchantOrderId, amount: intAmount });
 
         db.prepare(`
             INSERT INTO payments (user_id, merchant_order_id, amount, product_details, email, reference, payment_url, qr_string, status)
@@ -149,6 +209,12 @@ router.post('/create', async (req, res) => {
             qrString: 'MOCK-QR-' + merchantOrderId,
             amount: intAmount,
             productDetails,
+        });
+    }
+
+    if (!hasDuitkuCredentials()) {
+        return res.status(503).json({
+            error: 'Payment gateway sedang dalam proses aktivasi. Pembelian akan dibuka setelah akses Midtrans/payment provider aktif.',
         });
     }
 
@@ -210,8 +276,14 @@ router.get('/status/:merchantOrderId', async (req, res) => {
         return res.json(paymentStatusPayload(payment, payment.status));
     }
 
-    if (useMockMode) {
+    if (isMockPaymentEnabled()) {
         return res.json({ ...paymentStatusPayload(payment, payment.status), statusMessage: 'Mock status checked' });
+    }
+
+    if (!hasDuitkuCredentials()) {
+        return res.status(503).json({
+            error: 'Payment gateway sedang dalam proses aktivasi. Status pembayaran belum dapat disinkronkan.',
+        });
     }
 
     const timestamp = Date.now().toString();
@@ -280,7 +352,7 @@ router.post('/callback', express.urlencoded({ extended: false }), (req, res) => 
         signature: receivedSig,
     } = req.body;
 
-    if (!verifyCallbackSignature(merchantCode, amount, merchantOrderId, API_KEY, receivedSig)) {
+    if (!hasDuitkuCredentials() || !verifyCallbackSignature(merchantCode, amount, merchantOrderId, API_KEY, receivedSig)) {
         console.warn('Callback signature mismatch:', { merchantOrderId });
         return res.status(400).send('Invalid signature');
     }
@@ -298,7 +370,28 @@ router.post('/callback', express.urlencoded({ extended: false }), (req, res) => 
 
 // GET /api/payment/mock-gateway — Simulator Pembayaran Sandbox Lokal
 router.get('/mock-gateway', (req, res) => {
-    const { merchantOrderId, amount, product } = req.query;
+    if (!isMockPaymentEnabled()) {
+        return res.status(404).send('Mock payment tidak aktif');
+    }
+
+    const db = req.app.locals.db;
+    const merchantOrderId = String(req.query.merchantOrderId || '').trim();
+    const token = String(req.query.token || '').trim();
+    const payment = db.prepare('SELECT merchant_order_id, amount, product_details FROM payments WHERE merchant_order_id = ?').get(merchantOrderId);
+
+    if (!payment) {
+        return res.status(404).send('Pembayaran tidak ditemukan');
+    }
+    if (!verifyMockPaymentToken({ merchantOrderId: payment.merchant_order_id, amount: payment.amount, token })) {
+        return res.status(403).send('Token simulator tidak valid');
+    }
+
+    const safeOrderId = escapeHtml(payment.merchant_order_id);
+    const safeProduct = escapeHtml(payment.product_details);
+    const safeAmount = Number(payment.amount || 0).toLocaleString('id-ID');
+    const successUrl = `/api/payment/mock-complete?merchantOrderId=${encodeQuery(payment.merchant_order_id)}&status=success&token=${encodeQuery(token)}`;
+    const failedUrl = `/api/payment/mock-complete?merchantOrderId=${encodeQuery(payment.merchant_order_id)}&status=failed&token=${encodeQuery(token)}`;
+    const pendingUrl = `/api/payment/mock-complete?merchantOrderId=${encodeQuery(payment.merchant_order_id)}&status=pending&token=${encodeQuery(token)}`;
 
     res.send(`
         <!doctype html>
@@ -345,32 +438,32 @@ router.get('/mock-gateway', (req, res) => {
                 Sandbox Simulator
               </span>
               <h1 class="font-display font-bold text-2xl tracking-tight text-ink">MAFIKING Pay</h1>
-              <p class="text-xs text-ink/40 mt-1">Order ID: ${merchantOrderId}</p>
+              <p class="text-xs text-ink/40 mt-1">Order ID: ${safeOrderId}</p>
             </div>
 
             <div class="border-t border-b border-ink/10 py-4 my-6">
               <div class="flex justify-between items-center mb-2">
                 <span class="text-sm text-ink/50 font-semibold">Produk</span>
-                <span class="text-sm font-bold text-ink max-w-[200px] truncate text-right" title="${product}">${product}</span>
+                <span class="text-sm font-bold text-ink max-w-[200px] truncate text-right" title="${safeProduct}">${safeProduct}</span>
               </div>
               <div class="flex justify-between items-center">
                 <span class="text-sm text-ink/50 font-semibold">Total Tagihan</span>
-                <span class="font-display font-bold text-xl text-ink">Rp ${Number(amount).toLocaleString('id-ID')}</span>
+                <span class="font-display font-bold text-xl text-ink">Rp ${safeAmount}</span>
               </div>
             </div>
 
             <div class="space-y-3">
-              <a href="/api/payment/mock-complete?merchantOrderId=${merchantOrderId}&status=success"
+              <a href="${successUrl}"
                  class="w-full py-3 bg-ink hover:bg-ink/90 text-white rounded-xl font-bold text-sm transition-all shadow-md block text-center">
                 Simulasi Bayar Sukses (QRIS/Transfer)
               </a>
 
-              <a href="/api/payment/mock-complete?merchantOrderId=${merchantOrderId}&status=failed"
+              <a href="${failedUrl}"
                  class="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-bold text-sm transition-all block text-center border border-red-200">
                 Simulasi Pembayaran Gagal
               </a>
 
-              <a href="/api/payment/mock-complete?merchantOrderId=${merchantOrderId}&status=pending"
+              <a href="${pendingUrl}"
                  class="w-full py-3 bg-yellow-50 hover:bg-yellow-100 text-yellow-700 rounded-xl font-bold text-sm transition-all block text-center border border-yellow-200">
                 Kembali ke Aplikasi (Biarkan Pending)
               </a>
@@ -387,8 +480,22 @@ router.get('/mock-gateway', (req, res) => {
 
 // GET /api/payment/mock-complete — Update status pembayaran & kembali
 router.get('/mock-complete', (req, res) => {
+    if (!isMockPaymentEnabled()) {
+        return res.status(404).send('Mock payment tidak aktif');
+    }
+
     const db = req.app.locals.db;
-    const { merchantOrderId, status } = req.query;
+    const merchantOrderId = String(req.query.merchantOrderId || '').trim();
+    const status = String(req.query.status || '').trim();
+    const token = String(req.query.token || '').trim();
+    const payment = db.prepare('SELECT merchant_order_id, amount FROM payments WHERE merchant_order_id = ?').get(merchantOrderId);
+
+    if (!payment) {
+        return res.status(404).send('Pembayaran tidak ditemukan');
+    }
+    if (!verifyMockPaymentToken({ merchantOrderId: payment.merchant_order_id, amount: payment.amount, token })) {
+        return res.status(403).send('Token simulator tidak valid');
+    }
 
     let dbStatus = 'PENDING';
     if (status === 'success') dbStatus = 'SUCCESS';
@@ -399,15 +506,20 @@ router.get('/mock-complete', (req, res) => {
 
     console.log(`[Mock Payment Simulator] ${merchantOrderId} updated to ${dbStatus}`);
 
-    const host = req.get('host');
-    res.redirect(`http://${host}/?merchantOrderId=${merchantOrderId}`);
+    res.redirect(`/?merchantOrderId=${encodeQuery(merchantOrderId)}`);
 });
 
 router.__test = {
     SUBSCRIPTION_PACKAGES,
+    buildMockPaymentUrl,
+    escapeHtml,
+    hasDuitkuCredentials,
     isRegisteredPaymentUser,
+    isMockPaymentEnabled,
     parsePrice,
     resolvePaymentItem,
+    signMockPayment,
+    verifyMockPaymentToken,
 };
 
 module.exports = router;

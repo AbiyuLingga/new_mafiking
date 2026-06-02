@@ -1,5 +1,12 @@
 const express = require('express');
-const { isAuthenticated } = require('../middleware/auth');
+const { isAuthenticated, requireRegisteredUser } = require('../middleware/auth');
+const { getTryoutChoices } = require('../lib/tryout-ranking');
+const {
+    FREE_MATH_TIME_LIMIT_SECONDS,
+    FREE_MATH_TRYOUT_ID,
+    FREE_MATH_TRYOUT_TITLE,
+    createTryoutSession,
+} = require('../lib/tryout-session');
 const router = express.Router();
 
 // GET /api/quiz/chapters
@@ -90,6 +97,75 @@ router.get('/subtopics/:id/full', isAuthenticated, (req, res) => {
         p.steps = stepsStmt.all(p.id);
     }
     res.json({ subtopic, problems });
+});
+
+// GET /api/quiz/tryout/free-math-session — 15 soal Matematika DB-backed dengan deadline server
+router.get('/tryout/free-math-session', isAuthenticated, requireRegisteredUser, (req, res) => {
+    const db = req.app.locals.db;
+    const userId = req.session.userId;
+    const limit = Math.max(1, Math.min(15, Number(req.query.limit) || 15));
+
+    const rows = db.prepare(`
+        SELECT
+            p.id,
+            p.subtopic_id,
+            p.question_text,
+            p.question_display,
+            p.difficulty,
+            p.question_type,
+            p.mc_options,
+            p.answer_text,
+            p.answer_display,
+            s.id AS source_subtopic_id,
+            s.title AS source_subtopic_title,
+            c.id AS source_chapter_id,
+            c.title AS source_chapter_title,
+            c.mapel AS source_mapel
+        FROM problems p
+        JOIN subtopics s ON s.id = p.subtopic_id
+        JOIN chapters c ON c.id = s.chapter_id
+        WHERE lower(coalesce(c.mapel, 'matematika')) = 'matematika'
+        ORDER BY RANDOM()
+        LIMIT ?
+    `).all(limit);
+
+    if (!rows.length) {
+        return res.status(404).json({ error: 'Belum ada soal Matematika untuk tryout gratis' });
+    }
+
+    const { session, token } = createTryoutSession({
+        userId,
+        problemIds: rows.map((row) => row.id),
+        timeLimitSeconds: FREE_MATH_TIME_LIMIT_SECONDS,
+    });
+
+    const problems = rows.map((row) => ({
+        id: row.id,
+        subtopic_id: row.subtopic_id,
+        question_text: row.question_text,
+        question_display: row.question_display,
+        difficulty: row.difficulty,
+        question_type: row.question_type,
+        mc_options: getTryoutChoices(row, rows),
+        sourceSubtopic: {
+            id: row.source_subtopic_id,
+            title: row.source_subtopic_title,
+            chapterId: row.source_chapter_id,
+            chapterTitle: row.source_chapter_title,
+            mapel: row.source_mapel,
+        },
+    }));
+
+    res.json({
+        id: FREE_MATH_TRYOUT_ID,
+        title: FREE_MATH_TRYOUT_TITLE,
+        problemLimit: limit,
+        timeLimitSeconds: session.timeLimitSeconds,
+        startedAt: session.startedAt,
+        expiresAt: session.expiresAt,
+        sessionToken: token,
+        problems,
+    });
 });
 
 module.exports = router;

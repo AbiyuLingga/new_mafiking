@@ -706,6 +706,8 @@ const LandingMediaImage = ({ src, alt, fit = "contain", objectPosition = "50% 50
     <img
       src={src}
       alt={alt}
+      decoding="async"
+      loading="lazy"
       onPointerMove={handlePointerMove}
       onPointerLeave={() => setTransformOrigin("50% 50%")}
       className={`absolute inset-0 h-full w-full ${fit === "cover" ? "object-cover" : "object-contain"} opacity-90 transition-transform duration-500 ease-out hover:scale-[1.28] ${imageClassName}`}
@@ -1098,13 +1100,13 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
                 <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-1.5 text-sm font-bold text-slate-800 shadow-sm">
                   <Icon.Sparkles className="h-4 w-4 text-slate-600" /> Bimbel #1 untuk TPB ITB
                 </div>
-                <h1 className="mb-6 flex flex-col items-start gap-1 text-[2.1rem] font-extrabold leading-[1] tracking-tight min-[390px]:text-[2.25rem] sm:text-[3.55rem] md:mb-8 md:text-6xl lg:text-[5rem]">
-                  <span className="whitespace-nowrap text-slate-900">Taklukkan TPB</span>
-                  <span className="whitespace-nowrap" style={{ color: "rgb(11 19 38 / 0.4)" }}>tanpa harus</span>
-                  <span className="whitespace-nowrap" style={{ color: "rgb(11 19 38 / 0.4)" }}>panik,</span>
-                  <span className="hi-yel mt-2 whitespace-nowrap text-slate-900">mulai dari fondasi</span>
+                <h1 className="mb-6 flex max-w-full flex-col items-start gap-1 text-[2.05rem] font-extrabold leading-[1.04] tracking-tight min-[390px]:text-[2.16rem] sm:text-[3.55rem] md:mb-8 md:text-6xl lg:text-[5rem]">
+                  <span className="text-slate-900 sm:whitespace-nowrap">Taklukkan TPB</span>
+                  <span className="sm:whitespace-nowrap" style={{ color: "rgb(11 19 38 / 0.4)" }}>tanpa harus</span>
+                  <span className="sm:whitespace-nowrap" style={{ color: "rgb(11 19 38 / 0.4)" }}>panik,</span>
+                  <span className="hi-yel mt-2 max-w-full text-slate-900 sm:whitespace-nowrap">mulai dari fondasi</span>
                 </h1>
-                <p className="mb-7 max-w-full text-lg leading-relaxed text-slate-600 sm:mb-10 sm:max-w-xl">Bimbingan Matematika, Fisika, dan Kimia dasar khusus mahasiswa ITB. Belajar dengan terstruktur, latihan adaptif, dan mentor berpengalaman.</p>
+                <p className="mb-7 max-w-full text-base leading-relaxed text-slate-600 sm:mb-10 sm:max-w-xl sm:text-lg">Bimbingan Matematika, Fisika, dan Kimia dasar khusus mahasiswa ITB. Belajar dengan terstruktur, latihan adaptif, dan mentor berpengalaman.</p>
                 <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row">
                   <button onClick={startFree} className="btn-ink landing-hero-cta justify-center sm:w-auto" type="button">Coba Gratis <Icon.Arrow className="w-4 h-4" /></button>
                 </div>
@@ -1147,7 +1149,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
           <LandingFade delay={80} className="relative z-10">
             <div className="mx-auto w-full max-w-[1800px] px-6 md:px-12 lg:px-20">
               <div className="grid grid-cols-2 gap-8 md:grid-cols-4 md:divide-x md:divide-slate-100 md:gap-4">
-                {[["100+", "Pengguna Aktif"], ["100+", "Soal Latihan"], ["99%", "Tingkat kepuasan"], ["24/7", "Belajar Kapan Saja"]].map(([value, label]) => (
+                {[["100+", "Pengguna Aktif"], ["20+", "Soal Latihan"], ["99%", "Tingkat kepuasan"], ["24/7", "Belajar Kapan Saja"]].map(([value, label]) => (
                   <div key={label} className="px-4 text-left md:text-center"><div className="mb-2 text-3xl font-extrabold text-slate-900 md:text-4xl">{value}</div><div className="text-sm font-medium text-slate-500">{label}</div></div>
                 ))}
               </div>

@@ -543,6 +543,7 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [timeLeft, setTimeLeft] = useState(Number(context?.timeLimitSeconds || 15 * 60));
   const [finishing, setFinishing] = useState(false);
+  const [sessionInfo, setSessionInfo] = useState(null);
   const timeExpired = timeLeft <= 0;
   const totalProblems = problems.length || Number(context?.problemLimit || 15);
   const activeProblem = problems[problemIndex];
@@ -551,29 +552,37 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
   useEffect(() => { loadTryoutProblems(); }, [context?.id]);
 
   useEffect(() => {
-    setTimeLeft(Number(context?.timeLimitSeconds || 15 * 60));
-  }, [context?.id, context?.timeLimitSeconds]);
+    const expiresAtMs = Date.parse(sessionInfo?.expiresAt || "");
+    if (Number.isFinite(expiresAtMs)) {
+      setTimeLeft(Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000)));
+      return;
+    }
+    setTimeLeft(Number(sessionInfo?.timeLimitSeconds || context?.timeLimitSeconds || 15 * 60));
+  }, [context?.id, context?.timeLimitSeconds, sessionInfo?.expiresAt, sessionInfo?.timeLimitSeconds]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setTimeLeft((current) => Math.max(0, current - 1));
+      const expiresAtMs = Date.parse(sessionInfo?.expiresAt || "");
+      if (Number.isFinite(expiresAtMs)) {
+        setTimeLeft(Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000)));
+      } else {
+        setTimeLeft((current) => Math.max(0, current - 1));
+      }
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [context?.id]);
+  }, [context?.id, sessionInfo?.expiresAt]);
+
+  useEffect(() => {
+    if (timeLeft === 0 && problems.length && !finishing) finishTryout();
+  }, [timeLeft, problems.length, finishing]);
 
   async function loadTryoutProblems() {
     setLoading(true);
     setError("");
     try {
-      const init = await MafikingAPI.get("/api/quiz/init");
-      const chapters = (init.chapters || []).filter((chapter) => normalizeTryoutText(chapter.mapel || "Matematika") === "matematika");
-      const subtopics = chapters
-        .flatMap((chapter) => chapter.subtopics || [])
-        .filter((subtopic) => Number((init.problemCounts || {})[subtopic.id] || 0) > 0);
-      const sessions = await Promise.all(subtopics.map((subtopic) => MafikingAPI.get(`/api/quiz/subtopics/${subtopic.id}/full`)));
-      const nextProblems = sessions
-        .flatMap((data) => (data.problems || []).map((problem) => ({ ...problem, sourceSubtopic: data.subtopic })))
-        .slice(0, Number(context?.problemLimit || 15));
+      const session = await MafikingAPI.get(`/api/quiz/tryout/free-math-session?limit=${Number(context?.problemLimit || 15)}`);
+      const nextProblems = Array.isArray(session.problems) ? session.problems : [];
+      setSessionInfo(session);
       setProblems(nextProblems);
       setProblemIndex(0);
       setAnswers({});
@@ -613,15 +622,16 @@ const FreeMathTryoutExam = ({ setRoute, context }) => {
     if (finishing || !problems.length) return;
     setFinishing(true);
     try {
-      const timeLimitSeconds = Number(context?.timeLimitSeconds || 15 * 60);
+      const timeLimitSeconds = Number(sessionInfo?.timeLimitSeconds || context?.timeLimitSeconds || 15 * 60);
       const durationSeconds = Math.max(0, timeLimitSeconds - Math.max(0, Number(timeLeft || 0)));
       const payloadAnswers = {};
       for (const problem of problems) {
         if (answers[problem.id] != null) payloadAnswers[problem.id] = answers[problem.id];
       }
       const result = await MafikingAPI.post("/api/progress/tryout-attempts", {
-        tryoutId: context?.id || "free-math-tryout-15",
-        tryoutTitle: context?.packageTitle || context?.title || "Try Out Matematika",
+        tryoutId: sessionInfo?.id || context?.id || "free-math-tryout-15",
+        tryoutTitle: sessionInfo?.title || context?.packageTitle || context?.title || "Try Out Matematika",
+        sessionToken: sessionInfo?.sessionToken || "",
         problemIds: problems.map((problem) => problem.id),
         answers: payloadAnswers,
         durationSeconds,

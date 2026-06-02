@@ -5673,14 +5673,28 @@ button:focus-visible, a:focus-visible {
 
 .landing-hero-copy {
   max-width: min(42rem, calc(100vw - 3rem));
+  min-width: 0;
 }
 
 .landing-hero-copy p {
   max-width: min(36rem, calc(100vw - 3rem));
+  min-width: 0;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .landing-hero-cta {
   width: min(100%, 340px);
+}
+
+@media (max-width: 639px) {
+  .landing-hero-copy {
+    max-width: 100%;
+  }
+
+  .landing-hero-copy p {
+    max-width: min(100%, 20rem);
+  }
 }
 
 @media (min-width: 640px) {
