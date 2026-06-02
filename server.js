@@ -43,6 +43,8 @@ const {
   shouldLogRequestTiming,
 } = require('./lib/performance');
 const { createRequestGuard } = require('./lib/request-guard');
+const { helmetCspOptions } = require('./lib/csp');
+const auditLog = require('./lib/audit-log');
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 const distDir = path.join(__dirname, 'dist');
@@ -272,20 +274,11 @@ app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https:", "https://cdn.jsdelivr.net"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
-      imgSrc: ["'self'", "data:", "https:"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
-      connectSrc: ["'self'", "https:", "https://unpkg.com"],
-      frameSrc: ["'self'", "https:"],
-      objectSrc: ["'none'"],
-      workerSrc: ["'self'", "blob:"]
-    }
+  contentSecurityPolicy: helmetCspOptions(),
+  crossOriginEmbedderPolicy: false,
+  reportingEndpoints: {
+    csp: '/api/csp-report',
   },
-  crossOriginEmbedderPolicy: false
 }));
 
 app.post('/api/webhooks/clerk', express.raw({ type: '*/*' }), webhookRoutes.handleClerkWebhook);
@@ -359,6 +352,26 @@ app.get('/api/config/clerk', (_req, res) => {
   res.json({ enabled: Boolean(publishableKey), publishableKey });
 });
 
+// CSP violation report endpoint. Browsers POST JSON-encoded reports here when
+// a Content-Security-Policy directive is violated. Always returns 204 to keep
+// the channel quiet for the browser.
+app.post(
+  ['/api/csp-report', '/api/csp-report/'],
+  express.json({ type: ['application/csp-report', 'application/reports+json', 'application/json'], limit: '32kb' }),
+  (req, res) => {
+    try {
+      const body = req.body || {};
+      const report = body['csp-report'] || body.report || body;
+      if (report && typeof report === 'object') {
+        auditLog.logCspReport(report);
+      }
+    } catch (_) {
+      // Never let a log write fail the request.
+    }
+    res.status(204).end();
+  }
+);
+
 app.post('/api/performance/vitals', performanceLimiter, (req, res) => {
   const normalized = normalizeVitalsPayload({
     ...(req.body || {}),
@@ -417,18 +430,6 @@ function apiRequestTiming(req, res, next) {
 
   return next();
 }
-
-// Hapus guest user yang tidak pernah login lebih dari 7 hari, tiap 24 jam
-setInterval(() => {
-  try {
-    const result = db.prepare(
-      "DELETE FROM users WHERE password_hash = 'none' AND (last_active IS NULL OR last_active < date('now', '-7 days'))"
-    ).run();
-    if (result.changes > 0) console.log(`[cleanup] Hapus ${result.changes} guest user lama.`);
-  } catch (e) {
-    console.error('[cleanup] Guest cleanup error:', e);
-  }
-}, 24 * 60 * 60 * 1000);
 
 app.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
