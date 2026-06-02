@@ -37,6 +37,12 @@ const app = express();
 const webhookRoutes = require('./routes/webhooks');
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
+const distDir = path.join(__dirname, 'dist');
+const distIndexPath = path.join(distDir, 'index.html');
+const legacyAppHtmlPath = path.join(__dirname, 'MAFIKING.html');
+const oneDaySeconds = 60 * 60 * 24;
+const oneWeekSeconds = oneDaySeconds * 7;
+const oneYearSeconds = oneDaySeconds * 365;
 
 const dbDir = path.join(__dirname, 'db');
 fs.mkdirSync(dbDir, { recursive: true });
@@ -260,7 +266,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "https://cdn.jsdelivr.net", "https://cdn.tailwindcss.com", "https://unpkg.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https:", "https://cdn.jsdelivr.net"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
       imgSrc: ["'self'", "data:", "https:"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
@@ -469,26 +475,76 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/payment', require('./routes/payment'));
 app.use('/api/correction', require('./routes/correction'));
 
+function hasBuiltClient() {
+  return fs.existsSync(distIndexPath);
+}
+
+function canServeLegacySource() {
+  return !isProduction && !hasBuiltClient();
+}
+
+function isVersionedAssetUrl(url) {
+  const value = String(url || '');
+  const pathname = value.split('?')[0] || '';
+  return /[?&](?:v|ver|version|hash|t)=[A-Za-z0-9._-]+/.test(value)
+    || /(?:-[A-Fa-f0-9]{8,}|-\d{8,})(?=\.[A-Za-z0-9]+$)/.test(path.basename(pathname));
+}
+
+function cacheControlForAssetRequest(req) {
+  const url = String(req.originalUrl || req.url || '');
+  const pathname = url.split('?')[0] || '';
+  if (isVersionedAssetUrl(url)) {
+    return `public, max-age=${oneYearSeconds}, immutable`;
+  }
+  if (/\.(?:avif|gif|jpe?g|mp4|png|svg|webm|webp|woff2?)$/i.test(pathname)) {
+    return `public, max-age=${oneWeekSeconds}, stale-while-revalidate=${oneDaySeconds}`;
+  }
+  return `public, max-age=${oneDaySeconds}, stale-while-revalidate=${oneDaySeconds}`;
+}
+
+function setStaticCacheHint(req, res, next) {
+  res.locals.staticCacheControl = cacheControlForAssetRequest(req);
+  next();
+}
+
 const staticCache = {
   index: false,
-  setHeaders: (res, filePath) => {
-    if (filePath.includes(`${path.sep}assets${path.sep}landing${path.sep}`)) {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      return;
-    }
-    if (filePath.endsWith('.jsx') || filePath.endsWith('styles.css')) {
-      res.setHeader('Content-Type', 'text/babel; charset=utf-8');
-      if (filePath.endsWith('styles.css')) res.setHeader('Content-Type', 'text/css; charset=utf-8');
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      return;
-    }
-    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=86400');
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', res.locals.staticCacheControl || `public, max-age=${oneDaySeconds}, stale-while-revalidate=${oneDaySeconds}`);
   }
 };
 
+const distAssetCache = {
+  index: false,
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', `public, max-age=${oneYearSeconds}, immutable`);
+  }
+};
+
+const devSourceCache = {
+  index: false,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.jsx')) {
+      res.setHeader('Content-Type', 'text/babel; charset=utf-8');
+    }
+    if (filePath.endsWith('styles.css')) {
+      res.setHeader('Content-Type', 'text/css; charset=utf-8');
+    }
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+};
+
+const devSourceStatic = express.static(path.join(__dirname, 'src'), devSourceCache);
+
+app.use('/assets', setStaticCacheHint);
+app.use('/assets', express.static(path.join(distDir, 'assets'), distAssetCache));
 app.use('/assets', express.static(path.join(__dirname, 'assets'), staticCache));
+app.use('/video', setStaticCacheHint);
 app.use('/video', express.static(path.join(__dirname, 'assets'), staticCache));
-app.use('/src', express.static(path.join(__dirname, 'src'), staticCache));
+app.use('/src', (req, res, next) => {
+  if (canServeLegacySource()) return devSourceStatic(req, res, next);
+  return res.status(404).type('text/plain; charset=utf-8').send('Not found');
+});
 app.get('/SOP-DEEPSEEK-IMPORT-SOAL.md', (req, res) => {
   if (!req.session?.role || req.session.role !== 'admin') {
     return res.status(403).send('Forbidden');
@@ -496,18 +552,35 @@ app.get('/SOP-DEEPSEEK-IMPORT-SOAL.md', (req, res) => {
   res.type('text/markdown; charset=utf-8').sendFile(path.join(__dirname, 'SOP-DEEPSEEK-IMPORT-SOAL.md'));
 });
 app.get('/tweaks-panel.jsx', (_req, res) => {
-  res.type('text/babel').sendFile(path.join(__dirname, 'tweaks-panel.jsx'));
+  if (canServeLegacySource()) {
+    res.type('text/babel').sendFile(path.join(__dirname, 'tweaks-panel.jsx'));
+    return;
+  }
+  res.status(404).type('text/plain; charset=utf-8').send('Not found');
 });
 app.get(['/syarat-ketentuan.html', '/terms.html', '/tnc.html'], (_req, res) => {
   res.sendFile(path.join(__dirname, 'syarat-ketentuan.html'));
 });
 
-const appHtmlPath = path.join(__dirname, 'MAFIKING.html');
+function sendAppHtml(_req, res) {
+  if (hasBuiltClient()) {
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.sendFile(distIndexPath);
+  }
+
+  if (isProduction) {
+    return res.status(503).type('text/plain; charset=utf-8').send('Production bundle belum tersedia. Jalankan npm run build sebelum start server.');
+  }
+
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  return res.sendFile(legacyAppHtmlPath);
+}
+
 app.get(['/', '/index.html', '/MAFIKING.html'], (_req, res) => {
-  res.sendFile(appHtmlPath);
+  sendAppHtml(_req, res);
 });
 app.get(/^(?!\/api\/).*/, (_req, res) => {
-  res.sendFile(appHtmlPath);
+  sendAppHtml(_req, res);
 });
 
 app.use((err, _req, res, _next) => {

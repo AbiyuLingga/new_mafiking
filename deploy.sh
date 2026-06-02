@@ -67,6 +67,10 @@ echo "[1/6] Menjalankan check lokal..."
 npm run check
 
 echo ""
+echo "[1/6] Membuat bundle production lokal..."
+npm run build
+
+echo ""
 echo "[2/6] Menyiapkan server..."
 ssh "$SSH_TARGET" "APP_PORT='$APP_PORT' APP_NAME='$APP_NAME' REMOTE_DIR='$REMOTE_DIR' bash -s" <<'ENDSSH'
 set -euo pipefail
@@ -109,7 +113,6 @@ rsync -az --delete --human-readable --info=progress2,stats2 \
   --exclude ".agents" \
   --exclude ".codex" \
   --exclude "node_modules" \
-  --exclude "dist" \
   --exclude ".env*" \
   --exclude "env" \
   --exclude ".deploy-deps.sha" \

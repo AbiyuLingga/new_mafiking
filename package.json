@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "node --watch server.js",
     "dev:api": "node --watch server.js",
+    "prebuild": "node scripts/build-legacy-entry.js",
     "build": "vite build",
     "preview": "node server.js",
     "start": "node server.js",

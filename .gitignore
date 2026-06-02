@@ -1,5 +1,6 @@
 node_modules/
 dist/
+src/generated-app.jsx
 .env
 .env*
 !.env.example

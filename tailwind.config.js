@@ -1,5 +1,5 @@
 module.exports = {
-  content: ['./index.html', './src/**/*.{js,jsx}'],
+  content: ['./index.html', './tweaks-panel.jsx', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
       colors: {

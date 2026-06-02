@@ -735,6 +735,31 @@ const LandingEditableMedia = ({ enabled, slot, mediaType = "image", label, onEdi
   </React.Fragment>
 );
 
+const LANDING_DEMO_VIDEO_OPTIMIZED = {
+  mp4: "/assets/landing/demo-video-848w-20260602.mp4",
+  webm: "/assets/landing/demo-video-848w-20260602.webm",
+  poster: "/assets/landing/demo-video-poster-20260602.jpg",
+};
+
+const LANDING_DEMO_VIDEO_ALIASES = {
+  "/assets/landing/demo_video-1780075618470.mp4": LANDING_DEMO_VIDEO_OPTIMIZED,
+  "/assets/landing/demo-video-848w-20260602.mp4": LANDING_DEMO_VIDEO_OPTIMIZED,
+  "/assets/saas_demo_video.mp4": LANDING_DEMO_VIDEO_OPTIMIZED,
+};
+
+function normalizeLandingAssetPath(url) {
+  try {
+    return new URL(url, window.location.origin).pathname;
+  } catch (_) {
+    return String(url || "").split("?")[0];
+  }
+}
+
+function resolveLandingDemoVideo(url) {
+  const assetPath = normalizeLandingAssetPath(url);
+  return LANDING_DEMO_VIDEO_ALIASES[assetPath] || { mp4: url, webm: "", poster: "" };
+}
+
 const LandingMediaUploadModal = ({ target, onClose, onUploaded }) => {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -845,7 +870,8 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   const featureOne = mediaUrl("feature_image_1", "/assets/landing/rekomendasi-latihan.jpg?v=202606011620");
   const featureTwo = mediaUrl("feature_image_2", "/assets/landing/history-kesalahan.jpg?v=202606011635");
   const featureThree = mediaUrl("feature_image_3", "/assets/landing/simulasi-tryout.jpg?v=202606011620");
-  const demoVideo = mediaUrl("demo_video", "/assets/saas_demo_video.mp4");
+  const demoVideoAsset = resolveLandingDemoVideo(mediaUrl("demo_video", LANDING_DEMO_VIDEO_OPTIMIZED.mp4));
+  const demoVideo = demoVideoAsset.mp4;
 
   React.useEffect(() => {
     soundEnabledRef.current = soundEnabled;
@@ -874,6 +900,11 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   React.useEffect(() => {
     const video = demoVideoRef.current;
     if (!video || !demoVideoShouldLoad) return undefined;
+    const sourceKey = `${demoVideoAsset.webm || ""}|${demoVideo || ""}`;
+    if (video.dataset.sourceKey !== sourceKey) {
+      video.load();
+      video.dataset.sourceKey = sourceKey;
+    }
 
     let cleanedUp = false;
     let isVideoVisible = false;
@@ -949,7 +980,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
       if (observer) observer.disconnect();
       removeInteractionListeners();
     };
-  }, [demoVideo, demoVideoShouldLoad]);
+  }, [demoVideo, demoVideoAsset.webm, demoVideoShouldLoad]);
 
   const toggleDemoSound = async () => {
     const video = demoVideoRef.current;
@@ -1204,14 +1235,18 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
                 {demoVideo ? (
                   <video
 			                    ref={demoVideoRef}
-			                    src={demoVideoShouldLoad ? demoVideo : undefined}
 			                    data-src={demoVideo}
 			                    muted={!soundEnabled}
 			                    loop
-			                    preload="metadata"
+			                    poster={demoVideoAsset.poster || undefined}
+			                    preload="none"
+			                    loading="lazy"
 			                    playsInline
 			                    className="h-full w-full scale-[1.06] object-contain"
-		                  />
+		                  >
+		                    {demoVideoShouldLoad && demoVideoAsset.webm && <source src={demoVideoAsset.webm} type="video/webm" />}
+		                    {demoVideoShouldLoad && demoVideo && <source src={demoVideo} type="video/mp4" />}
+		                  </video>
 	                ) : (
                   <div className="flex h-full w-full flex-col bg-[#0F172A] p-8 opacity-50"><div className="mb-6 flex w-full max-w-sm items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/80 px-4 py-3"><div className="flex gap-2"><div className="h-3 w-3 rounded-full bg-rose-500" /><div className="h-3 w-3 rounded-full bg-amber-500" /><div className="h-3 w-3 rounded-full bg-emerald-500" /></div><div className="font-mono text-xs text-slate-400">canvas_evaluation_ai.js</div></div><div className="flex-grow space-y-6"><div className="h-4 w-1/3 rounded-md bg-slate-800" /><div className="h-4 w-1/2 rounded-md bg-slate-800" /><div className="relative flex h-32 w-full items-center justify-center overflow-hidden rounded-2xl border border-rose-500/30 bg-slate-800/50 shadow-inner"><div className="absolute bottom-0 left-0 top-0 w-1 bg-rose-500" /><span className="font-mono text-sm text-rose-400">Error Detected: Calculation logic drift in Step 3.</span></div></div></div>
 	                )}
