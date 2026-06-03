@@ -1,13 +1,16 @@
 # Mafiking security baseline
 
 OWASP ASVS L2 baseline snapshot. Tracks what is currently enabled, what is
-exempt, and how to operate the security-critical knobs. Updated by Phase 0 of
-the hardening roadmap and refreshed at every review gate.
+exempt, and how to operate the security-critical knobs. Initial lock-in was
+Phase 0; the document is now the consolidated record of Phases 0–4 (app
+hardening + Nevacloud VPS hardening).
 
-**Status:** Phase 0 — initial lock-in.
-**Branch:** `security/p0-baseline`.
+**Status:** Phase 4 — applied to production VPS at `202.155.94.210` (mafiking.com).
+**Branch:** `main` (merged from `security/p4-vps-hardening`, commit `7b90be2`).
 **Target posture:** OWASP ASVS Level 2.
-**Last verified:** `npm run check` green (12 contract tests).
+**Last verified:** 2026-06-03 — `npm run check` green (22 contract tests + 8
+scanners); VPS Phase 4 applied via `ops/apply-all.sh`; see
+`docs/security/phase4-summary-2026-06-03.txt` for the full VPS post-state.
 
 ## Runtime identity
 
@@ -150,10 +153,96 @@ appear in both the syntax-check list and the test runner.
 ## Out of scope for this baseline (tracked elsewhere)
 
 - Tamper-evident audit log (HMAC chain) — tracked in `posture.md`.
-- Per-route rate-limit inventory — Phase 1.
-- WAF (ModSecurity + OWASP CRS) — Phase 4.
-- TLS 1.3 / HSTS at the edge — Phase 4.
-- Cloud CIS benchmark for Nevacloud VPS — Phase 4.
-- CI security workflow (SBOM, TruffleHog, semgrep, DAST) — Phases 3 and 4.
-- Threat model DFD in OWASP Threat Dragon — Phase 4.
-- Incident response runbook — Phase 4.
+- ModSecurity v3 nginx connector (jammy has no package; CRS 3.3.2 staged
+  under `/opt/owasp-crs-3.3.2`, `libmodsecurity3` installed, directives
+  commented in `ops/nginx-hardened.conf`). See `ops/modsecurity/STATUS.md`
+  for Path A (build on a beefier host) and Path B (Cloudflare in front).
+- B2 rclone config — script `ops/backup.sh` skips upload until
+  `/root/.config/rclone/rclone.conf` exists with a `type = b2` remote.
+- sshd drop-in reload — `/etc/ssh/sshd_config.d/99-mafiking.conf` is
+  installed but `systemctl reload ssh` is gated on
+  `ops/provision-deploy-user.sh` provisioning `mafiking-deploy` with a
+  real pubkey at `/root/.ssh/mafiking-deploy.pub`.
+
+## Phase 4 — Edge / VPS hardening (applied 2026-06-03 to 202.155.94.210)
+
+The application-layer controls above sit behind an edge and host baseline
+applied with `ops/apply-all.sh`. Verified state as of 2026-06-03:
+
+### Edge — nginx 1.18.0 (TLS, HSTS, headers, rate limits)
+
+- `ssl_protocols TLSv1.2 TLSv1.3;` in `/etc/nginx/nginx.conf`; TLS 1.0/1.1
+  rejected; `ssl_session_cache shared:SSL:10m;` + `ssl_session_timeout 1d;`
+  + `ssl_session_tickets off;` set inline.
+- `ops/nginx-hardened.conf` shipped to `/etc/nginx/sites-available/new_mafiking`:
+  HSTS preload 2y via
+  `add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;`,
+  plus `X-Frame-Options DENY`, `X-Content-Type-Options nosniff`,
+  `Referrer-Policy strict-origin-when-cross-origin`, `Permissions-Policy`.
+- Per-route `limit_req_zone`s: `mafiking_login` 15r/m, `mafiking_register`
+  4r/m, `mafiking_correction` 20r/m, `mafiking_payment` 8r/m,
+  `mafiking_perf` 120r/m.
+- App behind reverse proxy on 127.0.0.1:3000; node runs as the
+  `mafiking` system user (`/usr/sbin/nologin`, no home write).
+
+### Edge — ModSecurity (deferred)
+
+- `libmodsecurity3` 3.0.6-1 installed.
+- OWASP CRS 3.3.2 extracted to `/opt/owasp-crs-3.3.2` (symlink
+  `/opt/owasp-crs`).
+- jammy main has no `libnginx-mod-http-modsecurity` package; v3 nginx
+  connector needs source build. ModSecurity directives in
+  `ops/nginx-hardened.conf` are commented. See `ops/modsecurity/STATUS.md`.
+
+### Edge — fail2ban 0.11.2
+
+- 4 jails active: `sshd`, `nginx-botsearch`, `nginx-http-flood`,
+  `mafiking-auth` (custom filter on `/api/auth/*` 401/403).
+
+### Host — auditd
+
+- 29 rules loaded via `augenrules --load` in `/etc/audit/rules.d/99-mafiking.rules`:
+  identity, sshd, mafiking-config, nginx-config, modsecurity-config,
+  setuid/setgid/execve(uid=0), network-bind, network-connect, cron,
+  auth-log, syslog, mafiking-logs, mafiking-backup, time-change, modules.
+  Excludes 9router maintenance tunnel noise.
+
+### Host — CIS Ubuntu 22.04 L1
+
+- `/etc/sysctl.d/99-mafiking-cis.conf`: forward=0, send_redirects=0,
+  source_route=0, redirects=0, syncookies=1, rp_filter=1, log_martians=1,
+  ignore_broadcasts=1, ASVS extras: randomize_va_space=2, kptr_restrict=2,
+  dmesg_restrict=1, protected_hardlinks=1, protected_symlinks=1.
+- PAM: `pwquality` minlen=14 + 1 of each class, `faillock` deny=5
+  unlock_time=900, `UMASK 027` in `/etc/login.defs`.
+- Permission baselines: `/etc/{passwd,shadow,group,gshadow}` and their
+  backups.
+- Banner at `/etc/issue.net` (authorized-use).
+
+### Operations — backups, logrotate, cron
+
+- `/opt/mafiking-ops/backup.sh` (mode 700): daily sqlite3 `.backup` +
+  tar/zstd to `/var/backups/mafiking/`, optional rclone crypt to B2.
+- `/etc/cron.d/mafiking-backup` runs 03:00 UTC.
+- `/etc/cron.d/mafiking-audit-analyze` runs 04:00 UTC,
+  `node scripts/analyze-audit-log.js` as `mafiking`.
+- `/etc/logrotate.d/mafiking`: 6mo rotation for app logs, 12mo for
+  audit-summary, 4wk for ModSecurity.
+
+### Snapshot
+
+Pre-change artefacts preserved at `/root/mafiking-rollback/20260603T003239Z/`
+on the VPS: `env.original` (mode 600), `nginx-original.conf`, `nginx.conf.original`,
+`sshd_config.original`, `ufw.original`, `pm2-dump.pm2`, `pm2-jlist.json`. The
+123-line post-hardening summary is at
+`docs/security/phase4-summary-2026-06-03.txt` (also at
+`/root/mafiking-phase4-summary.txt` on the VPS).
+
+### CI security workflow (Phase 3)
+
+- `.github/workflows/security.yml` (5 jobs: npm-audit, CycloneDX SBOM,
+  semgrep, TruffleHog, contract tests); runs on push to `main` and
+  `security/**`, every PR, and weekly Sunday 02:00 UTC.
+- `.github/workflows/dast.yml` runs a weekly OWASP ZAP baseline scan.
+- `.zap/rules.tsv` documents 90 tuned IGNORE rules (intentional overlap
+  with CSP, helmet, csrf-csrf, `__Host-` cookies).
