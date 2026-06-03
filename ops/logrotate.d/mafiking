@@ -1,0 +1,40 @@
+# /etc/logrotate.d/mafiking-backup
+# Rotate the backup log monthly, keep 6.
+/var/log/mafiking-backup.log {
+  monthly
+  rotate 6
+  compress
+  delaycompress
+  missingok
+  notifempty
+  create 0640 root root
+  sharedscripts
+  postrotate
+    # no daemon to signal
+  endscript
+}
+
+/var/log/mafiking-audit-summary.log {
+  monthly
+  rotate 12
+  compress
+  delaycompress
+  missingok
+  notifempty
+  create 0640 root root
+}
+
+/var/log/modsecurity/audit.log {
+  weekly
+  rotate 4
+  compress
+  delaycompress
+  missingok
+  notifempty
+  create 0640 www-data adm
+  sharedscripts
+  postrotate
+    # modsecurity rotates via SecAuditLogStorageDir
+    find /var/log/modsecurity/ -name 'audit-*.log' -mtime +28 -delete
+  endscript
+}

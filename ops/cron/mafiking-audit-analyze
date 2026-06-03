@@ -1,0 +1,7 @@
+# /etc/cron.d/mafiking-audit-analyze
+# Daily 04:00 UTC: summarize logs/audit.log + logs/csp-reports.log.
+# Output: /var/log/mafiking-audit-summary.log (NDJSON lines, one per day).
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=root
+0 4 * * *  mafiking  cd /opt/mafiking && /usr/bin/node scripts/analyze-audit-log.js >> /var/log/mafiking-audit-summary.log 2>&1

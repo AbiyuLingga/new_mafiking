@@ -1,0 +1,6 @@
+# /etc/cron.d/mafiking-backup
+# Daily 03:00 UTC. Adjust if B2 egress costs spike.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=root
+0 3 * * *  root  /opt/mafiking-ops/backup.sh >> /var/log/mafiking-backup.log 2>&1
