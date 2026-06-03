@@ -1,0 +1,30 @@
+# ops/systemd-pm2.service — PM2 daemon for the mafiking service user.
+#
+# Drop-in: /etc/systemd/system/pm2-mafiking.service
+# Enable:   systemctl enable --now pm2-mafiking
+#
+# Replaces the root pm2-root.service (which is the default for any user
+# who runs `pm2 startup` as root). The new unit runs PM2 as the
+# 'mafiking' system user, isolating process ownership from /root.
+
+[Unit]
+Description=PM2 process manager (mafiking)
+Documentation=https://pm2.keymetrics.io/
+After=network.target
+
+[Service]
+Type=forking
+User=mafiking
+Environment=PM2_HOME=/opt/mafiking/.pm2
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+PIDFile=/opt/mafiking/.pm2/pm2.pid
+Restart=on-failure
+RestartSec=5
+
+ExecStartPre=/usr/bin/env rm -f /opt/mafiking/.pm2/pm2.pid
+ExecStart=/usr/bin/env node /usr/lib/node_modules/pm2/bin/pm2 resurrect
+ExecReload=/usr/bin/env node /usr/lib/node_modules/pm2/bin/pm2 reload all
+ExecStop=/usr/bin/env node /usr/lib/node_modules/pm2/bin/pm2 kill
+
+[Install]
+WantedBy=multi-user.target
