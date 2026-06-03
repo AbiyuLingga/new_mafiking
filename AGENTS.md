@@ -278,3 +278,37 @@ PORT=3001 npm start
 - Assuming all static chapters have backend question banks.
 - Forgetting that React in the browser comes from CDN UMD scripts.
 - Cleaning or deleting guest users without first confirming the user wants local data cleanup.
+
+## Security Notes (Phase 0-4, ASVS L2)
+
+Canonical security docs live under `docs/security/`:
+
+- `baseline.md` — controls in effect, including the Phase 4 VPS section.
+- `threat-model.json` — OWASP Threat Dragon 2.0 DFD (13 nodes, 12 flows,
+  20 STRIDE threats). `threat-model.md` is a narrative companion only.
+- `audit-2026-06.md` — OWASP API Top 10 review (findings F-1 to F-9).
+- `posture.md` — monthly snapshot template.
+- `phase4-summary-2026-06-03.txt` — VPS post-state from the Phase 4
+  apply.
+- `incident-response.md`, `secrets.md`, `llm.md`, `llm-inventory.md` —
+  operational runbooks.
+
+Open items at last review: F-10 (id coercion in `/evaluate`), F-11
+(EXIF strip — `sharp` blocked on the 957 MB VPS, deferred), F-12
+(per-user adaptive throttle), F-13 (ModSecurity v3 connector — Path A
+source build or Path B Cloudflare-fronted), F-14 (sshd drop-in reload
+waits for `mafiking-deploy` pubkey at `/root/.ssh/mafiking-deploy.pub`),
+F-15 (B2 rclone config — needs `/root/.config/rclone/rclone.conf`).
+
+## GitHub Push Gotcha (workflow scope)
+
+The default GitHub PAT used to push `main` does not have the
+`workflow` scope. This blocks any push that touches
+`.github/workflows/*.yml`. The workflow files (added in `fb42f58`) are
+therefore NOT on `origin/main` as of 2026-06-03; they live on local
+`main` and on `security/p0-baseline`. To publish them, push from a
+token that has the `workflow` scope, or push via SSH. If you need to
+rebuild `main` without the workflow files, the cleanest pattern is
+cherry-pick each non-workflow commit, and for the workflow commit
+itself use `git cherry-pick -n` + `git restore --staged .github/
+workflows/` + `rm -rf .github/workflows/` + commit with a note.
