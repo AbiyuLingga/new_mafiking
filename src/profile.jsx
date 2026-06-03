@@ -160,7 +160,8 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
   function renderRecommendationQuestionHTML(value) {
     const text = truncateRecommendationText(value || '');
     if (window.renderMafikingMathHTML && text) return window.renderMafikingMathHTML(text);
-    return text;
+    if (window.escapeHtml) return window.escapeHtml(text);
+    return String(text || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
   function getProfileDisplayName() {
@@ -586,9 +587,12 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                           <h4
                             className="font-display font-semibold text-base mt-2 truncate text-ink"
                             dangerouslySetInnerHTML={{
-                              __html: window.renderMafikingMathHTML && att.questionText
-                                ? window.renderMafikingMathHTML(att.questionText)
-                                : (att.questionText || "Latihan Bebas")
+                              __html: (() => {
+                                const q = att.questionText || '';
+                                if (window.renderMafikingMathHTML && q) return window.renderMafikingMathHTML(q);
+                                if (window.escapeHtml) return window.escapeHtml(q);
+                                return q.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+                              })()
                             }}
                           />
                           <CorrectionIssueSummary attempt={att} />

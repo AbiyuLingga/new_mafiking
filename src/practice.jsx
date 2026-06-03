@@ -2281,6 +2281,7 @@ function renderEquation(value) {
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
+if (typeof window !== "undefined") window.escapeHtml = escapeHtml;
 
 function normalizeKatexInput(value) {
   return String(value || "")

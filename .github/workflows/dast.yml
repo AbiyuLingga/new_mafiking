@@ -1,0 +1,29 @@
+name: dast
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly Tuesday 04:00 UTC. Requires a running staging instance
+    # reachable at ${{ secrets.DAST_TARGET_URL }}.
+    - cron: '0 4 * * 2'
+
+permissions:
+  contents: read
+
+jobs:
+  zap-baseline:
+    name: OWASP ZAP baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ secrets.DAST_TARGET_URL != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.13.0
+        with:
+          target: ${{ secrets.DAST_TARGET_URL }}
+          rules_file_name: .zap/rules.tsv
+          cmd_options: '-a -m 5 -I'
+          allow_issue_writing: false
+          fail_action: true
+          artifact_name: zap-baseline-report

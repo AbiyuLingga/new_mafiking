@@ -1,9 +1,18 @@
 const express = require('express');
 const crypto = require('crypto');
 const axios = require('axios');
+const rateLimit = require('express-rate-limit');
 const { isRegisteredUser } = require('../middleware/auth');
 const { setPublicApiCache } = require('../lib/performance');
 const router = express.Router();
+
+const paymentLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 8,
+  message: { error: 'Terlalu banyak percobaan pembayaran. Coba lagi sebentar.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const DUITKU_BASE_URL = 'https://api-sandbox.duitku.com/api'; // ganti ke https://api-prod.duitku.com/api saat production
 const MERCHANT_CODE = process.env.DUITKU_MERCHANT_CODE;
@@ -189,7 +198,7 @@ router.get('/config', (_req, res) => {
 });
 
 // POST /api/payment/create
-router.post('/create', async (req, res) => {
+router.post('/create', paymentLimiter, async (req, res) => {
     const db = req.app.locals.db;
     const userId = req.session.userId;
     if (!isRegisteredPaymentUser({ db, userId })) {

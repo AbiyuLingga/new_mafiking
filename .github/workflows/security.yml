@@ -1,0 +1,93 @@
+name: security
+
+on:
+  push:
+    branches: [main, security/**]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly Sunday 02:00 UTC.
+    - cron: '0 2 * * 0'
+
+permissions:
+  contents: read
+
+jobs:
+  npm-audit:
+    name: npm audit (advisories)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --no-audit --fund=false
+      - name: npm audit (fail on high/critical)
+        run: |
+          npm audit --audit-level=high
+      - name: typosquatting scan
+        run: npm run test:npm-typosquats
+
+  sbom:
+    name: SBOM (CycloneDX)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --no-audit --fund=false
+      - name: Generate SBOM
+        run: npx --yes @cyclonedx/cyclonedx-npm --output-format JSON --output-file sbom.cdx.json
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cdx.json
+          retention-days: 30
+
+  semgrep:
+    name: semgrep (SAST)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: returntocorp/semgrep:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Project rules
+        run: semgrep --config .semgrep.yml --error --metrics=off .
+      - name: OWASP security audit
+        run: semgrep --config p/security-audit --metrics=off .
+
+  trufflehog:
+    name: TruffleHog (secrets in git history)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: TruffleHog filesystem
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: .
+          base: ${{ github.event.repository.default_branch }}
+          head: ${{ github.sha }}
+          extra_args: --no-update
+
+  contract-tests:
+    name: contract + security scanners
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --no-audit --fund=false
+      - run: npm run check
