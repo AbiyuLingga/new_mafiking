@@ -391,7 +391,6 @@ const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess, curr
 
 // ─── Landing (marketing, untuk anonymous/guest) ───────────────────────────
 const LandingLegacy = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
-  const [promoOpen, setPromoOpen] = React.useState(true);
   const isRegistered = currentUser && !currentUser.display_name?.startsWith("Tamu_");
   const startFree = () => setRoute({ route: "belajar", section: "Try Out" });
   const authRedirect = { route: "belajar", section: "Try Out" };
@@ -624,21 +623,6 @@ const LandingLegacy = ({ setRoute, tweaks, isAdmin = false, currentUser = null }
 
       <Footer setRoute={setRoute} />
 
-      {promoOpen && (
-        <div className="fixed bottom-5 right-5 z-50 hidden w-[320px] rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-300/50 md:block">
-          <button onClick={() => setPromoOpen(false)} className="absolute right-3 top-3 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900" type="button" aria-label="Tutup promo">
-            <Icon.X className="w-4 h-4" />
-          </button>
-          <div className="pr-8">
-            <div className="text-xs font-black uppercase text-amber-600">Diskon paket aktif</div>
-            <h3 className="mt-1 text-xl font-black">Diskon 50% kelas TPB</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Mulai dari Try Out gratis dulu, lalu upgrade saat butuh akses penuh.</p>
-            <button onClick={() => setRoute("tryout")} className="mt-4 inline-flex items-center gap-2 text-sm font-black text-slate-950" type="button">
-              Lihat Paket <Icon.Arrow className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -738,7 +722,7 @@ const LandingEditableMedia = ({ enabled, slot, mediaType = "image", label, onEdi
 );
 
 const LANDING_DEMO_VIDEO_OPTIMIZED = {
-  mp4: "",
+  mp4: "/assets/saas_demo_video.mp4",
   webm: "",
   poster: "/assets/landing/simulasi-tryout.jpg?v=202606011620",
 };
@@ -826,7 +810,6 @@ const LandingMediaUploadModal = ({ target, onClose, onUploaded }) => {
 
 // Landing page adapted from the Google AI Studio design in the provided zip.
 const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
-  const [promoOpen, setPromoOpen] = React.useState(true);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [landingMedia, setLandingMedia] = React.useState({});
   const [mediaEditTarget, setMediaEditTarget] = React.useState(null);
@@ -839,7 +822,6 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   const isRegistered = currentUser && !currentUser.display_name?.startsWith("Tamu_");
   const authRedirect = { route: "belajar", section: "Try Out" };
   const openLogin = () => setRoute({ route: "lobby", authMode: "login", authRedirect });
-  const openPackages = () => setRoute("tryout");
   const startFree = () => {
     try { window.sessionStorage.setItem("mafiking:tryout-pop", "1"); } catch (_) {}
     setRoute({ route: "belajar", section: "Try Out" });
@@ -868,7 +850,6 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
     return () => { cancelled = true; };
   }, []);
 
-  const promoImage = mediaUrl("promo_image", "https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=800&auto=format&fit=crop");
   const featureOne = mediaUrl("feature_image_1", "/assets/landing/rekomendasi-latihan.jpg?v=202606011620");
   const featureTwo = mediaUrl("feature_image_2", "/assets/landing/history-kesalahan.jpg?v=202606011635");
   const featureThree = mediaUrl("feature_image_3", "/assets/landing/simulasi-tryout.jpg?v=202606011620");
@@ -1019,33 +1000,8 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
     ["Belajarnya jadi lebih rapi. Aku bisa fokus ke Matematika dulu, terus pindah Fisika tanpa bingung mulai dari bab mana.", "Nadya K.", "SITH-R 24", "N"],
   ];
 
-  const promoPopup = promoOpen ? ReactDOM.createPortal((
-        <div className="landing-promo fixed bottom-6 right-6 z-[9000] hidden w-[min(320px,calc(100vw-40px))] max-h-[calc(100vh-48px)] overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl shadow-slate-900/12 md:block">
-          <button onClick={() => setPromoOpen(false)} className="absolute right-4 top-4 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70" type="button" aria-label="Tutup promo">
-            <Icon.X className="w-4 h-4" />
-          </button>
-          <div className="relative flex h-56 items-center justify-center overflow-hidden bg-slate-100">
-            <img src={promoImage} alt="Promo Background" className="absolute inset-0 z-0 h-full w-full object-cover" />
-            <LandingEditableMedia enabled={landingMediaEditEnabled} slot="promo_image" label="promo popup" mediaType="image" onEdit={setMediaEditTarget} />
-            <div className="relative z-20 text-center">
-              <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] font-bold text-slate-800 shadow-sm">
-                <Icon.Sparkles className="h-3 w-3 text-amber-500" /> PROMO TERBATAS
-              </div>
-              <h3 className="px-4 text-xl font-extrabold text-white drop-shadow-[0_2px_12px_rgba(0,0,0,.65)]">Diskon 50% Kelas TPB!</h3>
-            </div>
-          </div>
-          <div className="bg-white p-4 text-center">
-            <p className="mb-4 text-sm font-medium text-slate-600">Amankan nilai A pertamamu sekarang.</p>
-            <button onClick={openPackages} className="w-full rounded-xl bg-[#FDE047] py-2.5 text-sm font-bold text-slate-900 transition-colors hover:bg-[#FCE76B]" type="button">
-              Lihat Promo
-            </button>
-          </div>
-        </div>
-      ), document.body) : null;
-
   return (
     <div className="relative min-h-screen overflow-hidden bg-white text-slate-900 font-sans">
-      {promoPopup}
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
         <div
           className="absolute inset-0"

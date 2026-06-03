@@ -118,7 +118,6 @@ rsync -az --delete --human-readable --info=progress2,stats2 \
   --exclude ".deploy-deps.sha" \
   --exclude "*.log" \
   --exclude "logs" \
-  --exclude "assets/saas_demo_video.mp4" \
   --exclude "db/*.sqlite" \
   --exclude "db/*.sqlite-shm" \
   --exclude "db/*.sqlite-wal" \
