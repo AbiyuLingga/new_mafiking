@@ -2,7 +2,15 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { isAuthenticated, requireRegisteredUser } = require('../middleware/auth');
-const { buildRecommendationSummary, formatLearningSkillLabel } = require('../lib/recommendation-engine');
+const {
+  buildRecommendationSummary,
+  computeBktLite,
+  computePerSkillHalfLifeLite,
+  enrichWithCatalog,
+  formatLearningSkillLabel,
+  interleaveRecallSlots,
+  loadMasteryStates,
+} = require('../lib/recommendation-engine');
 const {
   call9RouterProfileSummary,
   shouldUse9RouterProfile,
@@ -828,6 +836,7 @@ function loadMultipleChoiceEvidence(db, userId, limit = PROFILE_MC_ATTEMPT_LIMIT
       p.answer_display,
       p.difficulty,
       p.question_type,
+      p.subtopic_id,
       s.title AS subtopic_title,
       c.title AS chapter_title
     FROM practice_attempts pa
@@ -872,6 +881,8 @@ function summarizeMultipleChoiceEvidence(rows) {
         questionDisplay: row.question_display || row.question_text || '',
         selectedAnswer: row.selected_answer || '',
         selectedChoiceIndex: row.selected_choice_index,
+        skillId: row.subtopic_id,
+        subtopicId: row.subtopic_id,
         subtopic: row.subtopic_title || ''
       });
     }
@@ -887,6 +898,30 @@ function summarizeMultipleChoiceEvidence(rows) {
       .slice(0, 8),
     recentWrong
   };
+}
+
+function buildMasteryHistory(masteryState) {
+  return (masteryState?.attempts || [])
+    .map((attempt) => ({
+      correct: attempt.correct,
+      createdAt: attempt.createdAt,
+      skillId: attempt.subtopicId,
+    }))
+    .filter((attempt) => attempt.skillId != null);
+}
+
+function enrichProfileSummaryRecommendations(db, userId, attempts, multipleChoiceEvidence, summary, masteryContext) {
+  const enrichedSummary = enrichWithDbProblems(db, userId, attempts, multipleChoiceEvidence, summary);
+  if (!enrichedSummary || !Array.isArray(enrichedSummary.recommendedItems)) return enrichedSummary;
+
+  const enrichedItems = enrichWithCatalog(enrichedSummary.recommendedItems, {
+    halfLives: masteryContext?.halfLives || {},
+    mastery: masteryContext?.mastery || {},
+    mcEvidence: multipleChoiceEvidence?.recentWrong || [],
+    now: masteryContext?.now || new Date(),
+  });
+  enrichedSummary.recommendedItems = interleaveRecallSlots(enrichedItems, { every: 3 });
+  return enrichedSummary;
 }
 
 function buildProfileAiEvidence({ aiAttempts, multipleChoiceEvidence }) {
@@ -1095,6 +1130,14 @@ router.post('/profile-summary', isAuthenticated, async (req, res) => {
     const multipleChoiceEvidence = summarizeMultipleChoiceEvidence(
       loadMultipleChoiceEvidence(db, req.session.userId, PROFILE_MC_ATTEMPT_LIMIT)
     );
+    const now = new Date();
+    const masteryState = loadMasteryStates(db, req.session.userId);
+    const masteryHistory = buildMasteryHistory(masteryState);
+    const masteryContext = {
+      halfLives: computePerSkillHalfLifeLite(masteryHistory),
+      mastery: computeBktLite(masteryHistory).mastery,
+      now,
+    };
 
     if (!attempts.length && !multipleChoiceEvidence.patterns.length && !multipleChoiceEvidence.recentWrong.length) {
       return res.json({
@@ -1107,12 +1150,20 @@ router.post('/profile-summary', isAuthenticated, async (req, res) => {
     const aiAttempts = compactAttemptsForProfile(attempts, PROFILE_AI_ATTEMPT_LIMIT);
     const deterministicSummary = buildDeterministicProfileSummary(recommendationAttempts);
     const forceRefresh = Boolean(req.body?.forceRefresh);
-    const refreshState = getProfileAiRefreshState(db, user, new Date());
+    const refreshState = getProfileAiRefreshState(db, user, now);
 
     if (!forceRefresh && refreshState.cachedSummary) {
+      const cachedSummary = enrichProfileSummaryRecommendations(
+        db,
+        req.session.userId,
+        attempts,
+        multipleChoiceEvidence,
+        refreshState.cachedSummary,
+        masteryContext
+      );
       return res.json({
         aiRefresh: serializeProfileAiRefreshState(refreshState, false),
-        summary: limitProfileSummaryTags(refreshState.cachedSummary)
+        summary: limitProfileSummaryTags(cachedSummary)
       });
     }
 
@@ -1131,15 +1182,15 @@ router.post('/profile-summary', isAuthenticated, async (req, res) => {
     let summary;
     if (!result) {
       let finalSummary = deterministicSummary || fallbackProfileFromAttempts(recommendationAttempts);
-      summary = limitProfileSummaryTags(enrichWithDbProblems(db, req.session.userId, attempts, multipleChoiceEvidence, finalSummary));
+      summary = limitProfileSummaryTags(enrichProfileSummaryRecommendations(db, req.session.userId, attempts, multipleChoiceEvidence, finalSummary, masteryContext));
     } else {
       const parsed = safeJsonParse(result.text, (overallSummary) => ({ overallSummary }));
       let merged = mergeProfileSummaries(normalizeProfileSummary(parsed, result.text), deterministicSummary);
-      summary = limitProfileSummaryTags(enrichWithDbProblems(db, req.session.userId, attempts, multipleChoiceEvidence, merged));
+      summary = limitProfileSummaryTags(enrichProfileSummaryRecommendations(db, req.session.userId, attempts, multipleChoiceEvidence, merged, masteryContext));
     }
 
     if (shouldCallAi || !refreshState.cachedSummary) {
-      recordProfileAiRefresh(db, req.session.userId, summary, new Date());
+      recordProfileAiRefresh(db, req.session.userId, summary, now);
       refreshState.remainingMs = PROFILE_AI_REFRESH_COOLDOWN_MS;
       refreshState.availableAt = new Date(Date.now() + PROFILE_AI_REFRESH_COOLDOWN_MS).toISOString();
     }
@@ -1261,7 +1312,7 @@ function enrichWithDbProblems(db, userId, attempts, multipleChoiceEvidence, summ
           purcellReference: p.subtopic_title || 'General',
           reason: "Dipilih berdasarkan riwayat kesalahanmu pada topik " + (p.subtopic_title || "ini") + ".",
           storyProblem: p.question_type === 'story',
-          targetSkill: skillLabel,
+          targetSkill: { id: p.subtopic_id, label: skillLabel },
           questionType: p.question_type,
           mcOptions: p.mc_options,
           acceptableAnswers: p.acceptable_answers
@@ -1280,10 +1331,12 @@ module.exports._profileSummaryInternals = {
   PROFILE_AI_REFRESH_COOLDOWN_MS,
   PROFILE_MC_ATTEMPT_LIMIT,
   PROFILE_RECOMMENDATION_ATTEMPT_LIMIT,
+  buildMasteryHistory,
   buildProfileAiEvidence,
   canBypassProfileAiCooldown,
   compactAttemptsForProfile,
   chooseProfileAttemptSource,
+  enrichProfileSummaryRecommendations,
   extractGeneratedText,
   getProfileModels,
   getProfileAiRefreshState,

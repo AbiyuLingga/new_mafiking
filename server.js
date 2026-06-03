@@ -47,6 +47,7 @@ const { createRequestGuard } = require('./lib/request-guard');
 const { helmetCspOptions } = require('./lib/csp');
 const { createCsrfProtection } = require('./lib/csrf-protection');
 const { SQLiteSessionStore } = require('./lib/sqlite-session-store');
+const { createCanaryMiddleware } = require('./lib/canary');
 const auditLog = require('./lib/audit-log');
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';

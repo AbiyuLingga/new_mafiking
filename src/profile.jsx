@@ -30,12 +30,6 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
       setAttempts(correctionAttempts);
       setLoading(false);
 
-      if (!correctionAttempts.length) {
-        setSummary(null);
-        setAiRefresh(null);
-        return;
-      }
-
       // Panggil AI summary di background, tampilkan spinner kecil di seksinya saja
       setSummaryLoading(true);
       try {
@@ -69,21 +63,32 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
     : collectTags(attempts, "strengthTags"));
 
   const hasCorrectionHistory = attempts.length > 0;
-  const recommendations = hasCorrectionHistory ? (summary?.recommendedQuestions || []) : [];
-  const recommendedItems = hasCorrectionHistory && Array.isArray(summary?.recommendedItems) ? summary.recommendedItems : [];
+  const hasSummaryEvidence = hasCorrectionHistory || Boolean(summary);
+  const recommendations = hasSummaryEvidence ? (summary?.recommendedQuestions || []) : [];
+  const recommendedItems = hasSummaryEvidence && Array.isArray(summary?.recommendedItems) ? summary.recommendedItems : [];
   const dataRecommendationRows = recommendedItems.length
-    ? recommendedItems.map((item) => ({
-      ref: item.ref || "",
-      questionDisplay: item.questionDisplay || item.questionText || "",
-      questionText: item.questionText || "",
-      answerDisplay: item.answerDisplay || "",
-      mapel: item.mapel || "",
-      difficulty: item.difficulty || "",
-      purcellReference: item.purcellReference || "",
-      reason: item.reason || "",
-      storyProblem: Boolean(item.storyProblem),
-      targetSkill: item.targetSkill?.label || "",
-    }))
+    ? recommendedItems.map((item) => {
+      const targetSkill = typeof item.targetSkill === "string"
+        ? item.targetSkill
+        : (item.targetSkill?.label || "");
+      return {
+        evidence: Array.isArray(item.evidence) ? item.evidence : [],
+        evidenceAt: item.evidenceAt || "",
+        frontier: item.frontier,
+        halfLifeDays: item.halfLifeDays,
+        kind: item.kind || "",
+        ref: item.ref || "",
+        questionDisplay: item.questionDisplay || item.questionText || "",
+        questionText: item.questionText || "",
+        answerDisplay: item.answerDisplay || "",
+        mapel: item.mapel || "",
+        difficulty: item.difficulty || "",
+        purcellReference: item.purcellReference || "",
+        reason: item.reason || "",
+        storyProblem: Boolean(item.storyProblem),
+        targetSkill,
+      };
+    })
     : recommendations.map((question) => ({
       ref: "",
       questionDisplay: question,
@@ -125,6 +130,24 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
   const recommendationRows = dataRecommendationRows.length
     ? dataRecommendationRows
     : (isAdmin ? adminPreviewRecommendationRows : []);
+
+  function formatRecommendationEvidenceTitle(item) {
+    const parts = [];
+    if (item.kind) parts.push(item.kind === "review" ? "Recall" : "Frontier");
+    if (typeof item.frontier === "boolean") parts.push(item.frontier ? "skill baru" : "review skill");
+    if (typeof item.halfLifeDays === "number") {
+      parts.push(`half-life ${item.halfLifeDays.toFixed(1)} hari`);
+    }
+    const evidence = Array.isArray(item.evidence) ? item.evidence[0] : null;
+    if (evidence) {
+      if (evidence.problemId) parts.push(`bukti soal #${evidence.problemId}`);
+      if (evidence.selectedAnswer || evidence.correctAnswer) {
+        parts.push(`jawabanmu: ${evidence.selectedAnswer || "-"}; benar: ${evidence.correctAnswer || "-"}`);
+      }
+      if (evidence.createdAt) parts.push(formatDate(evidence.createdAt));
+    }
+    return parts.join(" · ");
+  }
 
   function formatDate(isoString) {
     if (!isoString) return "";
@@ -499,8 +522,9 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                 ) : recommendationRows.length ? (
                   <div className="grid gap-3">
                     {recommendationRows.map((item, index) => {
+                      const evidenceTitle = formatRecommendationEvidenceTitle(item);
                       return (
-                        <div key={item.ref || index} className="rounded-xl border border-ink/5 bg-ink/[0.02] p-4 flex items-start gap-4 hover:bg-ink/[0.04] transition-all justify-between">
+                        <div key={item.ref || index} className="rounded-xl border border-ink/5 bg-ink/[0.02] p-4 flex items-start gap-4 hover:bg-ink/[0.04] transition-all justify-between" title={evidenceTitle || item.reason || ""}>
                           <div className="min-w-0 flex-1">
                               {(item.mapel || item.difficulty) ? (
                                 <p className="text-[10px] uppercase tracking-wider font-black text-ink/70 mb-1">
@@ -518,7 +542,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                                 dangerouslySetInnerHTML={{ __html: renderRecommendationQuestionHTML(item.questionDisplay || '') }}
                               />
                               {item.reason ? (
-                                <p className="text-xs text-ink/50 mt-2 leading-relaxed">{item.reason}</p>
+                                <p className="text-xs text-ink/50 mt-2 leading-relaxed" title={evidenceTitle || item.reason}>{item.reason}</p>
                               ) : null}
                           </div>
                           <button

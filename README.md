@@ -23,7 +23,7 @@ The active browser entry point is `MAFIKING.html`, served by `server.js`. The fr
 - Imported question data at time of writing: 2 chapters, 4 subtopics, 23 problems, 86 problem steps.
 - Available real practice bank: Integral only. The static Belajar UI has more chapter cards, but only `Teknik Integrasi` currently maps to real backend problems.
 - Canvas correction: OCR/transcription and answer evaluation use Gemini 3.1 Flash Lite when `GEMINI_KEY_1` or later keys are configured; profile summary has a fallback when keys are missing.
-- Recommendation engine: profile recommendations are deterministic from correction attempts plus `data/recommendation-catalog.json` (`2026-05-20.purcell-v1`) and `docs/purcell-inspired-question-bank.md`; Gemma writes the profile narrative text, but the selected follow-up questions come from the local engine.
+- Recommendation engine: profile recommendations are deterministic from correction attempts, multiple-choice mistakes, `data/recommendation-catalog.json` (`2026-05-20.purcell-v1`), and `docs/purcell-inspired-question-bank.md`; Gemma writes the profile narrative text only. The local engine applies half-life review scoring, BKT-lite mastery estimates, KST-style frontier/review tagging, recall interleaving, and per-item evidence metadata so selected follow-up questions stay catalog-backed and auditable.
 
 ## Quick Start
 

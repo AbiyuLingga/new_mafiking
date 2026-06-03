@@ -8,10 +8,12 @@ const {
   PROFILE_AI_ATTEMPT_LIMIT,
   PROFILE_AI_REFRESH_COOLDOWN_MS,
   PROFILE_RECOMMENDATION_ATTEMPT_LIMIT,
+  buildMasteryHistory,
   buildProfileAiEvidence,
   canBypassProfileAiCooldown,
   compactAttemptsForProfile,
   chooseProfileAttemptSource,
+  enrichProfileSummaryRecommendations,
   extractGeneratedText,
   getProfileModels,
   getProfileAiRefreshState,
@@ -132,6 +134,7 @@ const mcEvidence = summarizeMultipleChoiceEvidence([
     question_display: '2 + 2 = ?',
     selected_answer: '5',
     selected_choice_index: 2,
+    subtopic_id: 101,
     subtopic_title: 'Aljabar Dasar'
   },
   {
@@ -141,6 +144,7 @@ const mcEvidence = summarizeMultipleChoiceEvidence([
     difficulty: 'Medium',
     problem_id: 12,
     question_display: '1 + 1 = ?',
+    subtopic_id: 101,
     subtopic_title: 'Aljabar Dasar'
   },
   {
@@ -155,6 +159,7 @@ const mcEvidence = summarizeMultipleChoiceEvidence([
     question_display: 'sin 0 = ?',
     selected_answer: '1',
     selected_choice_index: 3,
+    subtopic_id: 102,
     subtopic_title: 'Trigonometri'
   }
 ]);
@@ -170,11 +175,93 @@ assert.deepEqual(mcEvidence.patterns[0], {
 assert.equal(mcEvidence.recentWrong.length, 2);
 assert.equal(mcEvidence.recentWrong[0].selectedAnswer, '5');
 assert.equal(mcEvidence.recentWrong[0].correctAnswer, '4');
+assert.equal(mcEvidence.recentWrong[0].skillId, 101);
+assert.equal(mcEvidence.recentWrong[0].subtopicId, 101);
 
 const aiEvidence = buildProfileAiEvidence({ aiAttempts, multipleChoiceEvidence: mcEvidence });
 assert.equal(aiEvidence.correctionAttempts.length, 20);
 assert.equal(aiEvidence.multipleChoiceEvidence.recentWrong.length, 2);
 assert.match(aiEvidence.instructions.multipleChoiceEvidence, /pilihan ganda/);
+
+const masteryHistory = buildMasteryHistory({
+  attempts: [
+    { correct: 0, createdAt: '2026-05-20T13:59:00.000Z', subtopicId: 101 },
+    { correct: 1, createdAt: '2026-05-20T13:58:00.000Z', subtopicId: 101 },
+  ]
+});
+assert.deepEqual(masteryHistory, [
+  { correct: 0, createdAt: '2026-05-20T13:59:00.000Z', skillId: 101 },
+  { correct: 1, createdAt: '2026-05-20T13:58:00.000Z', skillId: 101 },
+]);
+
+const recommendationDb = {
+  prepare(sql) {
+    if (/SELECT DISTINCT subtopic_id FROM problems/.test(sql)) {
+      return {
+        all() {
+          return [{ subtopic_id: 101 }];
+        }
+      };
+    }
+    if (/WHERE p\.subtopic_id = \?/.test(sql)) {
+      return {
+        get() {
+          return {
+            id: 201,
+            subtopic_id: 101,
+            subtopic_title: 'Aljabar Dasar',
+            question_display: '2 + 3 = ?',
+            question_text: '2 + 3 = ?',
+            answer_display: '5',
+            difficulty: 'Medium',
+            question_type: 'choice',
+            mc_options: '["4","5","6"]',
+            acceptable_answers: '["5"]',
+          };
+        }
+      };
+    }
+    if (/WHERE p\.subtopic_id IN/.test(sql)) {
+      return {
+        all() {
+          return [];
+        }
+      };
+    }
+    if (/FROM problems p/.test(sql)) {
+      return {
+        all() {
+          return [];
+        }
+      };
+    }
+    throw new Error(`Unexpected SQL in recommendation test: ${sql}`);
+  }
+};
+
+const enrichedRecommendationSummary = enrichProfileSummaryRecommendations(
+  recommendationDb,
+  7,
+  [],
+  mcEvidence,
+  { weaknesses: [], recommendedQuestions: [], overallSummary: 'Ringkas.' },
+  {
+    halfLives: { 101: 7 },
+    mastery: { 101: 0.35 },
+    now: new Date('2026-05-20T14:00:00.000Z'),
+  }
+);
+
+assert.equal(enrichedRecommendationSummary.recommendedItems.length, 1);
+assert.deepEqual(enrichedRecommendationSummary.recommendedItems[0].targetSkill, {
+  id: 101,
+  label: 'Aljabar',
+});
+assert.equal(enrichedRecommendationSummary.recommendedItems[0].frontier, true);
+assert.equal(enrichedRecommendationSummary.recommendedItems[0].kind, 'new');
+assert.equal(enrichedRecommendationSummary.recommendedItems[0].halfLifeDays, 7);
+assert.equal(enrichedRecommendationSummary.recommendedItems[0].evidenceAt, '2026-05-20T14:00:00.000Z');
+assert.equal(enrichedRecommendationSummary.recommendedItems[0].evidence[0].problemId, 11);
 
 assert.deepEqual(
   normalizeTranscription(

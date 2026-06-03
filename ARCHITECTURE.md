@@ -555,6 +555,8 @@ need_score =
 
 Runtime recommendation selection must stay deterministic: Gemma can contribute `overallSummary` text, but `recommendedItems`, `recommendedQuestions`, and `skillNeedScores` are merged from `lib/recommendation-engine.js` so profile recommendations point at real catalog refs instead of invented items.
 
+The local engine enriches selected DB-backed recommendations with half-life review signals, BKT-lite per-skill mastery, KST-style frontier versus review tags, recall-slot interleaving, and recent multiple-choice evidence. High mastery reduces recency-error pressure, very low mastery increases prerequisite-gap weight, and the frontend receives `evidence`, `frontier`, `kind`, `halfLifeDays`, and `evidenceAt` metadata for each selected item while AI remains prose-only.
+
 The profile endpoint intentionally uses two attempt windows: `PROFILE_RECOMMENDATION_ATTEMPT_LIMIT = 200` for local recommendation stability and `PROFILE_AI_ATTEMPT_LIMIT = 20` for AI prompt cost/latency control. Multiple-choice evidence has its own `PROFILE_MC_ATTEMPT_LIMIT = 120` because it is summarized before reaching the AI prompt.
 
 AI narrative refreshes are recorded in `profile_ai_refreshes`. Normal users can refresh AI narrative text once per hour; admin account `123`/`135` bypasses the cooldown for testing and operations. When cooldown blocks the AI call or Gemma fails, the endpoint still returns the deterministic local profile summary.
