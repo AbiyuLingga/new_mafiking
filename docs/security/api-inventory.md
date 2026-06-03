@@ -175,8 +175,8 @@ All routes `isAdmin`. Routes that take `:id` operate on catalog content
 | DELETE | `/api/admin/tryout-questions/:id` | admin | ✓ | admin | |
 | GET | `/api/admin/tryout-questions/:id/steps` | admin | n/a | admin | |
 | POST | `/api/admin/tryout-questions/:id/steps` | admin | ✓ | admin | |
-| PUT | `/api/admin/tryout-questions-step/:id` | admin | ✓ | admin | |
-| DELETE | `/api/admin/tryout-questions-step/:id` | admin | ✓ | admin | |
+| PUT | `/api/admin/tryout-question-steps/:id` | admin | ✓ | admin | |
+| DELETE | `/api/admin/tryout-question-steps/:id` | admin | ✓ | admin | |
 | GET | `/api/admin/tryout-attempts` | admin | n/a | admin | |
 | DELETE | `/api/admin/tryout-attempts/:id` | admin | ✓ | admin | |
 | GET | `/api/admin/dashboard-data` | admin | n/a | admin | |
