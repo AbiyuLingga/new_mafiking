@@ -1,0 +1,120 @@
+# semgrep configuration for new_mafiking.
+#
+# Run locally (requires semgrep installed):
+#   semgrep --config .semgrep.yml .
+#
+# In CI (Phase 3 wires this into .github/workflows/security.yml):
+#   semgrep --config p/security-audit --config .semgrep.yml .
+#
+# We intentionally keep this list short and targeted at the bugs that the
+# project-specific scans (scripts/scan-xss-patterns.js,
+# scripts/discover-shadow-routes.js) and the npm audit cannot catch on
+# their own. The broader p/security-audit ruleset is enabled in CI; this
+# file is the project-specific layer that runs first.
+
+rules:
+  - id: express-trust-proxy-broad
+    message: >-
+      `app.set('trust proxy', true)` or a number > 1 trusts every upstream
+      proxy and lets attackers spoof X-Forwarded-For. Use a specific
+      hop count or a function that inspects the chain.
+    severity: WARNING
+    languages: [javascript]
+    paths:
+      include:
+        - "*.js"
+    pattern: |
+      app.set('trust proxy', $X)
+    pattern-either:
+      - pattern: app.set('trust proxy', true)
+      - pattern: app.set('trust proxy', $N)
+        metavariable-pattern:
+          metavariable: $N
+          regex: '^(?!1$)\d+$'
+
+  - id: express-helmet-disabled
+    message: >-
+      helmet() is being mounted with one or more protection modules
+      disabled. Mafiking should keep the defaults on; if a module is
+      intentionally disabled, leave a comment explaining why.
+    severity: INFO
+    languages: [javascript]
+    paths:
+      include:
+        - "*.js"
+    pattern: |
+      app.use(helmet({...$OPTS}))
+
+  - id: session-cookie-secure-off
+    message: >-
+      session cookie has `secure: false`. In production, secure must be
+      true (or 'auto') to ensure the cookie is only sent over HTTPS.
+    severity: WARNING
+    languages: [javascript]
+    paths:
+      include:
+        - "*.js"
+    pattern: |
+      {secure: false, ...$REST}
+
+  - id: bcrypt-weak-cost
+    message: >-
+      bcrypt cost factor below 10 is brute-forceable. Mafiking uses 10;
+      keep that as a minimum.
+    severity: WARNING
+    languages: [javascript]
+    paths:
+      include:
+        - "*.js"
+    pattern: |
+      bcrypt.hashSync($X, $COST)
+    metavariable-pattern:
+      metavariable: $COST
+      regex: '^(?:[0-9])$'
+
+  - id: process-env-in-client-bundle
+    message: >-
+      process.env reference in a frontend file (src/*.jsx) is a likely
+      secret leak into the Vite client bundle. Use Vite's import.meta.env
+      with a VITE_ prefix, or pass the value through a fetch to a
+      server-side endpoint.
+    severity: ERROR
+    languages: [javascript]
+    paths:
+      include:
+        - "src/*.jsx"
+    pattern: process.env.$X
+
+  - id: xss-via-inner-html
+    message: >-
+      Direct innerHTML/outerHTML assignment. Use a sanitizer (xss,
+      DOMPurify) or React's textContent rendering instead.
+    severity: ERROR
+    languages: [javascript]
+    pattern-either:
+      - pattern: $X.innerHTML = $Y
+      - pattern: $X.outerHTML = $Y
+      - pattern: document.write($X)
+      - pattern: document.writeln($X)
+
+  - id: raw-sql-template-string
+    message: >-
+      String concatenation into a SQL query is a SQL injection risk. Use
+      parameterized queries with ? placeholders and db.prepare(...).
+    severity: ERROR
+    languages: [javascript]
+    pattern: |
+      db.exec(`...${$X}...`)
+    pattern-either:
+      - pattern: db.exec(`...${$X}...`)
+      - pattern: db.prepare(`...${$X}...`)
+
+  - id: json-without-content-type-check
+    message: >-
+      express.json() or express.raw() mounted with a permissive type
+      filter (e.g. '*/*') is intended for webhooks only. Confirm the
+      route is a signed, server-to-server callback.
+    severity: INFO
+    languages: [javascript]
+    pattern: |
+      express.raw({type: '*/*'})
