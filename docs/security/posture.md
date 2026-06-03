@@ -105,7 +105,7 @@
 | F-7  | CSP report-uri unmonitored | Low | Open — weekly scan needed | eng |
 | F-8  | Payment create had no rate limit | Medium | Closed (commit 7e4829d) | — |
 | F-9  | `webhooks.js` dead code | Low | Documented (F-3) | — |
-| F-10 | Id coercion in `/evaluate` | Low | Open — tracked in llm.md | eng |
+| F-10 | Id coercion in `/evaluate` | Low | Closed (2026-06-03, `parsePositiveId` + 16-assertion test) | — |
 | F-11 | EXIF strip on upload | Low | Open — sharp install pending | eng |
 | F-12 | Per-user adaptive throttle | Low | Open — tracked in llm.md | eng |
 | F-13 | ModSecurity v3 nginx connector | Medium | Open — Path A build or Path B Cloudflare | eng |

@@ -24,12 +24,15 @@ mode only), any future browser-side LLM.
 ## Findings
 
 ### F-10 [Low] `questionId` / `problemId` not coerced to `Number` before prompt interpolation
-**Status:** Documented. Tracked in Phase 2 follow-ups.
-**Location:** `routes/correction.js:979` — interpolated as
-`ID soal: ${questionId || problemId}`. A malicious JSON client could
-send `questionId: 'foo'` and have it appear unescaped in the prompt.
-The actual exposure is low because the model treats it as an opaque ID,
-but coercion is a defense-in-depth improvement.
+**Status:** Fixed. `parsePositiveId` added in `routes/correction.js` and
+applied to both `questionId` and `problemId` at the top of the
+`/evaluate` handler; the validated integer (or `null`) is the only
+value interpolated into the Gemini prompt. A 400 is returned when the
+caller supplies a non-positive-integer ID, and a separate
+`scripts/test-f10-id-coercion.js` (16 assertions) is wired into
+`npm run check` to prevent regression. Exported as
+`module.exports._correctionInternals.parsePositiveId` for direct test
+access.
 
 ### F-11 [Medium] No EXIF strip on uploaded canvas images
 **Status:** Tracked. Out of scope for Phase 2.

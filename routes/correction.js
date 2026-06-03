@@ -233,6 +233,12 @@ function detectMimeType(imageBase64, mimeType) {
   return mimeType || String(imageBase64 || '').match(/^data:([^;]+);base64,/)?.[1] || '';
 }
 
+function parsePositiveId(value) {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 && id < 1e15 ? id : null;
+}
+
 function validateImagePayload(imageBase64, mimeType) {
   if (!imageBase64) return { cleanBase64: '', normalizedMimeType: '' };
 
@@ -979,6 +985,14 @@ router.post('/evaluate', isAuthenticated, requireRegisteredUser, async (req, res
       return res.status(400).json({ error: 'Konfirmasi hasil OCR terlebih dulu sebelum koreksi.' });
     }
 
+    const safeQuestionId = parsePositiveId(questionId);
+    const safeProblemId = parsePositiveId(problemId);
+    const safeIdForPrompt = safeQuestionId || safeProblemId;
+    if ((questionId !== undefined && safeQuestionId === null)
+        || (problemId !== undefined && safeProblemId === null)) {
+      return res.status(400).json({ error: 'ID soal tidak valid.' });
+    }
+
     const sanitized = {
       questionText: sanitizeForPrompt(questionText),
       expectedAnswer: sanitizeForPrompt(expectedAnswer),
@@ -999,7 +1013,7 @@ router.post('/evaluate', isAuthenticated, requireRegisteredUser, async (req, res
       {
         text: [
           'Evaluasi jawaban siswa sesuai SOP Gemini Canvas Redline dan kembalikan JSON sesuai schema.',
-          questionId || problemId ? `ID soal: ${questionId || problemId}` : '',
+          safeIdForPrompt ? `ID soal: ${safeIdForPrompt}` : '',
           sanitized.questionText.text ? `Soal: ${sanitized.questionText.text}` : '',
           sanitized.expectedAnswer.text ? `Jawaban acuan: ${sanitized.expectedAnswer.text}` : '',
           safeTopicTags.length ? `Topik soal: ${safeTopicTags.join(', ')}` : '',
@@ -1029,7 +1043,7 @@ router.post('/evaluate', isAuthenticated, requireRegisteredUser, async (req, res
     const feedback = evaluation.fullFeedback;
 
     const db = req.app.locals.db;
-    const normalizedProblemId = Number(problemId || questionId) || null;
+    const normalizedProblemId = safeProblemId || safeQuestionId;
     db.prepare(`
       INSERT INTO correction_attempts (
         user_id, problem_id, mode, question_text, expected_answer, detected_answer_text,
@@ -1280,6 +1294,7 @@ module.exports._profileSummaryInternals = {
 module.exports._correctionInternals = {
   normalizeEvaluation,
   normalizeTranscription,
+  parsePositiveId,
   safeJsonParse,
   safeTranscriptionParse,
   stripLatexToPlain
