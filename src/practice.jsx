@@ -69,7 +69,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
 
   function dismissCanvasIntro() { setShowCanvasIntro(false); }
   function requiresLogin() {
-    return !context?.isPreview && !isAuthenticated && !isLoggedIn && !isAdmin;
+    return !context?.isPreview && !isLoggedIn && !isAdmin;
   }
   function requestLogin() {
     showToast("Masuk atau sign up dulu.", "error");
@@ -91,8 +91,8 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     });
   }
   function requiresLoginForAnswer() {
-    const requires = !context?.isPreview && !isAuthenticated && !isLoggedIn && !isAdmin;
-    console.log('[DEBUG requiresLoginForAnswer]', { isPreview: context?.isPreview, isAuthenticated, isLoggedIn, isAdmin, requires });
+    const requires = !context?.isPreview && !isLoggedIn && !isAdmin;
+    console.log('[DEBUG requiresLoginForAnswer]', { isPreview: context?.isPreview, isLoggedIn, isAdmin, requires });
     return requires;
   }
   function requestAnswerLogin() {

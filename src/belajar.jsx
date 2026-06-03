@@ -213,6 +213,18 @@ const TryOutBelajarPanel = ({ setRoute, isLoggedIn, isAdmin = false }) => {
     || activePackages.some((title) => ["Trial 7 Hari", "Bulanan", "Semester"].includes(title));
 
   const startPractice = () => {
+    if (!isLoggedIn && !isAdmin) {
+      showToast("Masuk atau sign up dulu untuk membuka soal tryout.", "error");
+      setRoute({
+        route: "lobby",
+        authMode: "login",
+        authRedirect: {
+          route: "belajar",
+          section: "Try Out"
+        }
+      });
+      return;
+    }
     setRoute({
       route: "tryout",
       tryout: {

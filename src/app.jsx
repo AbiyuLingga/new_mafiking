@@ -47,7 +47,11 @@ const AdminChunkFallback = ({ status }) => (
 );
 
 const App = () => {
-  const [route, setRoute] = React.useState("lobby");
+  const [route, setRoute] = React.useState(() => {
+    const hash = window.location.hash.replace(/^#\/?/, "");
+    const allowed = ["lobby", "belajar", "misi", "tryout", "leaderboard", "admin", "profile", "payment", "practice"];
+    return allowed.includes(hash) ? hash : "lobby";
+  });
   const [practiceContext, setPracticeContext] = React.useState(null);
   const [paymentContext, setPaymentContext] = React.useState(null);
   const [tryoutContext, setTryoutContext] = React.useState(null);
@@ -97,6 +101,8 @@ const App = () => {
   }, [refreshCurrentUser]);
 
   const navigate = React.useCallback((next) => {
+    let nextRoute = "lobby";
+    let stateObj = {};
     if (next && typeof next === "object") {
       if (next.practice) setPracticeContext(next.practice);
       if (next.tryout) setTryoutContext(next.tryout);
@@ -111,15 +117,60 @@ const App = () => {
         setAuthMode(null);
         setAuthRedirect(null);
       }
-      setRoute(next.route || "lobby");
-      return;
+      nextRoute = next.route || "lobby";
+      setRoute(nextRoute);
+      stateObj = {
+        route: nextRoute,
+        practice: next.practice,
+        tryout: next.tryout,
+        payment: next.payment,
+        belajarSection: next.section || next.belajarSection,
+        authMode: next.authMode,
+        authRedirect: next.authRedirect
+      };
+    } else {
+      setPaymentContext(null);
+      setTryoutContext(null);
+      setAuthMode(null);
+      setAuthRedirect(null);
+      if (next !== "belajar") setBelajarSection(null);
+      nextRoute = next;
+      setRoute(nextRoute);
+      stateObj = { route: nextRoute };
     }
-    setPaymentContext(null);
-    setTryoutContext(null);
-    setAuthMode(null);
-    setAuthRedirect(null);
-    if (next !== "belajar") setBelajarSection(null);
-    setRoute(next);
+    
+    if (window.location.hash !== `#${nextRoute}`) {
+      window.history.pushState(stateObj, "", `#${nextRoute}`);
+    } else {
+      window.history.replaceState(stateObj, "", `#${nextRoute}`);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const handlePopState = (event) => {
+      if (event.state) {
+        const state = event.state;
+        setRoute(state.route || "lobby");
+        setPracticeContext(state.practice || null);
+        setTryoutContext(state.tryout || null);
+        setPaymentContext(state.payment || null);
+        setBelajarSection(state.belajarSection || null);
+        setAuthMode(state.authMode || null);
+        setAuthRedirect(state.authRedirect || null);
+      } else {
+        const hash = window.location.hash.replace(/^#\/?/, "");
+        const allowed = ["lobby", "belajar", "misi", "tryout", "leaderboard", "admin", "profile", "payment", "practice"];
+        setRoute(allowed.includes(hash) ? hash : "lobby");
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    
+    const hash = window.location.hash.replace(/^#\/?/, "");
+    const allowed = ["lobby", "belajar", "misi", "tryout", "leaderboard", "admin", "profile", "payment", "practice"];
+    const initialRoute = allowed.includes(hash) ? hash : "lobby";
+    window.history.replaceState({ route: initialRoute }, "", `#${initialRoute}`);
+    
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   const requestConfirm = React.useCallback((config) => {

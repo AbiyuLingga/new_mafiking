@@ -121,6 +121,18 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
   }
 
   function startTryoutPackage(pkg) {
+    if (!isLoggedIn && !isAdmin) {
+      showToast("Masuk atau sign up dulu untuk membuka soal tryout.", "error");
+      setRoute({
+        route: "lobby",
+        authMode: "login",
+        authRedirect: {
+          route: "tryout",
+          tryout: buildTryoutSessionContextFromPackage(pkg, "tryout-confirm"),
+        }
+      });
+      return;
+    }
     setRoute({
       route: "tryout",
       tryout: buildTryoutSessionContextFromPackage(pkg, "tryout-confirm"),
