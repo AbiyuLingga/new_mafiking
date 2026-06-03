@@ -8,6 +8,7 @@ const {
   shouldUse9RouterProfile,
 } = require('../lib/ai-profile-provider');
 const { logTokenUsage } = require('../lib/log-token-usage');
+const { sanitizeForPrompt } = require('../lib/text-sanitize');
 
 const router = express.Router();
 
@@ -921,6 +922,11 @@ router.post('/transcribe', isAuthenticated, requireRegisteredUser, async (req, r
     const { cleanBase64, normalizedMimeType } = validateImagePayload(imageBase64, mimeType);
     if (!cleanBase64) return res.status(400).json({ error: 'imageBase64 wajib dikirim.' });
 
+    const sanitizedQuestion = sanitizeForPrompt(questionText);
+    if (sanitizedQuestion.truncated) {
+      console.warn('[correction] transcribe: questionText truncated from', sanitizedQuestion.originalLength, 'to', sanitizedQuestion.sanitizedLength, 'chars');
+    }
+
     const result = await callGeminiWithFallback({
       maxOutputTokens: TRANSCRIBE_MAX_OUTPUT_TOKENS,
       models: getGeminiModels(TRANSCRIBE_MODELS),
@@ -931,7 +937,7 @@ router.post('/transcribe', isAuthenticated, requireRegisteredUser, async (req, r
         {
           text: [
             'Transkripsikan isi gambar jawaban berikut sesuai SOP.',
-            questionText ? `Soal: ${questionText}` : '',
+            sanitizedQuestion.text ? `Soal: ${sanitizedQuestion.text}` : '',
             'Output wajib LaTeX. Teks biasa wajib memakai \\text{...}.'
           ].filter(Boolean).join('\n\n')
         },
@@ -972,16 +978,35 @@ router.post('/evaluate', isAuthenticated, requireRegisteredUser, async (req, res
     if (cleanBase64 && !confirmedLatex) {
       return res.status(400).json({ error: 'Konfirmasi hasil OCR terlebih dulu sebelum koreksi.' });
     }
+
+    const sanitized = {
+      questionText: sanitizeForPrompt(questionText),
+      expectedAnswer: sanitizeForPrompt(expectedAnswer),
+      confirmedAnswerLatex: sanitizeForPrompt(confirmedAnswerLatex),
+      text: sanitizeForPrompt(text),
+    };
+    const truncatedFields = Object.entries(sanitized)
+      .filter(([, v]) => v.truncated)
+      .map(([k]) => k);
+    if (truncatedFields.length) {
+      console.warn('[correction] evaluate: prompt fields truncated:', truncatedFields.join(', '));
+    }
+    const safeTopicTags = Array.isArray(topicTags)
+      ? topicTags.filter((t) => typeof t === 'string' && t.length > 0).map((t) => sanitizeForPrompt(t, { maxChars: 64 }).text)
+      : [];
+
     const parts = [
       {
         text: [
           'Evaluasi jawaban siswa sesuai SOP Gemini Canvas Redline dan kembalikan JSON sesuai schema.',
           questionId || problemId ? `ID soal: ${questionId || problemId}` : '',
-          questionText ? `Soal: ${questionText}` : '',
-          expectedAnswer ? `Jawaban acuan: ${expectedAnswer}` : '',
-          Array.isArray(topicTags) && topicTags.length ? `Topik soal: ${topicTags.join(', ')}` : '',
-          confirmedLatex ? `confirmedAnswerLatex:\n${confirmedLatex}` : '',
-          text && text !== confirmedLatex ? `Teks jawaban siswa:\n${text}` : '',
+          sanitized.questionText.text ? `Soal: ${sanitized.questionText.text}` : '',
+          sanitized.expectedAnswer.text ? `Jawaban acuan: ${sanitized.expectedAnswer.text}` : '',
+          safeTopicTags.length ? `Topik soal: ${safeTopicTags.join(', ')}` : '',
+          sanitized.confirmedAnswerLatex.text ? `confirmedAnswerLatex:\n${sanitized.confirmedAnswerLatex.text}` : '',
+          sanitized.text.text && sanitized.text.text !== sanitized.confirmedAnswerLatex.text
+            ? `Teks jawaban siswa:\n${sanitized.text.text}`
+            : '',
           cleanBase64 ? 'Gambar canvas dilampirkan sebagai bukti visual.' : ''
         ].filter(Boolean).join('\n\n')
       }
