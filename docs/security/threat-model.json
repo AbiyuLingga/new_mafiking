@@ -1,0 +1,565 @@
+{
+  "version": "2.0.0",
+  "summary": {
+    "title": "Mafiking — Production Threat Model",
+    "owner": "Mafiking engineering",
+    "reviewer": "Security (Anthropic-Cybersecurity-Skills integration)",
+    "description": "STRIDE-based DFD for the production deployment of Mafiking on Nevacloud VPS. Captures the trust boundaries, assets, and mitigations documented across the security docs in this repository."
+  },
+  "detail": {
+    "diagram": {
+      "title": "Mafiking production",
+      "description": "Browser → Cloudflare DNS (optional) → Nevacloud VPS (nginx + ModSecurity + node) → SQLite / Clerk / Duitku / Gemini / Gemma / DeepSeek / Backblaze B2.",
+      "shapes": [
+        {
+          "id": "user",
+          "name": "End user (browser)",
+          "type": "Actor",
+          "description": "Student or guest. Owns session cookies; can be a paying customer.",
+          "outOfScope": false,
+          "trustLevel": 0,
+          "hasOpenThreats": true,
+          "isTrustBoundary": false
+        },
+        {
+          "id": "admin",
+          "name": "Admin (browser)",
+          "type": "Actor",
+          "description": "Has Mafiking role = 'admin'. Can access /SOP-* docs, /api/admin/*, /api/import/*.",
+          "outOfScope": false,
+          "trustLevel": 50,
+          "hasOpenThreats": true,
+          "isTrustBoundary": false
+        },
+        {
+          "id": "clerk_browser",
+          "name": "Clerk SDK (browser)",
+          "type": "Process",
+          "description": "Third-party Clerk auth widget loaded from clerk.mafiking.com subdomains via Clerk publishable key.",
+          "outOfScope": false,
+          "trustLevel": 10,
+          "hasOpenThreats": false,
+          "isTrustBoundary": true
+        },
+        {
+          "id": "edge_dns",
+          "name": "DNS / edge (Cloudflare or registrar)",
+          "type": "Process",
+          "description": "Resolves mafiking.com to 202.155.94.210. Optional Cloudflare proxy in front for L7 DDoS.",
+          "outOfScope": true,
+          "trustLevel": 0,
+          "hasOpenThreats": false,
+          "isTrustBoundary": true
+        },
+        {
+          "id": "vps_edge",
+          "name": "VPS — nginx + ModSecurity",
+          "type": "Process",
+          "description": "Edge proxy. TLS 1.2+1.3, HSTS preload, ModSecurity CRS 3.3.2 detection-only. Reverse proxies to node on 127.0.0.1:3000.",
+          "outOfScope": false,
+          "trustLevel": 90,
+          "hasOpenThreats": true,
+          "isTrustBoundary": true
+        },
+        {
+          "id": "vps_node",
+          "name": "VPS — Node app (port 3000)",
+          "type": "Process",
+          "description": "Express + helmet + csrf-csrf + express-rate-limit. 93 routes. Listens only on 127.0.0.1:3000.",
+          "outOfScope": false,
+          "trustLevel": 90,
+          "hasOpenThreats": true,
+          "isTrustBoundary": true
+        },
+        {
+          "id": "vps_sqlite",
+          "name": "SQLite database",
+          "type": "Datastore",
+          "description": "/opt/mafiking/data/mafiking.sqlite, mode 0700, owned by mafiking service user. Backed up daily to B2 via sqlite3 .backup.",
+          "outOfScope": false,
+          "trustLevel": 95,
+          "hasOpenThreats": true,
+          "isTrustBoundary": false
+        },
+        {
+          "id": "clerk_api",
+          "name": "Clerk API (clerk.mafiking.com)",
+          "type": "External",
+          "description": "Identity provider. Issues session JWTs, sends svix webhooks for /api/webhooks/clerk.",
+          "outOfScope": true,
+          "trustLevel": 10,
+          "hasOpenThreats": false,
+          "isTrustBoundary": true
+        },
+        {
+          "id": "duitku",
+          "name": "Duitku payment gateway",
+          "type": "External",
+          "description": "Indonesian payment aggregator. POSTs callback to /api/payment/callback with HMAC signature.",
+          "outOfScope": true,
+          "trustLevel": 10,
+          "hasOpenThreats": false,
+          "isTrustBoundary": true
+        },
+        {
+          "id": "gemini",
+          "name": "Google Gemini API",
+          "type": "External",
+          "description": "Image / math OCR for /api/correction. Sends sanitized user text only.",
+          "outOfScope": true,
+          "trustLevel": 5,
+          "hasOpenThreats": true,
+          "isTrustBoundary": true
+        },
+        {
+          "id": "gemma",
+          "name": "Gemma 4 31B (profile provider)",
+          "type": "External",
+          "description": "Adaptive profile generator. Server-side prompts only — no user data crosses this boundary.",
+          "outOfScope": true,
+          "trustLevel": 5,
+          "hasOpenThreats": false,
+          "isTrustBoundary": true
+        },
+        {
+          "id": "deepseek",
+          "name": "DeepSeek (admin import)",
+          "type": "External",
+          "description": "Question draft generator for admin-only /api/import/deepseek. Server-side prompts.",
+          "outOfScope": true,
+          "trustLevel": 5,
+          "hasOpenThreats": false,
+          "isTrustBoundary": true
+        },
+        {
+          "id": "b2",
+          "name": "Backblaze B2 (encrypted)",
+          "type": "Datastore",
+          "description": "Offsite backup. rclone crypt over b2:mafiking-backups. 30-day retention.",
+          "outOfScope": true,
+          "trustLevel": 0,
+          "hasOpenThreats": false,
+          "isTrustBoundary": true
+        }
+      ],
+      "flows": [
+        {
+          "id": "f_user_browser",
+          "name": "User HTTPS request",
+          "sourceId": "user",
+          "destinationId": "vps_edge",
+          "description": "GET/POST/PUT/DELETE /api/* with __Host-mafiking.sid and __Host-mafiking.csrf-token cookies.",
+          "order": 1,
+          "reason": "User traffic",
+          "hasOpenThreats": true
+        },
+        {
+          "id": "f_admin_browser",
+          "name": "Admin HTTPS request",
+          "sourceId": "admin",
+          "destinationId": "vps_edge",
+          "description": "Same as user, but with admin role on session.",
+          "order": 2,
+          "reason": "Admin traffic",
+          "hasOpenThreats": true
+        },
+        {
+          "id": "f_clerk_browser_app",
+          "name": "Clerk widget load (browser)",
+          "sourceId": "clerk_browser",
+          "destinationId": "user",
+          "description": "Clerk JS loaded from clerk.mafiking.com subdomain. Publishable key derived from VITE_CLERK_PUBLISHABLE_KEY.",
+          "order": 3,
+          "reason": "Auth UX",
+          "hasOpenThreats": false
+        },
+        {
+          "id": "f_edge_node",
+          "name": "Reverse proxy (127.0.0.1:3000)",
+          "sourceId": "vps_edge",
+          "destinationId": "vps_node",
+          "description": "Proxies to node. Adds X-Real-IP, X-Forwarded-Proto, X-Forwarded-For.",
+          "order": 4,
+          "reason": "Same host, no TLS",
+          "hasOpenThreats": true
+        },
+        {
+          "id": "f_node_sqlite",
+          "name": "SQLite read/write",
+          "sourceId": "vps_node",
+          "destinationId": "vps_sqlite",
+          "description": "better-sqlite3. WAL mode. BOLA check: WHERE user_id = req.session.userId.",
+          "order": 5,
+          "reason": "Persistence",
+          "hasOpenThreats": true
+        },
+        {
+          "id": "f_node_clerk",
+          "name": "Clerk API call",
+          "sourceId": "vps_node",
+          "destinationId": "clerk_api",
+          "description": "Server uses CLERK_SECRET_KEY. Webhook receiver at /api/webhooks/clerk verifies svix signature.",
+          "order": 6,
+          "reason": "Identity",
+          "hasOpenThreats": true
+        },
+        {
+          "id": "f_user_duitku",
+          "name": "Duitku payment create",
+          "sourceId": "user",
+          "destinationId": "duitku",
+          "description": "Browser redirected to Duitku hosted page. HMAC-signed request from server side.",
+          "order": 7,
+          "reason": "Payment",
+          "hasOpenThreats": true
+        },
+        {
+          "id": "f_duitku_node",
+          "name": "Duitku callback",
+          "sourceId": "duitku",
+          "destinationId": "vps_node",
+          "description": "Server-to-server POST to /api/payment/callback with HMAC signature. CSRF exempt, Idempotency-Key required.",
+          "order": 8,
+          "reason": "Payment confirmation",
+          "hasOpenThreats": true
+        },
+        {
+          "id": "f_node_gemini",
+          "name": "Gemini OCR / evaluate",
+          "sourceId": "vps_node",
+          "destinationId": "gemini",
+          "description": "User text sanitized via lib/text-sanitize.js before send. LaTeX preserved, control chars stripped.",
+          "order": 9,
+          "reason": "AI processing",
+          "hasOpenThreats": true
+        },
+        {
+          "id": "f_node_gemma",
+          "name": "Gemma profile call",
+          "sourceId": "vps_node",
+          "destinationId": "gemma",
+          "description": "Server-side prompt only, no user input.",
+          "order": 10,
+          "reason": "Profile gen",
+          "hasOpenThreats": false
+        },
+        {
+          "id": "f_admin_deepseek",
+          "name": "DeepSeek import",
+          "sourceId": "admin",
+          "destinationId": "deepseek",
+          "description": "Admin-only /api/import/deepseek. Server-side prompt; admin uploads document.",
+          "order": 11,
+          "reason": "Question import",
+          "hasOpenThreats": true
+        },
+        {
+          "id": "f_node_b2",
+          "name": "Encrypted backup",
+          "sourceId": "vps_node",
+          "destinationId": "b2",
+          "description": "Daily 03:00 UTC. rclone crypt over b2:mafiking-backups. Daily snapshot via sqlite3 .backup + rsync.",
+          "order": 12,
+          "reason": "Resilience",
+          "hasOpenThreats": true
+        }
+      ]
+    },
+    "threats": [
+      {
+        "id": "T-001",
+        "title": "XSS via unsanitized innerHTML (profile page)",
+        "type": ["Tampering", "Information Disclosure"],
+        "status": "Mitigated",
+        "description": "User-supplied text flowed into profile.jsx via innerHTML. Two specific instances: renderRecommendationQuestionHTML and an h4 heading. Both were assigning to innerHTML with no escaping.",
+        "likelihood": "High",
+        "impact": "High",
+        "risk": "High",
+        "mitigations": [
+          "src/profile.jsx:160 and :586 — both now use window.escapeHtml",
+          "scan-xss-patterns.js enforces escapeHtml on every innerHTML assign",
+          "helmet CSP blocks inline event handlers"
+        ]
+      },
+      {
+        "id": "T-002",
+        "title": "BOLA — user can read another user's data",
+        "type": ["Information Disclosure"],
+        "status": "Verified",
+        "description": "User-scoped routes must filter by req.session.userId. Audited via api-inventory.md.",
+        "likelihood": "Medium",
+        "impact": "High",
+        "risk": "Medium",
+        "mitigations": [
+          "api-inventory.md — every user-scoped route shows WHERE clause",
+          "No app-level ownership leak found in audit"
+        ]
+      },
+      {
+        "id": "T-003",
+        "title": "CSRF on state-changing endpoints",
+        "type": ["Tampering", "Repudiation"],
+        "status": "Mitigated",
+        "description": "All 25 state-changing routes verified to require csrf-csrf double-submit token. /api/webhooks/clerk, /api/payment/callback, /api/csp-report[/], /api/performance/vitals are exempt by design.",
+        "likelihood": "Medium",
+        "impact": "High",
+        "risk": "Medium",
+        "mitigations": [
+          "csrf-csrf@^4.0.3 with double-submit + HMAC",
+          "__Host-mafiking.csrf-token cookie in prod",
+          "request-guard.js Origin/Sec-Fetch-Site check"
+        ]
+      },
+      {
+        "id": "T-004",
+        "title": "Brute-force login",
+        "type": ["Spoofing"],
+        "status": "Mitigated",
+        "description": "Repeated login attempts against /api/auth/login.",
+        "likelihood": "High",
+        "impact": "Medium",
+        "risk": "Medium",
+        "mitigations": [
+          "express-rate-limit: 15 / 15 min per IP",
+          "fail2ban: mafiking-auth jail 8 fails / 10 min -> 24h ban",
+          "bcrypt cost 12"
+        ]
+      },
+      {
+        "id": "T-005",
+        "title": "Payment callback spoofing",
+        "type": ["Tampering"],
+        "status": "Mitigated",
+        "description": "Duitku callback must be HMAC-verified; replays blocked by Idempotency-Key.",
+        "likelihood": "Low",
+        "impact": "Critical",
+        "risk": "Medium",
+        "mitigations": [
+          "HMAC SHA-256 of (merchantCode + amount + merchantOrderId + apiKey)",
+          "Idempotency-Key header required for state mutation",
+          "paymentLimiter: 8 / 60s"
+        ]
+      },
+      {
+        "id": "T-006",
+        "title": "LLM prompt injection via user-submitted text",
+        "type": ["Information Disclosure", "Tampering"],
+        "status": "Mitigated",
+        "description": "User text sent to Gemini for OCR/evaluation could contain prompt injection.",
+        "likelihood": "Medium",
+        "impact": "Medium",
+        "risk": "Medium",
+        "mitigations": [
+          "lib/text-sanitize.js — 4000 char cap, control/bidi/zero-width strip, LaTeX preserved",
+          "Applied to all Gemini-bound fields in routes/correction.js"
+        ]
+      },
+      {
+        "id": "T-007",
+        "title": "Webhook spoofing (Clerk)",
+        "type": ["Spoofing", "Tampering"],
+        "status": "Mitigated",
+        "description": "Forged webhooks impersonating Clerk could elevate session roles.",
+        "likelihood": "Low",
+        "impact": "High",
+        "risk": "Medium",
+        "mitigations": [
+          "svix signature verification on /api/webhooks/clerk",
+          "request body stored raw, then verified"
+        ]
+      },
+      {
+        "id": "T-008",
+        "title": "Account takeover via session fixation",
+        "type": ["Spoofing"],
+        "status": "Mitigated",
+        "description": "Session ID rotates on login. __Host- cookie scoped to host only.",
+        "likelihood": "Low",
+        "impact": "High",
+        "risk": "Medium",
+        "mitigations": [
+          "req.session.regenerate on login",
+          "__Host-mafiking.sid cookie in prod (no Domain, Path=/, Secure)",
+          "HttpOnly, SameSite=Lax"
+        ]
+      },
+      {
+        "id": "T-009",
+        "title": "SQLite tampering via filesystem",
+        "type": ["Tampering", "Repudiation"],
+        "status": "Mitigated",
+        "description": "Compromised process could corrupt SQLite. Resolved by mode 0700 + daily sqlite3 .backup to B2.",
+        "likelihood": "Low",
+        "impact": "Critical",
+        "risk": "Medium",
+        "mitigations": [
+          "mafiking.sqlite mode 0700 owned by service user",
+          "Daily offsite encrypted backup",
+          "WAL mode in better-sqlite3"
+        ]
+      },
+      {
+        "id": "T-010",
+        "title": "Exposed node debug port or stack trace",
+        "type": ["Information Disclosure"],
+        "status": "Mitigated",
+        "description": "Stack traces could leak file paths and internals.",
+        "likelihood": "Low",
+        "impact": "Low",
+        "risk": "Low",
+        "mitigations": [
+          "Helmet + no stack traces in production (NODE_ENV=production)",
+          "express behind nginx — proxy_intercept_errors on"
+        ]
+      },
+      {
+        "id": "T-011",
+        "title": "L7 DDoS",
+        "type": ["Denial of Service"],
+        "status": "Partially mitigated",
+        "description": "Application-layer flood from a small botnet.",
+        "likelihood": "Medium",
+        "impact": "Medium",
+        "risk": "Medium",
+        "mitigations": [
+          "express-rate-limit per route",
+          "fail2ban nginx-http-flood jail (200/min ban 30m)",
+          "ModSecurity CRS anomaly scoring (detection-only)",
+          "Optional Cloudflare in front (not yet enabled)"
+        ]
+      },
+      {
+        "id": "T-012",
+        "title": "Privilege escalation via /api/admin/*",
+        "type": ["Elevation of Privilege"],
+        "status": "Verified",
+        "description": "Audit confirms middleware/admin.js checks req.session.role === 'admin' on every admin route.",
+        "likelihood": "Low",
+        "impact": "Critical",
+        "risk": "Medium",
+        "mitigations": [
+          "middleware/admin.js + middleware/auth.js on every admin route",
+          "api-inventory.md: 40+ admin routes catalogued with role check"
+        ]
+      },
+      {
+        "id": "T-013",
+        "title": "CSP bypass via Tailwind CDN",
+        "type": ["Tampering"],
+        "status": "Accepted risk",
+        "description": "Tailwind CDN requires 'unsafe-inline' in style-src. Migration to a build step would remove this.",
+        "likelihood": "Low",
+        "impact": "Low",
+        "risk": "Low",
+        "mitigations": [
+          "reportOnly: true with 7-day observation window",
+          "Nonces are still used for inline event handlers"
+        ]
+      },
+      {
+        "id": "T-014",
+        "title": "VPS compromise via SSH",
+        "type": ["Spoofing", "Tampering"],
+        "status": "Mitigated",
+        "description": "Initial Ubuntu 22.04 image allows PermitRootLogin + PasswordAuthentication.",
+        "likelihood": "Medium",
+        "impact": "Critical",
+        "risk": "High",
+        "mitigations": [
+          "ops/sshd-hardening.conf disables root + password, allows key-only",
+          "ops/provision-deploy-user.sh creates non-root deploy user",
+          "fail2ban sshd jail 4 fails / 10 min -> 24h ban"
+        ]
+      },
+      {
+        "id": "T-015",
+        "title": "Supply-chain attack via npm dependency",
+        "type": ["Tampering"],
+        "status": "Mitigated",
+        "description": "A typosquatted or compromised npm package could exfiltrate secrets.",
+        "likelihood": "Low",
+        "impact": "High",
+        "risk": "Medium",
+        "mitigations": [
+          "scan-npm-typosquats.js (Damerau-Levenshtein against 130 popular names)",
+          "GitHub Actions: npm-audit, CycloneDX SBOM, TruffleHog on every commit",
+          "package-lock.json committed; ci uses npm ci"
+        ]
+      },
+      {
+        "id": "T-016",
+        "title": "Data exfiltration via DAST/crawler probing",
+        "type": ["Information Disclosure", "Repudiation"],
+        "status": "Mitigated",
+        "description": "Probing for /api/admin, /api/users, /api/payment secrets.",
+        "likelihood": "High",
+        "impact": "Medium",
+        "risk": "Medium",
+        "mitigations": [
+          "ModSecurity rule id:10010 blocks /lib /routes /scripts /ops paths",
+          "ModSecurity rule id:10011 blocks scanner User-Agents",
+          "fail2ban nginx-botsearch jail"
+        ]
+      },
+      {
+        "id": "T-017",
+        "title": "Backup exfiltration",
+        "type": ["Information Disclosure"],
+        "status": "Mitigated",
+        "description": "Compromised credentials to rclone could leak encrypted backups.",
+        "likelihood": "Low",
+        "impact": "High",
+        "risk": "Medium",
+        "mitigations": [
+          "rclone crypt: client-side AES-256 with separate crypt password",
+          "B2 key in /root/.config/rclone/rclone.conf, mode 0600",
+          "90-day rotation per docs/security/secrets.md"
+        ]
+      },
+      {
+        "id": "T-018",
+        "title": "LLM data exfiltration via crafted image",
+        "type": ["Information Disclosure"],
+        "status": "Open",
+        "description": "Gemini OCR could pull text from images that includes other users' data; F-11 EXIF strip on upload is not yet implemented.",
+        "likelihood": "Low",
+        "impact": "Medium",
+        "risk": "Low",
+        "mitigations": [
+          "Sanitization runs server-side only",
+          "F-11 deferred to Phase 4 follow-up — would add sharp EXIF strip"
+        ]
+      },
+      {
+        "id": "T-019",
+        "title": "Replay attack on payment callback",
+        "type": ["Tampering"],
+        "status": "Mitigated",
+        "description": "Replayed Duitku callback could double-credit a payment.",
+        "likelihood": "Low",
+        "impact": "High",
+        "risk": "Medium",
+        "mitigations": [
+          "Idempotency-Key required",
+          "merchantOrderId uniqueness constraint in SQLite",
+          "paymentLimiter on /api/payment/create"
+        ]
+      },
+      {
+        "id": "T-020",
+        "title": "Misconfigured firewall rule",
+        "type": ["Information Disclosure", "Tampering"],
+        "status": "Mitigated",
+        "description": "accidentally opening 3000/tcp or 22/tcp to all.",
+        "likelihood": "Low",
+        "impact": "High",
+        "risk": "Medium",
+        "mitigations": [
+          "ufw default deny incoming, allow outgoing",
+          "Explicit allow 22, 80, 443 only",
+          "Deny 3000/tcp explicitly"
+        ]
+      }
+    ]
+  }
+}

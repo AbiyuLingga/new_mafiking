@@ -1,0 +1,54 @@
+# /etc/fail2ban/jail.d/mafiking.local
+# Mafiking-tuned fail2ban profile. Includes the standard SSH jail plus
+# three application-layer jails that read from nginx access log.
+#
+# ASVS V11.1, V14.1 — brute-force protection.
+
+[DEFAULT]
+# Use systemd for sshd, raw file for nginx.
+backend = systemd
+destemail = root@localhost
+sender = fail2ban@mafiking.com
+mta = sendmail
+bantime  = 1h
+findtime = 10m
+maxretry = 5
+
+# --- SSH ---
+[sshd]
+enabled = true
+port    = ssh
+filter  = sshd
+logpath = %(sshd_log)s
+maxretry = 4
+bantime  = 24h
+
+# --- 404 / 403 scan (catches dirbuster/gobuster) ---
+[nginx-botsearch]
+enabled  = true
+port     = http,https
+filter   = nginx-botsearch
+logpath  = /var/log/nginx/access.log
+maxretry = 10
+findtime = 5m
+bantime  = 24h
+
+# --- Auth failures against /api/auth/* (login brute force) ---
+[mafiking-auth]
+enabled  = true
+port     = http,https
+filter   = mafiking-auth
+logpath  = /var/log/nginx/access.log
+maxretry = 8
+findtime = 10m
+bantime  = 24h
+
+# --- HTTP request flood (defense-in-depth alongside express-rate-limit) ---
+[nginx-http-flood]
+enabled  = true
+port     = http,https
+filter   = nginx-http-flood
+logpath  = /var/log/nginx/access.log
+maxretry = 200
+findtime = 60s
+bantime  = 30m
