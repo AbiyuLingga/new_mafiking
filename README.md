@@ -392,6 +392,48 @@ Most API routes require either a local session or a verified Clerk Bearer token.
 | `GET` | `/api/payment/status/:merchantOrderId` | Check payment status. |
 | `POST` | `/api/payment/callback` | Duitku server callback. |
 
+## Security Posture
+
+Mafiking targets **OWASP ASVS Level 2** on a Nevacloud VPS at
+`202.155.94.210` (Ubuntu 22.04, domain `mafiking.com`). The current
+posture is the result of Phases 0–4 of a structured hardening roadmap:
+
+- **Application layer:** `helmet` with a tight CSP (no broad `https:`,
+  Clerk-derived allowlist, `frame-ancestors 'none'`, `object-src 'none'`),
+  `csrf-csrf` double-submit CSRF with `__Host-mafiking.csrf-token` in
+  production, custom SQLite session store with `__Host-mafiking.sid`
+  cookies, NDJSON audit log, and `express-rate-limit` on auth,
+  correction, performance, and payment endpoints.
+- **Frontend scan:** `scripts/scan-xss-patterns.js` (8 hits, all routed
+  through known-safe helpers), `scripts/discover-shadow-routes.js`
+  (93/93 reconciled), `scripts/scan-npm-typosquats.js` (28 deps clean).
+- **CI:** `.github/workflows/security.yml` (npm-audit, CycloneDX SBOM,
+  semgrep, TruffleHog, contract tests) on push to `main`, every PR, and
+  weekly Sunday 02:00 UTC. `.github/workflows/dast.yml` runs a weekly
+  ZAP baseline scan.
+- **VPS / edge:** TLS 1.2/1.3 only, HSTS preload (`max-age=63072000;
+  includeSubDomains; preload`), per-route nginx rate-limit zones, 4
+  fail2ban jails, 29 auditd rules, CIS Ubuntu 22.04 L1 sysctl + PAM,
+  app running as the `mafiking` system user at `/opt/mafiking`.
+
+Canonical security docs:
+
+- `docs/security/baseline.md` — ASVS L2 controls, including the
+  Phase 4 VPS section.
+- `docs/security/threat-model.json` — OWASP Threat Dragon 2.0 DFD
+  (13 nodes, 12 flows, 20 STRIDE threats).
+- `docs/security/audit-2026-06.md` — OWASP API Top 10 review.
+- `docs/security/posture.md` — monthly snapshot (last verified
+  2026-06-03).
+- `docs/security/phase4-summary-2026-06-03.txt` — VPS post-state.
+- `docs/security/incident-response.md` — NIST 800-61r2-aligned runbook.
+- `docs/security/secrets.md` — rotation runbook.
+
+Open items (tracked in `posture.md` § 8): ModSecurity v3 connector
+(deferred — Path A build or Path B Cloudflare), sshd drop-in reload
+(waits for `mafiking-deploy` pubkey), B2 rclone config (waits for
+owner), F-10 / F-11 / F-12 LLM-side follow-ups.
+
 ## Development Notes
 
 - Preserve the copied UI unless a task explicitly asks for UI changes.

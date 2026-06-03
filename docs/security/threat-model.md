@@ -1,9 +1,18 @@
-# Mafiking threat model (stub)
+# Mafiking threat model
 
-Initial STRIDE sketch to anchor the hardening roadmap. A full OWASP Threat
-Dragon DFD is produced in Phase 4 (`threat-model.json` + `threat-model.png`).
-This stub is the planning tool we use to triage findings during Phase 1 and
-to spot gaps in the controls listed in `baseline.md`.
+> **The canonical artifact is `docs/security/threat-model.json`** — an
+> OWASP Threat Dragon 2.0 DFD with 13 trust-boundary nodes, 12 data flows,
+> and 20 STRIDE threats. It supersedes the planning stub below.
+> Open the JSON in
+> [Threat Dragon](https://owasp.org/www-project-threat-dragon/) to view
+> the diagram, or read the JSON directly to enumerate the threats.
+>
+> This document now only serves as a narrative companion: it lists
+> actors, trust boundaries, and the top STRIDE threats in priority order.
+> Status, mitigation, and verification details for each threat are
+> tracked inside `threat-model.json`.
+
+## Actors and trust boundaries
 
 ## Actors and trust boundaries
 
@@ -24,61 +33,84 @@ candidate threat source.
 
 ## Top STRIDE threats (initial, ordered by risk)
 
-1. **Spoofing — session theft via stored XSS**
+1. **Spoofing — session theft via stored XSS** *(Mitigated)*
    The static-Babel architecture keeps `'unsafe-inline'` in the CSP, which
    means a reflected or stored XSS would let an attacker read
    `__Host-mafiking.sid` and impersonate the user.
    *Control:* tightened CSP allowlist (no broad `https:`), report-only mode,
-   audit log on auth events. *Follow-up:* nonce migration in a separate plan;
-   Phase 1 XSS scan.
+   audit log on auth events, XSS-pattern scanner wired into `npm run check`.
+   *Verification:* `scripts/scan-xss-patterns.js` (0 new). F-1, F-2 fixed in
+   commit `1092c92`. *Follow-up:* nonce migration tracked in `posture.md`.
 
-2. **Tampering — payment callback spoofing**
+2. **Tampering — payment callback spoofing** *(Mitigated)*
    An attacker could try to forge a Duitku callback to grant paid access
    without paying.
    *Control:* Duitku callback is MD5-signed against `merchantCode + amount +
    merchantOrderId + API_KEY`; the handler returns 401 on signature mismatch.
-   CSRF exempt. *Verification:* Phase 1 contract test.
+   CSRF exempt. *Verification:* `routes/payment.js` covered by Phase 1
+   contract tests.
 
-3. **Repudiation — admin actions without an audit trail**
+3. **Repudiation — admin actions without an audit trail** *(Partial)*
    Admin resets, role changes, and content edits need a tamper-evident log
    to be useful in an investigation.
-   *Control:* NDJSON audit log to `logs/audit.log`. *Known gap:* the log is
-   not yet HMAC-chained. *Follow-up:* Phase 4 posture doc.
+   *Control:* NDJSON audit log to `logs/audit.log`, daily cron analyzer.
+   *Known gap:* the log is not yet HMAC-chained. *Follow-up:* tracked in
+   `posture.md` as a post-L2 hardening item.
 
-4. **Information disclosure — Gemini API keys leaking to the client bundle**
+4. **Information disclosure — Gemini API keys leaking to the client bundle** *(Mitigated)*
    A misconfiguration in `routes/correction.js` or Vite could ship
    `GEMINI_KEY_*` to the browser.
    *Control:* env hygiene, no `process.env` interpolation in `src/*.jsx`,
-   Vite only exposes `VITE_*` prefixed variables. *Verification:* Phase 1.5
-   sensitive-data scan.
+   Vite only exposes `VITE_*` prefixed variables, TruffleHog job in CI.
+   *Verification:* Phase 1.5 sensitive-data scan.
 
-5. **Denial of service — expensive Gemini calls on the correction path**
+5. **Denial of service — expensive Gemini calls on the correction path** *(Mitigated, partial)*
    `POST /api/correction/evaluate` triggers OCR and LLM calls per request.
    An attacker could amplify this into a cost attack.
-   *Control:* `express-rate-limit` on the route, per-user token bucket
-   (Phase 1.6 hardening), CSP report endpoint throttling. *Follow-up:* per-user
-   adaptive throttle.
+   *Control:* `express-rate-limit` (`correctionLimiter` 12/60s, nginx
+   `mafiking_correction` 20r/m), CSP report endpoint throttling, payment
+   limiter 8/60s. *Follow-up:* per-user adaptive throttle (F-12).
 
-6. **Elevation of privilege — BOLA on user-owned resources**
+6. **Elevation of privilege — BOLA on user-owned resources** *(Mitigated)*
    Routes that take `:id` (e.g. `/api/progress/:id`, `/api/correction/:id`)
    could read or mutate another user's data if ownership is not checked.
-   *Control:* `req.session.userId` ownership check is intended everywhere
-   but not yet audited. *Verification:* Phase 1.4 BOLA scan — this is the
-   highest-priority follow-up.
+   *Control:* `req.session.userId` ownership check is consistent across
+   user-scoped routes; admin routes gated by `isAdmin`.
+   *Verification:* Phase 1.4 BOLA scan — no findings (see
+   `audit-2026-06.md`).
 
-7. **Tampering (AI) — prompt injection via canvas image or OCR text**
+7. **Tampering (AI) — prompt injection via canvas image or OCR text** *(Mitigated)*
    The Gemini / Gemma calls in `routes/correction.js` and
    `lib/ai-profile-provider.js` accept user-supplied content (canvas
    drawings, image uploads). A crafted image could carry instructions that
    the model follows, leaking the system prompt or producing unsafe output.
-   *Control:* server-side input sanitization (length cap, control-char
-   strip), strict system prompt. *Verification:* Phase 2 LLM inventory.
+   *Control:* `lib/text-sanitize.js` (4000-char cap, control-char strip,
+   LaTeX-preserving) applied at `routes/correction.js:920` and `:954`;
+   strict system prompt; per-route LLM rate limits. *Verification:* Phase 2
+   LLM inventory (`docs/security/llm.md`); F-10, F-11, F-12 tracked.
 
-8. **Spoofing — webhook replay**
+8. **Spoofing — webhook replay** *(Mitigated)*
    An attacker who captures a valid Clerk or Duitku webhook could replay it.
    *Control:* svix timestamp window for Clerk; Duitku's `merchantOrderId`
-   uniqueness on the Mafiking side. *Verification:* Phase 1.7 SSRF / replay
-   review.
+   uniqueness on the Mafiking side. *Verification:* Phase 1.7 SSRF /
+   replay review.
+
+9. **Edge DoS / brute force on the Nevacloud VPS** *(Mitigated)*
+   Nevacloud does not provide managed DDoS; the only edge is nginx +
+   fail2ban + ufw.
+   *Control:* UFW default-deny in; ports 22/80/443 open; fail2ban 4 jails
+   (`sshd`, `nginx-botsearch`, `nginx-http-flood`, `mafiking-auth`);
+   per-route nginx rate-limit zones. *Follow-up:* ModSecurity v3 (Path A
+   source build or Path B Cloudflare-fronted) and HSTS preload submission
+   to hstspreload.org.
+
+10. **Host compromise via SSH key sprawl** *(Partial)*
+    Nevacloud VPS exposes SSH to the public internet; only root key
+    access is currently in use.
+    *Control:* sshd drop-in installed (PermitRootLogin no, PasswordAuth
+    no, modern Kex/Ciphers/MACs, AllowGroups ssh-users) but NOT reloaded.
+    *Follow-up:* `ops/provision-deploy-user.sh` to create `mafiking-deploy`
+    with a real pubkey, then `systemctl reload ssh`.
 
 ## Mitigations NOT in scope (out-of-band risks)
 
@@ -88,10 +120,11 @@ candidate threat source.
 - Insider threat: requires a separate HR / access-control layer, not in
   this scope.
 
-## What this stub is for
+## What this document is for
 
-- Triage Phase 1 findings against the top 8 threats.
+- Triage findings against the top STRIDE threats.
 - Pre-validate the controls listed in `baseline.md`.
-- Track the three open gaps (HMAC audit chain, BOLA audit, LLM input
-  sanitization) into Phase 1, 2, and 4 work.
-- Be replaced by the full Threat Dragon DFD in Phase 4.
+- Point to the canonical `threat-model.json` for status, mitigation, and
+  verification detail per threat.
+- Track the three open gaps (HMAC audit chain, per-user adaptive
+  throttle, ModSecurity v3 connector) into follow-up work.
