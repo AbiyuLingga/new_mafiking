@@ -159,6 +159,9 @@ appear in both the syntax-check list and the test runner.
   for Path A (build on a beefier host) and Path B (Cloudflare in front).
 - B2 rclone config — script `ops/backup.sh` skips upload until
   `/root/.config/rclone/rclone.conf` exists with a `type = b2` remote.
+  See `docs/security/b2-backup-setup.md` for the one-time setup
+  walkthrough (bucket, app key, rclone.conf template, end-to-end
+  verification).
 - sshd drop-in reload — `/etc/ssh/sshd_config.d/99-mafiking.conf` is
   installed but `systemctl reload ssh` is gated on
   `ops/provision-deploy-user.sh` provisioning `mafiking-deploy` with a
