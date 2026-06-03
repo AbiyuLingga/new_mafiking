@@ -26,11 +26,20 @@ SERVER_IP="$1"
 SERVER_USER="$2"
 APP_NAME="${APP_NAME:-new_mafiking}"
 APP_PORT="${APP_PORT:-3000}"
-REMOTE_DIR="${REMOTE_DIR:-/home/$SERVER_USER/new_mafiking}"
-
-if [ "$SERVER_USER" = "root" ]; then
-  REMOTE_DIR="${REMOTE_DIR:-/root/new_mafiking}"
-  REMOTE_DIR="/root/new_mafiking"
+if [ -n "${REMOTE_DIR:-}" ]; then
+  REMOTE_DIR="$REMOTE_DIR"
+elif [ "$SERVER_USER" = "root" ]; then
+  REMOTE_DIR="/opt/mafiking"
+else
+  REMOTE_DIR="/home/$SERVER_USER/new_mafiking"
+fi
+APP_RUN_USER="${APP_RUN_USER:-}"
+if [ -z "$APP_RUN_USER" ]; then
+  if [ "$REMOTE_DIR" = "/opt/mafiking" ]; then
+    APP_RUN_USER="mafiking"
+  else
+    APP_RUN_USER="$SERVER_USER"
+  fi
 fi
 
 SSH_TARGET="$SERVER_USER@$SERVER_IP"
@@ -45,6 +54,7 @@ echo "========================================"
 echo "Server : $SSH_TARGET"
 echo "Folder : $REMOTE_DIR"
 echo "Port   : $APP_PORT"
+echo "Run as : $APP_RUN_USER"
 echo ""
 
 require_command() {
@@ -112,6 +122,8 @@ rsync -az --delete --human-readable --info=progress2,stats2 \
   --exclude ".git" \
   --exclude ".agents" \
   --exclude ".codex" \
+  --exclude ".pm2" \
+  --exclude ".npm" \
   --exclude "node_modules" \
   --exclude ".env*" \
   --exclude "env" \
@@ -185,7 +197,7 @@ ENDSSH
 
 echo ""
 echo "[5/6] Install dependency dan setup Nginx..."
-ssh "$SSH_TARGET" "APP_PORT='$APP_PORT' APP_NAME='$APP_NAME' REMOTE_DIR='$REMOTE_DIR' SERVER_IP='$SERVER_IP' DEPS_HASH='$DEPS_HASH' bash -s" <<'ENDSSH'
+ssh "$SSH_TARGET" "APP_PORT='$APP_PORT' APP_NAME='$APP_NAME' REMOTE_DIR='$REMOTE_DIR' SERVER_IP='$SERVER_IP' DEPS_HASH='$DEPS_HASH' APP_RUN_USER='$APP_RUN_USER' bash -s" <<'ENDSSH'
 set -euo pipefail
 
 if command -v sudo >/dev/null 2>&1; then
@@ -195,20 +207,32 @@ else
 fi
 
 cd "$REMOTE_DIR"
+if [ "$APP_RUN_USER" != "root" ] && id "$APP_RUN_USER" >/dev/null 2>&1; then
+  $SUDO chown -R "$APP_RUN_USER:$APP_RUN_USER" "$REMOTE_DIR"
+fi
+
+run_app() {
+  if [ "$APP_RUN_USER" != "root" ] && id "$APP_RUN_USER" >/dev/null 2>&1; then
+    $SUDO -u "$APP_RUN_USER" env HOME="$REMOTE_DIR" PM2_HOME="$REMOTE_DIR/.pm2" "$@"
+  else
+    "$@"
+  fi
+}
+
 if [ -f .deploy-deps.sha ] && [ "$(cat .deploy-deps.sha)" = "$DEPS_HASH" ] && [ -d node_modules ]; then
   echo "Dependency tidak berubah, skip npm ci."
-elif [ ! -f .deploy-deps.sha ] && [ -d node_modules ] && npm ls --omit=dev --depth=0 >/dev/null 2>&1; then
+elif [ ! -f .deploy-deps.sha ] && [ -d node_modules ] && run_app npm ls --omit=dev --depth=0 >/dev/null 2>&1; then
   echo "Dependency server sudah valid, menyimpan hash dan skip npm ci."
   printf "%s\n" "$DEPS_HASH" > .deploy-deps.sha
 else
   echo "Dependency berubah atau belum terpasang, menjalankan npm ci..."
-  npm ci --omit=dev
+  run_app npm ci --omit=dev
   printf "%s\n" "$DEPS_HASH" > .deploy-deps.sha
 fi
 
 if [ -f db/tryout-bank.json ]; then
   echo "Mengimpor bank Try Out bundled secara aman..."
-  npm run import:tryouts
+  run_app npm run import:tryouts
 else
   echo "db/tryout-bank.json tidak ada, skip import Try Out bundled."
 fi
@@ -293,18 +317,32 @@ ENDSSH
 
 echo ""
 echo "[6/6] Menjalankan aplikasi dengan PM2..."
-ssh "$SSH_TARGET" "APP_PORT='$APP_PORT' APP_NAME='$APP_NAME' REMOTE_DIR='$REMOTE_DIR' bash -s" <<'ENDSSH'
+ssh "$SSH_TARGET" "APP_PORT='$APP_PORT' APP_NAME='$APP_NAME' REMOTE_DIR='$REMOTE_DIR' APP_RUN_USER='$APP_RUN_USER' bash -s" <<'ENDSSH'
 set -euo pipefail
 
 cd "$REMOTE_DIR"
 
-pm2 delete "$APP_NAME" >/dev/null 2>&1 || true
-pm2 delete mafiking >/dev/null 2>&1 || true
-pm2 delete new-mafiking >/dev/null 2>&1 || true
-pm2 start server.js --name "$APP_NAME" --time
-pm2 save
+run_pm2() {
+  if [ "$APP_RUN_USER" != "root" ] && id "$APP_RUN_USER" >/dev/null 2>&1; then
+    sudo -u "$APP_RUN_USER" env HOME="$REMOTE_DIR" PM2_HOME="$REMOTE_DIR/.pm2" pm2 "$@"
+  else
+    pm2 "$@"
+  fi
+}
 
-STARTUP_CMD="$(pm2 startup systemd -u "$(whoami)" --hp "$HOME" | tail -n 1 || true)"
+run_pm2 delete "$APP_NAME" >/dev/null 2>&1 || true
+run_pm2 delete mafiking >/dev/null 2>&1 || true
+run_pm2 delete new-mafiking >/dev/null 2>&1 || true
+run_pm2 start server.js --name "$APP_NAME" --time
+run_pm2 save
+
+if [ "$APP_RUN_USER" != "root" ]; then
+  pm2 delete "$APP_NAME" >/dev/null 2>&1 || true
+  pm2 delete mafiking >/dev/null 2>&1 || true
+  pm2 delete new-mafiking >/dev/null 2>&1 || true
+fi
+
+STARTUP_CMD="$(run_pm2 startup systemd -u "$APP_RUN_USER" --hp "$REMOTE_DIR" | tail -n 1 || true)"
 if echo "$STARTUP_CMD" | grep -q "sudo\\|env PATH"; then
   eval "$STARTUP_CMD" || true
 fi
@@ -324,8 +362,13 @@ echo "Perintah server:"
 echo "  ssh $SSH_TARGET"
 echo "  cd $REMOTE_DIR"
 echo "  nano .env"
-echo "  pm2 logs $APP_NAME"
-echo "  pm2 restart $APP_NAME"
+if [ "$APP_RUN_USER" = "root" ]; then
+  echo "  pm2 logs $APP_NAME"
+  echo "  pm2 restart $APP_NAME"
+else
+  echo "  sudo -u $APP_RUN_USER PM2_HOME=$REMOTE_DIR/.pm2 pm2 logs $APP_NAME"
+  echo "  sudo -u $APP_RUN_USER PM2_HOME=$REMOTE_DIR/.pm2 pm2 restart $APP_NAME"
+fi
 echo ""
 echo "Jika ingin deploy ulang sambil overwrite database server:"
 echo "  DEPLOY_DB=1 ./deploy.sh $SERVER_IP $SERVER_USER"

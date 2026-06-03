@@ -1,6 +1,6 @@
 // Practice route — choice (multiple choice) default, optional canvas mode.
 
-const CANVAS_DEMO_IMAGE_SRC = "/assets/landing/simulasi-tryout.jpg?v=202606011620";
+const CANVAS_DEMO_VIDEO_SRC = "/assets/saas_demo_video_popup.mp4";
 const OCR_TRUST_STREAK_KEY = "mafiking:canvas-ocr-trust-streak";
 const OCR_TRUST_THRESHOLD = 4;
 const OCR_AUTO_ACCEPT_MS = 12000;
@@ -2971,6 +2971,24 @@ const ResultModal = ({ attempt, onClose }) => {
 
 // ─── Canvas intro modal ────────────────────────────────────────────────────
 const CanvasIntroModal = ({ onDismiss, onOpenCanvas }) => {
+  const videoRef = React.useRef(null);
+  const [soundEnabled, setSoundEnabled] = React.useState(false);
+
+  const toggleSound = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const nextEnabled = !soundEnabled;
+    video.muted = !nextEnabled;
+    video.volume = nextEnabled ? 1 : video.volume;
+    try {
+      await video.play();
+      setSoundEnabled(nextEnabled);
+    } catch (_) {
+      video.muted = true;
+      setSoundEnabled(false);
+    }
+  };
+
   return (
     <div className="canvas-intro-backdrop" role="presentation">
       <section
@@ -2984,13 +3002,37 @@ const CanvasIntroModal = ({ onDismiss, onOpenCanvas }) => {
         </button>
 
         <div className="canvas-demo-video" aria-label="Preview demo mode canvas">
-          <img
-            alt="Preview demo mode canvas"
+          <video
+            autoPlay
             className="canvas-demo-media"
-            decoding="async"
-            loading="lazy"
-            src={CANVAS_DEMO_IMAGE_SRC}
+            loop
+            muted={!soundEnabled}
+            playsInline
+            preload="metadata"
+            ref={videoRef}
+            src={CANVAS_DEMO_VIDEO_SRC}
           />
+          <button
+            aria-label={soundEnabled ? "Matikan suara demo canvas" : "Nyalakan suara demo canvas"}
+            className="canvas-demo-sound-button"
+            onClick={toggleSound}
+            type="button"
+          >
+            {soundEnabled ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                <path d="M19 5a10 10 0 0 1 0 14" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <line x1="23" y1="9" x2="17" y2="15" />
+                <line x1="17" y1="9" x2="23" y2="15" />
+              </svg>
+            )}
+            <span>{soundEnabled ? "SOUND ON" : "SOUND OFF"}</span>
+          </button>
         </div>
 
         <div>
