@@ -362,6 +362,7 @@ if (clerkMiddleware && process.env.CLERK_SECRET_KEY) {
 app.use(require('./middleware/clerk-auth').clerkAuthMiddleware);
 app.use(apiRequestTiming);
 app.use(createRequestGuard());
+app.use(createCanaryMiddleware());
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
