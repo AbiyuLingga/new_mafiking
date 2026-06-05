@@ -121,18 +121,6 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
   }
 
   function startTryoutPackage(pkg) {
-    if (!isLoggedIn && !isAdmin) {
-      showToast("Masuk atau sign up dulu untuk membuka soal tryout.", "error");
-      setRoute({
-        route: "lobby",
-        authMode: "login",
-        authRedirect: {
-          route: "tryout",
-          tryout: buildTryoutSessionContextFromPackage(pkg, "tryout-confirm"),
-        }
-      });
-      return;
-    }
     setRoute({
       route: "tryout",
       tryout: buildTryoutSessionContextFromPackage(pkg, "tryout-confirm"),
@@ -321,14 +309,6 @@ const TryoutStartConfirmation = ({ setRoute, context, isLoggedIn = false, isAdmi
   }, [isLoggedIn, isAdmin, tryoutId]);
 
   function startExam() {
-    if (!isLoggedIn && !isAdmin && !context?.freeTryout) {
-      setRoute({
-        route: "lobby",
-        authMode: "login",
-        authRedirect: { route: "tryout", tryout: context },
-      });
-      return;
-    }
     setRoute({
       route: "tryout",
       tryout: {
@@ -656,11 +636,30 @@ function buildTryoutSessionContext(context) {
     backRoute: context?.backRoute || { route: "belajar", section: "Try Out" },
     attempt: context?.attempt || null,
     sessionSeed: context?.sessionSeed || null,
+    pendingSubmitDraft: context?.pendingSubmitDraft || null,
   };
+}
+
+function buildTryoutDraftStorageKey(tryoutId) {
+  return `mafiking:tryout-submit-draft:${String(tryoutId || "tryout").trim() || "tryout"}`;
+}
+
+function readTryoutDraftFromStorage(tryoutId) {
+  try {
+    const raw = window.sessionStorage.getItem(buildTryoutDraftStorageKey(tryoutId));
+    if (!raw) return null;
+    const draft = JSON.parse(raw);
+    if (!draft || draft.tryoutId !== tryoutId || !draft.answers || !Array.isArray(draft.problemIds)) return null;
+    return draft;
+  } catch (_) {
+    return null;
+  }
 }
 
 const FreeMathTryoutExam = ({ setRoute, context, isLoggedIn = false, isAdmin = false }) => {
   const tryoutId = getTryoutContextId(context);
+  const pendingSubmitDraftRef = useRef(context?.pendingSubmitDraft || readTryoutDraftFromStorage(tryoutId));
+  const pendingAutoSubmitRef = useRef(false);
   const sessionSeedRef = useRef({ tryoutId: "", seed: "" });
   if (sessionSeedRef.current.tryoutId !== tryoutId) {
     sessionSeedRef.current = {
@@ -684,6 +683,12 @@ const FreeMathTryoutExam = ({ setRoute, context, isLoggedIn = false, isAdmin = f
   const selectedChoiceIndex = activeProblem ? answers[activeProblem.id] : null;
 
   useEffect(() => { loadTryoutProblems(); }, [tryoutId]);
+
+  useEffect(() => {
+    if (!pendingAutoSubmitRef.current || !isLoggedIn || isAdmin || !sessionInfo || !problems.length || finishing) return;
+    pendingAutoSubmitRef.current = false;
+    finishTryout({ forceSubmit: true, draft: pendingSubmitDraftRef.current });
+  }, [isLoggedIn, isAdmin, sessionInfo, problems.length, finishing]);
 
   useEffect(() => {
     const expiresAtMs = Date.parse(sessionInfo?.expiresAt || "");
@@ -746,10 +751,18 @@ const FreeMathTryoutExam = ({ setRoute, context, isLoggedIn = false, isAdmin = f
       });
       setProblems(nextProblems);
       setProblemIndex(0);
-      setAnswers({});
+      const pendingDraft = pendingSubmitDraftRef.current;
+      const restoredAnswers = pendingDraft && pendingDraft.tryoutId === tryoutId && pendingDraft.answers
+        ? pendingDraft.answers
+        : {};
+      setAnswers(restoredAnswers);
       setDoubtful({});
       setMobileNavOpen(false);
       setFinishing(false);
+      if (pendingDraft && pendingDraft.tryoutId === tryoutId && pendingDraft.autoSubmit) {
+        pendingAutoSubmitRef.current = true;
+        showToast("Login berhasil. Jawaban tryout sedang disimpan otomatis.", "info");
+      }
     } catch (caught) {
       setError(caught.message || "Gagal memuat soal tryout.");
     } finally {
@@ -771,27 +784,71 @@ const FreeMathTryoutExam = ({ setRoute, context, isLoggedIn = false, isAdmin = f
     setMobileNavOpen(false);
   }
 
-  async function finishTryout() {
+  function buildTryoutSubmissionPayload({ answersSource = answers, draft = null } = {}) {
+    const timeLimitSeconds = Number(sessionInfo?.timeLimitSeconds || context?.timeLimitSeconds || 30 * 60);
+    const durationSeconds = Number.isFinite(Number(draft?.durationSeconds))
+      ? Math.max(0, Number(draft.durationSeconds))
+      : Math.max(0, timeLimitSeconds - Math.max(0, Number(timeLeft || 0)));
+    const payloadAnswers = {};
+    const choiceMap = {};
+    for (const problem of problems) {
+      if (answersSource[problem.id] != null) payloadAnswers[problem.id] = answersSource[problem.id];
+      choiceMap[problem.id] = draft?.choiceMap?.[problem.id] || getChoices(problem);
+    }
+    return {
+      tryoutId: sessionInfo?.id || context?.id || "free-math-tryout-15",
+      tryoutTitle: sessionInfo?.title || context?.packageTitle || context?.title || "Try Out Matematika",
+      sessionToken: sessionInfo?.sessionToken || "",
+      problemIds: problems.map((problem) => problem.id),
+      answers: payloadAnswers,
+      choiceMap,
+      durationSeconds,
+    };
+  }
+
+  function redirectGuestToLoginWithDraft() {
+    const draftPayload = buildTryoutSubmissionPayload();
+    const draft = {
+      ...draftPayload,
+      tryoutId,
+      autoSubmit: true,
+      savedAt: Date.now(),
+      sessionSeed: sessionSeedRef.current.seed,
+    };
+    try {
+      window.sessionStorage.setItem(buildTryoutDraftStorageKey(tryoutId), JSON.stringify(draft));
+    } catch (_) {}
+    showToast("Login dulu untuk menyimpan hasil tryout. Jawabanmu sudah diamankan.", "info");
+    setRoute({
+      route: "lobby",
+      authMode: "login",
+      authRedirect: {
+        route: "tryout",
+        tryout: {
+          ...context,
+          id: tryoutId,
+          tryout_id: tryoutId,
+          mode: context?.mode === "free-math" ? "free-math" : "tryout-exam",
+          sessionSeed: sessionSeedRef.current.seed,
+          pendingSubmitDraft: draft,
+        },
+      },
+    });
+  }
+
+  async function finishTryout(options = {}) {
     if (finishing || !problems.length) return;
+    if (!options.forceSubmit && !isLoggedIn && !isAdmin) {
+      redirectGuestToLoginWithDraft();
+      return;
+    }
     setFinishing(true);
     try {
-      const timeLimitSeconds = Number(sessionInfo?.timeLimitSeconds || context?.timeLimitSeconds || 30 * 60);
-      const durationSeconds = Math.max(0, timeLimitSeconds - Math.max(0, Number(timeLeft || 0)));
-      const payloadAnswers = {};
-      const choiceMap = {};
-      for (const problem of problems) {
-        if (answers[problem.id] != null) payloadAnswers[problem.id] = answers[problem.id];
-        choiceMap[problem.id] = getChoices(problem);
-      }
-      const result = await MafikingAPI.post("/api/progress/tryout-attempts", {
-        tryoutId: sessionInfo?.id || context?.id || "free-math-tryout-15",
-        tryoutTitle: sessionInfo?.title || context?.packageTitle || context?.title || "Try Out Matematika",
-        sessionToken: sessionInfo?.sessionToken || "",
-        problemIds: problems.map((problem) => problem.id),
-        answers: payloadAnswers,
-        choiceMap,
-        durationSeconds,
-      });
+      const result = await MafikingAPI.post("/api/progress/tryout-attempts", buildTryoutSubmissionPayload({
+        answersSource: options.draft?.answers || answers,
+        draft: options.draft || null,
+      }));
+      try { window.sessionStorage.removeItem(buildTryoutDraftStorageKey(tryoutId)); } catch (_) {}
       const score = result?.attempt?.score;
       showToast(score == null ? "Tryout selesai. Hasil tersimpan." : `Tryout selesai. Skor kamu ${score}.`, "success");
       setRoute({
@@ -823,11 +880,7 @@ const FreeMathTryoutExam = ({ setRoute, context, isLoggedIn = false, isAdmin = f
         }
       }
       if (message.toLowerCase().includes("login") && !isLoggedIn && !isAdmin) {
-        setRoute({
-          route: "lobby",
-          authMode: "login",
-          authRedirect: { route: "tryout", tryout: { ...context, id: tryoutId, tryout_id: tryoutId, mode: "tryout-confirm" } },
-        });
+        redirectGuestToLoginWithDraft();
         return;
       }
       showToast(message, "error");

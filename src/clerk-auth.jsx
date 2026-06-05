@@ -155,6 +155,14 @@ const MafikingClerk = (() => {
     return window.location.pathname === OAUTH_CALLBACK_PATH;
   }
 
+  function withTimeout(promise, timeoutMs, message) {
+    let timer = 0;
+    const timeout = new Promise((_, reject) => {
+      timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    });
+    return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer));
+  }
+
   async function waitForSignedIn(timeoutMs = 180000) {
     const clerk = await load();
     const startedAt = Date.now();
@@ -203,18 +211,22 @@ const MafikingClerk = (() => {
     const clerk = await load();
 
     if (typeof clerk.handleRedirectCallback === "function") {
-      await clerk.handleRedirectCallback({
-        continueSignUpUrl: "/",
-        signInUrl: "/",
-        signUpUrl: "/",
-        signInForceRedirectUrl: "/",
-        signUpForceRedirectUrl: "/",
-        signInFallbackRedirectUrl: "/",
-        signUpFallbackRedirectUrl: "/",
-      }, async () => {});
+      try {
+        await withTimeout(clerk.handleRedirectCallback({
+          continueSignUpUrl: "/",
+          signInUrl: "/",
+          signUpUrl: "/",
+          signInForceRedirectUrl: "/",
+          signUpForceRedirectUrl: "/",
+          signInFallbackRedirectUrl: "/",
+          signUpFallbackRedirectUrl: "/",
+        }, async () => {}), 8000, "Callback Google terlalu lama.");
+      } catch (error) {
+        console.warn("[clerk-callback] continuing after callback timeout", error && error.message);
+      }
     }
 
-    await waitForSignedIn();
+    await waitForSignedIn(15000);
     const user = await syncSession();
     clearPendingOAuth();
     if (window.location.pathname === OAUTH_CALLBACK_PATH) {

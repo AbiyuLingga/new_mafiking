@@ -91,6 +91,10 @@ for (const migration of [
   "ALTER TABLE users ADD COLUMN clerk_id TEXT",
   "ALTER TABLE users ADD COLUMN email TEXT",
   "ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT 'local'",
+  "ALTER TABLE users ADD COLUMN email_verified_at DATETIME",
+  "ALTER TABLE users ADD COLUMN email_verification_token_hash TEXT",
+  "ALTER TABLE users ADD COLUMN email_verification_expires_at DATETIME",
+  "ALTER TABLE users ADD COLUMN email_verification_last_sent_at DATETIME",
   "ALTER TABLE chapters ADD COLUMN mapel TEXT DEFAULT 'Matematika'",
   "ALTER TABLE chapters ADD COLUMN semester INTEGER DEFAULT 1",
   "ALTER TABLE chapters ADD COLUMN description TEXT DEFAULT ''",
@@ -215,6 +219,15 @@ try {
     UPDATE users
     SET auth_provider = 'local'
     WHERE auth_provider IS NULL OR auth_provider = '' OR auth_provider = 'password'
+  `);
+} catch (_) {}
+
+try {
+  db.exec(`
+    UPDATE users
+    SET email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP)
+    WHERE email_verified_at IS NULL
+      AND (role = 'admin' OR auth_provider IN ('clerk', 'linked') OR email_verification_token_hash IS NULL)
   `);
 } catch (_) {}
 
@@ -382,6 +395,7 @@ const registerLimiter = rateLimit({
 const correctionLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 12,
+  keyGenerator: (req) => `correction:${req.session?.userId || req.userId || rateLimit.ipKeyGenerator(req.ip)}`,
   message: { error: 'Terlalu banyak request koreksi. Coba lagi sebentar.' },
   standardHeaders: true,
   legacyHeaders: false
@@ -533,6 +547,10 @@ app.use((req, res, next) => {
     req.path === '/api/quiz/init' ||
     req.path === '/api/tryout-packages' ||
     req.path === '/api/webhooks/clerk' ||
+    req.path === '/api/auth/login' ||
+    req.path === '/api/auth/register' ||
+    req.path === '/api/auth/resend-verification' ||
+    req.path === '/api/auth/verify-email' ||
     req.path.startsWith('/api/payment/mock-')
   ) return next();
   if (req.session.userId) return next();
@@ -792,10 +810,13 @@ function ensureFixedAdminUser(database) {
     database.prepare(
       "UPDATE users SET password_hash = ?, role = 'admin' WHERE id = ?"
     ).run(passwordHash, existing.id);
+    database.prepare(
+      "UPDATE users SET email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP) WHERE id = ?"
+    ).run(existing.id);
     return;
   }
   database.prepare(
-    "INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, 'Admin 123', 'admin')"
+    "INSERT INTO users (username, password_hash, display_name, role, email_verified_at) VALUES (?, ?, 'Admin 123', 'admin', CURRENT_TIMESTAMP)"
   ).run(username, passwordHash);
 }
 

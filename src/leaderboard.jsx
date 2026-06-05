@@ -1,10 +1,53 @@
-const TRYOUT_LEADERBOARD_ID = "free-math-tryout-15";
+const DEFAULT_TRYOUT_LEADERBOARD = {
+  id: "free-math-tryout-15",
+  label: "Try Out Gratis",
+  meta: "15 soal",
+};
 
 const Leaderboard = () => {
   const [activeTab, setActiveTab] = React.useState("semua");
+  const [tryoutOptions, setTryoutOptions] = React.useState([DEFAULT_TRYOUT_LEADERBOARD]);
+  const [selectedTryoutId, setSelectedTryoutId] = React.useState(DEFAULT_TRYOUT_LEADERBOARD.id);
   const [rows, setRows] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadTryoutOptions() {
+      try {
+        const packages = await MafikingAPI.get("/api/tryout-packages");
+        if (cancelled) return;
+        const packageOptions = Array.isArray(packages)
+          ? packages
+              .map((pkg) => ({
+                id: String(pkg.tryout_id || "").trim(),
+                label: String(pkg.title || "").trim(),
+                meta: [pkg.questions ? `${Number(pkg.questions)} soal` : "", pkg.duration || ""].filter(Boolean).join(" · "),
+              }))
+              .filter((option) => option.id && option.label)
+          : [];
+        const seen = new Set();
+        const options = [DEFAULT_TRYOUT_LEADERBOARD, ...packageOptions].filter((option) => {
+          if (seen.has(option.id)) return false;
+          seen.add(option.id);
+          return true;
+        });
+        setTryoutOptions(options.length ? options : [DEFAULT_TRYOUT_LEADERBOARD]);
+        setSelectedTryoutId((current) => (
+          options.some((option) => option.id === current)
+            ? current
+            : (options[0] || DEFAULT_TRYOUT_LEADERBOARD).id
+        ));
+      } catch (_) {
+        if (!cancelled) setTryoutOptions([DEFAULT_TRYOUT_LEADERBOARD]);
+      }
+    }
+
+    loadTryoutOptions();
+    return () => { cancelled = true; };
+  }, []);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -14,7 +57,7 @@ const Leaderboard = () => {
       setError("");
       try {
         const endpoint = activeTab === "tryout"
-          ? `/api/progress/leaderboard/tryout?tryoutId=${encodeURIComponent(TRYOUT_LEADERBOARD_ID)}`
+          ? `/api/progress/leaderboard/tryout?tryoutId=${encodeURIComponent(selectedTryoutId || DEFAULT_TRYOUT_LEADERBOARD.id)}`
           : activeTab === "mingguan"
             ? "/api/progress/leaderboard/weekly"
             : "/api/progress/leaderboard";
@@ -32,7 +75,7 @@ const Leaderboard = () => {
 
     loadLeaderboard();
     return () => { cancelled = true; };
-  }, [activeTab]);
+  }, [activeTab, selectedTryoutId]);
 
   const isTryoutTab = activeTab === "tryout";
   const pointLabel = isTryoutTab
@@ -41,7 +84,18 @@ const Leaderboard = () => {
       ? "Total Poin (XP)"
       : "Poin (XP) Minggu Ini";
   const podiumRows = [rows[1], rows[0], rows[2]].filter(Boolean);
-  const podiumGridClass = podiumRows.length === 1
+  const showEmptyTryoutPodium = isTryoutTab && !loading && !error && rows.length === 0;
+  const podiumSlots = showEmptyTryoutPodium
+    ? [
+        { rank: 2, isEmpty: true },
+        { rank: 1, isEmpty: true },
+        { rank: 3, isEmpty: true },
+      ]
+    : podiumRows;
+  const showPodium = !loading && !error && podiumSlots.length > 0;
+  const podiumGridClass = showEmptyTryoutPodium
+    ? "md:grid-cols-3"
+    : podiumRows.length === 1
     ? "md:grid-cols-1 md:max-w-sm md:mx-auto"
     : podiumRows.length === 2
       ? "md:grid-cols-2 md:max-w-3xl md:mx-auto"
@@ -103,19 +157,47 @@ const Leaderboard = () => {
           />
         </div>
 
-        {!loading && !error && podiumRows.length > 0 && (
+        {isTryoutTab && (
+          <div className="mb-4 flex shrink-0 gap-2 overflow-x-auto pb-1 hide-scrollbar">
+            {tryoutOptions.map((option) => {
+              const isSelected = option.id === selectedTryoutId;
+              return (
+                <button
+                  key={option.id}
+                  onClick={() => setSelectedTryoutId(option.id)}
+                  className={`shrink-0 rounded-full border px-4 py-2 text-left transition-colors ${
+                    isSelected
+                      ? "border-ink bg-ink text-white"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-ink"
+                  }`}
+                  type="button"
+                >
+                  <div className="text-xs font-black">{option.label}</div>
+                  {option.meta && (
+                    <div className={`mt-0.5 text-[10px] font-bold ${isSelected ? "text-white/65" : "text-slate-400"}`}>
+                      {option.meta}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {showPodium && (
           <div className={`hidden shrink-0 items-end gap-5 pb-5 md:grid ${podiumGridClass}`}>
-            {podiumRows.map((user) => {
+            {podiumSlots.map((user) => {
               const isChampion = user.rank === 1;
+              const isEmpty = Boolean(user.isEmpty);
               const placeClass = isChampion
-                ? "bg-yel border-amber-300 shadow-lg h-[270px] lg:h-[300px]"
-                : "bg-white border-slate-200 shadow-sm h-[240px] lg:h-[260px]";
+                ? `${isEmpty ? "bg-yel/40 border-amber-200 border-dashed" : "bg-yel border-amber-300 shadow-lg"} h-[270px] lg:h-[300px]`
+                : `${isEmpty ? "bg-white/70 border-slate-200 border-dashed" : "bg-white border-slate-200 shadow-sm"} h-[240px] lg:h-[260px]`;
               const avatarClass = isChampion
-                ? "h-24 w-24 bg-ink text-white text-3xl"
-                : "h-20 w-20 bg-slate-700 text-white text-2xl";
+                ? `${isEmpty ? "bg-white/60 ring-1 ring-amber-200" : "bg-ink text-white"} h-24 w-24 text-3xl`
+                : `${isEmpty ? "bg-slate-100 ring-1 ring-slate-200" : "bg-slate-700 text-white"} h-20 w-20 text-2xl`;
               return (
                 <div
-                  key={`podium-${user.id}-${user.rank}`}
+                  key={isEmpty ? `podium-empty-${user.rank}` : `podium-${user.id}-${user.rank}`}
                   className={`relative flex flex-col items-center rounded-[2rem] border p-6 text-center overflow-visible ${placeClass}`}
                 >
                   <div className={`absolute -top-4 flex h-9 w-9 items-center justify-center rounded-full font-black ring-4 ring-white ${
@@ -124,24 +206,34 @@ const Leaderboard = () => {
                     {user.rank}
                   </div>
                   <div className={`mb-4 flex shrink-0 items-center justify-center rounded-full font-black tracking-wider ${avatarClass}`}>
-                    {user.initials}
+                    {!isEmpty && user.initials}
                   </div>
-                  <h2 className="leaderboard-podium-name text-base font-black text-ink lg:text-lg">
-                    {user.display_name}
-                  </h2>
-                  {user.fakultas && (
-                    <p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-slate-500">
-                      {user.fakultas}
-                    </p>
+                  {!isEmpty && (
+                    <React.Fragment>
+                      <h2 className="leaderboard-podium-name text-base font-black text-ink lg:text-lg">
+                        {user.display_name}
+                      </h2>
+                      {user.fakultas && (
+                        <p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-slate-500">
+                          {user.fakultas}
+                        </p>
+                      )}
+                      <div className="mt-4">
+                        <div className={`font-black ${isChampion ? "text-3xl" : "text-2xl"} text-ink`}>
+                          {renderPrimaryMetric(user)}
+                        </div>
+                        <div className="mx-auto mt-2">
+                          {renderSecondaryMetric(user, isChampion)}
+                        </div>
+                      </div>
+                    </React.Fragment>
                   )}
-                  <div className="mt-4">
-                    <div className={`font-black ${isChampion ? "text-3xl" : "text-2xl"} text-ink`}>
-                      {renderPrimaryMetric(user)}
+                  {isEmpty && (
+                    <div className="mt-2 flex w-full flex-1 flex-col items-center justify-center" aria-hidden="true">
+                      <div className="h-3 w-28 rounded-full bg-white/60" />
+                      <div className="mt-3 h-2 w-20 rounded-full bg-white/45" />
                     </div>
-                    <div className="mx-auto mt-2">
-                      {renderSecondaryMetric(user, isChampion)}
-                    </div>
-                  </div>
+                  )}
                 </div>
               );
             })}

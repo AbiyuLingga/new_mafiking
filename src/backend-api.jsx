@@ -85,8 +85,22 @@ const MafikingAPI = {
     return parseApiResponse(response);
   },
 
-  async post(path, payload = {}) {
+  async post(path, payload = {}, options = {}) {
     const authHeaders = await clerkAuthHeaders();
+    if (options.stream) {
+      const response = await fetch(path, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { Accept: "text/event-stream", "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok || !response.body) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || `Request gagal (${response.status})`);
+      }
+      return readEventStream(response, options.onEvent);
+    }
+
     const response = await fetch(path, {
       method: "POST",
       credentials: "same-origin",
@@ -130,6 +144,50 @@ async function parseApiResponse(response) {
     throw new Error(data.error || `Request gagal (${response.status})`);
   }
   return data;
+}
+
+async function readEventStream(response, onEvent) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalResult = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split("\n\n");
+    buffer = chunks.pop() || "";
+
+    for (const chunk of chunks) {
+      const event = parseSseEvent(chunk);
+      if (!event) continue;
+      if (onEvent) onEvent(event.name, event.data);
+      if (event.name === "result") finalResult = event.data;
+      if (event.name === "error") throw new Error(event.data?.message || "Koreksi gagal.");
+    }
+  }
+
+  if (!finalResult) throw new Error("Stream koreksi selesai tanpa hasil.");
+  return finalResult;
+}
+
+function parseSseEvent(chunk) {
+  const lines = String(chunk || "").split("\n");
+  let name = "message";
+  let data = "";
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    if (!line || line.startsWith(":")) continue;
+    if (line.startsWith("event:")) name = line.slice(6).trim() || name;
+    if (line.startsWith("data:")) data += line.slice(5).trim();
+  }
+  if (!data) return null;
+  try {
+    return { name, data: JSON.parse(data) };
+  } catch (_) {
+    return { name, data: { raw: data } };
+  }
 }
 
 window.MafikingAPI = MafikingAPI;

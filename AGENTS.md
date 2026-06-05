@@ -64,9 +64,8 @@ For profile recommendation tasks, also inspect:
 data/recommendation-catalog.json
 docs/purcell-inspired-question-bank.md
 lib/recommendation-engine.js
-lib/ai-profile-provider.js
 scripts/test-recommendation-engine.js
-SOP-9ROUTER-PROFILE-SUMMARY.md
+SOP-PROFILE-SUMMARY.md
 ```
 
 For visual/UI tasks, inspect the actual rendered page in a browser after changes.
@@ -299,6 +298,16 @@ Open items at last review: F-10 (id coercion in `/evaluate`), F-11
 source build or Path B Cloudflare-fronted), F-14 (sshd drop-in reload
 waits for `mafiking-deploy` pubkey at `/root/.ssh/mafiking-deploy.pub`),
 F-15 (B2 rclone config — needs `/root/.config/rclone/rclone.conf`).
+
+## Email Verification
+
+- Local email/password signups (`auth_provider = 'local'`) must verify the supplied email before login is allowed.
+- Verification is enforced with `users.email_verified_at`; Clerk/Google users, linked Clerk users, and admins bypass it.
+- Verification links are single-use, expire after 24 hours, and only the SHA-256 token hash is stored.
+- Resend cooldown is 60 seconds per user; `/api/auth/resend-verification` returns generic success to avoid account enumeration.
+- Outbound email is sent through `lib/mailer.js` using Gmail SMTP and `mafikingsolusitpb@gmail.com`; production needs a Gmail App Password in `SMTP_PASS`.
+- Local development can set `MAIL_DRY_RUN=true`; the server logs the verification URL instead of sending SMTP mail.
+- The verification link is a SPA hash route: `https://mafiking.com/#verify-email?token=...`.
 
 ## GitHub Push Gotcha (workflow scope)
 

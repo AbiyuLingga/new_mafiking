@@ -10,7 +10,7 @@ This document describes the current architecture of `new_mafiking`. It is intent
 - An Express backend.
 - A local SQLite database.
 - A multiple-choice-first practice flow with optional stylus canvas mode.
-- Gemini-powered canvas correction.
+- Multi-provider AI canvas correction through Gemini/Groq, with direct Gemini fallback when the pool is disabled.
 - Deterministic Purcell-aligned follow-up recommendations for profile reports.
 - Import/export scripts for practice and Try Out bank portability.
 
@@ -39,7 +39,7 @@ Static React app in browser
   v
 db/database.sqlite
   |
-  | optional Gemini/Duitku calls
+  | optional Gemini/Groq/Duitku calls
   v
 External services
 ```
@@ -189,7 +189,7 @@ The global `Nav` is intentionally not rendered while `route === "practice"` or `
 - Landing media slots are loaded from `GET /api/landing-media`; the public landing no longer exposes inline media replacement controls to admins.
 - The landing page uses local reveal/pop animations in `src/lobby.jsx` and `src/styles.css`; it does not rely on a bundled Framer Motion runtime in this static-Babel app.
 - The demo video section intentionally has no grid background after the latest landing UI correction.
-- Login/sign-up screens expose both the existing username/password flow and Clerk Google auth. Clerk browser scripts are loaded dynamically by `src/clerk-auth.jsx`.
+- Login/sign-up screens expose the local email/password flow and Clerk Google auth. New local email/password accounts must verify their email via a single-use verification link before login is allowed. Clerk browser scripts are loaded dynamically by `src/clerk-auth.jsx`.
 - After auth succeeds, `GET /api/auth/me` marks incomplete non-admin profiles with `profile_needs_completion`; `src/app.jsx` then renders the fixed, non-dismissible `ProfileOnboardingModal`.
 - The top app nav uses `Beranda` for `belajar`, `Misi Harian` for `misi`, `Paket` for `tryout`, and `Peringkat` for `leaderboard`; there is no separate `Belajar` nav link.
 - The app route shell uses a small vertical fade/slide transition. `src/shared.jsx` measures nav and segmented-control buttons so the active oval moves instead of teleporting. `src/belajar.jsx` separately measures the active mapel tab so its underline slides between `Try Out`, `Matematika`, `Fisika`, and `Kimia`; the `Try Out` underline uses the ink accent.
@@ -298,6 +298,7 @@ server.js
 | Body limits | `server.js` | JSON limit `12mb`; URL encoded limit `100kb`. |
 | Sessions | `server.js` | `express-session`, 7-day cookie, `sameSite: strict`. |
 | Clerk auth | `server.js` + `middleware/clerk-auth.js` + `src/clerk-auth.jsx` | `@clerk/express` verifies Clerk sessions; frontend sends Bearer token when Clerk is signed in, then middleware maps Clerk users to local SQLite users. |
+| Email verification | `routes/auth.js` + `lib/email-verification.js` + `lib/mailer.js` | Local email/password signups store only a SHA-256 verification-token hash, send a Gmail SMTP verification link, and hard-block login until `users.email_verified_at` is set. |
 | Rate limits | `server.js` | Login, register, and correction route limits. |
 | Auth guard | `middleware/auth.js` | Requires either `req.userId` from Clerk or `req.session.userId`. |
 | Admin guard | `middleware/admin.js` | Requires admin role from either Clerk-mapped request state or session. |
@@ -353,19 +354,22 @@ Computes XP, penalties, level, badge tier, streaks, solved counts, mastery, and 
 - `POST /api/correction/transcribe`
 - `POST /api/correction/evaluate`
 - `POST /api/correction/profile-summary`
+- `GET /api/correction/pool/stats`
 
 Core responsibilities:
 
 - Validate image MIME type and size.
-- Use up to 20 Gemini API keys for Gemini/Gemma calls.
-- Try configured OCR/evaluation models plus the Gemini 3.1 Flash Lite default.
-- Retry only retryable Gemini overload/rate-limit errors.
+- Route OCR/evaluation through `lib/multi-provider-pool.js` when enabled.
+- Use up to 20 Gemini API keys for Gemini/Gemma calls and an optional `GROQ_API_KEY` for Groq vision calls.
+- Try configured OCR/evaluation models plus the Gemini 3.1 Flash Lite default on the direct Gemini fallback path.
+- Retry only retryable provider overload/rate-limit errors.
+- Keep `POST /api/correction/transcribe` for compatibility, but the current canvas UI posts image-only submissions directly to `/api/correction/evaluate` for merged OCR + evaluation.
 - Normalize evaluation/profile JSON.
 - Store correction attempts in SQLite.
-- Log successful Gemini/Gemma token usage to `ai_token_usage` without blocking the request.
+- Log successful AI token usage to `ai_token_usage` without blocking the request.
 - Provide local fallback profile summaries when Gemma is unavailable.
 - Compute deterministic `recommendedItems` from local skill metadata and the Purcell-inspired reference bank; Gemma does not freely choose those follow-up questions.
-- Use Gemma 4 31B for profile narrative text by default; legacy 9Router override requires explicit `PROFILE_PROVIDER_ALLOW_9ROUTER=true`. Canvas OCR/evaluation still uses Gemini 3.1 Flash Lite directly.
+- Use Gemma 4 31B for profile narrative text.
 - Rate-limit AI profile narrative refreshes to once per hour for normal users; admin `123`/`135` bypasses the cooldown.
 - Include summarized multiple-choice mistakes from `practice_attempts` as profile narrative evidence, without letting AI choose final catalog refs.
 
@@ -469,7 +473,7 @@ problems 1 -> many user_progress
 problems 1 -> many correction_attempts, nullable on delete
 ```
 
-Clerk adds `users.clerk_id`, `users.email`, and `users.auth_provider`. A partial unique index protects non-empty `clerk_id` values. `auth_provider` uses `local`, `clerk`, or `linked`; old `password` values are normalized to `local` at startup. If a Clerk user's email matches an existing local username/email, the account is linked instead of duplicating progress.
+Clerk adds `users.clerk_id`, `users.email`, and `users.auth_provider`. Local email verification adds `users.email_verified_at`, `users.email_verification_token_hash`, `users.email_verification_expires_at`, and `users.email_verification_last_sent_at`. A partial unique index protects non-empty `clerk_id` values. `auth_provider` uses `local`, `clerk`, or `linked`; old `password` values are normalized to `local` at startup. If a Clerk user's email matches an existing local username/email, the account is linked instead of duplicating progress.
 
 ### Startup Schema Behavior
 
@@ -509,17 +513,35 @@ Click chapter card in src/belajar.jsx
 ```text
 User opens Try Canvas
   -> user writes on canvas
-  -> exportCanvasImage()
-  -> POST /api/correction/evaluate
+  -> exportCanvasImage() as compressed JPEG
+  -> POST /api/correction/evaluate-stream
+  -> fallback POST /api/correction/evaluate when streaming fails
   -> validateImagePayload()
-  -> callGeminiWithFallback()
+  -> callAiWithPoolFallback()
+  -> callWithPool() when enabled, else callGeminiWithFallback()
+  -> pool selects Gemini, Groq, or optional OpenRouter with queue limits
+  -> merged OCR + evaluation JSON
+  -> optional answer-equivalence fast path only when detected answer matches expected answer
   -> logTokenUsage()
   -> normalizeEvaluation()
   -> INSERT correction_attempts
+  -> INSERT correction_latency_metrics
   -> return evaluation
   -> frontend opens result modal
   -> POST /api/progress/submit
 ```
+
+Wrong-answer visualization depends on the merged AI response retaining
+`wrongSteps` and `redlineTargets`. Latency work must not remove these fields:
+`src/practice.jsx` stores the original stroke snapshot with the attempt, and
+the result modal redraws those strokes while overlaying matched wrong strokes
+in red. The fast path is only allowed to clear redline fields when the detected
+answer is equivalent to the expected answer and the final result is correct.
+
+The streaming endpoint sends phase events such as `reading`, `evaluating`, and
+`fast-path` before the final `result` event. It shares the same backend helper
+as the non-streaming endpoint, so correctness, persistence, and redline output
+stay aligned between both paths.
 
 ### Profile Report Flow
 
@@ -561,9 +583,7 @@ The profile endpoint intentionally uses two attempt windows: `PROFILE_RECOMMENDA
 
 AI narrative refreshes are recorded in `profile_ai_refreshes`. Normal users can refresh AI narrative text once per hour; admin account `123`/`135` bypasses the cooldown for testing and operations. When cooldown blocks the AI call or Gemma fails, the endpoint still returns the deterministic local profile summary.
 
-When explicitly enabled, legacy 9Router is called through `lib/ai-profile-provider.js` against an OpenAI-compatible `/chat/completions` endpoint. 9Router failure does not break profile rendering; the endpoint falls back to the deterministic local summary. Production should leave the default Gemma provider active unless intentionally testing a 9Router override.
-
-Profile narrative providers must read `SOP-9ROUTER-PROFILE-SUMMARY.md` through `routes/correction.js` before producing summary JSON. Despite the legacy filename, this SOP is the source of truth for what Gemma may infer and what it must leave to the deterministic recommendation engine.
+Profile narrative calls must read `SOP-PROFILE-SUMMARY.md` through `routes/correction.js` before producing summary JSON. This SOP is the source of truth for what Gemma may infer and what it must leave to the deterministic recommendation engine.
 
 ### Question Bank Export/Import Flow
 

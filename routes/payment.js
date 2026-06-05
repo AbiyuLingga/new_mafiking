@@ -14,11 +14,12 @@ const paymentLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-const DUITKU_BASE_URL = 'https://api-sandbox.duitku.com/api'; // ganti ke https://api-prod.duitku.com/api saat production
+const DUITKU_BASE_URL = process.env.DUITKU_BASE_URL || 'https://api-sandbox.duitku.com/api'; // ganti ke https://api-prod.duitku.com/api saat production
 const MERCHANT_CODE = process.env.DUITKU_MERCHANT_CODE;
 const API_KEY = process.env.DUITKU_API_KEY;
 const CALLBACK_URL = process.env.DUITKU_CALLBACK_URL || 'https://mafiking.com/api/payment/callback';
 const RETURN_URL = process.env.DUITKU_RETURN_URL || 'https://mafiking.com/payment.html';
+const PAYMENT_METHOD = process.env.DUITKU_PAYMENT_METHOD || '';
 
 const SUBSCRIPTION_PACKAGES = {
     trial: { label: 'Trial 7 Hari', price: 29000 },
@@ -28,7 +29,7 @@ const SUBSCRIPTION_PACKAGES = {
 
 function makePOPHeaders() {
     const timestamp = Date.now().toString();
-    const signature = crypto.createHash('sha256').update(MERCHANT_CODE + timestamp + API_KEY).digest('hex');
+    const signature = createDuitkuSignature(MERCHANT_CODE + timestamp, API_KEY);
     return {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -38,10 +39,19 @@ function makePOPHeaders() {
     };
 }
 
-// Signature untuk callback verification (MD5)
+function createDuitkuSignature(stringToSign, apiKey = API_KEY) {
+    return crypto.createHmac('sha256', apiKey || '').update(String(stringToSign || '')).digest('hex');
+}
+
+function safeSignatureCompare(expected, received) {
+    const expectedBuffer = Buffer.from(String(expected || ''));
+    const receivedBuffer = Buffer.from(String(received || ''));
+    return expectedBuffer.length === receivedBuffer.length && crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
+}
+
 function verifyCallbackSignature(merchantCode, amount, merchantOrderId, apiKey, received) {
-    const expected = crypto.createHash('md5').update(merchantCode + amount + merchantOrderId + apiKey).digest('hex');
-    return expected === received;
+    const expected = createDuitkuSignature(`${merchantCode}${amount}${merchantOrderId}`, apiKey);
+    return safeSignatureCompare(expected, received);
 }
 
 function hasDuitkuCredentials(env = process.env) {
@@ -191,6 +201,47 @@ function paymentGatewayState(env = process.env) {
     };
 }
 
+function buildDuitkuInvoicePayload({
+    merchantCode = MERCHANT_CODE,
+    item,
+    merchantOrderId,
+    buyerEmail,
+    buyerName,
+    userId,
+    paymentMethod = PAYMENT_METHOD,
+    callbackUrl = CALLBACK_URL,
+    returnUrl = RETURN_URL,
+    expiryPeriod = 60,
+}) {
+    return {
+        merchantCode,
+        paymentAmount: item.amount,
+        paymentMethod,
+        merchantOrderId,
+        productDetails: item.productDetails,
+        additionalParam: item.type,
+        merchantUserInfo: buyerEmail,
+        email: buyerEmail,
+        customerVaName: buyerName,
+        itemDetails: [
+            {
+                name: item.productDetails,
+                price: item.amount,
+                quantity: 1,
+            },
+        ],
+        customerDetail: {
+            firstName: buyerName,
+            lastName: '',
+            email: buyerEmail,
+            merchantCustomerId: String(userId),
+        },
+        callbackUrl,
+        returnUrl,
+        expiryPeriod,
+    };
+}
+
 // GET /api/payment/config
 router.get('/config', (_req, res) => {
     setPublicApiCache(res, 30, 120);
@@ -251,18 +302,13 @@ router.post('/create', paymentLimiter, async (req, res) => {
         });
     }
 
-    const payload = {
-        merchantCode: MERCHANT_CODE,
-        paymentAmount: intAmount,
-        paymentMethod: 'QRIS',
+    const payload = buildDuitkuInvoicePayload({
+        item,
         merchantOrderId,
-        productDetails,
-        email: buyerEmail,
-        customerVaName: buyerName,
-        callbackUrl: CALLBACK_URL,
-        returnUrl: RETURN_URL,
-        expiryPeriod: 60,
-    };
+        buyerEmail,
+        buyerName,
+        userId,
+    });
 
     try {
         const { data } = await axios.post(`${DUITKU_BASE_URL}/merchant/createInvoice`, payload, {
@@ -320,7 +366,7 @@ router.get('/status/:merchantOrderId', async (req, res) => {
     }
 
     const timestamp = Date.now().toString();
-    const signature = crypto.createHash('sha256').update(MERCHANT_CODE + timestamp + API_KEY).digest('hex');
+    const signature = createDuitkuSignature(MERCHANT_CODE + timestamp, API_KEY);
 
     try {
         const { data } = await axios.post(`${DUITKU_BASE_URL}/merchant/transactionStatus`, {
@@ -554,7 +600,9 @@ router.get('/mock-complete', (req, res) => {
 
 router.__test = {
     SUBSCRIPTION_PACKAGES,
+    buildDuitkuInvoicePayload,
     buildMockPaymentUrl,
+    createDuitkuSignature,
     escapeHtml,
     hasDuitkuCredentials,
     isRegisteredPaymentUser,
@@ -562,6 +610,7 @@ router.__test = {
     parsePrice,
     resolvePaymentItem,
     signMockPayment,
+    verifyCallbackSignature,
     verifyMockPaymentToken,
     paymentGatewayState,
 };

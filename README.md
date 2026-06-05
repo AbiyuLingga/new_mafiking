@@ -22,7 +22,7 @@ The active browser entry point is `MAFIKING.html`, served by `server.js`. The fr
 - Question bank: exported from `../Mafiking/db/database.sqlite` into `db/question-bank.json`.
 - Imported question data at time of writing: 2 chapters, 4 subtopics, 23 problems, 86 problem steps.
 - Available real practice bank: Integral only. The static Belajar UI has more chapter cards, but only `Teknik Integrasi` currently maps to real backend problems.
-- Canvas correction: OCR/transcription and answer evaluation use Gemini 3.1 Flash Lite when `GEMINI_KEY_1` or later keys are configured; profile summary has a fallback when keys are missing.
+- Canvas correction: one submit sends a compressed JPEG canvas image to `/api/correction/evaluate-stream` with `/api/correction/evaluate` fallback. OCR + evaluation can route through the multi-provider pool (Gemini + Groq + optional OpenRouter), or direct Gemini fallback when the pool is disabled. Wrong-answer redline data is preserved through `wrongSteps` and `redlineTargets` so the result modal can redraw the user's canvas with incorrect strokes marked red. Profile summary has a local fallback when keys are missing.
 - Recommendation engine: profile recommendations are deterministic from correction attempts, multiple-choice mistakes, `data/recommendation-catalog.json` (`2026-05-20.purcell-v1`), and `docs/purcell-inspired-question-bank.md`; Gemma writes the profile narrative text only. The local engine applies half-life review scoring, BKT-lite mastery estimates, KST-style frontier/review tagging, recall interleaving, and per-item evidence metadata so selected follow-up questions stay catalog-backed and auditable.
 
 ## Quick Start
@@ -55,20 +55,26 @@ Create `.env` from `.env.example`.
 | `CLERK_PUBLISHABLE_KEY` | Alternative public Clerk key | Server also accepts this name and maps it for the static browser bridge. |
 | `CLERK_SECRET_KEY` | Required for Clerk Google auth | Server-only Clerk key used by `@clerk/express`. Never expose this in client code. |
 | `CLERK_WEBHOOK_SIGNING_SECRET` | Required for production Clerk webhook | Secret used by `svix` to verify Clerk webhook signatures at `/api/webhooks/clerk`. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE` | Required for local email signup verification | SMTP connection settings. Gmail production uses `smtp.gmail.com`, `465`, and `true`. |
+| `SMTP_USER`, `SMTP_PASS` | Required for local email signup verification | Gmail sender account and App Password. Do not use the normal Google account password. |
+| `MAIL_FROM_NAME`, `MAIL_DRY_RUN` | No | Friendly sender name and local dry-run mode. Set `MAIL_DRY_RUN=true` locally to log verification links instead of sending email. |
+| `PUBLIC_BASE_URL` | Required for production email links | Base URL used in verification emails, e.g. `https://mafiking.com`. |
 | `GEMINI_KEY_1` ... `GEMINI_KEY_20` | Required for AI correction/profile narrative | Gemini API keys used with fallback rotation for Gemini and Gemma models. |
 | `GEMINI_MODELS` | No | Comma-separated model preference for OCR/evaluation before built-in fallbacks. Defaults to Gemini 3.1 Flash Lite. |
 | `GEMMA_PROFILE_MODEL` | No | Gemma model used for profile narrative. Defaults to `gemma-4-31b-it`. |
 | `GEMMA_PROFILE_MODELS` | No | Comma-separated profile narrative model fallback list. Overrides `GEMMA_PROFILE_MODEL`. |
+| `MAFIKING_POOL_ENABLED` | No | Enables the multi-provider AI pool. Defaults to enabled when keys exist; set `false` to use direct Gemini fallback. |
+| `MAFIKING_POOL_GEMINI_WEIGHT` | No | Weighted-random Gemini share for pool calls. Defaults to `0.5`. |
+| `MAFIKING_POOL_GROQ_WEIGHT` | No | Weighted-random Groq share for pool calls. Defaults to `0.3`. |
+| `MAFIKING_POOL_OPENROUTER_WEIGHT` | No | Weighted-random OpenRouter share for pool calls when `OPENROUTER_API_KEY` is set. Defaults to `0.2`. |
+| `MAFIKING_POOL_MAX_CONCURRENT` | No | Global AI pool concurrency limit. Defaults to `5`. |
+| `MAFIKING_POOL_CACHE_TTL_MS` | No | In-memory AI response cache TTL. Defaults to `3600000`. |
+| `GROQ_API_KEY` | Required for Groq pool capacity | Server-only Groq key for `meta-llama/llama-4-scout-17b-16e-instruct`. |
+| `OPENROUTER_API_KEY` | Optional for OpenRouter pool capacity | Server-only OpenRouter key. If empty, the OpenRouter provider is skipped. |
+| `OPENROUTER_MODEL` | No | OpenRouter model for canvas evaluation. Defaults to `google/gemma-4-31b-it:free`. |
+| `MAFIKING_FAST_PATH_ENABLED` | No | Enables the answer-equivalence fast path after AI OCR/evaluation. Defaults to enabled unless set to `false`, `0`, `off`, or `no`. |
 | `GEMINI_REQUEST_DAILY_LIMIT` | No | Admin monitoring request limit display per Gemini key. Defaults to `1500`. |
 | `GEMINI_TOKEN_DAILY_LIMIT` | No | Admin monitoring token limit display per Gemini key. Defaults to `1000000`. |
-| `AI_PROFILE_PROVIDER` | No | Legacy provider label. Profile narrative uses Gemma by default. |
-| `PROFILE_PROVIDER_ALLOW_9ROUTER` | No | Set `true` only to allow temporary 9Router profile narrative override when `AI_PROFILE_PROVIDER=9router`. |
-| `NINEROUTER_BASE_URL` | Required if `AI_PROFILE_PROVIDER=9router` | 9Router OpenAI-compatible base URL, usually `http://127.0.0.1:20128/v1`. |
-| `NINEROUTER_API_KEY` | Required if `AI_PROFILE_PROVIDER=9router` | API key copied from the 9Router dashboard. Server-side only. |
-| `NINEROUTER_MODEL` | No | 9Router fallback model for profile narrative when `NINEROUTER_MODELS` is not set. |
-| `NINEROUTER_MODELS` | No | Comma-separated allowlist for round-robin. Use only models that pass smoke tests. Overrides `NINEROUTER_MODEL`. |
-| `NINEROUTER_MAX_TOKENS` | No | Max output tokens for profile narrative. Defaults to `1200`. |
-| `NINEROUTER_TIMEOUT_MS` | No | Timeout for profile narrative. Defaults to `60000`. |
 | `DEEPSEEK_API_KEY` | Required for admin AI import | DeepSeek API key used only by the server-side admin import route. |
 | `DEEPSEEK_BASE_URL` | No | DeepSeek API base URL. Defaults to `https://api.deepseek.com`. |
 | `DEEPSEEK_MODEL` | No | DeepSeek chat model. Defaults to `deepseek-v4-pro`. |
@@ -79,7 +85,7 @@ Create `.env` from `.env.example`.
 | `DUITKU_CALLBACK_URL` | Required for deployed payments | Payment callback URL. |
 | `DUITKU_RETURN_URL` | Required for deployed payments | Browser return URL after payment. |
 
-Without Gemini keys, practice pages still open, but canvas evaluation endpoints return an API-key error. The profile summary endpoint can still return a local fallback summary. Profile narrative uses Gemma through the same Gemini API key pool; catalog recommendation items still come from the local deterministic engine.
+Without Gemini or Groq keys, practice pages still open, but canvas evaluation endpoints return an API-key error. With only Gemini keys, the pool can still serve via Gemini; with `MAFIKING_POOL_ENABLED=false`, correction uses the direct Gemini fallback path. The profile summary endpoint can still return a local fallback summary. Profile narrative uses Gemma through Gemini keys; catalog recommendation items still come from the local deterministic engine.
 
 Clerk CLI setup writes `.env.local`. That file is intentionally ignored by git. The server loads `.env.local` first and then `.env`, without printing secrets. Before testing Google login, create/confirm the Clerk application, enable Google in SSO Connections, and make sure `CLERK_SECRET_KEY` plus one publishable key are present in ignored env files. For production webhooks, copy the Clerk endpoint signing secret into `CLERK_WEBHOOK_SIGNING_SECRET`.
 
@@ -88,8 +94,6 @@ For profile narrative, the default model is:
 ```env
 GEMMA_PROFILE_MODEL=gemma-4-31b-it
 ```
-
-9Router support remains for temporary override only. Set both `AI_PROFILE_PROVIDER=9router` and `PROFILE_PROVIDER_ALLOW_9ROUTER=true` if you intentionally want to use it.
 
 ## Commands
 
@@ -103,7 +107,6 @@ GEMMA_PROFILE_MODEL=gemma-4-31b-it
 | `npm run test:admin-import` | Run focused tests for admin file-import validation helpers. |
 | `npm run test:recommendations` | Run focused tests for skill mapping, need-score formula, Purcell-inspired parsing, and recommendation difficulty gating. |
 | `npm run test:profile-summary` | Run focused tests for profile-summary attempt window splitting. |
-| `npm run test:ai-profile` | Run focused tests for the 9Router/OpenAI-compatible profile provider adapter. |
 | `npm run export:questions` | Export question tables from the old Mafiking SQLite database into `db/question-bank.json`. |
 | `npm run import:questions` | Import `db/question-bank.json` into `db/database.sqlite`. |
 | `npm run import:questions -- --force` | Replace question tables even if existing progress/correction rows reference old problems. |
@@ -217,9 +220,12 @@ The import script refuses to replace question tables when user progress or corre
 |-- lib/
 |   |-- admin-import.js        # Admin import normalization and DeepSeek helper logic
 |   |-- clerk-user-sync.js     # Clerk user -> local SQLite user sync and guest merge helpers
+|   |-- gemini-client.js       # Pool-compatible Gemini client
+|   |-- groq-client.js         # Pool-compatible Groq vision client
 |   |-- log-token-usage.js     # Non-blocking AI token usage logger
+|   |-- multi-provider-pool.js # AI provider routing, cache, queue, fallback
 |   `-- recommendation-engine.js # Deterministic weakness scoring and follow-up question picker
-|-- SOP-9ROUTER-PROFILE-SUMMARY.md # Required profile narrative prompt for Gemma/legacy 9Router
+|-- SOP-PROFILE-SUMMARY.md # Required profile narrative prompt for Gemma
 |-- routes/
 |   |-- auth.js                # Register, login, logout, current user
 |   |-- webhooks.js            # Clerk webhook verification and user-created sync
@@ -277,7 +283,7 @@ The import script refuses to replace question tables when user progress or corre
 - Everyone opening `/` sees the `Landing` component.
 - The Mafiking logo returns to this landing page from app routes.
 - `Coba Gratis` opens `Belajar` with the `Try Out` tab selected. If the user is already logged in, the same button continues into their account context.
-- The login screen uses the existing auth UI. Sign up temporarily reuses that shell with sign-up labels and a display-name field. `Kembali landing` clears the auth route state and returns to the public landing.
+- The login screen uses the existing auth UI. Email/password sign up asks for email and password, then requires the user to click a verification link sent by email before login is allowed.
 - The auth screen also includes Clerk Google login/sign-up controls. Clerk is loaded through `src/clerk-auth.jsx`, using `/api/config/clerk` to fetch only the publishable key.
 - Clerk users are synced into local SQLite users on API requests through `@clerk/express`; the local `users.id` remains the source of truth for progress, XP, admin role, and payments.
 - First-time Google users are synced into the local account model, then incomplete non-admin profiles are completed through the mandatory modal in `src/onboarding.jsx`.
@@ -314,9 +320,9 @@ The import script refuses to replace question tables when user progress or corre
 
 1. User enters canvas mode via `ModeSegment`.
 2. User writes on the canvas in `src/practice.jsx` / `src/answer-board.jsx`.
-3. Submit exports the canvas image as PNG data URL.
-4. Frontend posts to `POST /api/correction/transcribe` for OCR confirmation, then `POST /api/correction/evaluate` after confirmation.
-5. Backend validates image size/type, calls Gemini 3.1 Flash Lite with key fallback, logs successful token usage in `ai_token_usage`, normalizes the JSON response, stores a row in `correction_attempts`, then returns feedback.
+3. Submit exports the canvas image as WEBP data URL.
+4. Frontend posts once to `POST /api/correction/evaluate`; the old `/api/correction/transcribe` route remains for compatibility and is marked deprecated.
+5. Backend validates image size/type, calls the multi-provider pool for merged OCR + evaluation when enabled, logs successful token usage in `ai_token_usage`, normalizes the JSON response, stores a row in `correction_attempts`, then returns feedback.
 6. Frontend shows the ResultModal and posts progress to `POST /api/progress/submit`.
 
 ### Profile Report
@@ -325,7 +331,7 @@ The import script refuses to replace question tables when user progress or corre
 2. It posts attempts to `/api/correction/profile-summary`.
 3. Backend computes deterministic skill need scores from up to 200 recent canvas correction attempts using wrong frequency, recency, low score, attempt pressure, and prerequisite gap.
 4. Backend adds recent multiple-choice evidence from `practice_attempts` so the narrative can mention repeated wrong subtopics, difficulty, selected answer, and correct answer.
-5. If the AI narrative cooldown allows it, backend sends only the 20 newest correction attempts plus summarized multiple-choice evidence to Gemma 4 31B, unless a legacy 9Router override is explicitly enabled.
+5. If the AI narrative cooldown allows it, backend sends only the 20 newest correction attempts plus summarized multiple-choice evidence to Gemma 4 31B.
 6. Normal users can refresh the AI narrative at most once per hour; admin user `123` with password `135` bypasses this cooldown.
 7. Backend returns `recommendedItems` from the Purcell-aligned local bank, `skillNeedScores` for debugging/explainability, and `recommendedQuestions` as a backward-compatible string list.
 
@@ -358,9 +364,10 @@ Most API routes require either a local session or a verified Clerk Bearer token.
 | `POST` | `/api/progress/submit` | Save correctness, XP, level, streak, and return updated progress metadata. |
 | `GET` | `/api/progress/stats` | Current user's real XP, level, daily streak, mastery, and progress toward the next level. |
 | `GET` | `/api/correction/attempts` | Recent correction attempts. |
-| `POST` | `/api/correction/transcribe` | Transcribe canvas image. |
-| `POST` | `/api/correction/evaluate` | Evaluate answer and store attempt. |
+| `POST` | `/api/correction/transcribe` | Deprecated compatibility route for OCR-only canvas image transcription. |
+| `POST` | `/api/correction/evaluate` | Evaluate answer and store attempt; image-only canvas submissions run merged OCR + evaluation in one request. |
 | `POST` | `/api/correction/profile-summary` | Generate or fallback profile summary. |
+| `GET` | `/api/correction/pool/stats` | Admin/local-admin read-only AI pool counters. |
 | `GET` | `/api/tryouts/:tryoutId/full` | Load one Try Out package/question bank with solution steps. |
 | `GET` | `/api/progress/tryout-attempts/latest` | Load the current registered user's latest attempt for one Try Out. |
 | `POST` | `/api/progress/tryout-attempts` | Submit a registered user's Try Out answers; rejects duplicate submissions until admin reset. |

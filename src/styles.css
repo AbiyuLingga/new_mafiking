@@ -417,6 +417,25 @@ button:focus-visible, a:focus-visible {
   box-shadow: 0 18px 46px -34px rgba(11, 19, 38, .24);
 }
 
+.landing-teacher-mask {
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}
+
+.landing-teacher-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+}
+
+.landing-teacher-track {
+  will-change: scroll-position;
+}
+
+.landing-teacher-card {
+  box-shadow: 0 18px 46px -34px rgba(11, 19, 38, .24);
+  scroll-snap-align: start;
+}
+
 @keyframes landing-testimonial-slide {
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(-50%, 0, 0); }
@@ -1292,7 +1311,7 @@ button:focus-visible, a:focus-visible {
   position: fixed;
   right: 0;
   top: 0;
-  z-index: 20000;
+  z-index: 30000;
 }
 
 .mafiking-confirm-card {
@@ -5856,6 +5875,7 @@ button:focus-visible, a:focus-visible {
   width: min(100%, 340px);
 }
 
+/* ─── Mobile compact overrides ─────────────────────────────────────────── */
 @media (max-width: 639px) {
   .landing-hero-copy {
     max-width: 100%;
@@ -5863,6 +5883,27 @@ button:focus-visible, a:focus-visible {
 
   .landing-hero-copy p {
     max-width: min(100%, 20rem);
+  }
+
+  .landing-mapel-carousel {
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .landing-mapel-carousel > * {
+    scroll-snap-align: start;
+  }
+
+  .landing-testimonial-mask::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    background: linear-gradient(to left, white, transparent);
+    pointer-events: none;
+    z-index: 10;
   }
 }
 

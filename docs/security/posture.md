@@ -67,7 +67,7 @@
 | Check | Where | Status |
 |---|---|---|
 | Gemini text sanitization | `routes/correction.js:920,954` + `lib/text-sanitize.js` | Active — 4000-char cap, control-char + bidi + zero-width strip, LaTeX-preserving |
-| Gemma / DeepSeek scope (server-side only) | `lib/ai-profile-provider.js`, `lib/admin-import.js` | Server-side only; no `process.env` in `src/*.jsx`; Vite `VITE_*`-only |
+| Gemma / DeepSeek scope (server-side only) | `routes/correction.js`, `lib/admin-import.js` | Server-side only; no `process.env` in `src/*.jsx`; Vite `VITE_*`-only |
 | Clerk webhook signature | `routes/webhooks.js` (svix) | svix-verified; raw body parser in front |
 | Duitku HMAC + idempotency | `routes/payment.js` | MD5-verified; `merchantOrderId` uniqueness enforced |
 | F-10 (id coercion) | `/api/correction/evaluate` | Open — tracked in `llm.md` |

@@ -179,7 +179,7 @@ const pad2 = (n) => String(n).padStart(2, "0");
 const Logo = ({ size = 32, inverted = false }) => (
   <div className="flex items-center gap-2.5">
     <img
-      src="assets/logo.png"
+      src="/assets/logo.png"
       alt="MAFIKING"
       style={{ height: size, width: "auto", filter: inverted ? "invert(1) brightness(2)" : "none" }}
       className="object-contain"
@@ -423,7 +423,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
 
   return (
     <header className={`sticky top-0 z-40 transition-all ${headerCls}`}>
-      <div className="max-w-6xl mx-auto px-6 md:px-8 flex items-center justify-between h-[72px]">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8 flex items-center justify-between h-14 sm:h-[72px]">
         <button onClick={() => {
           if (typeof onLogoClick === 'function') {
             onLogoClick();
@@ -432,7 +432,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
           if (typeof window.__mafikingShowLanding === 'function') window.__mafikingShowLanding();
           else goHome();
         }} className="flex items-center">
-          <Logo size={32} inverted={isInk} />
+          <Logo size={28} inverted={isInk} />
         </button>
         <nav ref={navRef} className="relative hidden md:flex items-center gap-1">
           {activePill.ready && (
@@ -489,10 +489,19 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
               </div>
             </div>
           )}
-          {showPublicCtas && <button onClick={() => setRoute("profile")} className={`hidden md:inline-flex text-sm font-semibold px-4 py-2 ${isInk ? "text-white/70 hover:text-white" : "text-ink/70 hover:text-ink"}`}>Masuk</button>}
+          {showPublicCtas && <button onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "profile" } })} className={`hidden md:inline-flex text-sm font-semibold px-4 py-2 ${isInk ? "text-white/70 hover:text-white" : "text-ink/70 hover:text-ink"}`}>Masuk</button>}
           {showPublicCtas && (
             <button onClick={() => setRoute({ route: "belajar", section: "Try Out" })} className={isInk ? "btn-yel !py-2.5 !px-5 text-sm" : "btn-ink !py-2.5 !px-5 text-sm"}>
               Coba Gratis
+            </button>
+          )}
+          {gamified && !isLoggedIn && (
+            <button
+              onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "profile" } })}
+              className={`hidden md:inline-flex text-sm font-semibold px-3 py-2 rounded-full transition-colors ${isInk ? "text-white/70 hover:text-white hover:bg-white/10" : "text-ink/65 hover:text-ink hover:bg-ink/5"}`}
+              type="button"
+            >
+              Masuk
             </button>
           )}
           {gamified && (
@@ -506,17 +515,19 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
         </div>
       </div>
       {menuOpen && (
-        <div className={`md:hidden border-t p-4 flex flex-col gap-1 ${isInk ? "bg-ink border-white/10" : "bg-white hairline"}`}>
-          {links.map(l => (
-            <button key={l.id} onClick={() => { goRoute(l.id); setMenuOpen(false); }} className={`text-left px-4 py-3 font-semibold rounded-xl ${isInk ? "text-white hover:bg-white/10" : "hover:bg-ink/5"}`}>
-              {l.label}
-            </button>
-          ))}
-          {isAdminMode && (
-            <button onClick={() => { if (typeof onAdminPanelOpen === 'function') onAdminPanelOpen(); setMenuOpen(false); }} className={`text-left px-4 py-3 font-semibold rounded-xl ${route === "admin" ? "bg-ink text-amber-300" : "bg-yel text-ink"}`} type="button">
-              Admin Panel
-            </button>
-          )}
+        <div className="md:hidden fixed inset-0 z-30 bg-black/20 backdrop-blur-sm" onClick={() => setMenuOpen(false)}>
+          <div className={`absolute top-14 sm:top-[72px] left-0 right-0 border-b p-3 flex flex-col gap-0.5 shadow-xl ${isInk ? "bg-ink border-white/10" : "bg-white hairline"}`} onClick={(e) => e.stopPropagation()}>
+            {links.map(l => (
+              <button key={l.id} onClick={() => { goRoute(l.id); setMenuOpen(false); }} className={`text-left px-4 py-3 font-semibold rounded-xl transition-colors ${route === l.id ? (isInk ? "bg-white/10 text-white" : "bg-ink/5 text-ink") : (isInk ? "text-white/70 hover:bg-white/10 hover:text-white" : "text-ink/70 hover:bg-ink/5 hover:text-ink")}`}>
+                {l.label}
+              </button>
+            ))}
+            {isAdminMode && (
+              <button onClick={() => { if (typeof onAdminPanelOpen === 'function') onAdminPanelOpen(); setMenuOpen(false); }} className={`text-left px-4 py-3 font-semibold rounded-xl ${route === "admin" ? "bg-ink text-amber-300" : "bg-yel text-ink"}`} type="button">
+                Admin Panel
+              </button>
+            )}
+          </div>
         </div>
       )}
     </header>

@@ -80,9 +80,8 @@ candidate threat source.
    `audit-2026-06.md`).
 
 7. **Tampering (AI) — prompt injection via canvas image or OCR text** *(Mitigated)*
-   The Gemini / Gemma calls in `routes/correction.js` and
-   `lib/ai-profile-provider.js` accept user-supplied content (canvas
-   drawings, image uploads). A crafted image could carry instructions that
+   The Gemini / Gemma calls in `routes/correction.js` accept
+   user-supplied content (canvas drawings, image uploads). A crafted image could carry instructions that
    the model follows, leaking the system prompt or producing unsafe output.
    *Control:* `lib/text-sanitize.js` (4000-char cap, control-char strip,
    LaTeX-preserving) applied at `routes/correction.js:920` and `:954`;

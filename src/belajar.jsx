@@ -41,7 +41,7 @@ function getTwoWordDisplayName(user) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).join(" ");
 }
 
-const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = null, initialSection = null, onSectionChange = null }) => {
+const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = null, hasPremiumAccess = false, initialSection = null, onSectionChange = null }) => {
   const [mapel, setMapelState] = useState(normalizeBelajarSection(initialSection) || getInitialBelajarMapel);
   const [semester, setSemester] = useState(1);
   const [dbInit, setDbInit] = useState(null);
@@ -85,10 +85,14 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
   })) : null;
 
   const useDb = rawDbChapters !== null;
-  const allMapelChapters = useDb
-    ? rawDbChapters.filter(c => c.mapel === mapel)
-    : (chapterData[mapel] || []);
-  const chapters = allMapelChapters.filter(c => c.semester === semester);
+  const staticMapelChapters = chapterData[mapel] || [];
+  const dbMapelChapters = useDb ? rawDbChapters.filter(c => c.mapel === mapel) : [];
+  const dbSemesterChapters = dbMapelChapters.filter(c => c.semester === semester);
+  const staticSemesterChapters = staticMapelChapters.filter(c => c.semester === semester);
+  const allMapelChapters = useDb ? dbMapelChapters : staticMapelChapters;
+  const chapters = useDb && !isAdmin && dbSemesterChapters.length === 0 && staticSemesterChapters.length > 0
+    ? staticSemesterChapters
+    : (useDb ? dbSemesterChapters : staticSemesterChapters);
   const isTryOutSection = mapel === "Try Out";
   const greetingName = isLoggedIn ? getTwoWordDisplayName(currentUser) : "";
 
@@ -96,10 +100,10 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
     <div className="app-page-bg app-page-bg--belajar min-h-[calc(100vh-72px)]">
       {/* Header */}
       <section>
-        <div className="max-w-6xl mx-auto px-6 md:px-8 pt-12 pb-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8 pt-6 sm:pt-12 pb-4 sm:pb-8">
           <div>
             <SemesterKicker semester={semester} setSemester={setSemester} />
-            <h1 className="font-display font-bold text-4xl md:text-5xl tracking-[-0.03em] leading-[1.05]">
+            <h1 className="font-display font-bold text-2xl sm:text-4xl md:text-5xl tracking-[-0.03em] leading-[1.05]">
               Selamat datang<br />
               {greetingName ? (
                 <span className="hi-yel-word">{greetingName}</span>
@@ -118,7 +122,7 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
 
       {/* Main content */}
       <section>
-        <div className="max-w-6xl mx-auto px-6 md:px-8 py-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-4 sm:py-10">
           {isTryOutSection ? (
             <div key={`cards-${mapel}`}>
               <TryOutBelajarPanel setRoute={setRoute} isLoggedIn={isLoggedIn} isAdmin={isAdmin} />
@@ -132,19 +136,19 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
             const toneClass = { amber: "tone-icon-amber", blue: "tone-icon-blue", emerald: "tone-icon-emerald", rose: "tone-icon-rose" }[M.color] || "tone-icon-amber";
             const barTone = { amber: "bar-amber", blue: "bar-blue", emerald: "bar-emerald", rose: "bar-rose" }[M.color] || "bar-amber";
             return (
-              <div className="flex items-start gap-4 mb-6">
+              <div className="flex items-start gap-3 sm:gap-4 mb-4 sm:mb-6">
                 <div
-                  className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 mt-0.5 ${toneClass}`}
+                  className={`w-9 h-9 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center shrink-0 mt-0.5 ${toneClass}`}
                 >
-                  <M.icon className="w-5 h-5" />
+                  <M.icon className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h2 className="font-display font-bold text-2xl tracking-[-0.02em] mb-1">{mapel}</h2>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-ink/50">
-                      {inProgress} dari {chapters.length} bab dikerjakan · {doneSoal}/{totalSoal} soal selesai
+                  <h2 className="font-display font-bold text-xl sm:text-2xl tracking-[-0.02em] mb-0.5 sm:mb-1">{mapel}</h2>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <span className="text-[10px] sm:text-xs text-ink/50">
+                      {inProgress} dari {chapters.length} bab · {doneSoal}/{totalSoal} soal
                     </span>
-                    <div className={`bar ${barTone} w-24 shrink-0`}><div style={{ width: `${pct}%` }}></div></div>
+                    <div className={`bar ${barTone} w-16 sm:w-24 shrink-0`}><div style={{ width: `${pct}%` }}></div></div>
                   </div>
                 </div>
               </div>
@@ -158,9 +162,9 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
           ) : !isTryOutSection ? (
             <React.Fragment>
               <div key={`cards-${mapel}-${semester}-${cardStyle}`}>
-                {cardStyle === "numbered" && <ChaptersNumbered chapters={chapters} setRoute={setRoute} mapel={mapel} />}
-                {cardStyle === "soft" && <ChaptersSoft chapters={chapters} setRoute={setRoute} mapel={mapel} />}
-                {cardStyle === "magazine" && <ChaptersMagazine chapters={chapters} setRoute={setRoute} mapel={mapel} />}
+                {cardStyle === "numbered" && <ChaptersNumbered chapters={chapters} setRoute={setRoute} mapel={mapel} hasPremiumAccess={hasPremiumAccess} />}
+                {cardStyle === "soft" && <ChaptersSoft chapters={chapters} setRoute={setRoute} mapel={mapel} hasPremiumAccess={hasPremiumAccess} />}
+                {cardStyle === "magazine" && <ChaptersMagazine chapters={chapters} setRoute={setRoute} mapel={mapel} hasPremiumAccess={hasPremiumAccess} />}
               </div>
             </React.Fragment>
           ) : null}
@@ -275,66 +279,66 @@ const TryOutBelajarPanel = ({ setRoute, isLoggedIn, isAdmin = false }) => {
   };
 
   return (
-    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mapel-stagger">
-      <section className="relative overflow-hidden rounded-[var(--card-radius)] bg-ink p-6 text-white group flex flex-col justify-between transition-all">
+    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6 mapel-stagger">
+      <section className="relative overflow-hidden rounded-[var(--card-radius)] bg-ink p-4 sm:p-6 text-white group flex flex-col justify-between transition-all">
         <div className="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-yel/20 blur-3xl" />
         <div className="absolute -bottom-16 -left-12 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
 
         <div className="relative z-10 flex flex-col h-full">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-[10px] font-mono font-bold tracking-widest uppercase bg-yel text-ink px-2.5 py-1 rounded-md border border-yel">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <span className="text-[9px] sm:text-[10px] font-mono font-bold tracking-widest uppercase bg-yel text-ink px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md border border-yel">
               Try Out
             </span>
-            <div className="h-8 min-w-[3.75rem] px-2 rounded-lg bg-white/5 flex items-center justify-center gap-1 text-[10px] font-mono font-bold tracking-widest uppercase text-white/65 border border-white/10">
-              <Icon.Clock className="w-3 h-3" />
+            <div className="h-7 sm:h-8 min-w-[3rem] sm:min-w-[3.75rem] px-1.5 sm:px-2 rounded-lg bg-white/5 flex items-center justify-center gap-1 text-[9px] sm:text-[10px] font-mono font-bold tracking-widest uppercase text-white/65 border border-white/10">
+              <Icon.Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
               30 mnt
             </div>
           </div>
 
-          <h2 className="font-display font-extrabold text-2xl leading-tight tracking-tight mb-3 text-white">
+          <h2 className="font-display font-extrabold text-lg sm:text-2xl leading-tight tracking-tight mb-2 sm:mb-3 text-white">
             Tryout pre-test TPB
           </h2>
-          <div className="mt-auto pt-4 border-t border-white/10 flex items-center justify-between gap-3 w-full">
-            <span className="text-xs font-mono font-bold text-white/50">
+          <div className="mt-auto pt-3 sm:pt-4 border-t border-white/10 flex items-center justify-between gap-2 sm:gap-3 w-full">
+            <span className="text-[10px] sm:text-xs font-mono font-bold text-white/50">
               Gratis
             </span>
-            <button onClick={startPractice} className="btn-yel !px-4 !py-2 text-xs shrink-0" type="button">
+            <button onClick={startPractice} className="btn-yel !px-3 !py-1.5 sm:!px-4 sm:!py-2 text-[10px] sm:text-xs shrink-0" type="button">
               Mulai
-              <Icon.Arrow className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+              <Icon.Arrow className="w-3 h-3 sm:w-3.5 sm:h-3.5 transition-transform group-hover:translate-x-1" />
             </button>
           </div>
 
         </div>
       </section>
-      <section className="relative overflow-hidden rounded-[var(--card-radius)] bg-ink p-6 text-white group flex flex-col justify-between transition-all">
+      <section className="relative overflow-hidden rounded-[var(--card-radius)] bg-ink p-4 sm:p-6 text-white group flex flex-col justify-between transition-all">
         <div className="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-yel/15 blur-3xl" />
         <div className="absolute -bottom-16 -left-12 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
 
         <div className="relative z-10 flex flex-col h-full">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-[10px] font-mono font-bold tracking-widest uppercase bg-white text-ink px-2.5 py-1 rounded-md border border-white">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <span className="text-[9px] sm:text-[10px] font-mono font-bold tracking-widest uppercase bg-white text-ink px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md border border-white">
               Premium
             </span>
-            <div className="h-8 min-w-[3.75rem] px-2 rounded-lg bg-white/5 flex items-center justify-center gap-1 text-[10px] font-mono font-bold tracking-widest uppercase text-white/65 border border-white/10">
-              <Icon.Clock className="w-3 h-3" />
+            <div className="h-7 sm:h-8 min-w-[3rem] sm:min-w-[3.75rem] px-1.5 sm:px-2 rounded-lg bg-white/5 flex items-center justify-center gap-1 text-[9px] sm:text-[10px] font-mono font-bold tracking-widest uppercase text-white/65 border border-white/10">
+              <Icon.Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
               {premiumPackage.duration || "90 mnt"}
             </div>
           </div>
 
-          <h2 className="font-display font-extrabold text-2xl leading-tight tracking-tight mb-3 text-white">
+          <h2 className="font-display font-extrabold text-lg sm:text-2xl leading-tight tracking-tight mb-2 sm:mb-3 text-white">
             {premiumPackage.title || "Tryout Premium"}
           </h2>
-          <div className="mt-auto pt-4 border-t border-white/10 flex items-center justify-between gap-3 w-full">
-            <span className="text-xs font-mono font-bold text-white/50">
+          <div className="mt-auto pt-3 sm:pt-4 border-t border-white/10 flex items-center justify-between gap-2 sm:gap-3 w-full">
+            <span className="text-[10px] sm:text-xs font-mono font-bold text-white/50">
               {hasPremiumAccess ? "Akses aktif" : "Perlu akses"}
             </span>
             <button
               onClick={startPremiumTryout}
-              className={hasPremiumAccess ? "btn-yel !px-4 !py-2 text-xs shrink-0" : "inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-bold text-white/65 hover:bg-white/10 transition-colors shrink-0"}
+              className={hasPremiumAccess ? "btn-yel !px-3 !py-1.5 sm:!px-4 sm:!py-2 text-[10px] sm:text-xs shrink-0" : "inline-flex items-center gap-1.5 sm:gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 sm:px-4 sm:py-2 text-[10px] sm:text-xs font-bold text-white/65 hover:bg-white/10 transition-colors shrink-0"}
               type="button"
             >
               {hasPremiumAccess ? "Mulai" : "Terkunci"}
-              {hasPremiumAccess ? <Icon.Arrow className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" /> : <Icon.Lock className="w-3.5 h-3.5" />}
+              {hasPremiumAccess ? <Icon.Arrow className="w-3 h-3 sm:w-3.5 sm:h-3.5 transition-transform group-hover:translate-x-1" /> : <Icon.Lock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
             </button>
           </div>
         </div>
@@ -524,7 +528,7 @@ const MapelTabs = ({ mapel, setMapel }) => {
   return (
     <section className="sticky top-[72px] z-30 bg-transparent border-b hairline">
       <div className="max-w-6xl mx-auto px-6 md:px-8">
-        <div ref={trackRef} className="mapel-tabs-track flex gap-8 overflow-x-auto hide-scrollbar pt-5">
+        <div ref={trackRef} className="mapel-tabs-track flex gap-3 sm:gap-8 overflow-x-auto hide-scrollbar pt-3 sm:pt-5">
           {underline.ready && (
             <span
               aria-hidden="true"
@@ -547,7 +551,7 @@ const MapelTabs = ({ mapel, setMapel }) => {
                 className="text-left whitespace-nowrap relative pb-3"
                 type="button"
               >
-                <div className={`font-display font-bold text-xl transition-colors duration-300 ${active ? tone.activeText : "text-ink/40"}`}>{m}</div>
+                <div className={`font-display font-bold text-base sm:text-xl transition-colors duration-300 ${active ? tone.activeText : "text-ink/40"}`}>{m}</div>
               </button>
             );
           })}
@@ -577,7 +581,7 @@ const MapelDropdown = ({ mapel, setMapel }) => (
 // ─── CHAPTER CARDS · 3 VARIANTS ───────────────────────────────────────────
 
 // Variant A — NUMBERED (editorial, angka bab besar di kiri, tanpa box)
-const ChaptersNumbered = ({ chapters, setRoute, mapel }) => (
+const ChaptersNumbered = ({ chapters, setRoute, mapel, hasPremiumAccess = false }) => (
   <div className="flex flex-col mapel-stagger">
     {chapters.map((c, i) => {
       const isActive = c.progress > 0;
@@ -594,7 +598,7 @@ const ChaptersNumbered = ({ chapters, setRoute, mapel }) => (
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
               {isActive && <span className="tag-yel tag">Aktif</span>}
-              <span className="text-xs text-ink/55 flex items-center gap-1"><Icon.Clock className="w-3 h-3" /> {c.est} · {c.total} soal</span>
+              <span className="text-xs text-ink/55 flex items-center gap-1"><Icon.Clock className="w-3 h-3" /> {c.est} · {c.total} soal{!hasPremiumAccess && c.total > 5 && <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider text-amber-700 ml-1">5 gratis</span>}</span>
             </div>
             <h3 className="font-display font-bold text-2xl md:text-3xl tracking-[-0.02em] leading-tight mb-1.5">{c.title}</h3>
             {pct > 0 && (
@@ -614,7 +618,7 @@ const ChaptersNumbered = ({ chapters, setRoute, mapel }) => (
 );
 
 // Variant B — SOFT CARDS (3-col grid, soft shadow, photo placeholder)
-const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
+const ChaptersSoft = ({ chapters, setRoute, mapel, hasPremiumAccess = false }) => {
   const toneClass = { Matematika: "card-premium-amber", Fisika: "card-premium-blue", Kimia: "card-premium-rose" }[mapel] || "card-premium-amber";
   const artClass = { Matematika: "card-premium-art-matematika", Fisika: "card-premium-art-fisika", Kimia: "card-premium-art-kimia" }[mapel] || "card-premium-art-matematika";
   const glowColor = { Matematika: "glow-amber", Fisika: "glow-blue", Kimia: "glow-rose" }[mapel] || "glow-amber";
@@ -632,14 +636,14 @@ const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
   };
 
   return (
-  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mapel-stagger">
+  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6 mapel-stagger">
     {chapters.map(c => {
       const pct = (c.progress / c.total) * 100;
       return (
         <button
           key={c.id}
           onClick={() => setRoute({ route: "practice", practice: { ...c, mapel } })}
-          className={`text-left card-premium card-premium-subject-art ${toneClass} ${artClass} p-6 group flex flex-col justify-between transition-all`}
+          className={`text-left card-premium card-premium-subject-art ${toneClass} ${artClass} p-4 sm:p-6 group flex flex-col justify-between transition-all`}
         >
           {/* Ambient Glows */}
           <div className={`card-premium-glow glow-top-right ${glowColor}`} />
@@ -649,34 +653,34 @@ const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
 
           {/* Top Row: Bab Info & Est */}
           <div className="relative z-10 w-full flex flex-col h-full">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono font-bold tracking-widest uppercase bg-ink/5 text-ink/65 px-2.5 py-1 rounded-md border border-ink/5">
+            <div className="flex items-center justify-between mb-2 sm:mb-4">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-[9px] sm:text-[10px] font-mono font-bold tracking-widest uppercase bg-ink/5 text-ink/65 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md border border-ink/5">
                   Bab {pad2(c.num)}
                 </span>
               </div>
               {c.est && (
-                <div className="h-8 min-w-[3.75rem] px-2 rounded-lg bg-transparent flex items-center justify-center text-[10px] font-mono font-bold tracking-widest uppercase text-ink/60 border border-ink/5 group-hover:text-ink transition-all duration-300 animate-pulse-subtle">
+                <div className="h-6 sm:h-8 min-w-[3rem] sm:min-w-[3.75rem] px-1.5 sm:px-2 rounded-lg bg-transparent flex items-center justify-center text-[9px] sm:text-[10px] font-mono font-bold tracking-widest uppercase text-ink/60 border border-ink/5 group-hover:text-ink transition-all duration-300 animate-pulse-subtle">
                   {c.est}
                 </div>
               )}
             </div>
 
             {/* Chapter Title */}
-            <h3 className="font-display font-extrabold text-2xl text-ink leading-tight tracking-tight mb-3 group-hover:text-ink/80 transition-colors">
+            <h3 className="font-display font-extrabold text-lg sm:text-2xl text-ink leading-tight tracking-tight mb-1.5 sm:mb-3 group-hover:text-ink/80 transition-colors">
               {c.title}
             </h3>
 
             {/* Chapter Subtitle (description) */}
             {c.sub && (
-              <p className="text-xs text-ink/55 font-sans leading-relaxed mb-4 line-clamp-2">
+              <p className="hidden sm:block text-xs text-ink/55 font-sans leading-relaxed mb-4 line-clamp-2">
                 {renderTextWithBold(c.sub)}
               </p>
             )}
 
             {/* Topics Covered */}
             {c.topics && c.topics.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-6">
+              <div className="hidden sm:flex flex-wrap gap-1.5 mb-6">
                 {c.topics.slice(0, 3).map(t => (
                   <span key={t} className={`topic-pill-premium ${pillClass}`}>
                     #{t}
@@ -686,26 +690,29 @@ const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
             )}
 
             {/* Divider & Footer (Progress / CTA) */}
-            <div className="mt-auto pt-4 flex items-center justify-between w-full">
+            <div className="mt-auto pt-3 sm:pt-4 flex items-center justify-between w-full">
               {pct > 0 ? (
-                <div className="flex flex-col gap-1.5 flex-1 mr-4">
-                  <div className="flex items-center justify-between text-[11px] font-mono font-bold text-ink/60">
+                <div className="flex flex-col gap-1 sm:gap-1.5 flex-1 mr-3 sm:mr-4">
+                  <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-mono font-bold text-ink/60">
                     <span>{c.progress} / {c.total} Soal</span>
                     <span>{Math.round(pct)}%</span>
                   </div>
-                  <div className="w-full h-1.5 bg-ink/5 rounded-full overflow-hidden">
+                  <div className="w-full h-1 sm:h-1.5 bg-ink/5 rounded-full overflow-hidden">
                     <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }}></div>
                   </div>
                 </div>
               ) : (
-                <span className="text-xs font-mono font-bold text-ink/45">
-                  {c.total} soal latihan
+                <span className="text-[10px] sm:text-xs font-mono font-bold text-ink/45 flex items-center gap-1.5">
+                  <span>{c.total} soal</span>
+                  {!hasPremiumAccess && c.total > 5 && (
+                    <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-extrabold uppercase tracking-wider text-amber-700">5 gratis</span>
+                  )}
                 </span>
               )}
 
-              <span className={`btn-premium-cta ${ctaClass} shrink-0`}>
+              <span className={`btn-premium-cta ${ctaClass} shrink-0 !px-2.5 !py-1.5 sm:!px-3.5 sm:!py-2 text-[10px] sm:text-xs`}>
                 Buka
-                <Icon.Arrow className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+                <Icon.Arrow className="w-3 h-3 sm:w-3.5 sm:h-3.5 transition-transform group-hover:translate-x-1" />
               </span>
             </div>
           </div>
@@ -717,7 +724,7 @@ const ChaptersSoft = ({ chapters, setRoute, mapel }) => {
 };
 
 // Variant C — MAGAZINE (horizontal scroll, editorial full-bleed cards)
-const ChaptersMagazine = ({ chapters, setRoute, mapel }) => (
+const ChaptersMagazine = ({ chapters, setRoute, mapel, hasPremiumAccess = false }) => (
   <div className="flex gap-4 md:gap-5 overflow-x-auto hide-scrollbar pb-4 -mx-6 px-6 md:-mx-8 md:px-8 mapel-stagger">
     {chapters.map((c, i) => {
       const isActive = c.progress > 0;
@@ -751,7 +758,7 @@ const ChaptersMagazine = ({ chapters, setRoute, mapel }) => (
             )}
             {!pct && (
               <div className={`mt-4 pt-4 border-t ${isHero ? "border-white/10" : "hairline"} flex items-center justify-between`}>
-                <span className={`text-xs font-mono ${isHero ? "text-white/40" : "text-ink/45"}`}>{c.total} soal</span>
+                <span className={`text-xs font-mono ${isHero ? "text-white/40" : "text-ink/45"}`}>{c.total} soal{!hasPremiumAccess && c.total > 5 && <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider text-amber-700 ml-1.5">5 gratis</span>}</span>
                 <Icon.Arrow className={`w-4 h-4 transition-transform group-hover:translate-x-1 ${isHero ? "text-white/60" : ""}`} />
               </div>
             )}

@@ -17,6 +17,10 @@ CREATE TABLE IF NOT EXISTS users (
     clerk_id TEXT,
     email TEXT,
     auth_provider TEXT NOT NULL DEFAULT 'local',
+    email_verified_at DATETIME,
+    email_verification_token_hash TEXT,
+    email_verification_expires_at DATETIME,
+    email_verification_last_sent_at DATETIME,
     xp INTEGER DEFAULT 0,
     level INTEGER DEFAULT 1,
     streak_days INTEGER DEFAULT 0,
@@ -217,6 +221,29 @@ CREATE TABLE IF NOT EXISTS correction_attempts (
     evaluation_json TEXT NOT NULL DEFAULT '{}',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS correction_latency_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    problem_id INTEGER REFERENCES problems(id) ON DELETE SET NULL,
+    provider TEXT NOT NULL DEFAULT 'unknown',
+    key_index INTEGER,
+    model_used TEXT DEFAULT '',
+    image_dimension INTEGER,
+    image_bytes INTEGER,
+    ai_duration_ms INTEGER,
+    total_duration_ms INTEGER,
+    cache_hit INTEGER DEFAULT 0,
+    fast_path INTEGER DEFAULT 0,
+    is_correct INTEGER,
+    queue_wait_ms INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'success',
+    error_code INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_latency_created ON correction_latency_metrics(created_at);
+CREATE INDEX IF NOT EXISTS idx_latency_provider ON correction_latency_metrics(provider);
 
 CREATE TABLE IF NOT EXISTS user_access_grants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

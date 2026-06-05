@@ -1,6 +1,6 @@
 # SOP Profile Summary
 
-SOP ini wajib dibaca dan diikuti setiap AI provider yang diminta membuat narasi raport profil belajar. Provider default Mafiking saat ini adalah Gemma 4 31B melalui Gemini API key pool; 9Router hanya dipakai sebagai override legacy jika diaktifkan eksplisit.
+SOP ini wajib dibaca dan diikuti Gemma saat membuat narasi raport profil belajar. Provider default Mafiking saat ini adalah Gemma 4 31B melalui Gemini API key pool.
 
 ## Peran
 

@@ -6,7 +6,7 @@ reach the model, the model + key, and the existing controls. Used by the
 Phase 2 LLM security review (`docs/security/llm.md`) and as the source
 of truth when the model set changes.
 
-## Gemini — image OCR + canvas evaluation
+## Gemini / Groq / OpenRouter — image OCR + canvas evaluation
 
 ### `/api/correction/transcribe` — image-to-LaTeX transcription
 - **File:** `routes/correction.js:918`
@@ -32,11 +32,16 @@ of truth when the model set changes.
 - **Audit:** logged in `ai_token_usage` (lib/log-token-usage.js) and
   surfaced to admin via `/api/admin/...` dashboards.
 
-### `/api/correction/evaluate` — canvas redline evaluation
+### `/api/correction/evaluate` and `/api/correction/evaluate-stream` — canvas redline evaluation
 - **File:** `routes/correction.js:952`
 - **Auth:** `isAuthenticated` + `requireRegisteredUser`
 - **CSRF:** same mount as transcribe.
-- **Model:** `gemini-3.1-flash-lite` (`EVALUATE_MODELS`).
+- **Model/provider:** direct fallback uses `gemini-3.1-flash-lite`
+  (`EVALUATE_MODELS`). When `MAFIKING_POOL_ENABLED` is active, the
+  request can route through Gemini, Groq
+  (`meta-llama/llama-4-scout-17b-16e-instruct`), or optional OpenRouter
+  (`OPENROUTER_MODEL`, default `google/gemma-4-31b-it:free`) depending on
+  configured keys and pool weights.
 - **System prompt:** `EVALUATE_SYSTEM_PROMPT` (routes/correction.js:46).
   Tells the model to (a) act as a math teacher, (b) use the confirmed
   LaTeX as the source of truth, (c) return only JSON, (d) cap tags at
@@ -54,7 +59,12 @@ of truth when the model set changes.
     to defend against a malicious JSON string.
 - **Risk class:** AML.T0051, AML.T0048 (Erode ML Model Integrity —
   not applicable here, but tracked). Mitigated as above.
-- **Cost control:** `correctionLimiter` + `EVALUATE_MAX_OUTPUT_TOKENS`.
+- **Cost control:** per-user `correctionLimiter`,
+  `EVALUATE_MAX_OUTPUT_TOKENS`, multi-provider queue concurrency, response
+  cache, and `correction_latency_metrics` tracking. The fast path can mark
+  equivalent correct answers after OCR/evaluation, but wrong answers must keep
+  `wrongSteps` and `redlineTargets` so the frontend can redraw the user's
+  canvas with incorrect strokes marked red.
 
 ## Gemma 4 31B — profile summary narrative
 
@@ -64,8 +74,8 @@ of truth when the model set changes.
   summary is allowed for any session-bound user; the data is read
   from `correction_attempts` scoped to `req.session.userId`).
 - **CSRF:** behind `csrfProtection`.
-- **Model:** `gemma-4-31b-it` (`PROFILE_MODELS`, via
-  `lib/ai-profile-provider.js`).
+- **Model:** `gemma-4-31b-it` (`PROFILE_MODELS`, via the Gemini path in
+  `routes/correction.js`).
 - **System prompt:** `PROFILE_NARRATIVE_SOP` (read from disk). The
   Gemma path constructs a structured evidence object via
   `buildProfileAiEvidence` and calls Gemma.
@@ -107,8 +117,6 @@ of truth when the model set changes.
 
 ## Out of scope
 
-- 9Router (legacy) profile provider. The runtime is in fallback mode
-  (`PROFILE_PROVIDER_ALLOW_9ROUTER=false` in `.env.example`).
 - DeepSeek *retry* loops. The `callDeepSeekDraft` function makes a
   single request and returns; no retry-with-jitter that could be
   exploited for cost amplification.

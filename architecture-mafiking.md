@@ -230,7 +230,6 @@ Clerk integration adds `users.clerk_id`, `users.email`, and `users.auth_provider
 - Successful AI usage is logged in `ai_token_usage` through `lib/log-token-usage.js`; logging must not break user requests.
 - Profile recommendations are deterministic and catalog-backed through `lib/recommendation-engine.js`.
 - Gemma 4 31B writes profile narrative text by default, but should not select final recommendation refs.
-- 9Router remains a legacy override only when `AI_PROFILE_PROVIDER=9router` and `PROFILE_PROVIDER_ALLOW_9ROUTER=true`.
 
 ## Known Constraints
 

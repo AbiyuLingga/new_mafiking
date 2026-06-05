@@ -1,31 +1,9 @@
 // Practice route — choice (multiple choice) default, optional canvas mode.
 
 const CANVAS_DEMO_VIDEO_SRC = "/assets/saas_demo_video_popup.mp4";
-const OCR_TRUST_STREAK_KEY = "mafiking:canvas-ocr-trust-streak";
-const OCR_TRUST_THRESHOLD = 4;
-const OCR_AUTO_ACCEPT_MS = 12000;
 
-function readOcrTrustStreak() {
-  try {
-    const value = Number(window.localStorage && window.localStorage.getItem(OCR_TRUST_STREAK_KEY));
-    return Number.isFinite(value) && value > 0 ? Math.min(99, Math.floor(value)) : 0;
-  } catch (_) {
-    return 0;
-  }
-}
-
-function writeOcrTrustStreak(value) {
-  const normalized = Math.max(0, Math.min(99, Math.floor(Number(value) || 0)));
-  try {
-    window.localStorage && window.localStorage.setItem(OCR_TRUST_STREAK_KEY, String(normalized));
-  } catch (_) { }
-  return normalized;
-}
-
-const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthenticated = false }) => {
+const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthenticated = false, hasPremiumAccess = false }) => {
   const boardRef = useRef(null);
-  const ocrPrefetchRef = useRef({ token: null, promise: null, result: null });
-  const confirmingOcrRef = useRef(false);
   const [mode, setMode] = useState("choice"); // "choice" | "canvas"
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -37,11 +15,8 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   const [boardDirty, setBoardDirty] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showResultModal, setShowResultModal] = useState(false);
-  const [ocrReview, setOcrReview] = useState(null);
   const [canvasProcess, setCanvasProcess] = useState(null);
   const [canvasProcessSlow, setCanvasProcessSlow] = useState(false);
-  const [ocrTrustStreak, setOcrTrustStreak] = useState(readOcrTrustStreak);
-  const [ocrPrefetchActive, setOcrPrefetchActive] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [showCanvasIntro, setShowCanvasIntro] = useState(() => !context?.disableCanvasIntro);
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(() => {
@@ -51,21 +26,6 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   const timeExpiredNoticeRef = useRef(false);
   const isTimedTryout = Number(context?.timeLimitSeconds || 0) > 0;
   const timeExpired = isTimedTryout && timeLeftSeconds === 0;
-
-  function resetOcrPrefetch() {
-    ocrPrefetchRef.current = { token: null, promise: null, result: null };
-    setOcrPrefetchActive(false);
-  }
-
-  function setStoredOcrTrustStreak(nextValue) {
-    const normalized = writeOcrTrustStreak(nextValue);
-    setOcrTrustStreak(normalized);
-    return normalized;
-  }
-
-  function resetOcrTrustStreak() {
-    setStoredOcrTrustStreak(0);
-  }
 
   function dismissCanvasIntro() { setShowCanvasIntro(false); }
   function requiresLogin() {
@@ -144,9 +104,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     setShowHint(false);
     setBoardDirty(false);
     setError("");
-    setOcrReview(null);
     setCanvasProcess(null);
-    resetOcrPrefetch();
     setShowResultModal(false);
   }, [problemIndex, session?.subtopic?.id]);
 
@@ -157,14 +115,9 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     return () => window.clearTimeout(timer);
   }, [canvasProcess]);
 
-  useEffect(() => {
-    if (!ocrReview?.trustedFastPath || !ocrReview?.detectedAnswerLatex || submitting || canvasProcess) return undefined;
-    const timer = window.setTimeout(() => {
-      confirmCanvasTranscription({ autoAccepted: true });
-    }, OCR_AUTO_ACCEPT_MS);
-    return () => window.clearTimeout(timer);
-  }, [ocrReview?.ocrToken, ocrReview?.trustedFastPath, submitting, canvasProcess]);
-
+  const FREE_LIMIT = 5;
+  const isQuestionLocked = (index) => !isAdmin && !hasPremiumAccess && index >= FREE_LIMIT;
+  const showLockedProblem = isQuestionLocked(problemIndex);
   const problem = session?.problems?.[problemIndex];
   const totalProblems = session?.problems?.length || 0;
   const activeAttempt = problem ? attemptsByProblem[problem.id] : null;
@@ -278,12 +231,12 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     }
   }
 
-  function buildCanvasEvaluationPayload(review) {
+  function buildCanvasEvaluationPayload(meta) {
     return {
-      confirmedAnswerLatex: review.detectedAnswerLatex,
       expectedAnswer: problem.answer_display,
-      imageBase64: review.imageBase64,
-      mimeType: review.imageMimeType || getDataUrlMimeType(review.imageBase64) || "image/png",
+      imageBase64: meta.imageBase64,
+      imageDimension: meta.imageDimension || 550,
+      mimeType: meta.imageMimeType || getDataUrlMimeType(meta.imageBase64) || "image/jpeg",
       problemId: problem.id,
       questionId: problem.id,
       questionText: problem.question_display || problem.question_text,
@@ -291,43 +244,31 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     };
   }
 
-  function requestCanvasEvaluation(review) {
-    return MafikingAPI.post("/api/correction/evaluate", buildCanvasEvaluationPayload(review));
-  }
-
-  function startTrustedCanvasPrefetch(review) {
-    if (!review?.ocrToken || !review.detectedAnswerLatex) return;
-    const token = review.ocrToken;
-    setOcrPrefetchActive(true);
-    const promise = requestCanvasEvaluation(review)
-      .then((result) => {
-        if (ocrPrefetchRef.current.token === token) ocrPrefetchRef.current.result = result;
-        return result;
-      })
-      .catch((error) => {
-        if (ocrPrefetchRef.current.token === token) ocrPrefetchRef.current.error = error;
-        return null;
-      })
-      .finally(() => {
-        if (ocrPrefetchRef.current.token === token) setOcrPrefetchActive(false);
+  async function requestCanvasEvaluation(meta, options = {}) {
+    const payload = buildCanvasEvaluationPayload(meta);
+    try {
+      return await MafikingAPI.post("/api/correction/evaluate-stream", payload, {
+        stream: true,
+        onEvent: options.onEvent,
       });
-    ocrPrefetchRef.current = { token, promise, result: null, error: null };
+    } catch (streamError) {
+      if (options.onStreamFallback) options.onStreamFallback(streamError);
+      return MafikingAPI.post("/api/correction/evaluate", payload);
+    }
   }
 
-  function saveCanvasEvaluationResult(review, evaluationResponse) {
+  function saveCanvasEvaluationResult(meta, evaluationResponse) {
     const attempt = {
       completedAt: new Date().toISOString(),
-      confirmedAnswerLatex: review.detectedAnswerLatex,
       evaluation: evaluationResponse.evaluation,
       feedback: evaluationResponse.feedback,
-      imageBase64: review.imageBase64,
+      transcription: evaluationResponse.transcription,
+      imageBase64: meta.imageBase64,
       mode: "canvas",
-      strokeSnapshot: review.strokeSnapshot,
+      strokeSnapshot: meta.strokeSnapshot,
     };
     setAttemptsByProblem((prev) => ({ ...prev, [problem.id]: attempt }));
     setBoardDirty(false);
-    setOcrReview(null);
-    resetOcrPrefetch();
     setShowResultModal(true);
     const isCorrect = Boolean(evaluationResponse.evaluation?.isCorrect);
     if (isCorrect) showToast("Jawaban benar! Progress tersimpan.", "success");
@@ -342,7 +283,6 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   }
 
   async function submitCanvas() {
-    console.log('[DEBUG submitCanvas] Called', { isPreview: context?.isPreview, isAuthenticated, isLoggedIn, isAdmin });
     if (!problem) return;
     if (timeExpired) { setError("Waktu try out sudah habis."); return; }
     if (context?.isPreview) { setError("Canvas correction tidak tersedia di mode preview."); return; }
@@ -350,83 +290,44 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     try {
       setError("");
       setShowResultModal(false);
-      setOcrReview(null);
-      resetOcrPrefetch();
       const imageBase64 = boardRef.current && boardRef.current.exportImage({
-        maxDimension: 700,
-        mimeType: "image/webp",
-        quality: 0.7,
+        maxDimension: 550,
+        mimeType: "image/jpeg",
+        quality: 0.55,
       });
       if (!imageBase64 || !boardDirty) { setError("Tulis jawaban di canvas terlebih dulu."); return; }
-      const imageMimeType = getDataUrlMimeType(imageBase64) || "image/png";
+      const imageMimeType = getDataUrlMimeType(imageBase64) || "image/jpeg";
       const strokeSnapshot = boardRef.current && boardRef.current.exportSnapshot && boardRef.current.exportSnapshot();
       setSubmitting(true);
-      setCanvasProcess("transcribing");
-      const transcription = await MafikingAPI.post("/api/correction/transcribe", {
-        imageBase64,
-        mimeType: imageMimeType,
-        questionText: problem.question_display || problem.question_text,
-      });
-      const trustedFastPath = ocrTrustStreak >= OCR_TRUST_THRESHOLD;
-      const review = {
-        ...transcription,
-        imageBase64,
-        imageMimeType,
-        ocrToken: `${Date.now()}-${problem.id}`,
-        strokeSnapshot,
-        trustedFastPath,
-      };
-      setOcrReview(review);
-      if (trustedFastPath) startTrustedCanvasPrefetch(review);
-      showToast(
-        trustedFastPath
-          ? "Tulisan terbaca. Koreksi mulai disiapkan sambil menunggu konfirmasi."
-          : "Tulisan terbaca. Konfirmasi dulu sebelum dikoreksi.",
-        "success"
-      );
-    } catch (caught) {
-      handleCorrectionError(caught);
-    } finally {
-      setCanvasProcess(null);
-      setSubmitting(false);
-    }
-  }
-
-  async function confirmCanvasTranscription(options = {}) {
-    if (confirmingOcrRef.current || !problem || !ocrReview) return;
-    const review = ocrReview;
-    if (!review.detectedAnswerLatex) {
-      setError("Gemini belum menemukan teks jawaban yang bisa dikonfirmasi.");
-      return;
-    }
-    confirmingOcrRef.current = true;
-    setStoredOcrTrustStreak(ocrTrustStreak + 1);
-    try {
-      setError("");
-      setShowResultModal(false);
-      setSubmitting(true);
       setCanvasProcess("evaluating");
-      const prefetch = ocrPrefetchRef.current;
-      let evaluation = null;
-      if (prefetch.token === review.ocrToken) {
-        evaluation = prefetch.result || (prefetch.promise ? await prefetch.promise : null);
-      }
-      if (!evaluation) evaluation = await requestCanvasEvaluation(review);
-      saveCanvasEvaluationResult(review, evaluation);
-      if (options.autoAccepted) showToast("Konfirmasi otomatis setelah 12 detik.", "success", 2500);
+
+      // SINGLE REQUEST - merged flow: OCR + evaluasi dalam 1 call
+      const result = await requestCanvasEvaluation({
+        imageBase64,
+        imageDimension: 550,
+        imageMimeType,
+        strokeSnapshot,
+      }, {
+        onEvent: (eventName, data) => {
+          if (eventName !== "phase") return;
+          if (data?.phase === "reading" || data?.phase === "evaluating") {
+            setCanvasProcess(data.phase);
+          }
+          if (data?.phase === "fast-path") {
+            setCanvasProcess("evaluating");
+            showToast("Jawaban cocok dengan kunci.", "success", 1500);
+          }
+        },
+        onStreamFallback: () => setCanvasProcess("evaluating"),
+      });
+
+      saveCanvasEvaluationResult({ imageBase64, strokeSnapshot }, result);
     } catch (caught) {
       handleCorrectionError(caught);
     } finally {
-      confirmingOcrRef.current = false;
       setCanvasProcess(null);
       setSubmitting(false);
     }
-  }
-
-  function cancelCanvasTranscription() {
-    resetOcrTrustStreak();
-    resetOcrPrefetch();
-    setOcrReview(null);
   }
 
   function handleCorrectionError(caught) {
@@ -451,7 +352,6 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     if (mode === "canvas" && boardDirty && !window.confirm("Beralih mode akan mengosongkan canvas. Lanjut?")) return;
     setMode(nextMode);
     setBoardDirty(false);
-    setOcrReview(null);
     setShowResultModal(false);
     setFocusMode(false);
   }
@@ -461,7 +361,6 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     if (mode === "canvas" && boardDirty && !window.confirm("Berpindah bab akan mengosongkan canvas. Lanjut?")) return;
     setMode("choice");
     setBoardDirty(false);
-    setOcrReview(null);
     setShowResultModal(false);
     setFocusMode(false);
     setRoute({ route: "practice", practice: { ...chapter, mapel: chapter.mapel || context?.mapel || "Matematika" } });
@@ -509,6 +408,73 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     );
   }
 
+  if (showLockedProblem) {
+    return (
+      <div className="mafiking-practice mafiking-canvas-practice">
+        <div className="mafiking-session-bar">
+          <button className="mafiking-back-button" onClick={() => setRoute("belajar")} type="button">
+            <Icon.ChevL className="w-4 h-4" />
+            Kembali
+          </button>
+          <div className="flex-1 flex items-center justify-center gap-1.5 text-xs font-mono font-bold text-ink/45">
+            <span>{problemIndex + 1}</span>
+            <span className="text-ink/25">/</span>
+            <span>{totalProblems}</span>
+          </div>
+          <div className="w-10" />
+        </div>
+        <section className="mafiking-canvas-card">
+          {!isLoggedIn ? (
+            <React.Fragment>
+              <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-ink/5 mx-auto mb-4">
+                <Icon.Lock className="w-5 h-5 text-ink/40" />
+              </div>
+              <div className="mafiking-answer-heading text-center">Masuk untuk melanjutkan</div>
+              <p className="mafiking-canvas-instruction mt-3 text-center">
+                Kamu sudah mengerjakan 5 soal gratis. Masuk atau daftar akun Mafiking untuk mengakses semua soal dan fitur belajar lainnya.
+              </p>
+              <div className="flex items-center justify-center gap-3 mt-6">
+                <button
+                  className="mafiking-primary-button"
+                  onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "belajar" } })}
+                  type="button"
+                >
+                  Masuk <Icon.Arrow />
+                </button>
+                <button
+                  className="btn-ghost text-sm font-bold"
+                  onClick={() => setRoute({ route: "lobby", authMode: "signup", authRedirect: { route: "belajar" } })}
+                  type="button"
+                >
+                  Daftar
+                </button>
+              </div>
+            </React.Fragment>
+          ) : (
+            <React.Fragment>
+              <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-ink/5 mx-auto mb-4">
+                <Icon.Lock className="w-5 h-5 text-ink/40" />
+              </div>
+              <div className="mafiking-answer-heading text-center">Beli Paket untuk lanjut</div>
+              <p className="mafiking-canvas-instruction mt-3 text-center">
+                Kamu sudah mengerjakan 5 soal gratis. dapatkan akses ke semua soal, pembahasan lengkap, dan fitur AI dengan membeli paket Mafiking.
+              </p>
+              <div className="flex items-center justify-center gap-3 mt-6">
+                <button
+                  className="mafiking-primary-button"
+                  onClick={() => setRoute("tryout")}
+                  type="button"
+                >
+                  Lihat Paket <Icon.Arrow />
+                </button>
+              </div>
+            </React.Fragment>
+          )}
+        </section>
+      </div>
+    );
+  }
+
   if (mode === "canvas") {
     return (
       <CanvasView
@@ -527,11 +493,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
         onMoveProblem={moveProblem}
         onProblemSelect={setProblemIndex}
         onReloadSession={loadPractice}
-        onCancelOcr={cancelCanvasTranscription}
-        onConfirmOcr={confirmCanvasTranscription}
         onSubmit={submitCanvas}
-        ocrPrefetchActive={ocrPrefetchActive}
-        ocrReview={ocrReview}
         problem={problem}
         problemIndex={problemIndex}
         problems={session?.problems || []}
@@ -1729,22 +1691,22 @@ const SolutionStepsPanel = ({ attempt, problem, isAdmin, onStepSaved }) => {
 // ─── Canvas view ──────────────────────────────────────────────────────────
 const CanvasProcessOverlay = ({ phase, slow }) => {
   if (!phase) return null;
-  const isEvaluating = phase === "evaluating";
+  const isReading = phase === "reading";
   return (
     <div className="canvas-processing-backdrop" role="status" aria-live="polite" aria-busy="true">
       <section className="canvas-processing-card">
         <div className="canvas-processing-spinner" aria-hidden="true" />
         <div>
           <div className="canvas-processing-step">
-            {isEvaluating ? "Langkah 2 dari 2" : "Langkah 1 dari 2"}
+            Koreksi canvas
           </div>
-          <h2>{isEvaluating ? "AI sedang mengoreksi jawaban Anda" : "AI sedang membaca tulisan Anda"}</h2>
+          <h2>{isReading ? "AI sedang membaca canvas Anda" : "AI sedang mengoreksi jawaban Anda"}</h2>
           <p>
             {slow
               ? "Masih memproses. Canvas sedang dianalisis, jangan tutup halaman."
-              : isEvaluating
-                ? "Membandingkan jawaban Anda dengan soal dan mencari bagian yang perlu diperbaiki."
-                : "Mengubah tulisan tangan di canvas menjadi teks matematika yang bisa dikonfirmasi."}
+              : isReading
+                ? "Mengubah tulisan tangan menjadi teks matematika tanpa mengubah canvas asli Anda."
+                : "Membandingkan jawaban dengan soal dan menyiapkan bagian salah yang akan ditandai merah."}
           </p>
         </div>
       </section>
@@ -1754,8 +1716,8 @@ const CanvasProcessOverlay = ({ phase, slow }) => {
 
 const CanvasView = ({
   attempt, boardDirty, boardRef, canvasProcess, canvasProcessSlow, error, focusMode, isAdmin, onBackToChoice, onSwitchMode,
-  onBoardDirtyChange, onCancelOcr, onConfirmOcr, onFocusModeToggle, onMoveProblem, onProblemSelect,
-  onReloadSession, onSubmit, ocrPrefetchActive, ocrReview, problem,
+  onBoardDirtyChange, onFocusModeToggle, onMoveProblem, onProblemSelect,
+  onReloadSession, onSubmit, problem,
   problemIndex, problems, showResultModal, submitting, totalProblems, onCloseResult,
   subtopicTitle, setRoute,
 }) => {
@@ -1962,16 +1924,6 @@ const CanvasView = ({
 
       {showResultModal && attempt ? (
         <ResultModal attempt={attempt} onClose={onCloseResult} />
-      ) : null}
-
-      {ocrReview && canvasProcess !== "evaluating" ? (
-        <OcrConfirmModal
-          ocrReview={ocrReview}
-          ocrPrefetchActive={ocrPrefetchActive}
-          onCancel={onCancelOcr}
-          onConfirm={onConfirmOcr}
-          submitting={submitting}
-        />
       ) : null}
     </div>
   );
@@ -2598,66 +2550,6 @@ function MathNarrative({ plain, latex }) {
     dangerouslySetInnerHTML: { __html: renderNarrativeHTML(plain, latex) }
   });
 }
-
-const OcrConfirmModal = ({ ocrPrefetchActive = false, ocrReview, onCancel, onConfirm, submitting }) => {
-  const confidence = Math.round(Math.max(0, Math.min(1, Number(ocrReview?.readingConfidence) || 0)) * 100);
-  const unclearParts = Array.isArray(ocrReview?.unclearParts) ? ocrReview.unclearParts.filter(Boolean) : [];
-  const trustedFastPath = Boolean(ocrReview?.trustedFastPath);
-
-  return (
-    <div className="canvas-result-modal-backdrop" role="presentation">
-      <article className="canvas-result-modal ocr-confirm-modal" aria-label="Konfirmasi tulisan canvas">
-        <button aria-label="Tutup konfirmasi tulisan" className="canvas-result-modal-close" disabled={submitting} onClick={onCancel} type="button">×</button>
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0 bg-blue-100 text-blue-700">
-            AI
-          </div>
-          <div>
-            <div className="kicker mb-0.5">Langkah 1</div>
-            <h2 className="font-display font-bold text-2xl leading-none">Konfirmasi tulisan terbaca</h2>
-          </div>
-        </div>
-
-        <div className="ocr-transcript-box">
-          <div className="ocr-transcript-label">Gemini membaca jawaban Anda sebagai:</div>
-          <div className="ocr-transcript-value">
-            <Eq value={ocrReview?.detectedAnswerLatex || "\\text{Belum terbaca jelas}"} />
-          </div>
-        </div>
-
-        <div className="ocr-meta-row">
-          <span>Keyakinan baca: {confidence}%</span>
-          {ocrReview?.needsUserConfirmation ? <span>Perlu konfirmasi user</span> : null}
-          {trustedFastPath ? <span>Auto acc 12 detik</span> : null}
-        </div>
-
-        {trustedFastPath ? (
-          <div className="ocr-fastpath-box">
-            {ocrPrefetchActive ? "Koreksi sedang disiapkan di background." : "Koreksi sudah disiapkan. Jika jawaban terbaca benar, hasil akan muncul lebih cepat."}
-          </div>
-        ) : null}
-
-        {unclearParts.length ? (
-          <div className="ocr-unclear-box">
-            <div className="font-semibold text-sm mb-1">Bagian yang perlu dicek:</div>
-            <ul>
-              {unclearParts.map((part, idx) => <li key={idx}>{part}</li>)}
-            </ul>
-          </div>
-        ) : null}
-
-        <div className="canvas-result-actions">
-          <button className="mafiking-soft-button" disabled={submitting} onClick={onCancel} type="button">
-            Kembali ke canvas
-          </button>
-          <button className="mafiking-primary-button" disabled={submitting || !ocrReview?.detectedAnswerLatex} onClick={onConfirm} type="button">
-            {submitting ? "Mengoreksi..." : ocrPrefetchActive ? "Benar, pakai koreksi siap" : "Benar, lanjut koreksi"}
-          </button>
-        </div>
-      </article>
-    </div>
-  );
-};
 
 function normalizePercentBoxClient(box) {
   if (!box || typeof box !== "object") return null;

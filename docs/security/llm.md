@@ -7,8 +7,7 @@ findings, and MITRE ATLAS mapping that go with the inventory.
 
 **Status:** Phase 2 review gate.
 **Scope:** all `/api/correction/*` endpoints and the admin DeepSeek
-import path. Out of scope: 9Router legacy profile provider (fallback
-mode only), any future browser-side LLM.
+import path. Out of scope: any future browser-side LLM.
 
 ## MITRE ATLAS mapping
 

@@ -46,11 +46,38 @@ const AdminChunkFallback = ({ status }) => (
   </section>
 );
 
+const AUTH_BACK_ROUTE_STORAGE_KEY = "mafiking:last-non-auth-route";
+const AUTH_BACK_PATH_STORAGE_KEY = "mafiking:last-non-auth-path";
+
+function readStoredAuthBackRoute() {
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(AUTH_BACK_ROUTE_STORAGE_KEY) || "null");
+    return parsed && isSafeAuthBackRoute(parsed) ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function isSafeAuthBackRoute(routeState) {
+  if (!routeState || !routeState.route) return false;
+  if (routeState.authMode) return false;
+  if (routeState.route === "profile") return false;
+  return true;
+}
+
+function writeStoredAuthBackRoute(routeState) {
+  if (!isSafeAuthBackRoute(routeState)) return;
+  try {
+    window.sessionStorage.setItem(AUTH_BACK_ROUTE_STORAGE_KEY, JSON.stringify(routeState));
+    window.sessionStorage.setItem(AUTH_BACK_PATH_STORAGE_KEY, appStateToPath(routeState));
+  } catch (_) {}
+}
+
 const App = () => {
+  const initialLocationRef = React.useRef(null);
+  if (!initialLocationRef.current) initialLocationRef.current = parseAppLocation();
   const [route, setRoute] = React.useState(() => {
-    const hash = window.location.hash.replace(/^#\/?/, "");
-    const allowed = ["lobby", "belajar", "misi", "tryout", "leaderboard", "admin", "profile", "payment", "practice"];
-    return allowed.includes(hash) ? hash : "lobby";
+    return initialLocationRef.current.route;
   });
   const [practiceContext, setPracticeContext] = React.useState(null);
   const [paymentContext, setPaymentContext] = React.useState(null);
@@ -58,8 +85,10 @@ const App = () => {
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [currentUser, setCurrentUser] = React.useState(null);
   const [isAdmin, setIsAdmin] = React.useState(false);
-  const [authMode, setAuthMode] = React.useState(null);
+  const [authMode, setAuthMode] = React.useState(() => initialLocationRef.current.authMode || null);
   const [authRedirect, setAuthRedirect] = React.useState(null);
+  const [authBackRoute, setAuthBackRoute] = React.useState(null);
+  const [authState, setAuthState] = React.useState(() => initialLocationRef.current.authState || null);
   const [pendingClerkUser, setPendingClerkUser] = React.useState(null);
   const [authCallbackLoading, setAuthCallbackLoading] = React.useState(() => {
     return Boolean(window.MafikingClerk && typeof window.MafikingClerk.isRedirectCallback === "function" && window.MafikingClerk.isRedirectCallback());
@@ -111,11 +140,27 @@ const App = () => {
       else setPaymentContext(null);
       if (next.section || next.belajarSection) setBelajarSection(next.section || next.belajarSection);
       if (next.authMode) {
+        const fallbackBackRoute = (authMode && authBackRoute) ? authBackRoute : {
+          route,
+          practice: practiceContext,
+          tryout: tryoutContext,
+          payment: paymentContext,
+          belajarSection,
+        };
+        const resolvedBackRoute = next.authBackRoute
+          || (isSafeAuthBackRoute(fallbackBackRoute) ? fallbackBackRoute : null)
+          || readStoredAuthBackRoute()
+          || { route: "lobby" };
+        writeStoredAuthBackRoute(resolvedBackRoute);
         setAuthMode(next.authMode);
         setAuthRedirect(next.authRedirect || null);
+        setAuthState(next.authState || null);
+        setAuthBackRoute(resolvedBackRoute);
       } else {
         setAuthMode(null);
         setAuthRedirect(null);
+        setAuthState(null);
+        setAuthBackRoute(null);
       }
       nextRoute = next.route || "lobby";
       setRoute(nextRoute);
@@ -126,25 +171,44 @@ const App = () => {
         payment: next.payment,
         belajarSection: next.section || next.belajarSection,
         authMode: next.authMode,
-        authRedirect: next.authRedirect
+        authRedirect: next.authRedirect,
+        authState: next.authState,
+        authBackRoute: next.authMode
+          ? (next.authBackRoute || (isSafeAuthBackRoute((authMode && authBackRoute) ? authBackRoute : {
+            route,
+            practice: practiceContext,
+            tryout: tryoutContext,
+            payment: paymentContext,
+            belajarSection,
+          }) ? ((authMode && authBackRoute) ? authBackRoute : {
+            route,
+            practice: practiceContext,
+            tryout: tryoutContext,
+            payment: paymentContext,
+            belajarSection,
+          }) : null) || readStoredAuthBackRoute() || { route: "lobby" })
+          : null
       };
     } else {
       setPaymentContext(null);
       setTryoutContext(null);
       setAuthMode(null);
       setAuthRedirect(null);
+      setAuthState(null);
+      setAuthBackRoute(null);
       if (next !== "belajar") setBelajarSection(null);
       nextRoute = next;
       setRoute(nextRoute);
       stateObj = { route: nextRoute };
     }
     
-    if (window.location.hash !== `#${nextRoute}`) {
-      window.history.pushState(stateObj, "", `#${nextRoute}`);
+    const nextPath = appStateToPath(stateObj);
+    if (normalizeAppPath(window.location.pathname) !== normalizeAppPath(nextPath) || window.location.hash) {
+      window.history.pushState(stateObj, "", nextPath);
     } else {
-      window.history.replaceState(stateObj, "", `#${nextRoute}`);
+      window.history.replaceState(stateObj, "", nextPath);
     }
-  }, []);
+  }, [route, practiceContext, tryoutContext, paymentContext, belajarSection, authMode, authBackRoute]);
 
   React.useEffect(() => {
     const handlePopState = (event) => {
@@ -157,21 +221,43 @@ const App = () => {
         setBelajarSection(state.belajarSection || null);
         setAuthMode(state.authMode || null);
         setAuthRedirect(state.authRedirect || null);
+        setAuthState(state.authState || null);
+        setAuthBackRoute(state.authBackRoute || null);
       } else {
-        const hash = window.location.hash.replace(/^#\/?/, "");
-        const allowed = ["lobby", "belajar", "misi", "tryout", "leaderboard", "admin", "profile", "payment", "practice"];
-        setRoute(allowed.includes(hash) ? hash : "lobby");
+        const parsed = parseAppLocation();
+        setRoute(parsed.route);
+        setBelajarSection(parsed.belajarSection || null);
       }
     };
     window.addEventListener("popstate", handlePopState);
     
-    const hash = window.location.hash.replace(/^#\/?/, "");
-    const allowed = ["lobby", "belajar", "misi", "tryout", "leaderboard", "admin", "profile", "payment", "practice"];
-    const initialRoute = allowed.includes(hash) ? hash : "lobby";
-    window.history.replaceState({ route: initialRoute }, "", `#${initialRoute}`);
+    const parsed = parseAppLocation();
+    const initialState = window.history.state || { route: parsed.route, belajarSection: parsed.belajarSection, authMode: parsed.authMode };
+    setBelajarSection(parsed.belajarSection || null);
+    setAuthMode(parsed.authMode || null);
+    setAuthRedirect(initialState.authRedirect || null);
+    setAuthState(initialState.authState || parsed.authState || null);
+    const initialAuthBackRoute = initialState.authBackRoute || (parsed.authMode ? readStoredAuthBackRoute() : null);
+    setAuthBackRoute(initialAuthBackRoute);
+    if (initialAuthBackRoute && parsed.authMode && !initialState.authBackRoute) {
+      initialState.authBackRoute = initialAuthBackRoute;
+    }
+    window.history.replaceState(initialState, "", appStateToPath(initialState));
     
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
+
+  React.useEffect(() => {
+    if (authMode) return;
+    if (route === "profile" && !isLoggedIn) return;
+    writeStoredAuthBackRoute({
+      route,
+      practice: practiceContext,
+      tryout: tryoutContext,
+      payment: paymentContext,
+      belajarSection,
+    });
+  }, [authMode, route, isLoggedIn, practiceContext, tryoutContext, paymentContext, belajarSection]);
 
   const requestConfirm = React.useCallback((config) => {
     setConfirmAction({
@@ -235,23 +321,50 @@ const App = () => {
     if (typeof window.MafikingClerk.isRedirectCallback !== "function" || !window.MafikingClerk.isRedirectCallback()) return undefined;
 
     let cancelled = false;
+    let completed = false;
     setAuthCallbackLoading(true);
+    const fallbackTimer = window.setTimeout(() => {
+      if (cancelled || completed) return;
+      window.MafikingClerk.syncSession()
+        .then((user) => {
+          if (cancelled || completed) return;
+          completed = true;
+          handleAuthSuccess(user, null);
+        })
+        .catch((err) => {
+          console.error("[clerk-callback:fallback]", err);
+          if (!cancelled && !completed) {
+            completed = true;
+            navigate({ route: "lobby", authMode: "login" });
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setAuthCallbackLoading(false);
+        });
+    }, 12000);
+
     window.MafikingClerk.completeRedirectAuth()
       .then((result) => {
-        if (cancelled || !result || !result.user) return;
+        if (cancelled || completed || !result || !result.user) return;
+        completed = true;
         handleAuthSuccess(result.user, result.redirect);
       })
       .catch((err) => {
         console.error("[clerk-callback]", err);
-        if (!cancelled) {
+        if (!cancelled && !completed) {
+          completed = true;
           navigate({ route: "lobby", authMode: "login" });
         }
       })
       .finally(() => {
+        window.clearTimeout(fallbackTimer);
         if (!cancelled) setAuthCallbackLoading(false);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      window.clearTimeout(fallbackTimer);
+    };
   }, [handleAuthSuccess, navigate]);
 
   React.useEffect(() => {
@@ -336,6 +449,18 @@ const App = () => {
     ? "belajar"
     : route;
 
+  const LoginRedirect = React.useCallback(({ setRoute: sr }) => {
+    React.useEffect(() => {
+      sr({
+        route: "lobby",
+        authMode: "login",
+        authRedirect: { route: "profile" },
+        authBackRoute: readStoredAuthBackRoute() || { route: "lobby" },
+      });
+    }, [sr]);
+    return null;
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col bg-paper text-ink">
       <OfflineBanner />
@@ -358,8 +483,8 @@ const App = () => {
           data-screen-label={routeLabel(route)}
           className={route === "practice" || route === "lobby" || isTryoutFullscreenRoute ? "" : "app-route-transition"}
         >
-          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={isAdmin || isAdminAccount} authMode={authMode} authRedirect={authRedirect} onAuthSuccess={handleAuthSuccess} pendingClerkUser={pendingClerkUser} />}
-          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} currentUser={currentUser} initialSection={belajarSection} onSectionChange={setBelajarSection} />}
+          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={isAdmin || isAdminAccount} authMode={authMode} authRedirect={authRedirect} authBackRoute={authBackRoute} authState={authState} onAuthSuccess={handleAuthSuccess} pendingClerkUser={pendingClerkUser} />}
+          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} currentUser={currentUser} hasPremiumAccess={hasPremiumAccess} initialSection={belajarSection} onSectionChange={setBelajarSection} />}
           {route === "misi" && (
             <ScreenErrorBoundary>
               {hasPremiumAccess
@@ -376,10 +501,10 @@ const App = () => {
           )}
           {route === "profile" && (isLoggedIn
             ? <Profile setRoute={navigate} isAdmin={isAdmin || isAdminAccount} onRequestLanding={confirmLandingReturn} onRequestLogout={confirmLogout} />
-            : <AccessGate setRoute={navigate} title="Masuk untuk membuka profil" requireLogin variant="profil" />
+            : <LoginRedirect setRoute={navigate} />
           )}
           {route === "payment" && <Payment setRoute={navigate} currentUser={currentUser} context={paymentContext} />}
-          {route === "practice" && <Practice setRoute={navigate} context={practiceContext} isAdmin={isAdmin} isLoggedIn={isLoggedIn} isAuthenticated={Boolean(currentUser)} />}
+          {route === "practice" && <Practice setRoute={navigate} context={practiceContext} isAdmin={isAdmin} isLoggedIn={isLoggedIn} isAuthenticated={Boolean(currentUser)} hasPremiumAccess={hasPremiumAccess} />}
         </div>
       </main>
 
@@ -668,6 +793,62 @@ const AccessGate = ({ setRoute, title, message, requireLogin = false, variant = 
   </div>
   );
 };
+
+const APP_ROUTE_NAMES = ["lobby", "belajar", "misi", "tryout", "leaderboard", "admin", "profile", "payment", "practice"];
+
+function normalizeAppPath(pathname) {
+  return String(pathname || "/").replace(/\/+$/, "") || "/";
+}
+
+function parseAppLocation() {
+  const legacyHash = window.location.hash.replace(/^#\/?/, "");
+  if (legacyHash.startsWith("verify-email")) {
+    const queryString = legacyHash.split("?")[1] || "";
+    const params = new URLSearchParams(queryString);
+    return { route: "lobby", authMode: "verify-email-token", authState: { token: params.get("token") || "" } };
+  }
+  if (APP_ROUTE_NAMES.includes(legacyHash)) return { route: legacyHash };
+
+  const path = normalizeAppPath(window.location.pathname);
+  if (path === "/" || path === "/index.html" || path === "/MAFIKING.html") return { route: "lobby" };
+  if (path === "/login" || path === "/masuk") return { route: "lobby", authMode: "login" };
+  if (path === "/signup" || path === "/daftar") return { route: "lobby", authMode: "signup" };
+  if (path === "/verify-email") {
+    const params = new URLSearchParams(window.location.search || "");
+    return { route: "lobby", authMode: "verify-email-token", authState: { token: params.get("token") || "" } };
+  }
+  if (path === "/belajar") return { route: "belajar" };
+  if (path === "/belajar/tryout") return { route: "belajar", belajarSection: "Try Out" };
+  if (path === "/belajar/practice" || path === "/practice") return { route: "practice" };
+  if (path === "/misi") return { route: "misi" };
+  if (path === "/tryout") return { route: "tryout" };
+  if (path === "/peringkat" || path === "/leaderboard") return { route: "leaderboard" };
+  if (path === "/profil" || path === "/profile") return { route: "profile" };
+  if (path === "/admin") return { route: "admin" };
+  if (path === "/payment" || path === "/tryout/payment") return { route: "payment" };
+  return { route: "lobby" };
+}
+
+function appStateToPath(state) {
+  const route = state?.route || "lobby";
+  if (state?.authMode === "verify-email-token") {
+    const token = String(state?.authState?.token || "").trim();
+    return token ? `/verify-email?token=${encodeURIComponent(token)}` : "/signup";
+  }
+  if (state?.authMode === "verify-email") return "/signup";
+  if (state?.authMode === "login") return "/login";
+  if (state?.authMode === "signup") return "/signup";
+  if (route === "lobby") return "/";
+  if (route === "belajar") {
+    const section = String(state?.belajarSection || state?.section || "").trim().toLowerCase();
+    return section === "try out" || section === "tryout" ? "/belajar/tryout" : "/belajar";
+  }
+  if (route === "practice") return "/belajar/practice";
+  if (route === "leaderboard") return "/peringkat";
+  if (route === "profile") return "/profil";
+  if (route === "payment") return "/payment";
+  return `/${route}`;
+}
 
 function routeLabel(r) {
   return ({

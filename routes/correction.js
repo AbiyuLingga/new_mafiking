@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { isAuthenticated, requireRegisteredUser } = require('../middleware/auth');
+const { isLocalAdminMode } = require('../middleware/admin');
 const {
   buildRecommendationSummary,
   computeBktLite,
@@ -11,12 +12,11 @@ const {
   interleaveRecallSlots,
   loadMasteryStates,
 } = require('../lib/recommendation-engine');
-const {
-  call9RouterProfileSummary,
-  shouldUse9RouterProfile,
-} = require('../lib/ai-profile-provider');
 const { logTokenUsage } = require('../lib/log-token-usage');
 const { sanitizeForPrompt } = require('../lib/text-sanitize');
+const { callWithPool, isPoolAvailable } = require('../lib/multi-provider-pool');
+const { isAnswerEquivalent } = require('../lib/answer-equivalence');
+const { getLatencySummary, recordLatency } = require('../lib/latency-tracker');
 
 const router = express.Router();
 
@@ -76,6 +76,34 @@ const PROFILE_SYSTEM_PROMPT = [
   'strengths dan weaknesses masing-masing maksimal 5 tag; pilih yang paling utama.',
   'Balas hanya JSON valid sesuai schema: strengths, weaknesses, recommendedQuestions, overallSummary. Jangan Markdown, jangan code fence, jangan properti tambahan.'
 ].join('\n\n');
+
+const MERGED_SYSTEM_PROMPT = [
+  'Kamu adalah guru matematika yang teliti dan ringkas. Tugasmu dalam 1 langkah:',
+  '1. BACA gambar canvas tulisan tangan siswa dan transkripsikan ke LaTeX ringkas.',
+  '2. EVALUASI jawaban tersebut terhadap soal dan jawaban acuan yang diberikan.',
+  '3. KEMBALIKAN JSON valid sesuai schema dengan field transcription dan evaluation.',
+  '',
+  'ATURAN OCR:',
+  '- Baca isi gambar dari atas ke bawah dan ubah ke LaTeX ringkas.',
+  '- Jangan mengoreksi jawaban, jangan memperbaiki langkah salah, dan jangan memberi skor.',
+  '- Semua field yang berisi teks untuk user harus berupa LaTeX.',
+  '- Semua teks biasa di dalam LaTeX wajib memakai \\text{...}.',
+  '- Jika tulisan tidak terbaca, isi readingConfidence rendah dan masukkan bagian yang tidak terbaca ke unclearParts.',
+  '',
+  'ATURAN EVALUASI:',
+  '- Gunakan detectedAnswerLatex dari transcription sebagai teks utama dan gambar canvas sebagai bukti visual.',
+  '- Jika teks dan gambar tidak konsisten, set needsResubmission true.',
+  '- Jika ada kesalahan, isi wrongSteps dan redlineTargets agar frontend dapat mengubah coretan salah menjadi merah.',
+  '- redlineTargets wajib menandai seluruh transisi/baris yang menjadi salah, bukan hanya token kecil. Contoh: jika siswa menulis 1+1=3, targetTextLatex dan boxPercent harus mencakup seluruh 1+1=3.',
+  '- Jika kesalahan terjadi karena hasil sebelum/sesudah transisi tidak konsisten, jadikan combinedBoxPercent area dari ekspresi lengkap yang harus dikoreksi.',
+  '- Maksimal 5 wrongSteps dan 5 redlineTargets. Pilih kesalahan utama, tetapi beri pembahasan yang cukup jelas.',
+  '- Untuk setiap wrongStep, isi issuePlain dan hintPlain masing-masing 1-2 kalimat pendek yang konkret.',
+  '- Jangan mengembalikan Markdown, HTML, atau code fence.',
+  '- strengthTags dan weaknessTags masing-masing maksimal 5 tag; pilih yang paling utama.',
+  '- Field berakhiran Latex harus berisi LaTeX yang pendek dan valid.',
+  '- Field berakhiran Plain harus berisi Bahasa Indonesia biasa tanpa Markdown, tanpa HTML, dan tanpa command LaTeX seperti \\text atau \\frac.',
+  '- Jangan menggabungkan narasi panjang menjadi satu ekspresi LaTeX; narasi panjang masuk ke fullFeedbackPlain, issuePlain, dan hintPlain.'
+].join(' ');
 
 const EVALUATION_SCHEMA = {
   type: 'object',
@@ -185,6 +213,90 @@ const PROFILE_SCHEMA = {
   required: ['strengths', 'weaknesses', 'recommendedQuestions', 'overallSummary']
 };
 
+const MERGED_EVALUATION_SCHEMA = {
+  type: 'object',
+  properties: {
+    transcription: {
+      type: 'object',
+      properties: {
+        detectedAnswerLatex: { type: 'string' },
+        readingConfidence: { type: 'number', minimum: 0, maximum: 1 },
+        unclearParts: { type: 'array', items: { type: 'string' } },
+        needsUserConfirmation: { type: 'boolean' }
+      },
+      required: ['detectedAnswerLatex', 'readingConfidence', 'unclearParts', 'needsUserConfirmation']
+    },
+    evaluation: {
+      type: 'object',
+      properties: {
+        isCorrect: { type: 'boolean' },
+        score: { type: 'integer' },
+        detectedAnswerText: { type: 'string' },
+        detectedAnswerLatex: { type: 'string' },
+        needsResubmission: { type: 'boolean' },
+        wrongSteps: {
+          type: 'array',
+          maxItems: 5,
+          items: {
+            type: 'object',
+            properties: {
+              stepNumber: { type: 'string' },
+              previousStep: { type: 'string' },
+              studentStep: { type: 'string' },
+              studentStepLatex: { type: 'string' },
+              studentStepPlain: { type: 'string' },
+              correctStepLatex: { type: 'string' },
+              correctStepPlain: { type: 'string' },
+              issue: { type: 'string' },
+              issueLatex: { type: 'string' },
+              issuePlain: { type: 'string' },
+              hint: { type: 'string' },
+              hintLatex: { type: 'string' },
+              hintPlain: { type: 'string' },
+              wrongPartBoxPercent: boxSchema(),
+              wrongBoxPercent: boxSchema(),
+              combinedBoxPercent: boxSchema()
+            }
+          }
+        },
+        redlineTargets: {
+          type: 'array',
+          maxItems: 5,
+          items: {
+            type: 'object',
+            properties: {
+              stepNumber: { type: 'string' },
+              targetTextLatex: { type: 'string' },
+              reasonLatex: { type: 'string' },
+              boxPercent: boxSchema(),
+              severity: { type: 'string' }
+            },
+            required: ['stepNumber', 'targetTextLatex', 'reasonLatex', 'boxPercent', 'severity']
+          }
+        },
+        fullFeedback: { type: 'string' },
+        fullFeedbackLatex: { type: 'string' },
+        fullFeedbackPlain: { type: 'string' },
+        strengthTags: { type: 'array', items: { type: 'string' }, maxItems: MAX_LEARNING_TAGS },
+        weaknessTags: { type: 'array', items: { type: 'string' }, maxItems: MAX_LEARNING_TAGS }
+      },
+      required: [
+        'isCorrect',
+        'score',
+        'detectedAnswerText',
+        'detectedAnswerLatex',
+        'needsResubmission',
+        'wrongSteps',
+        'redlineTargets',
+        'fullFeedback',
+        'strengthTags',
+        'weaknessTags'
+      ]
+    }
+  },
+  required: ['transcription', 'evaluation']
+};
+
 function boxSchema() {
   return {
     type: 'object',
@@ -199,10 +311,10 @@ function boxSchema() {
 
 function readProfileNarrativeSop() {
   try {
-    return fs.readFileSync(path.join(__dirname, '..', 'SOP-9ROUTER-PROFILE-SUMMARY.md'), 'utf8');
+    return fs.readFileSync(path.join(__dirname, '..', 'SOP-PROFILE-SUMMARY.md'), 'utf8');
   } catch {
     return [
-      'SOP 9Router Profile Summary:',
+      'SOP Profile Summary:',
       'Tulis hanya diagnosis dan narasi belajar dari evidence attempt.',
       'Jangan memilih ref soal final, difficulty final, atau Purcell reference final.',
       'Backend lokal memilih recommendedItems dan skillNeedScores secara deterministik.',
@@ -642,31 +754,65 @@ async function callGeminiWithFallback({ maxOutputTokens, models, parts, provider
   throw error;
 }
 
-async function callProfileNarrativeSummary(attempts, db) {
-  if (shouldUse9RouterProfile() && process.env.PROFILE_PROVIDER_ALLOW_9ROUTER === 'true') {
-    return call9RouterProfileSummary({
-      attempts,
-      systemInstruction: PROFILE_SYSTEM_PROMPT,
+async function callAiWithPoolFallback({
+  db,
+  legacyModels,
+  legacyProvider = 'gemini',
+  maxOutputTokens,
+  parts,
+  poolProvider = 'auto',
+  schema,
+  systemInstruction,
+  temperature,
+}) {
+  if (isPoolAvailable()) {
+    return callWithPool({
+      db,
+      maxOutputTokens,
+      parts,
+      provider: poolProvider,
+      schema,
+      systemInstruction,
+      temperature,
     });
   }
 
-  if (!getGeminiKeys().length) return null;
-
-  const result = await callGeminiWithFallback({
-    models: getProfileModels(PROFILE_MODELS),
-    provider: 'gemma',
-    schema: PROFILE_SCHEMA,
-    systemInstruction: PROFILE_SYSTEM_PROMPT,
+  const legacyResult = await callGeminiWithFallback({
     db,
-    parts: [{ text: `Buat raport belajar dari data berikut:\n\n${JSON.stringify(attempts)}` }]
+    maxOutputTokens,
+    models: legacyModels,
+    parts,
+    provider: legacyProvider,
+    schema,
+    systemInstruction,
   });
+  return { ...legacyResult, provider: legacyProvider };
+}
 
-  return {
-    keyIndex: result.keyIndex,
-    modelUsed: result.modelUsed,
-    provider: 'gemma',
-    text: result.text,
-  };
+async function callProfileNarrativeSummary(attempts, db) {
+  try {
+    const result = await callAiWithPoolFallback({
+      systemInstruction: PROFILE_SYSTEM_PROMPT,
+      schema: PROFILE_SCHEMA,
+      maxOutputTokens: 1200,
+      temperature: 0.2,
+      db,
+      poolProvider: 'gemini',
+      legacyModels: getProfileModels(PROFILE_MODELS),
+      legacyProvider: 'gemma',
+      parts: [{ text: `Buat raport belajar dari data berikut:\n\n${JSON.stringify(attempts)}` }],
+    });
+
+    return {
+      keyIndex: result.keyIndex,
+      modelUsed: result.modelUsed,
+      provider: result.provider,
+      text: result.text,
+    };
+  } catch (error) {
+    console.warn('Profile AI narrative via pool failed:', error.message);
+    return null;
+  }
 }
 
 function fallbackProfileFromAttempts(attempts) {
@@ -958,6 +1104,7 @@ router.get('/attempts', isAuthenticated, (req, res) => {
 });
 
 router.post('/transcribe', isAuthenticated, requireRegisteredUser, async (req, res) => {
+  res.set('X-Deprecated', 'Use /evaluate with imageBase64 instead (merged flow)');
   try {
     const { imageBase64, mimeType, questionText } = req.body;
     const { cleanBase64, normalizedMimeType } = validateImagePayload(imageBase64, mimeType);
@@ -968,9 +1115,9 @@ router.post('/transcribe', isAuthenticated, requireRegisteredUser, async (req, r
       console.warn('[correction] transcribe: questionText truncated from', sanitizedQuestion.originalLength, 'to', sanitizedQuestion.sanitizedLength, 'chars');
     }
 
-    const result = await callGeminiWithFallback({
+    const result = await callAiWithPoolFallback({
       maxOutputTokens: TRANSCRIBE_MAX_OUTPUT_TOKENS,
-      models: getGeminiModels(TRANSCRIBE_MODELS),
+      legacyModels: getGeminiModels(TRANSCRIBE_MODELS),
       schema: TRANSCRIPTION_SCHEMA,
       systemInstruction: TRANSCRIBE_SYSTEM_PROMPT,
       db: req.app.locals.db,
@@ -987,7 +1134,7 @@ router.post('/transcribe', isAuthenticated, requireRegisteredUser, async (req, r
     });
 
     const parsed = safeTranscriptionParse(result.text);
-    res.json({ ...normalizeTranscription(parsed, result.text), durationMs: result.durationMs, keyIndex: result.keyIndex, modelUsed: result.modelUsed });
+    res.json({ ...normalizeTranscription(parsed, result.text), durationMs: result.durationMs, keyIndex: result.keyIndex, modelUsed: result.modelUsed, provider: result.provider });
   } catch (error) {
     res.status(error.status ?? error.response?.status ?? 500).json({
       error: error.message || 'Gagal membaca gambar.',
@@ -996,55 +1143,162 @@ router.post('/transcribe', isAuthenticated, requireRegisteredUser, async (req, r
   }
 });
 
-router.post('/evaluate', isAuthenticated, requireRegisteredUser, async (req, res) => {
-  try {
-    const {
-      expectedAnswer,
-      imageBase64,
-      mimeType,
-      problemId,
-      questionId,
-      questionText,
-      confirmedAnswerLatex,
-      text,
-      topicTags
-    } = req.body;
+function estimateBase64Bytes(cleanBase64) {
+  const text = String(cleanBase64 || '');
+  if (!text) return 0;
+  const padding = text.endsWith('==') ? 2 : text.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor((text.length * 3) / 4) - padding);
+}
 
-    if (!questionText && !text && !imageBase64) {
-      return res.status(400).json({ error: 'Kirim soal dan jawaban teks atau gambar canvas.' });
-    }
+function isFastPathEnabled() {
+  const raw = String(process.env.MAFIKING_FAST_PATH_ENABLED || '').trim().toLowerCase();
+  return raw === '' || raw === 'true' || raw === '1' || raw === 'yes';
+}
 
-    const { cleanBase64, normalizedMimeType } = validateImagePayload(imageBase64, mimeType);
-    const confirmedLatex = String(confirmedAnswerLatex || text || '').trim();
-    if (cleanBase64 && !confirmedLatex) {
-      return res.status(400).json({ error: 'Konfirmasi hasil OCR terlebih dulu sebelum koreksi.' });
-    }
-
-    const safeQuestionId = parsePositiveId(questionId);
-    const safeProblemId = parsePositiveId(problemId);
-    const safeIdForPrompt = safeQuestionId || safeProblemId;
-    if ((questionId !== undefined && safeQuestionId === null)
-        || (problemId !== undefined && safeProblemId === null)) {
-      return res.status(400).json({ error: 'ID soal tidak valid.' });
-    }
-
-    const sanitized = {
-      questionText: sanitizeForPrompt(questionText),
-      expectedAnswer: sanitizeForPrompt(expectedAnswer),
-      confirmedAnswerLatex: sanitizeForPrompt(confirmedAnswerLatex),
-      text: sanitizeForPrompt(text),
+function applyFastPathIfEquivalent(parsed, expectedAnswer) {
+  if (!isFastPathEnabled() || !parsed || !expectedAnswer) return { parsed, fastPath: false };
+  const detected = parsed.transcription?.detectedAnswerLatex
+    || parsed.evaluation?.detectedAnswerLatex
+    || parsed.detectedAnswerLatex
+    || '';
+  if (!detected || !isAnswerEquivalent(detected, expectedAnswer)) return { parsed, fastPath: false };
+  if (!parsed.transcription && !parsed.evaluation) {
+    return {
+      parsed: {
+        ...parsed,
+        detectedAnswerLatex: parsed.detectedAnswerLatex || detected,
+        detectedAnswerText: parsed.detectedAnswerText || detected,
+        fullFeedback: 'Jawaban Anda benar.',
+        fullFeedbackLatex: '\\text{Jawaban Anda benar.}',
+        fullFeedbackPlain: 'Jawaban Anda benar.',
+        isCorrect: true,
+        needsResubmission: false,
+        redlineTargets: [],
+        score: 100,
+        weaknessTags: [],
+        wrongSteps: [],
+      },
+      fastPath: true,
     };
-    const truncatedFields = Object.entries(sanitized)
-      .filter(([, v]) => v.truncated)
-      .map(([k]) => k);
-    if (truncatedFields.length) {
-      console.warn('[correction] evaluate: prompt fields truncated:', truncatedFields.join(', '));
-    }
-    const safeTopicTags = Array.isArray(topicTags)
-      ? topicTags.filter((t) => typeof t === 'string' && t.length > 0).map((t) => sanitizeForPrompt(t, { maxChars: 64 }).text)
-      : [];
+  }
+  const next = {
+    ...parsed,
+    evaluation: {
+      ...(parsed.evaluation || {}),
+      detectedAnswerLatex: parsed.evaluation?.detectedAnswerLatex || detected,
+      detectedAnswerText: parsed.evaluation?.detectedAnswerText || detected,
+      fullFeedback: 'Jawaban Anda benar.',
+      fullFeedbackLatex: '\\text{Jawaban Anda benar.}',
+      fullFeedbackPlain: 'Jawaban Anda benar.',
+      isCorrect: true,
+      needsResubmission: false,
+      redlineTargets: [],
+      score: 100,
+      weaknessTags: [],
+      wrongSteps: [],
+    },
+  };
+  return { parsed: next, fastPath: true };
+}
 
-    const parts = [
+function insertCorrectionAttempt(db, { evaluation, expectedAnswer, problemId, questionText, resultText, transcription, userId }) {
+  const feedback = evaluation.fullFeedback;
+  db.prepare(`
+    INSERT INTO correction_attempts (
+      user_id, problem_id, mode, question_text, expected_answer, detected_answer_text,
+      score, is_correct, feedback, strength_tags, weakness_tags, evaluation_json
+    )
+    VALUES (?, ?, 'canvas', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    userId,
+    problemId,
+    String(questionText || ''),
+    String(expectedAnswer || ''),
+    evaluation.detectedAnswerLatex || evaluation.detectedAnswerText,
+    evaluation.score,
+    evaluation.isCorrect ? 1 : 0,
+    feedback,
+    JSON.stringify(evaluation.strengthTags),
+    JSON.stringify(evaluation.weaknessTags),
+    JSON.stringify(transcription ? { ...evaluation, transcription } : evaluation)
+  );
+  return feedback || resultText || '';
+}
+
+async function buildEvaluationResponse(req, { requestStartedAt = Date.now(), sendEvent } = {}) {
+  const {
+    expectedAnswer,
+    imageBase64,
+    imageDimension,
+    mimeType,
+    problemId,
+    questionId,
+    questionText,
+    confirmedAnswerLatex,
+    text,
+    topicTags
+  } = req.body;
+
+  const { cleanBase64, normalizedMimeType } = validateImagePayload(imageBase64, mimeType);
+  if (!questionText && !text && !imageBase64) {
+    const error = new Error('Kirim soal dan jawaban teks atau gambar canvas.');
+    error.status = 400;
+    throw error;
+  }
+  const confirmedLatex = String(confirmedAnswerLatex || text || '').trim();
+
+  const safeQuestionId = parsePositiveId(questionId);
+  const safeProblemId = parsePositiveId(problemId);
+  const safeIdForPrompt = safeQuestionId || safeProblemId;
+  if ((questionId !== undefined && safeQuestionId === null)
+      || (problemId !== undefined && safeProblemId === null)) {
+    const error = new Error('ID soal tidak valid.');
+    error.status = 400;
+    throw error;
+  }
+
+  const sanitized = {
+    questionText: sanitizeForPrompt(questionText),
+    expectedAnswer: sanitizeForPrompt(expectedAnswer),
+    confirmedAnswerLatex: sanitizeForPrompt(confirmedAnswerLatex),
+    text: sanitizeForPrompt(text),
+  };
+  const truncatedFields = Object.entries(sanitized)
+    .filter(([, value]) => value.truncated)
+    .map(([key]) => key);
+  if (truncatedFields.length) {
+    console.warn('[correction] evaluate: prompt fields truncated:', truncatedFields.join(', '));
+  }
+
+  const safeTopicTags = Array.isArray(topicTags)
+    ? topicTags.filter((tag) => typeof tag === 'string' && tag.length > 0).map((tag) => sanitizeForPrompt(tag, { maxChars: 64 }).text)
+    : [];
+  const useMergedFlow = Boolean(cleanBase64) && !confirmedLatex;
+
+  let schema, systemInstruction, maxOutputTokens, parts;
+  if (useMergedFlow) {
+    schema = MERGED_EVALUATION_SCHEMA;
+    systemInstruction = MERGED_SYSTEM_PROMPT;
+    maxOutputTokens = 3200;
+    parts = [
+      {
+        text: [
+          'Evaluasi jawaban siswa sesuai SOP Mafiking Canvas (merged flow: OCR + evaluasi dalam 1 langkah).',
+          safeIdForPrompt ? `ID soal: ${safeIdForPrompt}` : '',
+          sanitized.questionText.text ? `Soal: ${sanitized.questionText.text}` : '',
+          sanitized.expectedAnswer.text ? `Jawaban acuan: ${sanitized.expectedAnswer.text}` : '',
+          safeTopicTags.length ? `Topik soal: ${safeTopicTags.join(', ')}` : '',
+          'Baca gambar canvas, transkripsikan ke LaTeX, lalu evaluasi terhadap soal dan jawaban acuan.',
+          'Kembalikan JSON dengan field transcription dan evaluation.'
+        ].filter(Boolean).join('\n\n')
+      },
+      { inlineData: { data: cleanBase64, mimeType: normalizedMimeType } }
+    ];
+  } else {
+    schema = EVALUATION_SCHEMA;
+    systemInstruction = EVALUATE_SYSTEM_PROMPT;
+    maxOutputTokens = EVALUATE_MAX_OUTPUT_TOKENS;
+    parts = [
       {
         text: [
           'Evaluasi jawaban siswa sesuai SOP Gemini Canvas Redline dan kembalikan JSON sesuai schema.',
@@ -1060,57 +1314,144 @@ router.post('/evaluate', isAuthenticated, requireRegisteredUser, async (req, res
         ].filter(Boolean).join('\n\n')
       }
     ];
+    if (cleanBase64) parts.push({ inlineData: { data: cleanBase64, mimeType: normalizedMimeType } });
+  }
 
-    if (cleanBase64) {
-      parts.push({ inlineData: { data: cleanBase64, mimeType: normalizedMimeType } });
-    }
+  if (sendEvent) sendEvent('phase', { phase: 'reading', message: 'Membaca canvas...' });
+  if (sendEvent) sendEvent('phase', { phase: 'evaluating', message: 'Mengevaluasi jawaban...' });
 
-    const result = await callGeminiWithFallback({
-      maxOutputTokens: EVALUATE_MAX_OUTPUT_TOKENS,
-      models: getGeminiModels(EVALUATE_MODELS),
-      schema: EVALUATION_SCHEMA,
-      systemInstruction: EVALUATE_SYSTEM_PROMPT,
-      db: req.app.locals.db,
-      parts
+  const result = await callAiWithPoolFallback({
+    maxOutputTokens,
+    legacyModels: getGeminiModels(EVALUATE_MODELS),
+    schema,
+    systemInstruction,
+    db: req.app.locals.db,
+    parts,
+  });
+
+  const db = req.app.locals.db;
+  const normalizedProblemId = safeProblemId || safeQuestionId;
+  let response;
+  let fastPath = false;
+
+  if (useMergedFlow) {
+    const parsedBase = safeJsonParse(result.text, () => ({
+      transcription: { detectedAnswerLatex: '', readingConfidence: 0, unclearParts: [], needsUserConfirmation: false },
+      evaluation: { isCorrect: false, score: 0, fullFeedback: 'AI response invalid.' },
+    }));
+    const fastPathResult = applyFastPathIfEquivalent(parsedBase, sanitized.expectedAnswer.text);
+    const parsed = fastPathResult.parsed;
+    fastPath = fastPathResult.fastPath;
+    if (fastPath && sendEvent) sendEvent('phase', { phase: 'fast-path', message: 'Jawaban cocok dengan kunci.' });
+
+    const transcription = parsed.transcription || {};
+    const evaluation = normalizeEvaluation(parsed.evaluation || {}, result.text);
+    const feedback = insertCorrectionAttempt(db, {
+      evaluation,
+      expectedAnswer,
+      problemId: normalizedProblemId,
+      questionText,
+      resultText: result.text,
+      transcription,
+      userId: req.session.userId,
     });
-    const parsed = safeJsonParse(result.text, (fullFeedback) => ({ fullFeedback, isCorrect: false, score: 0 }));
-    const evaluation = normalizeEvaluation(parsed, result.text);
-    const feedback = evaluation.fullFeedback;
 
-    const db = req.app.locals.db;
-    const normalizedProblemId = safeProblemId || safeQuestionId;
-    db.prepare(`
-      INSERT INTO correction_attempts (
-        user_id, problem_id, mode, question_text, expected_answer, detected_answer_text,
-        score, is_correct, feedback, strength_tags, weakness_tags, evaluation_json
-      )
-      VALUES (?, ?, 'canvas', ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      req.session.userId,
-      normalizedProblemId,
-      String(questionText || ''),
-      String(expectedAnswer || ''),
-      evaluation.detectedAnswerLatex || evaluation.detectedAnswerText,
-      evaluation.score,
-      evaluation.isCorrect ? 1 : 0,
-      feedback,
-      JSON.stringify(evaluation.strengthTags),
-      JSON.stringify(evaluation.weaknessTags),
-      JSON.stringify(evaluation)
-    );
-
-    res.json({
+    response = {
+      merged: true,
+      transcription: normalizeTranscription(transcription, result.text),
       evaluation,
       feedback,
       durationMs: result.durationMs,
       keyIndex: result.keyIndex,
-      modelUsed: result.modelUsed
+      modelUsed: result.modelUsed,
+      provider: result.provider,
+      cached: Boolean(result.cached),
+      fastPath,
+      queueWaitMs: result.queueWaitMs || 0,
+    };
+  } else {
+    const parsedBase = safeJsonParse(result.text, (fullFeedback) => ({ fullFeedback, isCorrect: false, score: 0 }));
+    const fastPathResult = applyFastPathIfEquivalent(parsedBase, sanitized.expectedAnswer.text);
+    const parsed = fastPathResult.parsed;
+    fastPath = fastPathResult.fastPath;
+    if (fastPath && sendEvent) sendEvent('phase', { phase: 'fast-path', message: 'Jawaban cocok dengan kunci.' });
+
+    const evaluation = normalizeEvaluation(parsed, result.text);
+    const feedback = insertCorrectionAttempt(db, {
+      evaluation,
+      expectedAnswer,
+      problemId: normalizedProblemId,
+      questionText,
+      resultText: result.text,
+      userId: req.session.userId,
     });
+
+    response = {
+      merged: false,
+      evaluation,
+      feedback,
+      durationMs: result.durationMs,
+      keyIndex: result.keyIndex,
+      modelUsed: result.modelUsed,
+      provider: result.provider,
+      cached: Boolean(result.cached),
+      fastPath,
+      queueWaitMs: result.queueWaitMs || 0,
+    };
+  }
+
+  recordLatency(db, {
+    userId: req.session.userId,
+    problemId: normalizedProblemId,
+    provider: response.provider,
+    keyIndex: response.keyIndex,
+    modelUsed: response.modelUsed,
+    imageDimension,
+    imageBytes: estimateBase64Bytes(cleanBase64),
+    aiDurationMs: response.durationMs,
+    totalDurationMs: Date.now() - requestStartedAt,
+    cacheHit: response.cached,
+    fastPath,
+    isCorrect: response.evaluation?.isCorrect,
+    queueWaitMs: response.queueWaitMs,
+    status: 'success',
+  });
+
+  return response;
+}
+
+router.post('/evaluate', isAuthenticated, requireRegisteredUser, async (req, res) => {
+  try {
+    res.json(await buildEvaluationResponse(req, { requestStartedAt: Date.now() }));
   } catch (error) {
     res.status(error.status ?? error.response?.status ?? 500).json({
       error: error.message || 'Gagal mengevaluasi jawaban.',
       attempts: error.attempts
     });
+  }
+});
+
+router.post('/evaluate-stream', isAuthenticated, requireRegisteredUser, async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+  const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 10000);
+
+  try {
+    const result = await buildEvaluationResponse(req, { requestStartedAt: Date.now(), sendEvent });
+    sendEvent('result', result);
+  } catch (error) {
+    sendEvent('error', { message: error.message || 'Gagal mengevaluasi jawaban.', attempts: error.attempts });
+  } finally {
+    clearInterval(heartbeat);
+    res.end();
   }
 });
 
@@ -1320,8 +1661,23 @@ function enrichWithDbProblems(db, userId, attempts, multipleChoiceEvidence, summ
     });
   }
 
-  return summary;
+   return summary;
 }
+
+const { getPoolStats: getStats } = require('../lib/multi-provider-pool');
+router.get('/pool/stats', isAuthenticated, (req, res) => {
+  if (!(req.session?.role === 'admin' || isLocalAdminMode(req))) {
+    return res.status(403).json({ error: 'Akses admin diperlukan' });
+  }
+  res.json(getStats());
+});
+
+router.get('/latency/summary', isAuthenticated, (req, res) => {
+  if (!(req.session?.role === 'admin' || isLocalAdminMode(req))) {
+    return res.status(403).json({ error: 'Akses admin diperlukan' });
+  }
+  res.json(getLatencySummary(req.app.locals.db, { sinceHours: req.query.hours }));
+});
 
 module.exports = router;
 module.exports._profileSummaryInternals = {

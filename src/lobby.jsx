@@ -1,11 +1,13 @@
 // MAFIKING Lobby — minimalist with 3 hero variants
 
-const Lobby = ({ setRoute, tweaks, currentUser, isAdmin = false, authMode = null, authRedirect = null, onAuthSuccess, pendingClerkUser = null }) => {
+const Lobby = ({ setRoute, tweaks, currentUser, isAdmin = false, authMode = null, authRedirect = null, authBackRoute = null, authState = null, onAuthSuccess, pendingClerkUser = null }) => {
   if (authMode) {
     return (
       <AuthScreen
         mode={authMode}
         redirect={authRedirect}
+        backRoute={authBackRoute}
+        authState={authState}
         setRoute={setRoute}
         onSuccess={onAuthSuccess}
         currentUser={currentUser}
@@ -60,18 +62,90 @@ const DevScreen = ({ unlockCount, onUnlockAttempt }) => {
   );
 };
 
-const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess, currentUser = null, initialClerkUser = null }) => {
+const GoogleLogoIcon = ({ size = 18 }) => (
+  <svg aria-hidden="true" width={size} height={size} viewBox="0 0 18 18">
+    <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
+    <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.33-1.58-5.04-3.72H.94v2.33A9 9 0 0 0 9 18z" />
+    <path fill="#FBBC05" d="M3.96 10.7A5.41 5.41 0 0 1 3.68 9c0-.59.1-1.16.28-1.7V4.97H.94A9 9 0 0 0 0 9c0 1.45.34 2.82.94 4.03l3.02-2.33z" />
+    <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.43 1.34l2.59-2.59C13.46.88 11.43 0 9 0A9 9 0 0 0 .94 4.97L3.96 7.3C4.67 5.16 6.66 3.58 9 3.58z" />
+  </svg>
+);
+
+const BackArrowIcon = ({ size = 14 }) => (
+  <svg aria-hidden="true" width={size} height={size} viewBox="0 0 20 20" fill="none">
+    <path d="M12.5 4.5 7 10l5.5 5.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M7.75 10H17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
+const EnvelopeIcon = ({ size = 24 }) => (
+  <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <rect x="3" y="5" width="18" height="14" rx="3" stroke="currentColor" strokeWidth="2" />
+    <path d="m4 7 8 6 8-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const EyeIcon = ({ size = 18, hidden = false }) => (
+  <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="12" cy="12" r="2.8" stroke="currentColor" strokeWidth="1.8" />
+    {hidden && <path d="M4 4l16 16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />}
+  </svg>
+);
+
+const EMAIL_VERIFIED_EVENT_KEY = "mafiking:email-verified";
+const AUTH_SCREEN_BACK_PATH_STORAGE_KEY = "mafiking:last-non-auth-path";
+
+const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authState = null, setRoute, onSuccess, currentUser = null, initialClerkUser = null }) => {
   const { useState } = React;
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [displayName, setDisplayName] = useState(initialClerkUser?.suggested_display_name || initialClerkUser?.display_name || '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [clerkLoading, setClerkLoading] = useState(false);
   const [clerkEnabled, setClerkEnabled] = useState(false);
   const [pendingClerkUser, setPendingClerkUser] = useState(initialClerkUser || null);
+  const [verifyState, setVerifyState] = useState(() => authState || {});
+  const [verifyStatus, setVerifyStatus] = useState("idle");
+  const [resendLoading, setResendLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(Number(authState?.cooldownSeconds || 0));
   const isSignup = mode === "signup";
+  const isVerifyEmail = mode === "verify-email";
+  const isVerifyToken = mode === "verify-email-token";
   const isGuestUser = currentUser && currentUser.display_name?.startsWith('Tamu_');
+  const verificationSyncRef = React.useRef(false);
+  const isSafeBackPath = (path) => {
+    const clean = String(path || '').split('?')[0].replace(/\/+$/, '') || '/';
+    return Boolean(path && path.startsWith('/') && clean !== '/login' && clean !== '/signup' && clean !== '/profil' && clean !== '/profile');
+  };
+  const readBackPath = () => {
+    try {
+      const path = String(window.sessionStorage.getItem(AUTH_SCREEN_BACK_PATH_STORAGE_KEY) || '').trim();
+      if (isSafeBackPath(path)) return path;
+    } catch (_) {}
+    try {
+      if (!document.referrer) return '';
+      const referrerUrl = new URL(document.referrer);
+      if (referrerUrl.origin !== window.location.origin) return '';
+      const path = `${referrerUrl.pathname}${referrerUrl.search}${referrerUrl.hash}`;
+      if (isSafeBackPath(path)) return path;
+    } catch (_) {}
+    return '';
+  };
+  const goBack = () => {
+    const backPath = readBackPath();
+    if (backPath) {
+      window.location.assign(backPath);
+      return;
+    }
+    if (backRoute) {
+      setRoute(backRoute);
+      return;
+    }
+    window.location.assign("/");
+  };
 
   React.useEffect(() => {
     let alive = true;
@@ -92,26 +166,138 @@ const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess, curr
     setDisplayName(initialClerkUser.suggested_display_name || initialClerkUser.display_name || '');
   }, [initialClerkUser]);
 
+  React.useEffect(() => {
+    if (!authState) return;
+    setVerifyState(authState);
+    setCooldown(Number(authState.cooldownSeconds || 0));
+  }, [authState]);
+
+  const confirmEmailVerification = React.useCallback(async () => {
+    const token = String(authState?.token || verifyState?.token || '').trim();
+    if (!token) {
+      setVerifyStatus("failed");
+      setError("Token verifikasi tidak ditemukan.");
+      return;
+    }
+    setVerifyStatus("verifying");
+    setError("");
+    try {
+      const verified = await MafikingAPI.post('/api/auth/verify-email', { token });
+      setVerifyStatus("success");
+      try {
+        window.localStorage.setItem(EMAIL_VERIFIED_EVENT_KEY, JSON.stringify({
+          at: Date.now(),
+          email: verified && verified.email ? String(verified.email).toLowerCase() : "",
+        }));
+      } catch (_) {}
+      const user = await MafikingAPI.get('/api/auth/me').catch(() => null);
+      if (user && typeof onSuccess === 'function') {
+        window.setTimeout(() => onSuccess(user, redirect), 650);
+      }
+    } catch (err) {
+      setVerifyStatus("failed");
+      setError(err.message || "Link verifikasi tidak valid atau sudah kadaluarsa.");
+    }
+  }, [authState?.token, verifyState?.token, onSuccess, redirect]);
+
+  React.useEffect(() => {
+    if (!isVerifyEmail) return undefined;
+
+    const handleStorage = (event) => {
+      if (event.key !== EMAIL_VERIFIED_EVENT_KEY || verificationSyncRef.current) return;
+      let payload = {};
+      try {
+        payload = JSON.parse(event.newValue || "{}");
+      } catch (_) {
+        payload = {};
+      }
+      const verifiedEmail = String(payload.email || "").trim().toLowerCase();
+      const waitingEmail = String(verifyState?.email || authState?.email || "").trim().toLowerCase();
+      if (waitingEmail && verifiedEmail && waitingEmail !== verifiedEmail) return;
+      verificationSyncRef.current = true;
+      setVerifyStatus("success");
+      setError("");
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [isVerifyEmail, verifyState?.email, authState?.email]);
+
+  React.useEffect(() => {
+    if (!isVerifyEmail || cooldown <= 0) return undefined;
+    const timer = window.setInterval(() => {
+      setCooldown((current) => Math.max(0, Number(current || 0) - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [isVerifyEmail, cooldown]);
+
+  const openVerifyScreen = (state) => {
+    const nextState = {
+      email: state.email || username.trim(),
+      displayName: state.displayName || '',
+      cooldownSeconds: Number(state.cooldownSeconds || 60),
+      sentAt: new Date().toISOString(),
+    };
+    setVerifyState(nextState);
+    setCooldown(nextState.cooldownSeconds);
+    setRoute({ route: "lobby", authMode: "verify-email", authState: nextState, authRedirect: redirect, authBackRoute: backRoute });
+  };
+
+  const resendVerification = async () => {
+    const email = String(verifyState?.email || username || '').trim();
+    if (!email) {
+      setError("Masukkan email terlebih dahulu.");
+      return;
+    }
+    setResendLoading(true);
+    setError("");
+    try {
+      const result = await MafikingAPI.post('/api/auth/resend-verification', { email });
+      setVerifyState((current) => ({
+        ...current,
+        email,
+        cooldownSeconds: Number(result.cooldownSeconds || 60),
+        sentAt: new Date().toISOString(),
+      }));
+      setCooldown(Number(result.cooldownSeconds || 60));
+    } catch (err) {
+      setError(err.message || "Gagal mengirim ulang email verifikasi.");
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
       if (isSignup) {
-        await MafikingAPI.post('/api/auth/register', {
-          username,
+        const email = username.trim();
+        const result = await MafikingAPI.post('/api/auth/register', {
+          username: email,
           password,
-          display_name: displayName || username,
+          display_name: email.split("@")[0] || email,
           fakultas: '',
         });
+        if (result.requiresVerification) {
+          openVerifyScreen(result);
+          return;
+        }
       } else {
-        await MafikingAPI.post('/api/auth/login', { username, password });
+        const result = await MafikingAPI.post('/api/auth/login', { username, password });
+        if (result.requiresVerification) {
+          openVerifyScreen(result);
+          return;
+        }
       }
       const user = await MafikingAPI.get('/api/auth/me');
       if (typeof onSuccess === 'function') onSuccess(user, redirect);
       else setRoute(redirect || { route: "belajar", section: "Try Out" });
     } catch (err) {
-      setError(err.message || (isSignup ? 'Sign up gagal.' : 'Username atau password salah.'));
+      setError(err.message || (isSignup ? 'Sign up gagal.' : 'Email atau password salah.'));
     } finally {
       setLoading(false);
     }
@@ -217,6 +403,168 @@ const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess, curr
     );
   }
 
+  if (isVerifyEmail || isVerifyToken) {
+    const email = String(verifyState?.email || '').trim();
+    const isSuccess = verifyStatus === "success";
+    const isFailed = verifyStatus === "failed";
+    const isVerifying = isVerifyToken && verifyStatus === "verifying";
+    const isConfirmPending = isVerifyToken && verifyStatus === "idle";
+    return (
+      <div style={{
+        backgroundColor: '#ffffff',
+        backgroundImage:
+          'linear-gradient(rgba(11,19,38,0.045) 1px, transparent 1px),' +
+          'linear-gradient(90deg, rgba(11,19,38,0.045) 1px, transparent 1px)',
+        backgroundSize: '40px 40px',
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        fontFamily: 'inherit',
+      }}>
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid rgba(11,19,38,0.1)',
+          borderRadius: 24,
+          padding: 40,
+          width: '100%',
+          maxWidth: 440,
+          boxShadow: '0 8px 40px rgba(11,19,38,0.08)',
+          margin: '0 16px',
+          textAlign: 'center',
+        }}>
+          <div style={{
+            alignItems: 'center',
+            background: isSuccess ? '#dcfce7' : isFailed ? '#fee2e2' : '#FFF44F',
+            borderRadius: 999,
+            color: isSuccess ? '#166534' : isFailed ? '#991b1b' : '#0b1326',
+            display: 'inline-flex',
+            height: 58,
+            justifyContent: 'center',
+            marginBottom: 18,
+            width: 58,
+          }}>
+            <EnvelopeIcon size={26} />
+          </div>
+          <h1 style={{ fontSize: 28, color: '#0b1326', letterSpacing: '-0.01em', fontWeight: 800, margin: 0 }}>
+            {isSuccess ? 'Email terverifikasi' : isFailed ? 'Link tidak valid' : isVerifying ? 'Memverifikasi email...' : isConfirmPending ? 'Konfirmasi email' : 'Cek email kamu'}
+          </h1>
+          <p style={{ color: 'rgba(11,19,38,0.55)', fontSize: 14, lineHeight: 1.65, margin: '12px 0 0' }}>
+            {isSuccess
+              ? isVerifyEmail
+                ? 'Akun kamu sudah aktif. Lanjutkan di tab Mafiking yang baru terbuka.'
+                : 'Akun kamu sudah aktif. Kamu akan diarahkan ke Mafiking.'
+              : isFailed
+                ? 'Link verifikasi tidak valid atau sudah kadaluarsa. Kamu bisa meminta link baru.'
+                : isConfirmPending
+                  ? 'Tekan tombol di bawah untuk mengaktifkan akun Mafiking kamu.'
+                : email
+                  ? `Kami sudah mengirim link konfirmasi ke ${email}. Klik link di email untuk mengaktifkan akun.`
+                  : 'Kami sudah mengirim link konfirmasi ke email kamu. Klik link di email untuk mengaktifkan akun.'}
+          </p>
+          {error && (
+            <p style={{ color: '#ef4444', fontSize: 13, marginTop: 12 }}>{error}</p>
+          )}
+          {!isSuccess && isVerifyToken && (
+            <div style={{ display: 'grid', gap: 10, marginTop: 26 }}>
+              <button
+                type="button"
+                disabled={isVerifying}
+                onClick={confirmEmailVerification}
+                style={{
+                  background: '#0b1326',
+                  border: 'none',
+                  borderRadius: 12,
+                  color: '#FFF44F',
+                  cursor: isVerifying ? 'not-allowed' : 'pointer',
+                  fontSize: 15,
+                  fontWeight: 800,
+                  opacity: isVerifying ? 0.65 : 1,
+                  padding: 14,
+                  width: '100%',
+                }}
+              >
+                {isVerifying ? 'Memverifikasi...' : 'Konfirmasi Email'}
+              </button>
+            </div>
+          )}
+          {!isSuccess && !isVerifyToken && (
+            <div style={{ display: 'grid', gap: 10, marginTop: 26 }}>
+              <a
+                href="https://mail.google.com/mail/u/0/#inbox"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  background: '#0b1326',
+                  borderRadius: 12,
+                  color: '#FFF44F',
+                  display: 'block',
+                  fontSize: 15,
+                  fontWeight: 800,
+                  padding: 14,
+                  textDecoration: 'none',
+                }}
+              >
+                Buka Gmail
+              </a>
+              <button
+                type="button"
+                disabled={resendLoading || cooldown > 0 || isVerifying}
+                onClick={resendVerification}
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid rgba(11,19,38,0.14)',
+                  borderRadius: 12,
+                  color: 'rgba(11,19,38,0.8)',
+                  cursor: (resendLoading || cooldown > 0 || isVerifying) ? 'not-allowed' : 'pointer',
+                  fontSize: 15,
+                  fontWeight: 800,
+                  opacity: (resendLoading || cooldown > 0 || isVerifying) ? 0.55 : 1,
+                  padding: 14,
+                }}
+              >
+                {resendLoading ? 'Mengirim...' : cooldown > 0 ? `Kirim ulang (${cooldown} detik)` : 'Kirim Ulang'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setRoute({ route: "lobby", authMode: "signup", authRedirect: redirect, authBackRoute: backRoute })}
+                style={{ color: 'rgba(11,19,38,0.55)', fontSize: 13, fontWeight: 800, padding: 8 }}
+              >
+                Pakai email lain
+              </button>
+            </div>
+          )}
+          {isSuccess && isVerifyToken && (
+            <button
+              type="button"
+              onClick={() => setRoute(redirect || { route: "belajar", section: "Try Out" })}
+              style={{
+                background: '#0b1326',
+                border: 'none',
+                borderRadius: 12,
+                color: '#FFF44F',
+                cursor: 'pointer',
+                fontSize: 15,
+                fontWeight: 800,
+                marginTop: 26,
+                padding: 14,
+                width: '100%',
+              }}
+            >
+              Lanjut ke Mafiking
+            </button>
+          )}
+          {!isSuccess && !isVerifyToken && (
+            <p style={{ color: 'rgba(11,19,38,0.42)', fontSize: 12, lineHeight: 1.55, margin: '18px 0 0' }}>
+              Tidak dapat email? Cek folder spam, lalu klik Kirim Ulang setelah cooldown selesai.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       backgroundColor: '#ffffff',
@@ -250,42 +598,26 @@ const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess, curr
           <h1 style={{ fontSize: 28, color: '#0b1326', letterSpacing: '-0.01em', fontWeight: 700, margin: 0 }}>
             {isSignup ? 'Sign Up Mafiking' : 'Masuk Mafiking'}
           </h1>
-          <p style={{ color: 'rgba(11,19,38,0.45)', fontSize: 13, marginTop: 6 }}>
-            {isSignup ? 'Buat akun dulu, UI sign up khusus bisa diganti nanti.' : 'Lanjutkan progres belajarmu.'}
-          </p>
+          {!isSignup && (
+            <p style={{ color: 'rgba(11,19,38,0.45)', fontSize: 13, marginTop: 6 }}>
+              Lanjutkan progres belajarmu.
+            </p>
+          )}
         </div>
 
         <form onSubmit={handleSubmit}>
-          {isSignup && (
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ display: 'block', fontSize: 13, color: 'rgba(11,19,38,0.65)', fontWeight: 500, marginBottom: 8 }}>Nama tampilan</label>
-              <input
-                type="text"
-                value={displayName}
-                onChange={e => setDisplayName(e.target.value)}
-                placeholder="Nama yang tampil di Mafiking"
-                required
-                autoFocus
-                style={{
-                  width: '100%', padding: '13px 16px', boxSizing: 'border-box',
-                  background: '#f8f8f8', border: '1px solid rgba(11,19,38,0.12)',
-                  borderRadius: 12, color: '#0b1326', fontSize: 15, outline: 'none',
-                }}
-                onFocus={e => e.target.style.borderColor = '#0b1326'}
-                onBlur={e => e.target.style.borderColor = 'rgba(11,19,38,0.12)'}
-              />
-            </div>
-          )}
-
           <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', fontSize: 13, color: 'rgba(11,19,38,0.65)', fontWeight: 500, marginBottom: 8 }}>Username</label>
+            <label style={{ display: 'block', fontSize: 13, color: 'rgba(11,19,38,0.65)', fontWeight: 500, marginBottom: 8 }}>
+              Email
+            </label>
             <input
-              type="text"
+              type={isSignup ? 'email' : 'text'}
               value={username}
               onChange={e => setUsername(e.target.value)}
-              placeholder="Masukkan username"
+              placeholder="nama@email.com"
               required
-              autoFocus={!isSignup}
+              autoFocus
+              autoComplete={isSignup ? 'email' : 'username'}
               style={{
                 width: '100%', padding: '13px 16px', boxSizing: 'border-box',
                 background: '#f8f8f8', border: '1px solid rgba(11,19,38,0.12)',
@@ -298,20 +630,47 @@ const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess, curr
 
           <div style={{ marginBottom: 24 }}>
             <label style={{ display: 'block', fontSize: 13, color: 'rgba(11,19,38,0.65)', fontWeight: 500, marginBottom: 8 }}>Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              style={{
-                width: '100%', padding: '13px 16px', boxSizing: 'border-box',
-                background: '#f8f8f8', border: '1px solid rgba(11,19,38,0.12)',
-                borderRadius: 12, color: '#0b1326', fontSize: 15, outline: 'none',
-              }}
-              onFocus={e => e.target.style.borderColor = '#0b1326'}
-              onBlur={e => e.target.style.borderColor = 'rgba(11,19,38,0.12)'}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                autoComplete={isSignup ? 'new-password' : 'current-password'}
+                style={{
+                  width: '100%', padding: '13px 48px 13px 16px', boxSizing: 'border-box',
+                  background: '#f8f8f8', border: '1px solid rgba(11,19,38,0.12)',
+                  borderRadius: 12, color: '#0b1326', fontSize: 15, outline: 'none',
+                }}
+                onFocus={e => e.target.style.borderColor = '#0b1326'}
+                onBlur={e => e.target.style.borderColor = 'rgba(11,19,38,0.12)'}
+              />
+              <button
+                type="button"
+                aria-label={showPassword ? 'Sembunyikan password' : 'Lihat password'}
+                title={showPassword ? 'Sembunyikan password' : 'Lihat password'}
+                onClick={() => setShowPassword(value => !value)}
+                style={{
+                  alignItems: 'center',
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'rgba(11,19,38,0.55)',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  height: 40,
+                  justifyContent: 'center',
+                  padding: 0,
+                  position: 'absolute',
+                  right: 6,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: 40,
+                }}
+              >
+                <EyeIcon hidden={!showPassword} />
+              </button>
+            </div>
             {error && (
               <p style={{ color: '#ef4444', fontSize: 13, marginTop: 8, marginLeft: 4 }}>{error}</p>
             )}
@@ -362,7 +721,9 @@ const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess, curr
                 width: '100%',
               }}
             >
-              <span style={{ alignItems: 'center', border: '1px solid rgba(11,19,38,.08)', borderRadius: 999, display: 'inline-flex', height: 24, justifyContent: 'center', width: 24 }}>G</span>
+              <span style={{ alignItems: 'center', border: '1px solid rgba(11,19,38,.08)', borderRadius: 999, display: 'inline-flex', height: 24, justifyContent: 'center', width: 24 }}>
+                <GoogleLogoIcon size={18} />
+              </span>
               {clerkLoading ? 'Menunggu Google...' : (isSignup ? 'Daftar dengan Google' : 'Masuk dengan Google')}
             </button>
           </>
@@ -370,14 +731,23 @@ const AuthScreen = ({ mode = "login", redirect = null, setRoute, onSuccess, curr
 
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 18, fontSize: 13 }}>
           <button
-            onClick={() => setRoute("lobby")}
+            onClick={goBack}
             type="button"
-            style={{ color: 'rgba(11,19,38,0.55)', fontWeight: 600 }}
+            style={{
+              alignItems: 'center',
+              color: 'rgba(11,19,38,0.62)',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              fontWeight: 800,
+              gap: 6,
+              padding: '4px 0',
+            }}
           >
-            Kembali landing
+            <BackArrowIcon />
+            kembali
           </button>
           <button
-            onClick={() => setRoute({ route: "lobby", authMode: isSignup ? "login" : "signup", authRedirect: redirect })}
+            onClick={() => setRoute({ route: "lobby", authMode: isSignup ? "login" : "signup", authRedirect: redirect, authBackRoute: backRoute })}
             type="button"
             style={{ color: '#0b1326', fontWeight: 700 }}
           >
@@ -421,9 +791,11 @@ const LandingLegacy = ({ setRoute, tweaks, isAdmin = false, currentUser = null }
             <Logo size={34} />
           </button>
           <nav className="hidden items-center gap-8 text-sm font-semibold text-slate-500 md:flex">
-            <a href="#belajar" className="hover:text-slate-950">Belajar</a>
-            <a href="#fitur" className="hover:text-slate-950">Fitur</a>
-            <a href="#testimoni" className="hover:text-slate-950">Testimoni</a>
+            {["belajar", "fitur", "testimoni"].map((id) => (
+              <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })} className="hover:text-slate-950" type="button">
+                {id === "fitur" ? "Fitur" : id === "testimoni" ? "Testimoni" : "Belajar"}
+              </button>
+            ))}
           </nav>
           <div className="flex items-center gap-3">
             <button onClick={startFree} className="btn-ink !py-2.5 !px-5 text-sm" type="button">
@@ -812,11 +1184,14 @@ const LandingMediaUploadModal = ({ target, onClose, onUploaded }) => {
 const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [landingMedia, setLandingMedia] = React.useState({});
+  const [tryoutPackages, setTryoutPackages] = React.useState([]);
   const [mediaEditTarget, setMediaEditTarget] = React.useState(null);
   const [soundEnabled, setSoundEnabled] = React.useState(true);
   const [demoVideoShouldLoad, setDemoVideoShouldLoad] = React.useState(false);
   const demoVideoRef = React.useRef(null);
   const demoVideoFrameRef = React.useRef(null);
+  const teacherScrollRef = React.useRef(null);
+  const teacherScrollAdjustingRef = React.useRef(false);
   const soundEnabledRef = React.useRef(true);
   const landingMediaEditEnabled = false;
   const isRegistered = currentUser && !currentUser.display_name?.startsWith("Tamu_");
@@ -825,6 +1200,22 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   const startFree = () => {
     try { window.sessionStorage.setItem("mafiking:tryout-pop", "1"); } catch (_) {}
     setRoute({ route: "belajar", section: "Try Out" });
+  };
+  const buyLandingPackage = (pkg) => {
+    if (isLandingPackageFree(pkg)) {
+      startFree();
+      return;
+    }
+    if (!pkg || !pkg.id) {
+      setRoute("tryout");
+      return;
+    }
+    const paymentRoute = { route: "payment", payment: { type: "tryout", package: pkg } };
+    if (!isRegistered) {
+      setRoute({ route: "lobby", authMode: "login", authRedirect: paymentRoute });
+      return;
+    }
+    setRoute(paymentRoute);
   };
   const scrollToId = (id) => {
     const el = document.getElementById(id);
@@ -840,12 +1231,56 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   };
   const mediaUrl = (slot, fallback) => (landingMedia && landingMedia[slot] && landingMedia[slot].url) || fallback;
   const updateLandingMedia = (slot, row) => setLandingMedia((prev) => ({ ...prev, [slot]: row }));
+  const centerTeacherScroll = React.useCallback(() => {
+    const container = teacherScrollRef.current;
+    if (!container) return;
+    const copyWidth = container.scrollWidth / 3;
+    if (!Number.isFinite(copyWidth) || copyWidth <= 0) return;
+    teacherScrollAdjustingRef.current = true;
+    container.scrollLeft = copyWidth;
+    window.requestAnimationFrame(() => { teacherScrollAdjustingRef.current = false; });
+  }, []);
+  const handleTeacherScroll = React.useCallback(() => {
+    const container = teacherScrollRef.current;
+    if (!container || teacherScrollAdjustingRef.current) return;
+    const copyWidth = container.scrollWidth / 3;
+    if (!Number.isFinite(copyWidth) || copyWidth <= 0) return;
+    if (container.scrollLeft < copyWidth * 0.5) {
+      teacherScrollAdjustingRef.current = true;
+      container.scrollLeft += copyWidth;
+      window.requestAnimationFrame(() => { teacherScrollAdjustingRef.current = false; });
+      return;
+    }
+    if (container.scrollLeft > copyWidth * 1.5) {
+      teacherScrollAdjustingRef.current = true;
+      container.scrollLeft -= copyWidth;
+      window.requestAnimationFrame(() => { teacherScrollAdjustingRef.current = false; });
+    }
+  }, []);
 
   React.useEffect(() => {
     let cancelled = false;
     fetch("/api/landing-media", { credentials: "same-origin" })
       .then((res) => res.ok ? res.json() : {})
       .then((data) => { if (!cancelled) setLandingMedia(data || {}); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  React.useEffect(() => {
+    const frame = window.requestAnimationFrame(centerTeacherScroll);
+    window.addEventListener("resize", centerTeacherScroll);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", centerTeacherScroll);
+    };
+  }, [centerTeacherScroll]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    fetch("/api/tryout-packages", { credentials: "same-origin" })
+      .then((res) => res.ok ? res.json() : [])
+      .then((rows) => { if (!cancelled) setTryoutPackages(Array.isArray(rows) ? rows : []); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
@@ -991,6 +1426,53 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
     { title: "Fisika", desc: "Mekanika, termodinamika, listrik magnet - sesuai kaedah dahulu, namun kemaritiman.", IconC: Icon.Atom, section: "Fisika" },
     { title: "Kimia", desc: "Wujud zat, stoikiometri - dari model Bohr hingga setara redoks.", IconC: Icon.Flask, section: "Kimia" },
   ];
+  const teacherProfiles = [
+    {
+      name: "Dakita Arfa",
+      initial: "DA",
+      awards: [
+        { text: "Prestasi sementara: pendamping materi Matematika TPB dengan fokus konsep dasar.", tone: "brand" },
+        { text: "Prestasi sementara: aktif menyusun latihan bertahap untuk persiapan kuis dan UTS.", tone: "amber" },
+        { text: "Prestasi sementara: membantu mahasiswa membaca pola kesalahan pengerjaan soal.", tone: "slate" },
+      ],
+    },
+    {
+      name: "Jordan Hervianto",
+      initial: "JH",
+      awards: [
+        { text: "Prestasi sementara: penguatan Fisika TPB dari mekanika hingga listrik magnet.", tone: "brand" },
+        { text: "Prestasi sementara: terbiasa membedah soal hitungan menjadi langkah pendek.", tone: "slate" },
+        { text: "Prestasi sementara: mendampingi review konsep sebelum evaluasi besar.", tone: "amber" },
+      ],
+    },
+    {
+      name: "Abiyu Lingga Rasendrya",
+      initial: "AL",
+      awards: [
+        { text: "Prestasi sementara: fokus Kimia TPB, stoikiometri, kesetimbangan, dan redoks.", tone: "brand" },
+        { text: "Prestasi sementara: menyusun pembahasan ringkas untuk latihan mingguan.", tone: "amber" },
+        { text: "Prestasi sementara: membantu mahasiswa menghubungkan rumus dengan intuisi soal.", tone: "slate" },
+      ],
+    },
+    {
+      name: "M. Elginito",
+      initial: "ME",
+      awards: [
+        { text: "Prestasi sementara: pendamping latihan campuran Matematika, Fisika, dan Kimia.", tone: "brand" },
+        { text: "Prestasi sementara: membantu menyusun strategi belajar menjelang ujian TPB.", tone: "slate" },
+        { text: "Prestasi sementara: fokus pada evaluasi progres dan penguatan fondasi.", tone: "amber" },
+      ],
+    },
+    {
+      name: "Gusti Ammar",
+      initial: "GA",
+      awards: [
+        { text: "Prestasi sementara: fokus review cepat konsep inti semester 1 dan semester 2.", tone: "brand" },
+        { text: "Prestasi sementara: mendampingi latihan adaptif sesuai kelemahan mahasiswa.", tone: "slate" },
+        { text: "Prestasi sementara: membantu merapikan alur berpikir saat mengerjakan soal.", tone: "amber" },
+      ],
+    },
+  ];
   const testimonials = [
     ["Dulu paling takut sama Kalkulus karena nggak ngerti konsep dasar limit. Di sini semua jadi visual dan terhubung. UTS dapet A.", "Budi R.", "STEI 23", "B"],
     ["Biasanya bimbel lain tutornya beneran cuma nyuruh hapal rumus nggak jelas. Latihannya terstruktur parah, serasa main game.", "Sarah M.", "FTMD 22", "S"],
@@ -999,6 +1481,19 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
     ["Canvas koreksinya kerasa beda. Salah hitung kecil langsung kelihatan, jadi nggak cuma tahu jawaban akhir benar atau salah.", "Dimas F.", "FTSL 23", "D"],
     ["Belajarnya jadi lebih rapi. Aku bisa fokus ke Matematika dulu, terus pindah Fisika tanpa bingung mulai dari bab mana.", "Nadya K.", "SITH-R 24", "N"],
   ];
+  const landingOffers = buildLandingOffers(tryoutPackages);
+  const awardToneClasses = {
+    brand: "border-slate-200 bg-slate-50 text-slate-950",
+    slate: "border-slate-200 bg-white text-slate-950",
+    amber: "border-amber-200 bg-amber-50 text-slate-950",
+    blue: "border-blue-100 bg-blue-50 text-slate-950",
+  };
+  const awardIconClasses = {
+    brand: "border-slate-200 bg-[#0B1326] text-[#FFF44F]",
+    slate: "border-slate-200 text-slate-500",
+    amber: "border-amber-100 text-amber-500",
+    blue: "border-blue-100 text-blue-600",
+  };
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-white text-slate-900 font-sans">
@@ -1016,13 +1511,13 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
       </div>
 
       <nav className="fixed top-0 z-50 w-full border-b border-slate-100 bg-white/80 backdrop-blur-md transition-all">
-        <div className="mx-auto w-full max-w-[1800px] px-6 md:px-12 lg:px-20">
-          <div className="flex h-20 items-center justify-between">
+        <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 md:px-12 lg:px-20">
+          <div className="flex h-14 sm:h-20 items-center justify-between">
             <button onClick={() => scrollToId("beranda")} className="flex items-center gap-2" type="button">
-              <Logo size={34} />
+              <Logo size={28} />
             </button>
             <div className="hidden items-center space-x-8 md:flex">
-              <button onClick={() => scrollToId("belajar")} className="font-medium text-slate-500 transition-colors hover:text-slate-900" type="button">Belajar</button>
+              <button onClick={() => scrollToId("pengajar")} className="font-medium text-slate-500 transition-colors hover:text-slate-900" type="button">Pengajar</button>
               <button onClick={() => scrollToId("fitur")} className="font-medium text-slate-500 transition-colors hover:text-slate-900" type="button">Fitur</button>
               <button onClick={() => scrollToId("testimoni")} className="font-medium text-slate-500 transition-colors hover:text-slate-900" type="button">Testimoni</button>
             </div>
@@ -1038,49 +1533,49 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
         </div>
         {menuOpen && (
           <div className="landing-mobile-menu space-y-1 border-b border-slate-100 bg-white px-4 pb-4 pt-2 md:hidden">
-            {[["belajar", "Belajar"], ["fitur", "Fitur"], ["testimoni", "Testimoni"]].map(([id, label]) => (
-              <button key={id} onClick={() => scrollToId(id)} className="block w-full rounded-md px-3 py-2 text-left font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-900" type="button">{label}</button>
+            {[["pengajar", "Pengajar"], ["fitur", "Fitur"], ["testimoni", "Testimoni"]].map(([id, label]) => (
+              <button key={id} onClick={() => scrollToId(id)} className="block w-full rounded-md px-3 py-2.5 text-left font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-900" type="button">{label}</button>
             ))}
-            <button onClick={startFree} className="btn-ink mt-4 w-full justify-center" type="button">
-              Coba Gratis <Icon.Arrow className="w-4 h-4" />
+            <button onClick={startFree} className="btn-ink mt-3 w-full justify-center !py-3 text-sm" type="button">
+              Coba Gratis <Icon.Arrow className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
       </nav>
 
-      <main className="relative z-10 pb-16 pt-12">
-        <section id="beranda" className="relative mx-auto w-full max-w-[1800px] scroll-mt-32 overflow-hidden px-6 pt-8 md:px-12 md:pt-12 lg:px-20 lg:pb-20 lg:pt-24">
+      <main className="relative z-10 pb-8 sm:pb-16 pt-10 sm:pt-12">
+        <section id="beranda" className="relative mx-auto w-full max-w-[1800px] scroll-mt-32 overflow-hidden px-4 pt-4 sm:px-6 sm:pt-8 md:px-12 md:pt-12 lg:px-20 lg:pb-20 lg:pt-24">
           <LandingFade className="relative z-10">
-            <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-8">
+            <div className="grid items-center gap-6 sm:gap-12 lg:grid-cols-2 lg:gap-8">
               <div className="landing-hero-copy relative z-10 w-full min-w-0">
-                <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-1.5 text-sm font-bold text-slate-800 shadow-sm">
-                  <Icon.Sparkles className="h-4 w-4 text-slate-600" /> Bimbel #1 untuk TPB ITB
+                <div className="mb-4 sm:mb-8 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 sm:px-4 sm:py-1.5 text-xs sm:text-sm font-bold text-slate-800 shadow-sm">
+                  <Icon.Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-600" /> Bimbel #1 untuk TPB ITB
                 </div>
-                <h1 className="mb-6 flex max-w-full flex-col items-start gap-1 text-[2.05rem] font-extrabold leading-[1.04] tracking-tight min-[390px]:text-[2.16rem] sm:text-[3.55rem] md:mb-8 md:text-6xl lg:text-[5rem]">
+                <h1 className="mb-4 sm:mb-6 flex max-w-full flex-col items-start gap-0.5 sm:gap-1 text-[1.65rem] font-extrabold leading-[1.04] tracking-tight min-[390px]:text-[1.85rem] sm:text-[3.55rem] md:mb-8 md:text-6xl lg:text-[5rem]">
                   <span className="text-slate-900 sm:whitespace-nowrap">Taklukkan TPB</span>
                   <span className="sm:whitespace-nowrap" style={{ color: "rgb(11 19 38 / 0.4)" }}>tanpa harus</span>
                   <span className="sm:whitespace-nowrap" style={{ color: "rgb(11 19 38 / 0.4)" }}>panik,</span>
-                  <span className="hi-yel mt-2 max-w-full text-slate-900 sm:whitespace-nowrap">mulai dari fondasi</span>
+                  <span className="hi-yel mt-1 sm:mt-2 max-w-full text-slate-900 sm:whitespace-nowrap">mulai dari fondasi</span>
                 </h1>
-                <p className="mb-7 max-w-full text-base leading-relaxed text-slate-600 sm:mb-10 sm:max-w-xl sm:text-lg">Bimbingan Matematika, Fisika, dan Kimia dasar khusus mahasiswa ITB. Belajar dengan terstruktur, latihan adaptif, dan mentor berpengalaman.</p>
-                <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row">
-                  <button onClick={startFree} className="btn-ink landing-hero-cta justify-center sm:w-auto" type="button">Coba Gratis <Icon.Arrow className="w-4 h-4" /></button>
+                <p className="mb-4 sm:mb-7 max-w-full text-sm leading-relaxed text-slate-600 sm:mb-10 sm:max-w-xl sm:text-lg">Bimbingan Matematika, Fisika, dan Kimia dasar khusus mahasiswa ITB. Belajar dengan terstruktur, latihan adaptif, dan mentor berpengalaman.</p>
+                <div className="mb-4 sm:mb-6 flex flex-col items-start gap-3 sm:flex-row sm:gap-4">
+                  <button onClick={startFree} className="btn-ink landing-hero-cta justify-center sm:w-auto !py-3 !px-5 sm:!py-4 sm:!px-7 text-sm sm:text-base" type="button">Coba Gratis <Icon.Arrow className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
                 </div>
               </div>
               <div className="relative flex items-center justify-center lg:h-[600px]">
-                <div className="relative mx-auto aspect-square w-full max-w-md lg:aspect-auto lg:h-full">
+                <div className="relative mx-auto aspect-[4/3] sm:aspect-square w-full max-w-[280px] sm:max-w-md lg:aspect-auto lg:h-full">
                   <div className="absolute left-1/2 top-1/2 z-0 h-[120%] w-[120%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-50 opacity-50 blur-3xl" />
-                  <div className="absolute right-0 top-10 z-20 w-48 rounded-2xl border border-slate-100 bg-white p-5 shadow-xl transition-transform duration-300 hover:-translate-y-2 lg:right-10">
-                    <div className="mb-2 flex items-start justify-between"><div className="text-2xl font-extrabold text-slate-900">IP 4.00</div><Icon.Star className="h-6 w-6 text-yellow-400" /></div>
-                    <div className="text-sm font-medium text-slate-500">Mentor ITB</div>
+                  <div className="absolute right-0 top-4 sm:top-10 z-20 w-32 sm:w-48 rounded-xl sm:rounded-2xl border border-slate-100 bg-white p-3 sm:p-5 shadow-xl transition-transform duration-300 hover:-translate-y-2 lg:right-10">
+                    <div className="mb-1 sm:mb-2 flex items-start justify-between"><div className="text-lg sm:text-2xl font-extrabold text-slate-900">IP 4.00</div><Icon.Star className="h-4 w-4 sm:h-6 sm:w-6 text-yellow-400" /></div>
+                    <div className="text-xs sm:text-sm font-medium text-slate-500">Mentor ITB</div>
                   </div>
-                  <div className="absolute bottom-10 -left-4 z-20 w-72 rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl transition-transform duration-300 hover:-translate-y-2 lg:left-0">
-                    <div className="mb-4 flex items-center gap-4"><div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-50"><Icon.Trophy className="h-7 w-7 text-amber-500" /></div><div><div className="font-bold text-slate-900">Juara Internasional</div><div className="text-xs font-medium text-slate-500">Olimpiade Fisika</div></div></div>
-                    <div className="flex items-center gap-3"><div className="h-10 w-10 rounded-full bg-slate-200" /><div className="h-2 w-full rounded-full bg-slate-100" /></div>
+                  <div className="absolute bottom-4 sm:bottom-10 -left-2 sm:-left-4 z-20 w-48 sm:w-72 rounded-2xl sm:rounded-3xl border border-slate-100 bg-white p-3 sm:p-6 shadow-2xl transition-transform duration-300 hover:-translate-y-2 lg:left-0">
+                    <div className="mb-2 sm:mb-4 flex items-center gap-2 sm:gap-4"><div className="flex h-8 w-8 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-amber-50"><Icon.Trophy className="h-4 w-4 sm:h-7 sm:w-7 text-amber-500" /></div><div><div className="text-xs sm:text-base font-bold text-slate-900">Juara Internasional</div><div className="text-[10px] sm:text-xs font-medium text-slate-500">Olimpiade Fisika</div></div></div>
+                    <div className="flex items-center gap-2 sm:gap-3"><div className="h-6 w-6 sm:h-10 sm:w-10 rounded-full bg-slate-200" /><div className="h-1.5 sm:h-2 w-full rounded-full bg-slate-100" /></div>
                   </div>
-                  <div className="absolute inset-x-8 bottom-20 top-32 z-10 flex flex-col overflow-hidden rounded-[2.5rem] border border-slate-200 bg-white shadow-sm">
-                    <div className="flex h-14 items-center gap-2 border-b border-slate-100 bg-slate-50/50 px-6"><div className="h-3 w-3 rounded-full bg-slate-200" /><div className="h-3 w-3 rounded-full bg-slate-200" /><div className="h-3 w-3 rounded-full bg-slate-200" /></div>
-                    <div className="flex flex-grow flex-col gap-4 p-6"><div className="h-24 w-full animate-pulse rounded-2xl border border-slate-100 bg-slate-50" /><div className="h-24 w-3/4 animate-pulse rounded-2xl border border-slate-100 bg-slate-50" style={{ animationDelay: "150ms" }} /><div className="h-24 w-5/6 animate-pulse rounded-2xl border border-slate-100 bg-slate-50" style={{ animationDelay: "300ms" }} /></div>
+                  <div className="absolute inset-x-4 sm:inset-x-8 bottom-10 sm:bottom-20 top-16 sm:top-32 z-10 flex flex-col overflow-hidden rounded-[1.5rem] sm:rounded-[2.5rem] border border-slate-200 bg-white shadow-sm">
+                    <div className="flex h-10 sm:h-14 items-center gap-1.5 sm:gap-2 border-b border-slate-100 bg-slate-50/50 px-3 sm:px-6"><div className="h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-slate-200" /><div className="h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-slate-200" /><div className="h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-slate-200" /></div>
+                    <div className="flex flex-grow flex-col gap-2 sm:gap-4 p-3 sm:p-6"><div className="h-14 sm:h-24 w-full animate-pulse rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50" /><div className="h-14 sm:h-24 w-3/4 animate-pulse rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50" style={{ animationDelay: "150ms" }} /><div className="h-14 sm:h-24 w-5/6 animate-pulse rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50" style={{ animationDelay: "300ms" }} /></div>
                   </div>
                 </div>
               </div>
@@ -1088,7 +1583,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
           </LandingFade>
         </section>
 
-        <section className="relative mt-8 overflow-hidden border-y border-slate-100 bg-white py-12 lg:py-16">
+        <section className="relative mt-4 sm:mt-8 overflow-hidden border-y border-slate-100 bg-white py-6 sm:py-12 lg:py-16">
           <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
             <div
               className="absolute inset-0"
@@ -1103,17 +1598,17 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" aria-hidden="true" />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" aria-hidden="true" />
           <LandingFade delay={80} className="relative z-10">
-            <div className="mx-auto w-full max-w-[1800px] px-6 md:px-12 lg:px-20">
-              <div className="grid grid-cols-2 gap-8 md:grid-cols-4 md:divide-x md:divide-slate-100 md:gap-4">
-                {[["100+", "Pengguna Aktif"], ["20+", "Soal Latihan"], ["99%", "Tingkat kepuasan"], ["24/7", "Belajar Kapan Saja"]].map(([value, label]) => (
-                  <div key={label} className="px-4 text-left md:text-center"><div className="mb-2 text-3xl font-extrabold text-slate-900 md:text-4xl">{value}</div><div className="text-sm font-medium text-slate-500">{label}</div></div>
+            <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 md:px-12 lg:px-20">
+              <div className="grid grid-cols-2 gap-4 sm:gap-8 md:grid-cols-4 md:gap-4 md:divide-x md:divide-slate-100">
+                {[["100+", "Pengguna Aktif"], ["20+", "Soal Latihan"], ["98%", "Rating"], ["24/7", "Belajar Kapan Saja"]].map(([value, label]) => (
+                  <div key={label} className="px-2 sm:px-4 text-left md:text-center"><div className="mb-1 sm:mb-2 text-xl sm:text-3xl font-extrabold text-slate-900 md:text-4xl">{value}</div><div className="text-xs sm:text-sm font-medium text-slate-500">{label}</div></div>
                 ))}
               </div>
             </div>
           </LandingFade>
         </section>
 
-        <section id="belajar" className="relative mx-auto w-full max-w-[1800px] scroll-mt-24 overflow-hidden px-6 py-24 md:px-12 lg:px-20">
+        <section id="belajar" className="relative mx-auto w-full max-w-[1800px] scroll-mt-24 overflow-hidden px-4 py-10 sm:px-6 sm:py-24 md:px-12 lg:px-20">
           <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
             <div
               className="absolute inset-0 opacity-55"
@@ -1128,23 +1623,103 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
             <div className="absolute -right-[10%] -top-[16%] h-[600px] w-[600px] rounded-full bg-yellow-50/70 opacity-65 blur-[160px]" />
           </div>
           <LandingFade delay={120} className="relative z-10">
-            <div className="mb-16 flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end">
-              <div><div className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-500">Mata Pelajaran</div><h2 className="text-3xl font-extrabold tracking-tight text-slate-900 md:text-5xl lg:text-6xl">Tiga fondasi utama ITB</h2></div>
-              <button onClick={() => setRoute({ route: "belajar", section: "Try Out" })} className="group flex items-center rounded-lg px-4 py-2 font-bold text-slate-900 transition-colors hover:bg-slate-50" type="button">Buka semua <Icon.ChevR className="ml-1 h-5 w-5 transition-transform group-hover:translate-x-1" /></button>
+            <div className="mb-6 sm:mb-16 flex flex-col items-start justify-between gap-4 sm:gap-6 sm:flex-row sm:items-end">
+              <div><div className="mb-2 sm:mb-4 text-xs font-bold uppercase tracking-widest text-slate-500">Mata Pelajaran</div><h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 md:text-5xl lg:text-6xl">Tiga fondasi utama ITB</h2></div>
+              <button onClick={() => setRoute({ route: "belajar", section: "Try Out" })} className="group flex items-center rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base font-bold text-slate-900 transition-colors hover:bg-slate-50" type="button">Buka semua <Icon.ChevR className="ml-1 h-4 w-4 sm:h-5 sm:w-5 transition-transform group-hover:translate-x-1" /></button>
             </div>
-            <div className="grid gap-6 lg:grid-cols-3">
+            <div className="landing-mapel-carousel flex gap-4 overflow-x-auto snap-x snap-mandatory -mx-4 px-4 pb-4 sm:grid sm:grid-cols-3 sm:gap-6 sm:overflow-visible sm:snap-none sm:-mx-0 sm:px-0 sm:pb-0 hide-scrollbar lg:grid-cols-3">
               {subjectCards.map((item) => (
-                <button key={item.title} onClick={() => setRoute({ route: "belajar", section: item.section })} className="group flex h-full flex-col rounded-[2rem] border border-slate-200 bg-white p-8 text-left transition-all hover:border-slate-300 hover:shadow-2xl hover:shadow-slate-200/50" type="button">
-                  <div className="mb-4 flex items-start justify-between"><div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-100 bg-slate-50 text-slate-900"><item.IconC className="h-6 w-6" /></div></div>
-                  <h3 className="mb-4 text-3xl font-extrabold text-slate-900">{item.title}</h3>
-                  <p className="flex-grow font-medium leading-relaxed text-slate-600">{item.desc}</p>
+                <button key={item.title} onClick={() => setRoute({ route: "belajar", section: item.section })} className="group flex min-w-[240px] sm:min-w-0 snap-start shrink-0 sm:shrink sm:snap-none h-full flex-col rounded-2xl sm:rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-8 text-left transition-all hover:border-slate-300 hover:shadow-2xl hover:shadow-slate-200/50" type="button">
+                  <div className="mb-3 sm:mb-4 flex items-start justify-between"><div className="flex h-10 w-10 sm:h-14 sm:w-14 items-center justify-center rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50 text-slate-900"><item.IconC className="h-5 w-5 sm:h-6 sm:w-6" /></div></div>
+                  <h3 className="mb-2 sm:mb-4 text-xl sm:text-3xl font-extrabold text-slate-900">{item.title}</h3>
+                  <p className="flex-grow text-sm sm:text-base font-medium leading-relaxed text-slate-600">{item.desc}</p>
                 </button>
               ))}
             </div>
           </LandingFade>
         </section>
 
-        <section id="fitur" className="relative scroll-mt-24 overflow-hidden border-y border-slate-200 bg-slate-50 py-24">
+        <section id="paket" className="relative hidden overflow-hidden bg-[#0B1326] py-12 text-white sm:py-20 lg:py-24">
+          <div className="pointer-events-none absolute inset-0 z-0 opacity-20" aria-hidden="true">
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: "linear-gradient(to right, rgba(255,255,255,0.16) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.12) 1px, transparent 1px)",
+                backgroundSize: "34px 34px",
+              }}
+            />
+          </div>
+          <LandingFade delay={140} className="relative z-10">
+            <div className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 md:px-12 lg:px-20">
+              <div className="mx-auto mb-8 max-w-3xl text-center sm:mb-12">
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[#FFF44F]/12 px-4 py-2 text-xs font-bold text-[#FFF44F] ring-1 ring-[#FFF44F]/25">
+                  <Icon.Trophy className="h-4 w-4" />
+                  Paket Belajar Mafiking
+                </div>
+                <h2 className="text-3xl font-extrabold tracking-tight sm:text-5xl">Penawaran Spesial</h2>
+                <p className="mx-auto mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-300 sm:text-lg">
+                  Pilih tryout sesuai kebutuhan belajarmu. Harga final dalam Rupiah terlihat sebelum kamu lanjut ke checkout dan pembayaran.
+                </p>
+              </div>
+
+              <div className="grid gap-5 md:grid-cols-3">
+                {landingOffers.map((pkg, index) => {
+                  const isFree = isLandingPackageFree(pkg);
+                  const featured = index === 1;
+                  const features = parseLandingPackageFeatures(pkg).slice(0, 3);
+                  return (
+                    <article key={`${pkg.title}-${index}`} className={`relative flex min-h-[430px] flex-col overflow-hidden rounded-[1.5rem] border bg-white p-6 text-slate-950 shadow-2xl shadow-slate-950/20 ${featured ? "border-[#FFF44F] ring-4 ring-[#FFF44F]/20" : "border-white/70"}`}>
+                      <div className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-[#FFF44F]/20" aria-hidden="true" />
+                      <div className="relative z-10 mb-6 flex items-start justify-between gap-4">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0B1326] text-[#FFF44F]">
+                          {isFree ? <Icon.Sparkles className="h-6 w-6" /> : <Icon.Trophy className="h-6 w-6" />}
+                        </div>
+                        <span className="rounded-full bg-[#FFF44F] px-3 py-1.5 text-xs font-extrabold text-[#0B1326] shadow-sm">
+                          {pkg.badge || (isFree ? "Gratis" : "Promo")}
+                        </span>
+                      </div>
+                      <div className="relative z-10">
+                        <h3 className="text-xl font-extrabold leading-tight text-slate-950">{pkg.title}</h3>
+                        <p className="mt-3 min-h-[72px] text-sm font-medium leading-6 text-slate-600">{pkg.description}</p>
+                        <div className="mt-5 flex items-end gap-3">
+                          <div className="text-3xl font-black tracking-tight text-[#0B1326] sm:text-4xl">{formatLandingPackagePrice(pkg.price)}</div>
+                          {pkg.original_price ? <div className="pb-1 text-sm font-bold text-slate-400 line-through">{pkg.original_price}</div> : null}
+                        </div>
+                      </div>
+                      <div className="relative z-10 mt-6 grid grid-cols-2 gap-3 border-y border-slate-100 py-4 text-sm">
+                        <div>
+                          <div className="text-xs font-bold uppercase text-slate-400">Durasi</div>
+                          <div className="mt-1 font-extrabold text-slate-900">{pkg.duration || "-"}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold uppercase text-slate-400">Soal</div>
+                          <div className="mt-1 font-extrabold text-slate-900">{Number(pkg.questions) || 0} soal</div>
+                        </div>
+                      </div>
+                      <ul className="relative z-10 mt-5 space-y-2.5 text-sm font-semibold text-slate-600">
+                        {features.map((feature) => (
+                          <li key={feature} className="flex items-start gap-2">
+                            <Icon.Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        className="relative z-10 mt-auto inline-flex w-fit items-center justify-center gap-2 rounded-full bg-[#0B1326] px-5 py-3 text-sm font-extrabold text-[#FFF44F] shadow-lg shadow-slate-950/15 transition-colors hover:bg-slate-900"
+                        onClick={() => buyLandingPackage(pkg)}
+                        type="button"
+                      >
+                        {isFree ? "Coba Gratis" : "Beli Paket"} <Icon.Arrow className="h-4 w-4" />
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          </LandingFade>
+        </section>
+
+        <section id="fitur" className="relative scroll-mt-24 overflow-hidden border-y border-slate-200 bg-slate-50 py-10 sm:py-24">
           <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
             <div
               className="absolute inset-0 opacity-70"
@@ -1157,22 +1732,78 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
             <div className="absolute -bottom-[16%] -left-[12%] h-[540px] w-[540px] rounded-full bg-sky-50/60 opacity-55 blur-[155px] mix-blend-multiply" />
           </div>
           <LandingFade delay={150} className="relative z-10">
-            <div className="mx-auto w-full max-w-[1800px] px-6 md:px-12 lg:px-20">
-              <div className="mx-auto mb-8 max-w-3xl text-center md:mb-12">
-                <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 md:text-5xl">
+            <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 md:px-12 lg:px-20">
+              <div className="mx-auto mb-6 sm:mb-8 max-w-3xl text-center md:mb-12">
+                <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 md:text-5xl">
                   Mengapa <span className="hi-yel">MAFIKING</span>?
                 </h2>
               </div>
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div className="landing-card-motion group flex flex-col rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md"><h3 className="mb-3 text-2xl font-bold text-slate-900">Rekomendasi Latihan</h3><p className="mb-8 font-medium text-slate-500">AI mendeteksi kelemahanmu dan merekomendasikan latihan soal untukmu.</p><div className="relative mt-auto aspect-[623/477] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"><LandingEditableMedia enabled={landingMediaEditEnabled} slot="feature_image_1" label="gambar fitur 1" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureOne} alt="Fitur rekomendasi latihan" /></LandingEditableMedia></div></div>
-                <div className="landing-card-motion group flex flex-col rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md"><div className="mb-3 flex items-center gap-2"><h3 className="text-2xl font-bold text-slate-900">History Kesalahan Canvas</h3><span className="inline-flex rounded bg-amber-100 px-2 py-0.5 text-xs font-bold uppercase tracking-widest text-amber-700">New</span></div><p className="mb-8 font-medium text-slate-500">Semua hitungan terekam otomatis. Ulangi di mana kamu salah, tanpa perlu mengulang dari awal.</p><div className="relative mt-auto min-h-[460px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 md:min-h-[540px]"><LandingEditableMedia enabled={landingMediaEditEnabled} slot="feature_image_2" label="gambar fitur 2" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureTwo} alt="Fitur history kesalahan canvas" fit="cover" objectPosition="0% 50%" /></LandingEditableMedia></div></div>
-                <div className="landing-card-motion group flex flex-col items-center gap-8 rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md md:flex-row lg:col-span-2"><div className="flex w-full flex-col items-center justify-center text-center md:w-1/3"><h3 className="mb-5 text-2xl font-bold text-slate-900">Simulasi Tryout CBT</h3><button onClick={startFree} className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-900 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50" type="button">Coba Tryout Gratis</button></div><div className="relative aspect-[800/441] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 md:w-2/3"><LandingEditableMedia enabled={landingMediaEditEnabled} slot="feature_image_3" label="gambar fitur tryout" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureThree} alt="Fitur simulasi tryout CBT" /></LandingEditableMedia></div></div>
+              <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+                <div className="landing-card-motion group flex flex-col rounded-2xl sm:rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-8 shadow-sm transition-shadow hover:shadow-md"><h3 className="mb-2 sm:mb-3 text-lg sm:text-2xl font-bold text-slate-900">Rekomendasi Latihan</h3><p className="mb-4 sm:mb-8 text-sm sm:text-base font-medium text-slate-500">AI mendeteksi kelemahanmu dan merekomendasikan latihan soal untukmu.</p><div className="relative mt-auto aspect-[16/10] sm:aspect-[623/477] w-full overflow-hidden rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50"><LandingEditableMedia enabled={landingMediaEditEnabled} slot="feature_image_1" label="gambar fitur 1" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureOne} alt="Fitur rekomendasi latihan" /></LandingEditableMedia></div></div>
+                <div className="landing-card-motion group flex flex-col rounded-2xl sm:rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-8 shadow-sm transition-shadow hover:shadow-md"><div className="mb-2 sm:mb-3 flex items-center gap-2"><h3 className="text-lg sm:text-2xl font-bold text-slate-900">History Kesalahan Canvas</h3><span className="inline-flex rounded bg-amber-100 px-2 py-0.5 text-xs font-bold uppercase tracking-widest text-amber-700">New</span></div><p className="mb-4 sm:mb-8 text-sm sm:text-base font-medium text-slate-500">Semua hitungan terekam otomatis. Ulangi di mana kamu salah, tanpa perlu mengulang dari awal.</p><div className="relative mt-auto min-h-[200px] sm:min-h-[460px] w-full overflow-hidden rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 md:min-h-[540px]"><LandingEditableMedia enabled={landingMediaEditEnabled} slot="feature_image_2" label="gambar fitur 2" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureTwo} alt="Fitur history kesalahan canvas" fit="cover" objectPosition="0% 50%" /></LandingEditableMedia></div></div>
+                <div className="landing-card-motion group flex flex-col items-center gap-4 sm:gap-8 rounded-2xl sm:rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-8 shadow-sm transition-shadow hover:shadow-md md:flex-row lg:col-span-2"><div className="flex w-full flex-col items-center justify-center text-center md:w-1/3"><h3 className="mb-3 sm:mb-5 text-lg sm:text-2xl font-bold text-slate-900">Simulasi Tryout CBT</h3><button onClick={startFree} className="rounded-xl border border-slate-200 bg-white px-4 py-2 sm:px-6 sm:py-3 text-xs sm:text-sm font-bold text-slate-900 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50" type="button">Coba Tryout Gratis</button></div><div className="relative aspect-video sm:aspect-[800/441] w-full overflow-hidden rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 md:w-2/3"><LandingEditableMedia enabled={landingMediaEditEnabled} slot="feature_image_3" label="gambar fitur tryout" mediaType="image" onEdit={setMediaEditTarget}><LandingMediaImage src={featureThree} alt="Fitur simulasi tryout CBT" /></LandingEditableMedia></div></div>
               </div>
             </div>
           </LandingFade>
         </section>
 
-        <section className="relative overflow-hidden bg-[#0B1221] py-24 text-white md:py-32">
+        <section id="pengajar" className="relative overflow-hidden bg-[#FBF8F1] py-10 sm:py-20 lg:py-24">
+          <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+            <div
+              className="absolute inset-0 opacity-80"
+              style={{
+                backgroundImage: "linear-gradient(to right, rgba(11, 19, 38, 0.045) 1px, transparent 1px), linear-gradient(to bottom, rgba(11, 19, 38, 0.045) 1px, transparent 1px)",
+                backgroundSize: "28px 28px",
+              }}
+            />
+            <div className="absolute -right-[14%] top-[8%] h-[520px] w-[520px] rounded-full bg-[#FFF44F]/25 blur-[150px]" />
+          </div>
+          <LandingFade delay={165} className="relative z-10">
+            <div className="mx-auto w-full max-w-[1440px] px-4 sm:px-6 md:px-12 lg:px-20">
+              <div className="mx-auto mb-8 max-w-3xl text-center sm:mb-12">
+                <div className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500">Profil Pengajar</div>
+                <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl md:text-5xl">
+                  Pengajar Mafiking
+                </h2>
+              </div>
+              <div ref={teacherScrollRef} onScroll={handleTeacherScroll} className="landing-teacher-mask landing-teacher-scroll relative -mx-4 overflow-x-auto overflow-y-hidden hide-scrollbar sm:-mx-6 md:-mx-12 lg:-mx-20">
+                <div className="landing-teacher-track flex w-max gap-4 px-4 sm:gap-6 sm:px-6 md:px-12 lg:gap-8 lg:px-20">
+                  {[...teacherProfiles, ...teacherProfiles, ...teacherProfiles].map((teacher, index) => (
+                    <article key={`${teacher.name}-${index}`} className="landing-card-motion landing-teacher-card flex min-h-[520px] w-[82vw] shrink-0 flex-col rounded-2xl border border-slate-200 bg-white/92 px-6 py-8 text-center shadow-sm transition-shadow hover:border-slate-300 hover:shadow-xl hover:shadow-slate-200/70 sm:w-[min(86vw,420px)] sm:rounded-[1.75rem] sm:px-8 sm:py-9 lg:w-[430px]">
+                      <div className="mx-auto flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-[6px] border-[#FBF8F1] bg-[#0B1326] shadow-inner ring-1 ring-slate-200">
+                        {teacher.photo ? (
+                          <img src={teacher.photo} alt={teacher.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                        ) : (
+                          <span className="text-3xl font-black text-[#FFF44F]">{teacher.initial}</span>
+                        )}
+                      </div>
+                      <h3 className="mx-auto mt-8 max-w-sm text-xl font-extrabold leading-tight text-slate-900 sm:text-2xl">
+                        {teacher.name}
+                      </h3>
+                      <div className="mx-auto mt-4 h-1 w-12 rounded-full bg-[#FFF44F] shadow-sm shadow-yellow-200" />
+                      <div className="mt-8 grid gap-3 text-left">
+                        {teacher.awards.map((award) => {
+                          const AwardIcon = Icon.Trophy;
+                          return (
+                            <div key={award.text} className={`flex min-h-[70px] items-center gap-4 rounded-xl border px-4 py-3 ${awardToneClasses[award.tone] || awardToneClasses.slate}`}>
+                              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-white shadow-sm ${awardIconClasses[award.tone] || awardIconClasses.slate}`}>
+                                <AwardIcon className="h-4 w-4" />
+                              </span>
+                              <span className="text-sm font-extrabold leading-snug">{award.text}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+                <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-10 w-10 bg-gradient-to-l from-[#FBF8F1] to-transparent sm:w-16" />
+              </div>
+            </div>
+          </LandingFade>
+        </section>
+
+        <section className="relative overflow-hidden bg-[#0B1221] py-10 sm:py-24 text-white md:py-32">
           <div
             className="pointer-events-none absolute inset-0 z-0 opacity-20"
             style={{
@@ -1183,13 +1814,13 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
           <LandingFade delay={170}>
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-700 to-transparent" />
             <div className="relative z-10 mx-auto w-full max-w-[1800px] px-6 md:px-12 lg:px-20">
-              <div className="mb-10 text-center md:mb-12">
-                <h2 className="flex flex-col items-center gap-3 text-center text-3xl font-extrabold tracking-tight text-white md:gap-4 md:text-5xl lg:text-6xl">
+              <div className="mb-6 sm:mb-10 text-center md:mb-12">
+                <h2 className="flex flex-col items-center gap-2 sm:gap-3 md:gap-4 text-center text-2xl sm:text-3xl font-extrabold tracking-tight text-white md:text-5xl lg:text-6xl">
                   <span>New</span>
                   <span>Canvas Mode</span>
                 </h2>
               </div>
-              <div ref={demoVideoFrameRef} className="relative mx-auto mb-16 flex aspect-[848/478] w-full max-w-5xl items-center justify-center overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-950 shadow-2xl">
+              <div ref={demoVideoFrameRef} className="relative mx-auto mb-6 sm:mb-16 flex aspect-video sm:aspect-[848/478] w-full max-w-5xl items-center justify-center overflow-hidden rounded-2xl sm:rounded-[2rem] border border-slate-800 bg-slate-950 shadow-2xl">
                 {demoVideo ? (
                   <video
 			                    ref={demoVideoRef}
@@ -1233,51 +1864,52 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
 	                  </button>
 	                )}
 	              </div>
-              <div className="mx-auto grid w-full grid-cols-1 gap-8 sm:grid-cols-3 md:gap-16">
+              <div className="mx-auto grid w-full grid-cols-3 gap-4 sm:gap-8 md:gap-16">
                 {[["1", "Tulis langsung di tab kamu"], ["2", "Koreksi langsung otomatis"], ["3", "Dapatkan rekomendasi materi"]].map(([num, title]) => (
-                  <div key={num} className="text-center"><div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-800"><span className="text-xl font-bold">{num}</span></div><h4 className="text-lg font-bold text-white">{title}</h4></div>
+                  <div key={num} className="text-center"><div className="mx-auto mb-3 sm:mb-6 flex h-9 w-9 sm:h-12 sm:w-12 items-center justify-center rounded-lg sm:rounded-xl border border-slate-700 bg-slate-800"><span className="text-sm sm:text-xl font-bold">{num}</span></div><h4 className="text-xs sm:text-lg font-bold text-white leading-tight">{title}</h4></div>
                 ))}
               </div>
             </div>
           </LandingFade>
         </section>
 
-        <section id="testimoni" className="relative mx-auto w-full max-w-[1800px] scroll-mt-24 overflow-hidden px-6 py-24 md:px-12 lg:px-20 lg:py-32">
+        <section id="testimoni" className="relative mx-auto w-full max-w-[1800px] scroll-mt-24 overflow-hidden px-4 py-10 sm:px-6 sm:py-24 md:px-12 lg:px-20 lg:py-32">
           <LandingFade delay={190}>
-            <h2 className="mb-16 text-4xl font-extrabold leading-[1.1] tracking-tight text-slate-900 md:text-5xl lg:mb-24 lg:text-center lg:text-7xl">Mahasiswa yang sudah <br className="hidden lg:block" /> <span className="font-serif font-medium italic text-slate-500">berlangganan.</span></h2>
-            <div className="landing-testimonial-mask -mx-6 overflow-hidden md:-mx-12 lg:-mx-20">
-              <div className="landing-testimonial-track flex w-max gap-6 px-6 md:px-12 lg:gap-8 lg:px-20">
+            <h2 className="mb-6 sm:mb-16 text-2xl sm:text-4xl font-extrabold leading-[1.1] tracking-tight text-slate-900 md:text-5xl lg:mb-24 lg:text-center lg:text-7xl">Mahasiswa yang sudah <br className="hidden lg:block" /> <span className="font-serif font-medium italic text-slate-500">berlangganan.</span></h2>
+            <div className="landing-testimonial-mask relative -mx-4 sm:-mx-6 md:-mx-12 lg:-mx-20 overflow-hidden">
+              <div className="landing-testimonial-track flex w-max gap-4 sm:gap-6 px-4 sm:px-6 md:px-12 lg:gap-8 lg:px-20">
                 {[...testimonials, ...testimonials].map(([quote, name, meta, initial], index) => (
-                  <div key={`${name}-${index}`} className="landing-testimonial-card flex w-[min(86vw,440px)] shrink-0 flex-col rounded-[2rem] border border-slate-200 bg-slate-50/95 p-8 lg:w-[520px] lg:p-10">
-                    <div className="mb-6 flex gap-1 text-amber-400">{[0,1,2,3,4].map(i => <Icon.Star key={i} className="h-5 w-5" />)}</div>
-                    <p className="mb-10 min-h-[112px] text-lg font-medium leading-relaxed text-slate-700">"{quote}"</p>
-                    <div className="mt-auto flex items-center gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-slate-200 font-bold text-slate-700">{initial}</div>
+                  <div key={`${name}-${index}`} className="landing-testimonial-card flex w-[78vw] sm:w-[min(86vw,440px)] shrink-0 flex-col rounded-2xl sm:rounded-[2rem] border border-slate-200 bg-slate-50/95 p-5 sm:p-8 lg:w-[520px] lg:p-10">
+                    <div className="mb-3 sm:mb-6 flex gap-1 text-amber-400">{[0,1,2,3,4].map(i => <Icon.Star key={i} className="h-4 w-4 sm:h-5 sm:w-5" />)}</div>
+                    <p className="mb-6 sm:mb-10 min-h-[80px] sm:min-h-[112px] text-sm sm:text-lg font-medium leading-relaxed text-slate-700">"{quote}"</p>
+                    <div className="mt-auto flex items-center gap-3 sm:gap-4">
+                      <div className="flex h-9 w-9 sm:h-12 sm:w-12 items-center justify-center rounded-full border border-slate-300 bg-slate-200 text-sm sm:text-base font-bold text-slate-700">{initial}</div>
                       <div>
-                        <div className="text-base font-bold text-slate-900">{name}</div>
-                        <div className="text-sm font-medium text-slate-500">{meta}</div>
+                        <div className="text-sm sm:text-base font-bold text-slate-900">{name}</div>
+                        <div className="text-xs sm:text-sm font-medium text-slate-500">{meta}</div>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
+              <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 sm:w-16 bg-gradient-to-l from-white to-transparent z-10" />
             </div>
           </LandingFade>
         </section>
       </main>
 
-      <footer className="relative z-10 w-full overflow-hidden border-t border-slate-800 bg-[#0B1221] pb-12 pt-24">
+      <footer className="relative z-10 w-full overflow-hidden border-t border-slate-800 bg-[#0B1221] pb-8 sm:pb-12 pt-10 sm:pt-24">
         <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
           <div className="absolute left-1/2 top-[-10%] h-[720px] w-[720px] -translate-x-1/2 rounded-full bg-slate-400/10 blur-[130px]" />
           <div className="absolute left-[18%] top-[12%] h-[560px] w-[560px] rounded-full bg-blue-500/10 blur-[150px]" />
           <div className="absolute right-[18%] top-[4%] h-[520px] w-[520px] rounded-full bg-yellow-300/8 blur-[150px]" />
         </div>
         <LandingFade delay={210} className="relative z-10">
-          <div className="mx-auto flex w-full max-w-[1400px] flex-col items-center px-6 text-center md:px-12 lg:px-20">
-            <h2 className="mb-8 text-4xl font-extrabold leading-[1.1] tracking-tight text-white md:text-5xl lg:text-7xl">Siap Mengamankan <br className="hidden md:block" /> <span className="text-[#FFF44F]">Nilai A Pertamamu?</span></h2>
-            <p className="mx-auto mb-12 max-w-2xl text-lg font-medium text-slate-400 lg:text-xl">Jangan tunggu sampai tertinggal materi. Bangun fondasi akademik terkuatmu hari ini juga.</p>
-            <button onClick={startFree} className="mb-8 flex items-center justify-center gap-2 rounded-full bg-[#FFF44F] px-8 py-4 text-lg font-bold text-slate-900 transition-all hover:bg-[#FFF44F]/90 active:scale-95" type="button">Coba Gratis <Icon.Arrow className="ml-1 h-5 w-5" /></button>
-            <div className="mb-10 mt-16 h-px w-full bg-slate-800/80" />
+          <div className="mx-auto flex w-full max-w-[1400px] flex-col items-center px-4 sm:px-6 text-center md:px-12 lg:px-20">
+            <h2 className="mb-4 sm:mb-8 text-2xl sm:text-4xl font-extrabold leading-[1.1] tracking-tight text-white md:text-5xl lg:text-7xl">Siap Mengamankan <br className="hidden md:block" /> <span className="text-[#FFF44F]">Nilai A Pertamamu?</span></h2>
+            <p className="mx-auto mb-6 sm:mb-12 max-w-2xl text-sm sm:text-lg font-medium text-slate-400 lg:text-xl">Jangan tunggu sampai tertinggal materi. Bangun fondasi akademik terkuatmu hari ini juga.</p>
+            <button onClick={startFree} className="mb-6 sm:mb-8 flex items-center justify-center gap-2 rounded-full bg-[#FFF44F] px-6 py-3 sm:px-8 sm:py-4 text-sm sm:text-lg font-bold text-slate-900 transition-all hover:bg-[#FFF44F]/90 active:scale-95" type="button">Coba Gratis <Icon.Arrow className="ml-1 h-4 w-4 sm:h-5 sm:w-5" /></button>
+            <div className="mb-6 sm:mb-10 mt-8 sm:mt-16 h-px w-full bg-slate-800/80" />
             <div className="grid w-full items-center gap-8 text-sm font-medium text-slate-500 lg:grid-cols-[1fr_auto_1fr]">
               <div className="flex items-center justify-center gap-3 lg:justify-start"><img src="/assets/logo.png" alt="MAFIKING" className="h-8 w-auto brightness-0 invert" /><span className="text-xl font-extrabold tracking-tight text-white">MAFIKING</span></div>
               <div className="flex flex-col items-center gap-4">
@@ -1292,6 +1924,12 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
                       <rect x="4" y="4" width="16" height="16" rx="5" />
                       <circle cx="12" cy="12" r="3.4" />
                       <path d="M16.9 7.1h.01" />
+                    </svg>
+                  </a>
+                  <a className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-white/[0.03] text-slate-300 transition-colors hover:border-blue-400 hover:bg-blue-400/10 hover:text-blue-300" href="mailto:mafikingsolusitpb@gmail.com" target="_blank" rel="noreferrer" aria-label="Email Mafiking">
+                    <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect x="2" y="4" width="20" height="16" rx="3" />
+                      <path d="M2 4l10 7 10-7" />
                     </svg>
                   </a>
                 </div>
@@ -1313,6 +1951,80 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
     </div>
   );
 };
+
+function buildLandingOffers(packages) {
+  const fallback = [
+    {
+      title: "Tryout Bundling: Semester 1",
+      description: "Evaluasi lengkap Matematika, Fisika, dan Kimia untuk persiapan UAS.",
+      price: "Rp 50.000",
+      original_price: null,
+      badge: "Populer",
+      duration: "180 mnt",
+      questions: 90,
+      features: JSON.stringify(["3 mata pelajaran dasar", "Sistem CBT seperti UAS", "Analisis butir soal AI"]),
+      tone: "default",
+    },
+    {
+      title: "Tryout Premium: The Trinity TPB",
+      description: "Simulasi pre-test TPB ITB berisi Matematika, Fisika, dan Kimia.",
+      price: "Rp 100.000",
+      original_price: "Rp 150.000",
+      badge: "Terlengkap",
+      duration: "90 mnt",
+      questions: 30,
+      features: JSON.stringify(["30 soal campuran TPB", "Urutan soal dan opsi diacak", "Pembahasan step-by-step"]),
+      tone: "feature",
+    },
+    {
+      title: "Tryout Gratis: Bab 1-2",
+      description: "Coba sistem CBT Mafiking secara gratis untuk Kalkulus Dasar.",
+      price: "Gratis",
+      original_price: null,
+      badge: "Gratis",
+      duration: "30 mnt",
+      questions: 15,
+      features: JSON.stringify(["1 mata pelajaran", "Hasil keluar instan", "Pembahasan teks dasar"]),
+      tone: "default",
+    },
+  ];
+
+  const rows = Array.isArray(packages) && packages.length ? packages : fallback;
+  const ordered = rows.slice().sort((a, b) => {
+    const aFree = isLandingPackageFree(a) ? 1 : 0;
+    const bFree = isLandingPackageFree(b) ? 1 : 0;
+    if (aFree !== bFree) return aFree - bFree;
+    return Number(a.sort_order || 0) - Number(b.sort_order || 0);
+  });
+  return ordered.slice(0, 3);
+}
+
+function parseLandingPackageFeatures(pkg) {
+  const value = pkg && pkg.features;
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.filter(Boolean);
+    } catch (_) {}
+    return value.split(/\n|,/).map((item) => item.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function isLandingPackageFree(pkg) {
+  const price = String(pkg && pkg.price || "").trim().toLowerCase();
+  return !price || price === "gratis" || price === "rp 0" || price === "0";
+}
+
+function formatLandingPackagePrice(price) {
+  if (typeof price === "number") return `Rp ${Math.round(price).toLocaleString("id-ID")}`;
+  const raw = String(price || "").trim();
+  if (!raw || raw.toLowerCase() === "gratis") return "Gratis";
+  const amount = Number.parseInt(raw.replace(/[^0-9]/g, ""), 10);
+  if (!amount) return raw;
+  return `Rp ${amount.toLocaleString("id-ID")}`;
+}
 
 const Dashboard = ({ user, setRoute, tweaks }) => {
   const { useState, useEffect } = React;
@@ -1589,7 +2301,7 @@ const Stats = ({ tweaks = {} }) => {
   const items = [
     ["2.500+", "Mahasiswa aktif"],
     ["15.000+", "Soal diselesaikan"],
-    ["98%", "Tingkat kepuasan"],
+    ["98%", "Rating"],
     ["24/7", "Support mentor"],
   ];
 

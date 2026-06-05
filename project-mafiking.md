@@ -29,7 +29,7 @@ Historical WSL path used by older notes:
 | --- | --- |
 | Runtime | Express serves `MAFIKING.html`; React UMD + Babel standalone loads static JSX files. |
 | Landing | Public landing always opens at `/`, uses the new Google AI Studio-inspired interface, local reveal animations, logo-to-landing behavior, and admin-editable media slots. |
-| Auth | Login works through the existing shell. Sign-up temporarily reuses the auth shell with sign-up labels. `Kembali landing` clears auth route state. Clerk Google auth is available through the auth shell, syncs to local SQLite users, and can prompt first-time Google users for a Mafiking display name. |
+| Auth | Login works through the existing shell. Email/password sign-up requires an email verification link before login is allowed. Clerk Google auth is available through the auth shell, syncs to local SQLite users, and can prompt first-time Google users for a Mafiking display name. |
 | Belajar | Sections are `Try Out`, `Matematika`, `Fisika`, `Kimia`. Copy is split/highlighted as `Selamat datang` plus `pejuang IP 4.0`, and the tabs use a sliding underline with `Try Out` in ink. |
 | Free Try Out | `Coba Gratis` routes to `Belajar -> Try Out`; `Mulai` opens a confirmation screen before the free 15-question / 15-minute session. Protected review paths require login/sign-up. |
 | Practice | Multiple-choice-first flow with optional canvas mode; OCR/transcription and answer evaluation use Gemini 3.1 Flash Lite. Unsupported chapters show empty state. |
@@ -97,7 +97,7 @@ Important caveat: `src/admin.jsx` currently references `window.AdminMonitoringPa
 - Portable question bank: `db/question-bank.json`.
 - Real imported practice bank: Integral only.
 - Key newer tables: `tryout_packages`, `user_access_grants`, `ai_token_usage`, `landing_media`.
-- Clerk auth adds local user columns: `clerk_id`, `email`, and `auth_provider`. Backend helpers live in `middleware/clerk-auth.js`, `lib/clerk-user-sync.js`, and `routes/webhooks.js`.
+- Clerk auth adds local user columns: `clerk_id`, `email`, and `auth_provider`. Local email/password signup also uses `email_verified_at` and hashed verification-token columns. Backend helpers live in `middleware/clerk-auth.js`, `lib/clerk-user-sync.js`, `lib/email-verification.js`, `lib/mailer.js`, and `routes/webhooks.js`.
 - Clerk webhook sync uses `POST /api/webhooks/clerk`; Google onboarding and guest merge use `POST /api/auth/clerk-onboard`.
 - Gemini/Gemma token usage is logged observationally and displayed from local data/limits, not live Google quota.
 
@@ -106,7 +106,7 @@ Important caveat: `src/admin.jsx` currently references `window.AdminMonitoringPa
 - Catalog: `data/recommendation-catalog.json`.
 - Reference questions: `docs/purcell-inspired-question-bank.md`.
 - Engine: `lib/recommendation-engine.js`.
-- Optional profile narrative provider: `lib/ai-profile-provider.js`.
+- Profile narrative provider: Gemma via `routes/correction.js`.
 - Contract: `/api/correction/profile-summary` preserves deterministic `recommendedItems`, `recommendedQuestions`, and `skillNeedScores`.
 
 ## Current Validation

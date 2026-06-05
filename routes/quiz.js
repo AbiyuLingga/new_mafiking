@@ -98,7 +98,10 @@ router.get('/subtopics/:id/full', isAuthenticated, (req, res) => {
         p.acceptable_answers = JSON.parse(p.acceptable_answers);
         p.steps = stepsStmt.all(p.id);
     }
-    res.json({ subtopic, problems });
+    const total = db.prepare(
+        'SELECT COUNT(*) as count FROM problems WHERE subtopic_id = ?'
+    ).get(req.params.id);
+    res.json({ subtopic, problems, total: total.count });
 });
 
 // GET /api/quiz/tryout/free-math-session — compatibility endpoint for older cached clients.

@@ -1,8 +1,11 @@
 const assert = require('assert');
+const crypto = require('crypto');
 const paymentRouter = require('../routes/payment');
 
 const {
+    buildDuitkuInvoicePayload,
     buildMockPaymentUrl,
+    createDuitkuSignature,
     escapeHtml,
     isMockPaymentEnabled,
     paymentGatewayState,
@@ -10,6 +13,7 @@ const {
     resolvePaymentItem,
     signMockPayment,
     SUBSCRIPTION_PACKAGES,
+    verifyCallbackSignature,
     verifyMockPaymentToken,
 } = paymentRouter.__test || {};
 
@@ -18,6 +22,9 @@ assert.strictEqual(typeof isRegisteredPaymentUser, 'function', 'isRegisteredPaym
 assert.strictEqual(typeof isMockPaymentEnabled, 'function', 'isMockPaymentEnabled must be exported for contract tests');
 assert.strictEqual(typeof verifyMockPaymentToken, 'function', 'verifyMockPaymentToken must be exported for contract tests');
 assert.strictEqual(typeof paymentGatewayState, 'function', 'paymentGatewayState must be exported for contract tests');
+assert.strictEqual(typeof createDuitkuSignature, 'function', 'createDuitkuSignature must be exported for contract tests');
+assert.strictEqual(typeof verifyCallbackSignature, 'function', 'verifyCallbackSignature must be exported for contract tests');
+assert.strictEqual(typeof buildDuitkuInvoicePayload, 'function', 'buildDuitkuInvoicePayload must be exported for contract tests');
 
 const userDb = {
     prepare(sql) {
@@ -98,6 +105,62 @@ assert.throws(
 assert.throws(
     () => resolvePaymentItem({ body: { purchaseType: 'tryout', tryoutPackageId: 9 }, db: { prepare: () => ({ get: () => ({ id: 9, title: 'Gratis', price: 'Gratis' }) }) } }),
     /Paket gratis tidak perlu pembayaran/
+);
+
+const duitkuSecret = 'sandbox-api-key';
+const createStringToSign = 'DXXXX1773728479616';
+const expectedCreateSignature = crypto.createHmac('sha256', duitkuSecret).update(createStringToSign).digest('hex');
+assert.strictEqual(createDuitkuSignature(createStringToSign, duitkuSecret), expectedCreateSignature);
+
+const callbackStringToSign = 'DXXXX150000abcde12345';
+const callbackSignature = crypto.createHmac('sha256', duitkuSecret).update(callbackStringToSign).digest('hex');
+assert.strictEqual(verifyCallbackSignature('DXXXX', '150000', 'abcde12345', duitkuSecret, callbackSignature), true);
+assert.strictEqual(verifyCallbackSignature('DXXXX', '150001', 'abcde12345', duitkuSecret, callbackSignature), false);
+
+assert.deepStrictEqual(
+    buildDuitkuInvoicePayload({
+        merchantCode: 'DXXXX',
+        item: {
+            type: 'tryout',
+            amount: 49000,
+            productDetails: 'Tryout UAS Fisika',
+        },
+        merchantOrderId: 'MFK-2-123',
+        buyerEmail: 'student@example.com',
+        buyerName: 'Student ITB',
+        userId: 2,
+        paymentMethod: '',
+        callbackUrl: 'https://mafiking.com/api/payment/callback',
+        returnUrl: 'https://mafiking.com/payment.html',
+        expiryPeriod: 60,
+    }),
+    {
+        merchantCode: 'DXXXX',
+        paymentAmount: 49000,
+        paymentMethod: '',
+        merchantOrderId: 'MFK-2-123',
+        productDetails: 'Tryout UAS Fisika',
+        additionalParam: 'tryout',
+        merchantUserInfo: 'student@example.com',
+        email: 'student@example.com',
+        customerVaName: 'Student ITB',
+        itemDetails: [
+            {
+                name: 'Tryout UAS Fisika',
+                price: 49000,
+                quantity: 1,
+            },
+        ],
+        customerDetail: {
+            firstName: 'Student ITB',
+            lastName: '',
+            email: 'student@example.com',
+            merchantCustomerId: '2',
+        },
+        callbackUrl: 'https://mafiking.com/api/payment/callback',
+        returnUrl: 'https://mafiking.com/payment.html',
+        expiryPeriod: 60,
+    }
 );
 
 assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'production' }), false);

@@ -61,7 +61,9 @@ gap analysis, and the CSRF / CORS coverage tests.
 | Method | Path | Auth | CSRF | BOLA | Notes |
 |---|---|---|---|---|---|
 | POST | `/api/auth/login` | public | ✓ | none | Per-username lockout (`MAX_ATTEMPTS=5`, `LOCKOUT_MS=5*60*1000`). Bcrypt. Beta gate via `BETA_USERNAME`. |
-| POST | `/api/auth/register` | public | ✓ | none | bcrypt cost 10. XSS-sanitizes display_name/fakultas/username. Min 8 chars password. Max 100 char display_name. |
+| POST | `/api/auth/register` | public | ✓ | none | bcrypt cost 10. XSS-sanitizes display_name/fakultas/email. Min 8 chars password. Creates local user pending email verification; no session until verify link is consumed. |
+| POST | `/api/auth/resend-verification` | public | ✓ | none | Generic success to avoid account enumeration. Per-IP limiter and per-user 60s resend cooldown. Sends a new single-use verification link for unverified local users only. |
+| GET | `/api/auth/verify-email` | public | n/a | none | Consumes a 24h single-use token. DB stores only SHA-256 token hash. Sets `email_verified_at` and creates a session when valid. |
 | POST | `/api/auth/logout` | session | ✓ | user-scoped | `req.session.destroy`. |
 | POST | `/api/auth/clerk-onboard` | session | ✓ | user-scoped | Requires Clerk user. Merges guest via `mergeGuestIntoUser` if `guest_user_id !== userId`. |
 | POST | `/api/auth/profile-onboarding` | session | ✓ | user-scoped | Strict validation (semester ∈ {1,2}, faculty in allowlist, major in faculty→major map, mapel in priority set, phone regex, referral allowlist). |
@@ -115,7 +117,10 @@ All routes `isAuthenticated`. Body validation lives in
 | GET | `/api/correction/attempts` | session | n/a | user-scoped | Reads own. LIMIT 50. |
 | POST | `/api/correction/transcribe` | registered | ✓ | user-scoped | Image OCR via Gemini. MIME + size validated. `questionText` interpolated into a system prompt — see Phase 2 LLM inventory. |
 | POST | `/api/correction/evaluate` | registered | ✓ | user-scoped | Image evaluation via Gemini. Owns the bulk of the Gemini cost. |
+| POST | `/api/correction/evaluate-stream` | registered | ✓ | user-scoped | SSE wrapper for image evaluation. Uses the same backend evaluation helper as `/evaluate`. |
 | POST | `/api/correction/profile-summary` | session | ✓ | user-scoped | Gemma 4 31B profile summary. Catalogs + AI prose. |
+| GET | `/api/correction/pool/stats` | session | n/a | admin | Admin/local-admin only. Read-only AI provider pool counters; no user data. |
+| GET | `/api/correction/latency/summary` | session | n/a | admin | Admin/local-admin only. Read-only latency percentiles and provider breakdown. |
 
 ### Payment (routes/payment.js)
 
