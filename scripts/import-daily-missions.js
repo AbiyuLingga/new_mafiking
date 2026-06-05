@@ -46,15 +46,23 @@ function ensureColumn(tableName, columnName, ddl) {
 ensureColumn('daily_missions', 'release_date', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('daily_missions', 'image_url', "TEXT DEFAULT ''");
 ensureColumn('daily_missions', 'image_alt', "TEXT DEFAULT ''");
+ensureColumn('daily_missions', 'question_type', "TEXT DEFAULT 'open'");
+ensureColumn('daily_missions', 'mc_options', "TEXT DEFAULT '[]'");
+ensureColumn('daily_missions', 'acceptable_answers', "TEXT DEFAULT '[]'");
+ensureColumn('daily_missions', 'hint', "TEXT DEFAULT ''");
+ensureColumn('daily_missions', 'hintPlain', "TEXT DEFAULT ''");
+ensureColumn('daily_missions', 'hintLatex', "TEXT DEFAULT ''");
 
 const insertMission = db.prepare(`
   INSERT INTO daily_missions (
     id, day, date_label, short_label, release_date, status, mapel,
-    target, question, image_url, image_alt, xp, week_label, sort_order
+    target, question, image_url, image_alt, question_type, mc_options,
+    acceptable_answers, hint, hintPlain, hintLatex, xp, week_label, sort_order
   )
   VALUES (
     @id, @day, @date_label, @short_label, @release_date, @status, @mapel,
-    @target, @question, @image_url, @image_alt, @xp, @week_label, @sort_order
+    @target, @question, @image_url, @image_alt, @question_type, @mc_options,
+    @acceptable_answers, @hint, @hintPlain, @hintLatex, @xp, @week_label, @sort_order
   )
 `);
 
@@ -73,6 +81,16 @@ const run = db.transaction(() => {
       question: row.question || '',
       image_url: row.image_url || '',
       image_alt: row.image_alt || '',
+      question_type: row.question_type || 'open',
+      mc_options: typeof row.mc_options === 'string'
+        ? row.mc_options
+        : JSON.stringify(Array.isArray(row.mc_options) ? row.mc_options : []),
+      acceptable_answers: typeof row.acceptable_answers === 'string'
+        ? row.acceptable_answers
+        : JSON.stringify(Array.isArray(row.acceptable_answers) ? row.acceptable_answers : []),
+      hint: row.hint || '',
+      hintPlain: row.hintPlain || '',
+      hintLatex: row.hintLatex || '',
       xp: Number(row.xp) || 150,
       week_label: row.week_label || 'Pekan 1',
       sort_order: Number(row.sort_order) || 0,

@@ -104,7 +104,10 @@ const questionBank = {
       { name: 'why', fallback: "''" },
       { name: 'intuition', fallback: "''" },
       { name: 'mistakes', fallback: "''" },
-      { name: 'mistake_result', fallback: "''" }
+      { name: 'mistake_result', fallback: "''" },
+      { name: 'hint', fallback: "''" },
+      { name: 'hintPlain', fallback: "''" },
+      { name: 'hintLatex', fallback: "''" }
     ],
     orderBy: 'problem_id, step_order, id'
   })

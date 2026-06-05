@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-06-05T13:45:59.205Z",
+  "exportedAt": "2026-06-05T18:47:03.201Z",
   "source": "bundled-daily-mission-import-2026-06-05",
   "missions": [
     {
@@ -11,12 +11,28 @@
       "status": "locked",
       "mapel": "Matematika",
       "target": "Matematika Harian 1",
-      "question": "(Operasi Bilangan & Logaritma) Tentukan nilai dari: $^2\\log 16 + ^3\\log 27 - ^5\\log 25$.",
+      "question": "Tentukan nilai dari: $^2\\log 16 + ^3\\log 27 - ^5\\log 25$.",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 1
+      "sort_order": 1,
+      "hint": "Ubah bilangan numerus menjadi bentuk pangkat dari basisnya agar mudah disederhanakan.",
+      "hintPlain": "Ubah bilangan numerus menjadi bentuk pangkat dari basisnya agar mudah disederhanakan.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "acceptable_answers": [
+        "5",
+        "D",
+        "d"
+      ]
     },
     {
       "id": 9002,
@@ -27,12 +43,28 @@
       "status": "locked",
       "mapel": "Fisika",
       "target": "Fisika Harian 1",
-      "question": "(Analisis Satuan & Dimensi) Usaha ($W$) didefinisikan sebagai gaya kali perpindahan. Tentukan dimensi dari usaha.",
+      "question": "Usaha ($W$) didefinisikan sebagai gaya kali perpindahan. Tentukan dimensi dari usaha.",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 2
+      "sort_order": 2,
+      "hint": "Ingat bahwa besaran Usaha adalah hasil perkalian antara Gaya dan Perpindahan ($W = F \\cdot s$).",
+      "hintPlain": "Ingat bahwa besaran Usaha adalah hasil perkalian antara Gaya dan Perpindahan ($W = F \\cdot s$).",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$[M][L][T]^{-1}$",
+        "$[M][L][T]^{-2}$",
+        "$[M][L]^2[T]^{-1}$",
+        "$[M][L]^2[T]^{-2}$",
+        "$[M][L]^2[T]^{-3}$"
+      ],
+      "acceptable_answers": [
+        "$[M][L]^2[T]^{-2}$",
+        "D",
+        "d"
+      ]
     },
     {
       "id": 9003,
@@ -43,12 +75,28 @@
       "status": "locked",
       "mapel": "Kimia",
       "target": "Kimia Harian 1",
-      "question": "(Struktur Atom) Tentukan jumlah proton, elektron, dan neutron pada ion $^{56}_{26}\\text{Fe}^{3+}$.",
+      "question": "Tentukan jumlah proton, elektron, dan neutron pada ion $^{56}_{26}\\text{Fe}^{3+}$.",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 3
+      "sort_order": 3,
+      "hint": "Nomor atom (angka bawah) menunjukkan jumlah proton. Neutron adalah selisih massa dan proton. Muatan positif berarti atom tersebut melepaskan elektron.",
+      "hintPlain": "Nomor atom (angka bawah) menunjukkan jumlah proton. Neutron adalah selisih massa dan proton. Muatan positif berarti atom tersebut melepaskan elektron.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$p=26, \\ e=26, \\ n=30$",
+        "$p=26, \\ e=23, \\ n=30$",
+        "$p=26, \\ e=29, \\ n=30$",
+        "$p=30, \\ e=23, \\ n=26$",
+        "$p=23, \\ e=26, \\ n=30$"
+      ],
+      "acceptable_answers": [
+        "$p=26, \\ e=23, \\ n=30$",
+        "B",
+        "b"
+      ]
     },
     {
       "id": 9004,
@@ -59,12 +107,28 @@
       "status": "locked",
       "mapel": "Matematika",
       "target": "Matematika Harian 2",
-      "question": "(Persamaan Garis) Tentukan persamaan garis lurus yang melalui titik $A(2, 3)$ dan sejajar dengan garis $y = 3x - 5$.",
+      "question": "Tentukan persamaan garis lurus yang melalui titik $A(2, 3)$ dan sejajar dengan garis $y = 3x - 5$.",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 4
+      "sort_order": 4,
+      "hint": "Garis yang sejajar memiliki nilai gradien ($m$) yang sama.",
+      "hintPlain": "Garis yang sejajar memiliki nilai gradien ($m$) yang sama.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$y = 3x - 1$",
+        "$y = 3x - 2$",
+        "$y = 3x - 3$",
+        "$y = 3x - 4$",
+        "$y = 3x - 5$"
+      ],
+      "acceptable_answers": [
+        "$y = 3x - 3$",
+        "C",
+        "c"
+      ]
     },
     {
       "id": 9005,
@@ -75,12 +139,28 @@
       "status": "locked",
       "mapel": "Fisika",
       "target": "Fisika Harian 2",
-      "question": "(Vektor) Perhatikan gambar vektor perpindahan berikut.\nSebuah partikel bergerak sejauh $4 \\text{ m}$ ke timur (sumbu $x$ positif), lalu $3 \\text{ m}$ ke utara (sumbu $y$ positif). Tentukan besar resultan perpindahannya.",
+      "question": "Perhatikan gambar vektor perpindahan berikut.\nSebuah partikel bergerak sejauh $4 \\text{ m}$ ke timur (sumbu $x$ positif), lalu $3 \\text{ m}$ ke utara (sumbu $y$ positif). Tentukan besar resultan perpindahannya.",
       "image_url": "/assets/practice/misi-fisika-q02.svg",
       "image_alt": "Fisika misi harian soal 2",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 5
+      "sort_order": 5,
+      "hint": "Arah timur dan utara saling tegak lurus, sehingga kamu bisa menggunakan Teorema Pythagoras untuk mencari resultannya.",
+      "hintPlain": "Arah timur dan utara saling tegak lurus, sehingga kamu bisa menggunakan Teorema Pythagoras untuk mencari resultannya.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$1 \\text{ m}$",
+        "$3 \\text{ m}$",
+        "$5 \\text{ m}$",
+        "$7 \\text{ m}$",
+        "$12 \\text{ m}$"
+      ],
+      "acceptable_answers": [
+        "$5 \\text{ m}$",
+        "C",
+        "c"
+      ]
     },
     {
       "id": 9006,
@@ -91,12 +171,28 @@
       "status": "locked",
       "mapel": "Kimia",
       "target": "Kimia Harian 2",
-      "question": "(Tata Nama Senyawa) Tuliskan rumus kimia untuk senyawa Tembaga(II) Sulfat Pentahidrat.",
+      "question": "Tuliskan rumus kimia untuk senyawa Tembaga(II) Sulfat Pentahidrat.",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 6
+      "sort_order": 6,
+      "hint": "Tembaga(II) bermuatan +2 dan Sulfat bermuatan -2. Kata 'Pentahidrat' menunjukkan bahwa senyawa tersebut mengikat 5 molekul air ($\\text{H}_2\\text{O}$).",
+      "hintPlain": "Tembaga(II) bermuatan +2 dan Sulfat bermuatan -2. Kata 'Pentahidrat' menunjukkan bahwa senyawa tersebut mengikat 5 molekul air ($\\text{H}_2\\text{O}$).",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$CuSO4 \\cdot H2O$",
+        "$CuSO4 \\cdot 3H2O$",
+        "$Cu2SO4 \\cdot 5H2O$",
+        "$CuSO4 \\cdot 5H2O$",
+        "$CuSO3 \\cdot 5H2O$"
+      ],
+      "acceptable_answers": [
+        "$CuSO4 \\cdot 5H2O$",
+        "D",
+        "d"
+      ]
     },
     {
       "id": 9007,
@@ -107,12 +203,28 @@
       "status": "locked",
       "mapel": "Matematika",
       "target": "Matematika Harian 3",
-      "question": "(Manipulasi Aljabar) Sederhanakan bentuk aljabar berikut: $\\frac{x^2 - 9}{x^2 - 2x - 15}$.",
+      "question": "Sederhanakan bentuk aljabar berikut: $\\frac{x^2 - 9}{x^2 - 2x - 15}$.",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 7
+      "sort_order": 7,
+      "hint": "Faktorkan persamaan kuadrat di pembilang dan penyebutnya terlebih dahulu, lalu coret faktor yang sama.",
+      "hintPlain": "Faktorkan persamaan kuadrat di pembilang dan penyebutnya terlebih dahulu, lalu coret faktor yang sama.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$\\frac{x + 3}{x - 5}$",
+        "$\\frac{x - 3}{x + 5}$",
+        "$\\frac{x - 3}{x - 5}$",
+        "$\\frac{x + 3}{x + 5}$",
+        "$\\frac{x - 5}{x - 3}$"
+      ],
+      "acceptable_answers": [
+        "$\\frac{x - 3}{x - 5}$",
+        "C",
+        "c"
+      ]
     },
     {
       "id": 9008,
@@ -123,12 +235,28 @@
       "status": "locked",
       "mapel": "Fisika",
       "target": "Fisika Harian 3",
-      "question": "(Kinematika Benda Titik) Sebuah mobil direm dengan perlambatan konstan sebesar $2 \\text{ m/s}^2$ dari kecepatan awal $20 \\text{ m/s}$ hingga berhenti. Berapakah jarak total yang ditempuh mobil tersebut?",
+      "question": "Sebuah mobil direm dengan perlambatan konstan sebesar $2 \\text{ m/s}^2$ dari kecepatan awal $20 \\text{ m/s}$ hingga berhenti. Berapakah jarak total yang ditempuh mobil tersebut?",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 8
+      "sort_order": 8,
+      "hint": "Karena waktu tidak diketahui, gunakan persamaan GLBB tanpa waktu: $v_t^2 = v_0^2 + 2as$.",
+      "hintPlain": "Karena waktu tidak diketahui, gunakan persamaan GLBB tanpa waktu: $v_t^2 = v_0^2 + 2as$.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "20 m",
+        "50 m",
+        "80 m",
+        "100 m",
+        "120 m"
+      ],
+      "acceptable_answers": [
+        "100 m",
+        "D",
+        "d"
+      ]
     },
     {
       "id": 9009,
@@ -139,12 +267,28 @@
       "status": "locked",
       "mapel": "Kimia",
       "target": "Kimia Harian 3",
-      "question": "(Ikatan Kimia & Bentuk Molekul) Perhatikan struktur molekul di bawah ini.\nBerdasarkan teori VSEPR, tentukan bentuk molekul dari $\\ce{H2O}$ (Oksigen memiliki 6 elektron valensi, berikatan dengan 2 atom H).",
+      "question": "Perhatikan struktur molekul di bawah ini.\nBerdasarkan teori VSEPR, tentukan bentuk molekul dari $\\mathrm{H_2O}$ (Oksigen memiliki 6 elektron valensi, berikatan dengan 2 atom H).",
       "image_url": "/assets/practice/misi-kimia-q03.svg",
       "image_alt": "Kimia misi harian soal 3",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 9
+      "sort_order": 9,
+      "hint": "Tentukan Pasangan Elektron Ikatan (PEI) dan Pasangan Elektron Bebas (PEB) pada atom pusat Oksigen untuk menentukan tipe geometrinya.",
+      "hintPlain": "Tentukan Pasangan Elektron Ikatan (PEI) dan Pasangan Elektron Bebas (PEB) pada atom pusat Oksigen untuk menentukan tipe geometrinya.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "Linear",
+        "Segitiga Datar",
+        "Tetrahedral",
+        "Piramida Segitiga",
+        "Bentuk V (Bengkok)"
+      ],
+      "acceptable_answers": [
+        "Bentuk V (Bengkok)",
+        "E",
+        "e"
+      ]
     },
     {
       "id": 9010,
@@ -155,12 +299,28 @@
       "status": "locked",
       "mapel": "Matematika",
       "target": "Matematika Harian 4",
-      "question": "(Geometri Dasar) Perhatikan gambar di bawah ini.\nSebuah segitiga berada di dalam persegi panjang dengan panjang $8 \\text{ cm}$ dan lebar $5 \\text{ cm}$. Titik puncak segitiga berada tepat di tengah sisi atas persegi panjang. Tentukan luas daerah yang diarsir (luas segitiga tersebut).",
+      "question": "Perhatikan gambar di bawah ini.\nSebuah segitiga berada di dalam persegi panjang dengan panjang $8 \\text{ cm}$ dan lebar $5 \\text{ cm}$. Titik puncak segitiga berada tepat di tengah sisi atas persegi panjang. Tentukan luas daerah yang diarsir (luas segitiga tersebut).",
       "image_url": "/assets/practice/misi-matematika-q04.svg",
       "image_alt": "Matematika misi harian soal 4",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 10
+      "sort_order": 10,
+      "hint": "Alas segitiga berimpit dengan panjang persegi panjang, dan tingginya persis sama dengan lebar persegi panjang.",
+      "hintPlain": "Alas segitiga berimpit dengan panjang persegi panjang, dan tingginya persis sama dengan lebar persegi panjang.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$10 \\text{ cm}^2$",
+        "$15 \\text{ cm}^2$",
+        "$20 \\text{ cm}^2$",
+        "$25 \\text{ cm}^2$",
+        "$40 \\text{ cm}^2$"
+      ],
+      "acceptable_answers": [
+        "$20 \\text{ cm}^2$",
+        "C",
+        "c"
+      ]
     },
     {
       "id": 9011,
@@ -171,12 +331,28 @@
       "status": "locked",
       "mapel": "Fisika",
       "target": "Fisika Harian 4",
-      "question": "(Dinamika Benda Titik) Perhatikan gambar di bawah.\nSebuah balok bermassa $2 \\text{ kg}$ meluncur tanpa gesekan pada bidang miring dengan sudut kemiringan $\\theta = 30^\\circ$. Tentukan percepatan balok tersebut! (Gunakan $g = 10 \\text{ m/s}^2$)",
+      "question": "Perhatikan gambar di bawah.\nSebuah balok bermassa $2 \\text{ kg}$ meluncur tanpa gesekan pada bidang miring dengan sudut kemiringan $\\theta = 30^\\circ$. Tentukan percepatan balok tersebut! (Gunakan $g = 10 \\text{ m/s}^2$)",
       "image_url": "/assets/practice/misi-fisika-q04.svg",
       "image_alt": "Fisika misi harian soal 4",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 11
+      "sort_order": 11,
+      "hint": "Gaya yang menyebabkan benda meluncur turun searah bidang miring adalah komponen gaya berat sejajar bidang, yaitu $mg \\sin \\theta$.",
+      "hintPlain": "Gaya yang menyebabkan benda meluncur turun searah bidang miring adalah komponen gaya berat sejajar bidang, yaitu $mg \\sin \\theta$.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$2 \\text{ m/s}^2$",
+        "$5 \\text{ m/s}^2$",
+        "$10 \\text{ m/s}^2$",
+        "$5\\sqrt{2} \\text{ m/s}^2$",
+        "$5\\sqrt{3} \\text{ m/s}^2$"
+      ],
+      "acceptable_answers": [
+        "$5 \\text{ m/s}^2$",
+        "B",
+        "b"
+      ]
     },
     {
       "id": 9012,
@@ -187,12 +363,28 @@
       "status": "locked",
       "mapel": "Kimia",
       "target": "Kimia Harian 4",
-      "question": "(Stoikiometri) Reaksi pembakaran gas metana: $\\ce{CH4 + 2O2 -> CO2 + 2H2O}$. Jika $3.2 \\text{ gram } \\ce{CH4}$ (Ar C=12, H=1) dibakar sempurna, hitunglah massa $\\ce{CO2}$ yang dihasilkan (Ar O=16).",
+      "question": "Reaksi pembakaran gas metana: $\\mathrm{CH_4} + 2\\mathrm{O_2} \\to \\mathrm{CO_2} + 2\\mathrm{H_2O}$. Jika $3.2 \\text{ gram } \\mathrm{CH_4}$ (Ar C=12, H=1) dibakar sempurna, hitunglah massa $\\mathrm{CO_2}$ yang dihasilkan (Ar O=16).",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 12
+      "sort_order": 12,
+      "hint": "Cari jumlah mol gas metana terlebih dahulu, lalu gunakan perbandingan koefisien reaksi untuk mengetahui mol gas $\\text{CO}_2$ yang dihasilkan.",
+      "hintPlain": "Cari jumlah mol gas metana terlebih dahulu, lalu gunakan perbandingan koefisien reaksi untuk mengetahui mol gas $\\text{CO}_2$ yang dihasilkan.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$2.2 \\text{ gram}$",
+        "$4.4 \\text{ gram}$",
+        "$8.8 \\text{ gram}$",
+        "$11.2 \\text{ gram}$",
+        "$17.6 \\text{ gram}$"
+      ],
+      "acceptable_answers": [
+        "$8.8 \\text{ gram}$",
+        "C",
+        "c"
+      ]
     },
     {
       "id": 9013,
@@ -203,12 +395,28 @@
       "status": "locked",
       "mapel": "Matematika",
       "target": "Matematika Harian 5",
-      "question": "(Fungsi & Trigonometri) Jika $f(x) = \\sin(2x)$ dan $g(x) = x + \\frac{\\pi}{4}$, tentukan nilai dari $(f \\circ g)\\left(\\frac{\\pi}{4}\\right)$.",
+      "question": "Jika $f(x) = \\sin(2x)$ dan $g(x) = x + \\frac{\\pi}{4}$, tentukan nilai dari $(f \\circ g)\\left(\\frac{\\pi}{4}\\right)$.",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 13
+      "sort_order": 13,
+      "hint": "Substitusikan fungsi $g(x)$ ke dalam setiap variabel $x$ pada fungsi $f(x)$.",
+      "hintPlain": "Substitusikan fungsi $g(x)$ ke dalam setiap variabel $x$ pada fungsi $f(x)$.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$-1$",
+        "$-\\frac{1}{2}$",
+        "$0$",
+        "$\\frac{1}{2}$",
+        "$1$"
+      ],
+      "acceptable_answers": [
+        "$0$",
+        "C",
+        "c"
+      ]
     },
     {
       "id": 9014,
@@ -219,12 +427,28 @@
       "status": "locked",
       "mapel": "Fisika",
       "target": "Fisika Harian 5",
-      "question": "(Benda Tegar - Torsi) Perhatikan sistem tuas berikut.\nSebuah batang homogen dengan panjang $L = 2 \\text{ m}$ diputar dengan gaya tegak lurus sebesar $F = 50 \\text{ N}$ di ujungnya. Jika engsel berada di ujung lainnya, tentukan besar momen gaya (torsi) yang terjadi.",
+      "question": "Perhatikan sistem tuas berikut.\nSebuah batang homogen dengan panjang $L = 2 \\text{ m}$ diputar dengan gaya tegak lurus sebesar $F = 50 \\text{ N}$ di ujungnya. Jika engsel berada di ujung lainnya, tentukan besar momen gaya (torsi) yang terjadi.",
       "image_url": "/assets/practice/misi-fisika-q05.svg",
       "image_alt": "Fisika misi harian soal 5",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 14
+      "sort_order": 14,
+      "hint": "Momen gaya (torsi) adalah hasil perkalian antara gaya dengan lengan momen jika gayanya sudah tegak lurus ($\\tau = F \\cdot r$).",
+      "hintPlain": "Momen gaya (torsi) adalah hasil perkalian antara gaya dengan lengan momen jika gayanya sudah tegak lurus ($\\tau = F \\cdot r$).",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$25 \\text{ N}\\cdot\\text{m}$",
+        "$50 \\text{ N}\\cdot\\text{m}$",
+        "$100 \\text{ N}\\cdot\\text{m}$",
+        "$150 \\text{ N}\\cdot\\text{m}$",
+        "$200 \\text{ N}\\cdot\\text{m}$"
+      ],
+      "acceptable_answers": [
+        "$100 \\text{ N}\\cdot\\text{m}$",
+        "C",
+        "c"
+      ]
     },
     {
       "id": 9015,
@@ -235,12 +459,28 @@
       "status": "locked",
       "mapel": "Kimia",
       "target": "Kimia Harian 5",
-      "question": "(Termokimia) Perhatikan diagram tingkat energi berikut.\nTentukan apakah reaksi ini eksoterm atau endoterm, dan hitunglah perubahan entalpi ($\\Delta H$) jika energi reaktan adalah $150 \\text{ kJ}$ dan energi produk $50 \\text{ kJ}$.",
+      "question": "Perhatikan diagram tingkat energi berikut.\nTentukan apakah reaksi ini eksoterm atau endoterm, dan hitunglah perubahan entalpi ($\\Delta H$) jika energi reaktan adalah $150 \\text{ kJ}$ dan energi produk $50 \\text{ kJ}$.",
       "image_url": "/assets/practice/misi-kimia-q05.svg",
       "image_alt": "Kimia misi harian soal 5",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 15
+      "sort_order": 15,
+      "hint": "Reaksi disebut eksoterm (melepas kalor) jika tingkat energi produk berada di bawah tingkat energi reaktan ($\\Delta H < 0$).",
+      "hintPlain": "Reaksi disebut eksoterm (melepas kalor) jika tingkat energi produk berada di bawah tingkat energi reaktan ($\\Delta H < 0$).",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "Eksoterm, $-100 \\text{ kJ}$",
+        "Eksoterm, $+100 \\text{ kJ}$",
+        "Endoterm, $-100 \\text{ kJ}$",
+        "Endoterm, $+100 \\text{ kJ}$",
+        "Eksoterm, $-200 \\text{ kJ}$"
+      ],
+      "acceptable_answers": [
+        "Eksoterm, $-100 \\text{ kJ}$",
+        "A",
+        "a"
+      ]
     },
     {
       "id": 9016,
@@ -251,12 +491,28 @@
       "status": "locked",
       "mapel": "Matematika",
       "target": "Matematika Harian 6",
-      "question": "(Vektor) Diketahui vektor $\\vec{u} = 3\\hat{i} - 4\\hat{j}$ dan $\\vec{v} = 4\\hat{i} + 3\\hat{j}$. Tentukan besar sudut yang dibentuk oleh kedua vektor tersebut.",
+      "question": "Diketahui vektor $\\vec{u} = 3\\hat{i} - 4\\hat{j}$ dan $\\vec{v} = 4\\hat{i} + 3\\hat{j}$. Tentukan besar sudut yang dibentuk oleh kedua vektor tersebut.",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 16
+      "sort_order": 16,
+      "hint": "Gunakan rumus perkalian titik (dot product) $\\vec{u} \\cdot \\vec{v} = |\\vec{u}||\\vec{v}|\\cos\\theta$.",
+      "hintPlain": "Gunakan rumus perkalian titik (dot product) $\\vec{u} \\cdot \\vec{v} = |\\vec{u}||\\vec{v}|\\cos\\theta$.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$0^\\circ$",
+        "$30^\\circ$",
+        "$45^\\circ$",
+        "$60^\\circ$",
+        "$90^\\circ$"
+      ],
+      "acceptable_answers": [
+        "$90^\\circ$",
+        "E",
+        "e"
+      ]
     },
     {
       "id": 9017,
@@ -267,12 +523,28 @@
       "status": "locked",
       "mapel": "Fisika",
       "target": "Fisika Harian 6",
-      "question": "(Momentum Linier) Dua buah benda A bermassa $2 \\text{ kg}$ (kecepatan $4 \\text{ m/s}$ ke kanan) dan benda B bermassa $3 \\text{ kg}$ (kecepatan $1 \\text{ m/s}$ ke kiri) bertumbukan lenting sempurna. Tentukan persamaan hukum kekekalan momentumnya. (Tidak perlu dihitung kecepatan akhirnya, cukup persamaan momentum).",
+      "question": "Dua buah benda A bermassa $2 \\text{ kg}$ (kecepatan $4 \\text{ m/s}$ ke kanan) dan benda B bermassa $3 \\text{ kg}$ (kecepatan $1 \\text{ m/s}$ ke kiri) bertumbukan lenting sempurna. Tentukan persamaan hukum kekekalan momentumnya. (Tidak perlu dihitung kecepatan akhirnya, cukup persamaan momentum).",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 17
+      "sort_order": 17,
+      "hint": "Gunakan hukum kekekalan momentum $\\Sigma p_{\\text{awal}} = \\Sigma p_{\\text{akhir}}$. Perhatikan tanda arah kecepatannya (kanan/kiri)!",
+      "hintPlain": "Gunakan hukum kekekalan momentum $\\Sigma p_{\\text{awal}} = \\Sigma p_{\\text{akhir}}$. Perhatikan tanda arah kecepatannya (kanan/kiri)!",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$8 = 2v_A' + 3v_B'$",
+        "$11 = 2v_A' + 3v_B'$",
+        "$5 = 2v_A' + 3v_B'$",
+        "$5 = 2v_A' - 3v_B'$",
+        "$-5 = 2v_A' + 3v_B'$"
+      ],
+      "acceptable_answers": [
+        "$5 = 2v_A' + 3v_B'$",
+        "C",
+        "c"
+      ]
     },
     {
       "id": 9018,
@@ -283,12 +555,28 @@
       "status": "locked",
       "mapel": "Kimia",
       "target": "Kimia Harian 6",
-      "question": "(Laju Reaksi) Dari reaksi $\\ce{A + B -> C}$, ketika konsentrasi [A] dinaikkan 2x (sementara [B] tetap), laju reaksi menjadi 4x lebih cepat. Tentukan orde reaksi terhadap A.",
+      "question": "Dari reaksi $A + B \\to C$, ketika konsentrasi [A] dinaikkan 2x (sementara [B] tetap), laju reaksi menjadi 4x lebih cepat. Tentukan orde reaksi terhadap A.",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 18
+      "sort_order": 18,
+      "hint": "Gunakan persamaan rasio laju reaksi terhadap konsentrasi: $\\frac{v_2}{v_1} = \\left(\\frac{[A]_2}{[A]_1}\\right)^x$.",
+      "hintPlain": "Gunakan persamaan rasio laju reaksi terhadap konsentrasi: $\\frac{v_2}{v_1} = \\left(\\frac{[A]_2}{[A]_1}\\right)^x$.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "acceptable_answers": [
+        "2",
+        "C",
+        "c"
+      ]
     },
     {
       "id": 9019,
@@ -299,12 +587,28 @@
       "status": "locked",
       "mapel": "Matematika",
       "target": "Matematika Harian 7",
-      "question": "(Pertidaksamaan) Tentukan himpunan penyelesaian dari pertidaksamaan: $\\frac{2x - 5}{x + 1} \\geq 1$.",
+      "question": "Tentukan himpunan penyelesaian dari pertidaksamaan: $\\frac{2x - 5}{x + 1} \\geq 1$.",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 19
+      "sort_order": 19,
+      "hint": "Pindahkan angka 1 ke ruas kiri sehingga ruas kanan menjadi 0, lalu samakan penyebut. Jangan pernah mengali silang pertidaksamaan pecahan!",
+      "hintPlain": "Pindahkan angka 1 ke ruas kiri sehingga ruas kanan menjadi 0, lalu samakan penyebut. Jangan pernah mengali silang pertidaksamaan pecahan!",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$-1 < x \\leq 6$",
+        "$x \\leq -1 \\text{ atau } x > 6$",
+        "$x < -1 \\text{ atau } x \\geq 6$",
+        "$x \\leq -1 \\text{ atau } x \\geq 6$",
+        "$-1 \\leq x \\leq 6$"
+      ],
+      "acceptable_answers": [
+        "$x < -1 \\text{ atau } x \\geq 6$",
+        "C",
+        "c"
+      ]
     },
     {
       "id": 9020,
@@ -315,12 +619,28 @@
       "status": "locked",
       "mapel": "Fisika",
       "target": "Fisika Harian 7",
-      "question": "(Osilasi) Perhatikan sistem pegas-massa berikut.\nSebuah pegas dengan konstanta $k = 200 \\text{ N/m}$ digantung vertikal dengan beban bermassa $m = 0.5 \\text{ kg}$. Tentukan periode osilasi sistem tersebut.",
+      "question": "Perhatikan sistem pegas-massa berikut.\nSebuah pegas dengan konstanta $k = 200 \\text{ N/m}$ digantung vertikal dengan beban bermassa $m = 0.5 \\text{ kg}$. Tentukan periode osilasi sistem tersebut.",
       "image_url": "/assets/practice/misi-fisika-q07.svg",
       "image_alt": "Fisika misi harian soal 7",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 20
+      "sort_order": 20,
+      "hint": "Gunakan rumus periode sistem pegas-massa, yaitu $T = 2\\pi \\sqrt{\\frac{m}{k}}$.",
+      "hintPlain": "Gunakan rumus periode sistem pegas-massa, yaitu $T = 2\\pi \\sqrt{\\frac{m}{k}}$.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$0.05\\pi \\text{ sekon}$",
+        "$0.1\\pi \\text{ sekon}$",
+        "$0.2\\pi \\text{ sekon}$",
+        "$0.5\\pi \\text{ sekon}$",
+        "$\\pi \\text{ sekon}$"
+      ],
+      "acceptable_answers": [
+        "$0.1\\pi \\text{ sekon}$",
+        "B",
+        "b"
+      ]
     },
     {
       "id": 9021,
@@ -331,12 +651,28 @@
       "status": "locked",
       "mapel": "Kimia",
       "target": "Kimia Harian 7",
-      "question": "(Kesetimbangan) Reaksi kesetimbangan: $\\ce{N2(g) + 3H2(g) <=> 2NH3(g)}$. Jika pada volume 1 Liter terdapat 2 mol $\\ce{N2}$, 3 mol $\\ce{H2}$, dan 4 mol $\\ce{NH3}$ saat setimbang, tentukan nilai konstanta kesetimbangan konsentrasi ($K_c$).",
+      "question": "Reaksi kesetimbangan: $\\mathrm{N_2}(g) + 3\\mathrm{H_2}(g) \\rightleftharpoons 2\\mathrm{NH_3}(g)$. Jika pada volume 1 Liter terdapat 2 mol $\\mathrm{N_2}$, 3 mol $\\mathrm{H_2}$, dan 4 mol $\\mathrm{NH_3}$ saat setimbang, tentukan nilai konstanta kesetimbangan konsentrasi ($K_c$).",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 21
+      "sort_order": 21,
+      "hint": "Nilai konstanta kesetimbangan ($K_c$) adalah hasil kali konsentrasi produk dipangkatkan koefisiennya dibagi hasil kali konsentrasi reaktan dipangkatkan koefisiennya.",
+      "hintPlain": "Nilai konstanta kesetimbangan ($K_c$) adalah hasil kali konsentrasi produk dipangkatkan koefisiennya dibagi hasil kali konsentrasi reaktan dipangkatkan koefisiennya.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$\\frac{4}{27}$",
+        "$\\frac{8}{27}$",
+        "$\\frac{16}{27}$",
+        "$\\frac{2}{9}$",
+        "$\\frac{4}{9}$"
+      ],
+      "acceptable_answers": [
+        "$\\frac{8}{27}$",
+        "B",
+        "b"
+      ]
     },
     {
       "id": 9022,
@@ -347,12 +683,28 @@
       "status": "locked",
       "mapel": "Matematika",
       "target": "Matematika Harian 8",
-      "question": "(Kalkulus Dasar - Integral) Perhatikan grafik fungsi berikut.\nTentukan luas daerah yang dibatasi oleh kurva $y = -x^2 + 4x$, sumbu-$x$, dari $x=0$ hingga $x=4$.",
+      "question": "Perhatikan grafik fungsi berikut.\nTentukan luas daerah yang dibatasi oleh kurva $y = -x^2 + 4x$, sumbu-$x$, dari $x=0$ hingga $x=4$.",
       "image_url": "/assets/practice/misi-matematika-q08.svg",
       "image_alt": "Matematika misi harian soal 8",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 22
+      "sort_order": 22,
+      "hint": "Luas daerah dapat dicari dengan mengintegralkan fungsi kurva batas atas dikurangi batas bawah pada selang $x$ yang diberikan.",
+      "hintPlain": "Luas daerah dapat dicari dengan mengintegralkan fungsi kurva batas atas dikurangi batas bawah pada selang $x$ yang diberikan.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$\\frac{16}{3} \\text{ satuan luas}$",
+        "$\\frac{32}{3} \\text{ satuan luas}$",
+        "$\\frac{64}{3} \\text{ satuan luas}$",
+        "$16 \\text{ satuan luas}$",
+        "$32 \\text{ satuan luas}$"
+      ],
+      "acceptable_answers": [
+        "$\\frac{32}{3} \\text{ satuan luas}$",
+        "B",
+        "b"
+      ]
     },
     {
       "id": 9023,
@@ -363,12 +715,28 @@
       "status": "locked",
       "mapel": "Fisika",
       "target": "Fisika Harian 8",
-      "question": "(Usaha & Energi) Sebuah balok dilepaskan dari puncak bidang miring kasar yang tingginya $h = 5 \\text{ m}$. Jika energi kinetik di dasar bidang miring adalah $30 \\text{ J}$ dan massa balok $1 \\text{ kg}$, berapakah besar usaha yang dilakukan oleh gaya gesek? ($g = 10 \\text{ m/s}^2$).",
+      "question": "Sebuah balok dilepaskan dari puncak bidang miring kasar yang tingginya $h = 5 \\text{ m}$. Jika energi kinetik di dasar bidang miring adalah $30 \\text{ J}$ dan massa balok $1 \\text{ kg}$, berapakah besar usaha yang dilakukan oleh gaya gesek? ($g = 10 \\text{ m/s}^2$).",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 23
+      "sort_order": 23,
+      "hint": "Usaha yang dilakukan oleh gaya gesek sama dengan selisih energi mekanik sistem (akhir dikurangi awal).",
+      "hintPlain": "Usaha yang dilakukan oleh gaya gesek sama dengan selisih energi mekanik sistem (akhir dikurangi awal).",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$10 \\text{ Joule}$",
+        "$15 \\text{ Joule}$",
+        "$20 \\text{ Joule}$",
+        "$30 \\text{ Joule}$",
+        "$50 \\text{ Joule}$"
+      ],
+      "acceptable_answers": [
+        "$20 \\text{ Joule}$",
+        "C",
+        "c"
+      ]
     },
     {
       "id": 9024,
@@ -379,12 +747,28 @@
       "status": "locked",
       "mapel": "Kimia",
       "target": "Kimia Harian 8",
-      "question": "(Asam Basa - Kurva Titrasi) Perhatikan kurva titrasi berikut.\nBerdasarkan bentuk kurva (pH awal di atas 7, titik ekuivalen di bawah 7), tentukan jenis asam dan basa yang sedang dititrasi (Asam kuat/lemah, Basa kuat/lemah).",
+      "question": "Perhatikan kurva titrasi berikut.\nBerdasarkan bentuk kurva (pH awal di atas 7, titik ekuivalen di bawah 7), tentukan jenis asam dan basa yang sedang dititrasi (Asam kuat/lemah, Basa kuat/lemah).",
       "image_url": "/assets/practice/misi-kimia-q08.svg",
       "image_alt": "Kimia misi harian soal 8",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 24
+      "sort_order": 24,
+      "hint": "Kurva yang diawali di pH basa lalu turun drastis menembus angka 7 ke pH sangat asam menandakan penitrasinya adalah asam kuat dan sampelnya adalah basa lemah.",
+      "hintPlain": "Kurva yang diawali di pH basa lalu turun drastis menembus angka 7 ke pH sangat asam menandakan penitrasinya adalah asam kuat dan sampelnya adalah basa lemah.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "Asam Kuat oleh Basa Kuat",
+        "Asam Lemah oleh Basa Kuat",
+        "Basa Kuat oleh Asam Kuat",
+        "Basa Lemah oleh Asam Kuat",
+        "Basa Lemah oleh Asam Lemah"
+      ],
+      "acceptable_answers": [
+        "Basa Lemah oleh Asam Kuat",
+        "D",
+        "d"
+      ]
     },
     {
       "id": 9025,
@@ -395,12 +779,28 @@
       "status": "locked",
       "mapel": "Matematika",
       "target": "Matematika Harian 9",
-      "question": "(Nilai Mutlak & Persamaan Kuadrat) Tentukan jumlah semua akar-akar real yang memenuhi persamaan $|x^2 - 4x| = 3$.",
+      "question": "Tentukan jumlah semua akar-akar real yang memenuhi persamaan $|x^2 - 4x| = 3$.",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 25
+      "sort_order": 25,
+      "hint": "Hilangkan tanda mutlak dengan membagi persamaan menjadi dua kasus: saat ruas kanan bernilai positif dan saat bernilai negatif.",
+      "hintPlain": "Hilangkan tanda mutlak dengan membagi persamaan menjadi dua kasus: saat ruas kanan bernilai positif dan saat bernilai negatif.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "0",
+        "4",
+        "6",
+        "8",
+        "12"
+      ],
+      "acceptable_answers": [
+        "8",
+        "D",
+        "d"
+      ]
     },
     {
       "id": 9026,
@@ -411,12 +811,28 @@
       "status": "locked",
       "mapel": "Fisika",
       "target": "Fisika Harian 9",
-      "question": "(Gelombang Mekanik) Persamaan gelombang berjalan pada tali dinyatakan dengan $y(x,t) = 0.02 \\sin(10\\pi t - 2\\pi x)$ dalam satuan SI. Tentukan cepat rambat gelombang tersebut!",
+      "question": "Persamaan gelombang berjalan pada tali dinyatakan dengan $y(x,t) = 0.02 \\sin(10\\pi t - 2\\pi x)$ dalam satuan SI. Tentukan cepat rambat gelombang tersebut!",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 26
+      "sort_order": 26,
+      "hint": "Cepat rambat gelombang berjalan dapat dicari dengan membagi koefisien waktu ($t$) dengan koefisien posisi ($x$).",
+      "hintPlain": "Cepat rambat gelombang berjalan dapat dicari dengan membagi koefisien waktu ($t$) dengan koefisien posisi ($x$).",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$0.02 \\text{ m/s}$",
+        "$2 \\text{ m/s}$",
+        "$5 \\text{ m/s}$",
+        "$10 \\text{ m/s}$",
+        "$20 \\text{ m/s}$"
+      ],
+      "acceptable_answers": [
+        "$5 \\text{ m/s}$",
+        "C",
+        "c"
+      ]
     },
     {
       "id": 9027,
@@ -427,12 +843,28 @@
       "status": "locked",
       "mapel": "Kimia",
       "target": "Kimia Harian 9",
-      "question": "(Kelarutan Garam - Efek Ion Senama) Diketahui $K_{sp}$ $\\ce{AgCl} = 1 \\times 10^{-10}$. Tentukan kelarutan $\\ce{AgCl}$ dalam larutan $\\ce{NaCl}$ 0.1 M.",
+      "question": "Diketahui $K_{sp}$ $\\mathrm{AgCl} = 1 \\times 10^{-10}$. Tentukan kelarutan $\\mathrm{AgCl}$ dalam larutan $\\mathrm{NaCl}$ 0.1 M.",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 27
+      "sort_order": 27,
+      "hint": "Tuliskan reaksi ionisasi $\\text{AgCl}$. Ingat bahwa dalam pelarut tersebut sudah terdapat ion $\\text{Cl}^-$ bebas sebanyak 0.1 M dari larutan $\\text{NaCl}$.",
+      "hintPlain": "Tuliskan reaksi ionisasi $\\text{AgCl}$. Ingat bahwa dalam pelarut tersebut sudah terdapat ion $\\text{Cl}^-$ bebas sebanyak 0.1 M dari larutan $\\text{NaCl}$.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$1 \\times 10^{-5} \\text{ M}$",
+        "$1 \\times 10^{-8} \\text{ M}$",
+        "$1 \\times 10^{-9} \\text{ M}$",
+        "$1 \\times 10^{-10} \\text{ M}$",
+        "$1 \\times 10^{-11} \\text{ M}$"
+      ],
+      "acceptable_answers": [
+        "$1 \\times 10^{-9} \\text{ M}$",
+        "C",
+        "c"
+      ]
     },
     {
       "id": 9028,
@@ -443,12 +875,28 @@
       "status": "locked",
       "mapel": "Matematika",
       "target": "Matematika Harian 10",
-      "question": "(Kalkulus Dasar - Turunan) Sebuah kotak tanpa tutup dibuat dari selembar karton berbentuk persegi dengan sisi $12 \\text{ cm}$ dengan cara memotong persegi identik di keempat pojoknya dan melipat sisi-sisinya ke atas. Tentukan volume maksimum kotak yang dapat dibuat.",
+      "question": "Sebuah kotak tanpa tutup dibuat dari selembar karton berbentuk persegi dengan sisi $12 \\text{ cm}$ dengan cara memotong persegi identik di keempat pojoknya dan melipat sisi-sisinya ke atas. Tentukan volume maksimum kotak yang dapat dibuat.",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 28
+      "sort_order": 28,
+      "hint": "Bentuk fungsi volume $V(x)$ dalam variabel $x$ terlebih dahulu, kemudian cari nilai $x$ yang membuat turunan pertamanya sama dengan nol ($V'(x) = 0$).",
+      "hintPlain": "Bentuk fungsi volume $V(x)$ dalam variabel $x$ terlebih dahulu, kemudian cari nilai $x$ yang membuat turunan pertamanya sama dengan nol ($V'(x) = 0$).",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$64 \\text{ cm}^3$",
+        "$96 \\text{ cm}^3$",
+        "$100 \\text{ cm}^3$",
+        "$128 \\text{ cm}^3$",
+        "$144 \\text{ cm}^3$"
+      ],
+      "acceptable_answers": [
+        "$128 \\text{ cm}^3$",
+        "D",
+        "d"
+      ]
     },
     {
       "id": 9029,
@@ -459,12 +907,28 @@
       "status": "locked",
       "mapel": "Fisika",
       "target": "Fisika Harian 10",
-      "question": "(Dinamika Rotasi) Sebuah katrol berupa silinder pejal (massa $M = 2 \\text{ kg}$, jari-jari $R$) dililitkan tali yang terhubung dengan balok bermassa $m = 4 \\text{ kg}$. Tentukan percepatan turunnya balok! ($g=10 \\text{ m/s}^2$, momen inersia katrol $I = \\frac{1}{2}MR^2$).",
+      "question": "Sebuah katrol berupa silinder pejal (massa $M = 2 \\text{ kg}$, jari-jari $R$) dililitkan tali yang terhubung dengan balok bermassa $m = 4 \\text{ kg}$. Tentukan percepatan turunnya balok! ($g=10 \\text{ m/s}^2$, momen inersia katrol $I = \\frac{1}{2}MR^2$).",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 29
+      "sort_order": 29,
+      "hint": "Tinjau persamaan gerak translasi pada balok ($\\Sigma F = ma$) dan gerak rotasi pada katrol ($\\Sigma \\tau = I\\alpha$), lalu substitusikan persamaan tegangan talinya.",
+      "hintPlain": "Tinjau persamaan gerak translasi pada balok ($\\Sigma F = ma$) dan gerak rotasi pada katrol ($\\Sigma \\tau = I\\alpha$), lalu substitusikan persamaan tegangan talinya.",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$4 \\text{ m/s}^2$",
+        "$5 \\text{ m/s}^2$",
+        "$8 \\text{ m/s}^2$",
+        "$10 \\text{ m/s}^2$",
+        "$12 \\text{ m/s}^2$"
+      ],
+      "acceptable_answers": [
+        "$8 \\text{ m/s}^2$",
+        "C",
+        "c"
+      ]
     },
     {
       "id": 9030,
@@ -475,12 +939,28 @@
       "status": "locked",
       "mapel": "Kimia",
       "target": "Kimia Harian 10",
-      "question": "(Sifat Koligatif Larutan) Tentukan titik didih larutan yang dibuat dengan melarutkan $11.7 \\text{ gram } \\ce{NaCl}$ (Mr = 58.5) dalam $500 \\text{ gram}$ air! ($K_b \\text{ air} = 0.52 ^\\circ\\text{C/m}$, asumsikan terionisasi sempurna).",
+      "question": "Tentukan titik didih larutan yang dibuat dengan melarutkan $11.7 \\text{ gram } \\mathrm{NaCl}$ (Mr = 58.5) dalam $500 \\text{ gram}$ air! ($K_b \\text{ air} = 0.52 ^\\circ\\text{C/m}$, asumsikan terionisasi sempurna).",
       "image_url": "",
       "image_alt": "",
       "xp": 150,
       "week_label": "Misi Harian TPB",
-      "sort_order": 30
+      "sort_order": 30,
+      "hint": "Penurunan atau kenaikan titik didih untuk larutan elektrolit (seperti $\\text{NaCl}$) harus dikalikan dengan faktor Van't Hoff ($i$).",
+      "hintPlain": "Penurunan atau kenaikan titik didih untuk larutan elektrolit (seperti $\\text{NaCl}$) harus dikalikan dengan faktor Van't Hoff ($i$).",
+      "hintLatex": "",
+      "question_type": "mc",
+      "mc_options": [
+        "$100.104 ^\\circ\\text{C}$",
+        "$100.208 ^\\circ\\text{C}$",
+        "$100.416 ^\\circ\\text{C}$",
+        "$100.832 ^\\circ\\text{C}$",
+        "$101.416 ^\\circ\\text{C}$"
+      ],
+      "acceptable_answers": [
+        "$100.416 ^\\circ\\text{C}$",
+        "C",
+        "c"
+      ]
     }
   ]
 }

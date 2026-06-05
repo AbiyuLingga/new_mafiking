@@ -76,7 +76,10 @@ CREATE TABLE IF NOT EXISTS problem_steps (
     why TEXT,
     intuition TEXT,
     mistakes TEXT,
-    mistake_result TEXT
+    mistake_result TEXT,
+    hint TEXT DEFAULT '',
+    hintPlain TEXT DEFAULT '',
+    hintLatex TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS daily_missions (
@@ -91,6 +94,12 @@ CREATE TABLE IF NOT EXISTS daily_missions (
     question TEXT NOT NULL DEFAULT '',
     image_url TEXT DEFAULT '',
     image_alt TEXT DEFAULT '',
+    question_type TEXT DEFAULT 'open',
+    mc_options TEXT DEFAULT '[]',
+    acceptable_answers TEXT DEFAULT '[]',
+    hint TEXT DEFAULT '',
+    hintPlain TEXT DEFAULT '',
+    hintLatex TEXT DEFAULT '',
     xp INTEGER NOT NULL DEFAULT 150,
     week_label TEXT DEFAULT 'Pekan 1',
     sort_order INTEGER DEFAULT 0
