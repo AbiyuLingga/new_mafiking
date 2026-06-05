@@ -17,6 +17,7 @@ const { sanitizeForPrompt } = require('../lib/text-sanitize');
 const { callWithPool, isPoolAvailable } = require('../lib/multi-provider-pool');
 const { isAnswerEquivalent } = require('../lib/answer-equivalence');
 const { getLatencySummary, recordLatency } = require('../lib/latency-tracker');
+const { simplifyGeminiSchema } = require('../lib/gemini-schema');
 
 const router = express.Router();
 
@@ -707,7 +708,7 @@ async function callGeminiWithFallback({ maxOutputTokens, models, parts, provider
           contents: [{ role: 'user', parts }],
           config: {
             ...(maxOutputTokens ? { maxOutputTokens } : {}),
-            responseJsonSchema: schema,
+            responseJsonSchema: simplifyGeminiSchema(schema),
             responseMimeType: 'application/json',
             systemInstruction,
             temperature: 0.1

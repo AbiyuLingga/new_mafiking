@@ -116,6 +116,7 @@ const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authSta
   const isVerifyToken = mode === "verify-email-token";
   const isGuestUser = currentUser && currentUser.display_name?.startsWith('Tamu_');
   const verificationSyncRef = React.useRef(false);
+  const verifyTokenSubmitRef = React.useRef(false);
   const isSafeBackPath = (path) => {
     const clean = String(path || '').split('?')[0].replace(/\/+$/, '') || '/';
     return Boolean(path && path.startsWith('/') && clean !== '/login' && clean !== '/signup' && clean !== '/profil' && clean !== '/profile');
@@ -199,6 +200,12 @@ const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authSta
       setError(err.message || "Link verifikasi tidak valid atau sudah kadaluarsa.");
     }
   }, [authState?.token, verifyState?.token, onSuccess, redirect]);
+
+  React.useEffect(() => {
+    if (!isVerifyToken || verifyTokenSubmitRef.current) return;
+    verifyTokenSubmitRef.current = true;
+    confirmEmailVerification();
+  }, [isVerifyToken, confirmEmailVerification]);
 
   React.useEffect(() => {
     if (!isVerifyEmail) return undefined;
@@ -408,7 +415,6 @@ const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authSta
     const isSuccess = verifyStatus === "success";
     const isFailed = verifyStatus === "failed";
     const isVerifying = isVerifyToken && verifyStatus === "verifying";
-    const isConfirmPending = isVerifyToken && verifyStatus === "idle";
     return (
       <div style={{
         backgroundColor: '#ffffff',
@@ -448,7 +454,7 @@ const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authSta
             <EnvelopeIcon size={26} />
           </div>
           <h1 style={{ fontSize: 28, color: '#0b1326', letterSpacing: '-0.01em', fontWeight: 800, margin: 0 }}>
-            {isSuccess ? 'Email terverifikasi' : isFailed ? 'Link tidak valid' : isVerifying ? 'Memverifikasi email...' : isConfirmPending ? 'Konfirmasi email' : 'Cek email kamu'}
+            {isSuccess ? 'Email terverifikasi' : isFailed ? 'Link tidak valid' : isVerifyToken ? 'Memverifikasi email...' : 'Cek email kamu'}
           </h1>
           <p style={{ color: 'rgba(11,19,38,0.55)', fontSize: 14, lineHeight: 1.65, margin: '12px 0 0' }}>
             {isSuccess
@@ -457,37 +463,12 @@ const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authSta
                 : 'Akun kamu sudah aktif. Kamu akan diarahkan ke Mafiking.'
               : isFailed
                 ? 'Link verifikasi tidak valid atau sudah kadaluarsa. Kamu bisa meminta link baru.'
-                : isConfirmPending
-                  ? 'Tekan tombol di bawah untuk mengaktifkan akun Mafiking kamu.'
                 : email
                   ? `Kami sudah mengirim link konfirmasi ke ${email}. Klik link di email untuk mengaktifkan akun.`
                   : 'Kami sudah mengirim link konfirmasi ke email kamu. Klik link di email untuk mengaktifkan akun.'}
           </p>
           {error && (
             <p style={{ color: '#ef4444', fontSize: 13, marginTop: 12 }}>{error}</p>
-          )}
-          {!isSuccess && isVerifyToken && (
-            <div style={{ display: 'grid', gap: 10, marginTop: 26 }}>
-              <button
-                type="button"
-                disabled={isVerifying}
-                onClick={confirmEmailVerification}
-                style={{
-                  background: '#0b1326',
-                  border: 'none',
-                  borderRadius: 12,
-                  color: '#FFF44F',
-                  cursor: isVerifying ? 'not-allowed' : 'pointer',
-                  fontSize: 15,
-                  fontWeight: 800,
-                  opacity: isVerifying ? 0.65 : 1,
-                  padding: 14,
-                  width: '100%',
-                }}
-              >
-                {isVerifying ? 'Memverifikasi...' : 'Konfirmasi Email'}
-              </button>
-            </div>
           )}
           {!isSuccess && !isVerifyToken && (
             <div style={{ display: 'grid', gap: 10, marginTop: 26 }}>

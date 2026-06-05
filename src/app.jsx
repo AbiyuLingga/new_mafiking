@@ -323,6 +323,11 @@ const App = () => {
     let cancelled = false;
     let completed = false;
     setAuthCallbackLoading(true);
+    const leaveCallback = () => {
+      if (cancelled || completed) return;
+      completed = true;
+      window.location.replace("/");
+    };
     const fallbackTimer = window.setTimeout(() => {
       if (cancelled || completed) return;
       window.MafikingClerk.syncSession()
@@ -333,15 +338,18 @@ const App = () => {
         })
         .catch((err) => {
           console.error("[clerk-callback:fallback]", err);
-          if (!cancelled && !completed) {
-            completed = true;
-            navigate({ route: "lobby", authMode: "login" });
-          }
+          leaveCallback();
         })
         .finally(() => {
           if (!cancelled) setAuthCallbackLoading(false);
         });
-    }, 12000);
+    }, 5000);
+
+    const hardStopTimer = window.setTimeout(() => {
+      if (cancelled || completed) return;
+      console.warn("[clerk-callback] hard stop, leaving callback page");
+      leaveCallback();
+    }, 9000);
 
     window.MafikingClerk.completeRedirectAuth()
       .then((result) => {
@@ -352,18 +360,19 @@ const App = () => {
       .catch((err) => {
         console.error("[clerk-callback]", err);
         if (!cancelled && !completed) {
-          completed = true;
-          navigate({ route: "lobby", authMode: "login" });
+          leaveCallback();
         }
       })
       .finally(() => {
         window.clearTimeout(fallbackTimer);
+        window.clearTimeout(hardStopTimer);
         if (!cancelled) setAuthCallbackLoading(false);
       });
 
     return () => {
       cancelled = true;
       window.clearTimeout(fallbackTimer);
+      window.clearTimeout(hardStopTimer);
     };
   }, [handleAuthSuccess, navigate]);
 
