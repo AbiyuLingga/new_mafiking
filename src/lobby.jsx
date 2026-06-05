@@ -1058,7 +1058,7 @@ const LandingEditableMedia = ({ enabled, slot, mediaType = "image", label, onEdi
     {children}
     {enabled && (
       <button
-        className="landing-edit-hotspot"
+        className="landing-edit-hotspot is-visible"
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -1174,7 +1174,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   const teacherScrollRef = React.useRef(null);
   const teacherScrollAdjustingRef = React.useRef(false);
   const soundEnabledRef = React.useRef(true);
-  const landingMediaEditEnabled = false;
+  const landingMediaEditEnabled = Boolean(isAdmin);
   const isRegistered = currentUser && !currentUser.display_name?.startsWith("Tamu_");
   const authRedirect = { route: "belajar", section: "Try Out" };
   const openLogin = () => setRoute({ route: "lobby", authMode: "login", authRedirect });

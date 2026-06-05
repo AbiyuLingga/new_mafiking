@@ -4,7 +4,7 @@ const CANVAS_DEMO_VIDEO_SRC = "/assets/saas_demo_video_popup.mp4";
 
 const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthenticated = false, hasPremiumAccess = false }) => {
   const boardRef = useRef(null);
-  const [mode, setMode] = useState("choice"); // "choice" | "canvas"
+  const [mode, setMode] = useState(() => context?.initialMode === "canvas" ? "canvas" : "choice"); // "choice" | "canvas"
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [session, setSession] = useState(null);
@@ -81,7 +81,8 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     setTimeLeftSeconds(limit > 0 ? limit : null);
     timeExpiredNoticeRef.current = false;
     setShowCanvasIntro(!context?.disableCanvasIntro);
-  }, [context?.id, context?.timeLimitSeconds, context?.disableCanvasIntro]);
+    setMode(context?.initialMode === "canvas" ? "canvas" : "choice");
+  }, [context?.id, context?.timeLimitSeconds, context?.disableCanvasIntro, context?.initialMode]);
 
   useEffect(() => {
     if (!isTimedTryout) return undefined;

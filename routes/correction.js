@@ -63,6 +63,7 @@ const EVALUATE_SYSTEM_PROMPT = [
   'Jika kesalahan terjadi karena hasil sebelum/sesudah transisi tidak konsisten, jadikan combinedBoxPercent area dari ekspresi lengkap yang harus dikoreksi.',
   'Maksimal 5 wrongSteps dan 5 redlineTargets. Pilih kesalahan utama, tetapi beri pembahasan yang cukup jelas.',
   'Untuk setiap wrongStep, isi issuePlain dan hintPlain masing-masing 1-2 kalimat pendek yang konkret.',
+  'Untuk semua teks yang tampil ke user, sapa user langsung sebagai "Kamu"; jangan menyebut user sebagai "siswa".',
   'Jangan mengembalikan Markdown, HTML, atau code fence.',
   'Balas hanya JSON valid sesuai schema.',
   'strengthTags dan weaknessTags masing-masing maksimal 5 tag; pilih yang paling utama.',
@@ -99,6 +100,7 @@ const MERGED_SYSTEM_PROMPT = [
   '- Jika kesalahan terjadi karena hasil sebelum/sesudah transisi tidak konsisten, jadikan combinedBoxPercent area dari ekspresi lengkap yang harus dikoreksi.',
   '- Maksimal 5 wrongSteps dan 5 redlineTargets. Pilih kesalahan utama, tetapi beri pembahasan yang cukup jelas.',
   '- Untuk setiap wrongStep, isi issuePlain dan hintPlain masing-masing 1-2 kalimat pendek yang konkret.',
+  '- Untuk semua teks yang tampil ke user, sapa user langsung sebagai "Kamu"; jangan menyebut user sebagai "siswa".',
   '- Jangan mengembalikan Markdown, HTML, atau code fence.',
   '- strengthTags dan weaknessTags masing-masing maksimal 5 tag; pilih yang paling utama.',
   '- Field berakhiran Latex harus berisi LaTeX yang pendek dan valid.',
@@ -557,12 +559,12 @@ function normalizeEvaluation(raw, sourceText) {
   const isCorrect = normalizeBoolean(raw.isCorrect);
   const wrongSteps = Array.isArray(raw.wrongSteps) ? raw.wrongSteps.map((step) => ({
     combinedBoxPercent: normalizeBox(step.combinedBoxPercent),
-    hint: String(step.hintPlain || step.hint || stripLatexToPlain(step.hintLatex) || ''),
-    hintLatex: String(step.hintLatex || step.hint || ''),
-    hintPlain: String(step.hintPlain || stripLatexToPlain(step.hint || step.hintLatex) || ''),
-    issue: String(step.issuePlain || step.issue || stripLatexToPlain(step.issueLatex) || ''),
-    issueLatex: String(step.issueLatex || step.issue || ''),
-    issuePlain: String(step.issuePlain || stripLatexToPlain(step.issue || step.issueLatex) || ''),
+    hint: addressUserDirectly(step.hintPlain || step.hint || stripLatexToPlain(step.hintLatex) || ''),
+    hintLatex: addressUserDirectly(step.hintLatex || step.hint || ''),
+    hintPlain: addressUserDirectly(step.hintPlain || stripLatexToPlain(step.hint || step.hintLatex) || ''),
+    issue: addressUserDirectly(step.issuePlain || step.issue || stripLatexToPlain(step.issueLatex) || ''),
+    issueLatex: addressUserDirectly(step.issueLatex || step.issue || ''),
+    issuePlain: addressUserDirectly(step.issuePlain || stripLatexToPlain(step.issue || step.issueLatex) || ''),
     previousStep: String(step.previousStep || ''),
     stepNumber: String(step.stepNumber || ''),
     studentStep: String(step.studentStepPlain || step.studentStep || stripLatexToPlain(step.studentStepLatex) || ''),
@@ -575,13 +577,13 @@ function normalizeEvaluation(raw, sourceText) {
   })) : [];
   const redlineTargets = Array.isArray(raw.redlineTargets) ? raw.redlineTargets.map((target) => ({
     boxPercent: normalizeBox(target.boxPercent),
-    reasonLatex: String(target.reasonLatex || ''),
+    reasonLatex: addressUserDirectly(target.reasonLatex || ''),
     severity: String(target.severity || 'error'),
     stepNumber: String(target.stepNumber || ''),
     targetTextLatex: String(target.targetTextLatex || '')
   })) : [];
-  const fullFeedbackLatex = String(raw.fullFeedbackLatex || raw.fullFeedback || sourceText || 'Koreksi selesai, tetapi respons AI belum rapi.');
-  const fullFeedbackPlain = String(
+  const fullFeedbackLatex = addressUserDirectly(raw.fullFeedbackLatex || raw.fullFeedback || sourceText || 'Koreksi selesai, tetapi respons AI belum rapi.');
+  const fullFeedbackPlain = addressUserDirectly(
     raw.fullFeedbackPlain ||
     raw.fullFeedbackText ||
     stripLatexToPlain(raw.fullFeedback || fullFeedbackLatex) ||
@@ -603,6 +605,12 @@ function normalizeEvaluation(raw, sourceText) {
     weaknessTags: normalizeLearningTags(raw.weaknessTags),
     wrongSteps
   };
+}
+
+function addressUserDirectly(text) {
+  return String(text || '')
+    .replace(/\bSiswa\b/g, 'Kamu')
+    .replace(/\bsiswa\b/g, 'kamu');
 }
 
 function normalizeProfileSummary(raw, sourceText) {

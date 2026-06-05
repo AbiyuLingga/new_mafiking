@@ -461,6 +461,10 @@ button:focus-visible, a:focus-visible {
   z-index: 30;
 }
 
+.landing-edit-hotspot.is-visible {
+  opacity: 1;
+}
+
 .landing-edit-hotspot:hover,
 .landing-edit-hotspot:focus-visible {
   background: rgba(15, 23, 42, .46);

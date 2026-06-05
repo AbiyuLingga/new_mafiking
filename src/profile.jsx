@@ -187,6 +187,22 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
     return String(text || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+  function openCanvasWeaknessPractice() {
+    setRoute({
+      route: "practice",
+      practice: {
+        id: 1,
+        title: "Teknik Integrasi",
+        mapel: "Matematika",
+        semester: 1,
+        topics: ["Substitusi U", "Integral parsial", "Trigonometri"],
+        problemLimit: 1,
+        initialMode: "canvas",
+        disableCanvasIntro: true,
+      },
+    });
+  }
+
   function getProfileDisplayName() {
     return String(user?.display_name || user?.username || "Memuat profil").trim();
   }
@@ -372,6 +388,19 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
             </div>
           ) : (
             <div className="grid gap-8">
+
+              <button
+                onClick={openCanvasWeaknessPractice}
+                type="button"
+                className="group flex w-full items-center justify-between gap-4 rounded-[var(--card-radius)] border border-ink/10 bg-white px-5 py-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md md:px-6"
+              >
+                <span className="text-sm font-bold leading-relaxed text-ink md:text-base">
+                  Kerjakan <span className="border-b-2 border-yel pb-0.5">Canvas</span> untuk Mendapat Analisis Kelemahan &amp; Dapatkan Rekomendasi Latihan Soal
+                </span>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink text-yel transition-transform group-hover:translate-x-1">
+                  <Icon.Arrow className="w-4 h-4" />
+                </span>
+              </button>
 
               {/* AI Evaluation Box */}
               <div

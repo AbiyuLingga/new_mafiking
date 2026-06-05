@@ -2,8 +2,9 @@
 
 const BLANK_PKG = { tryout_id: '', title: '', description: '', price: 'Gratis', original_price: '', badge: '', duration: '60 mnt', questions: 30, features: '', tone: 'default', sort_order: 0 };
 
-const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
+const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context }) => {
   const mode = String(context?.mode || "");
+  const canEditPackages = Boolean(isAdminMode);
   const [tab, setTab] = useState("beli");
   const [packages, setPackages] = useState([]);
   const [activePackages, setActivePackages] = useState([]);
@@ -11,6 +12,13 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
   const [editPkg, setEditPkg] = useState(null);
   const [inlineEdit, setInlineEdit] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!canEditPackages) {
+      setEditPkg(null);
+      setInlineEdit(null);
+    }
+  }, [canEditPackages]);
 
   useEffect(() => {
     if (!isTryoutSessionMode(mode)) loadPackages();
@@ -84,6 +92,7 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
 
   async function savePkg(e) {
     e.preventDefault();
+    if (!canEditPackages) return;
     setSaving(true);
     try {
       const id = editPkg.id;
@@ -128,7 +137,7 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
   }
 
   function startInlineEdit(pkg, field, rows) {
-    if (!isAdmin || !pkg || !pkg.id) return;
+    if (!canEditPackages || !pkg || !pkg.id) return;
     const raw = field === 'features'
       ? (Array.isArray(pkg.features) ? pkg.features.join('\n') : String(pkg.features || ''))
       : String(pkg[field] == null ? '' : pkg[field]);
@@ -142,6 +151,10 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
 
   async function saveInlineEdit() {
     if (!inlineEdit) return;
+    if (!canEditPackages) {
+      setInlineEdit(null);
+      return;
+    }
     const pkg = packages.find(item => item.id === inlineEdit.id);
     if (!pkg) {
       setInlineEdit(null);
@@ -162,6 +175,7 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
   }
 
   async function deletePkg(id) {
+    if (!canEditPackages) return;
     if (!window.confirm('Hapus paket tryout ini?')) return;
     try {
       await MafikingAPI.del(`/api/admin/tryout-packages/${id}`);
@@ -183,7 +197,7 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
                 Pilih paket belajar<br/>
                 sesuai kebutuhan kamu.
               </h1>
-              {isAdmin && (
+              {canEditPackages && (
                 <button
                   onClick={() => setEditPkg({ ...BLANK_PKG, sort_order: packages.length + 1 })}
                   className="mt-4 admin-btn-primary flex items-center gap-2"
@@ -222,7 +236,7 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
                     pkg={pkg}
                     hasAccess={hasAccess(pkg)}
                     setRoute={setRoute}
-                    isAdmin={isAdmin}
+                    isAdmin={canEditPackages}
                     isLoggedIn={isLoggedIn}
                     onStartPackage={startTryoutPackage}
                     adminEdit={{ inlineEdit, saving, startInlineEdit, setInlineEdit, saveInlineEdit }}
@@ -246,7 +260,7 @@ const Tryout = ({ setRoute, isAdmin, isLoggedIn, context }) => {
                     pkg={pkg}
                     hasAccess={true}
                     setRoute={setRoute}
-                    isAdmin={isAdmin}
+                    isAdmin={canEditPackages}
                     isLoggedIn={isLoggedIn}
                     onStartPackage={startTryoutPackage}
                     adminEdit={{ inlineEdit, saving, startInlineEdit, setInlineEdit, saveInlineEdit }}

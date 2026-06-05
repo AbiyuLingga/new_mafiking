@@ -100,6 +100,7 @@ const App = () => {
   const isGuest = currentUser && currentUser.display_name?.startsWith("Tamu_");
   const isLoggedIn = currentUser && !isGuest;
   const isAdminAccount = currentUser?.role === "admin";
+  const canEditInlineAsAdmin = isAdmin || isAdminAccount;
   const hasPremiumAccess = isAdminAccount || activePackages.length > 0;
 
   const refreshCurrentUser = React.useCallback(async () => {
@@ -492,8 +493,8 @@ const App = () => {
           data-screen-label={routeLabel(route)}
           className={route === "practice" || route === "lobby" || isTryoutFullscreenRoute ? "" : "app-route-transition"}
         >
-          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={isAdmin || isAdminAccount} authMode={authMode} authRedirect={authRedirect} authBackRoute={authBackRoute} authState={authState} onAuthSuccess={handleAuthSuccess} pendingClerkUser={pendingClerkUser} />}
-          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} currentUser={currentUser} hasPremiumAccess={hasPremiumAccess} initialSection={belajarSection} onSectionChange={setBelajarSection} />}
+          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={canEditInlineAsAdmin} authMode={authMode} authRedirect={authRedirect} authBackRoute={authBackRoute} authState={authState} onAuthSuccess={handleAuthSuccess} pendingClerkUser={pendingClerkUser} />}
+          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={canEditInlineAsAdmin} isLoggedIn={isLoggedIn} currentUser={currentUser} hasPremiumAccess={hasPremiumAccess} initialSection={belajarSection} onSectionChange={setBelajarSection} />}
           {route === "misi" && (
             <ScreenErrorBoundary>
               {hasPremiumAccess
@@ -501,7 +502,7 @@ const App = () => {
                 : <AccessGate setRoute={navigate} title="Akses Paket" message="Beli paket untuk mendapat akses ke misi harian dan latihan terarah setiap hari" variant="misi" showFreeTryout={false} hideKicker />}
             </ScreenErrorBoundary>
           )}
-          {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} isLoggedIn={isLoggedIn} context={tryoutContext} />}
+          {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={canEditInlineAsAdmin} isAdminMode={isAdmin} isLoggedIn={isLoggedIn} context={tryoutContext} />}
           {route === "leaderboard" && window.Leaderboard && React.createElement(window.Leaderboard)}
           {route === "admin" && isAdminAccount && isAdmin && (
             window.AdminPage
@@ -509,11 +510,11 @@ const App = () => {
               : <AdminChunkFallback status={adminChunkStatus} />
           )}
           {route === "profile" && (isLoggedIn
-            ? <Profile setRoute={navigate} isAdmin={isAdmin || isAdminAccount} onRequestLanding={confirmLandingReturn} onRequestLogout={confirmLogout} />
+            ? <Profile setRoute={navigate} isAdmin={canEditInlineAsAdmin} onRequestLanding={confirmLandingReturn} onRequestLogout={confirmLogout} />
             : <LoginRedirect setRoute={navigate} />
           )}
           {route === "payment" && <Payment setRoute={navigate} currentUser={currentUser} context={paymentContext} />}
-          {route === "practice" && <Practice setRoute={navigate} context={practiceContext} isAdmin={isAdmin} isLoggedIn={isLoggedIn} isAuthenticated={Boolean(currentUser)} hasPremiumAccess={hasPremiumAccess} />}
+          {route === "practice" && <Practice setRoute={navigate} context={practiceContext} isAdmin={canEditInlineAsAdmin} isLoggedIn={isLoggedIn} isAuthenticated={Boolean(currentUser)} hasPremiumAccess={hasPremiumAccess} />}
         </div>
       </main>
 
