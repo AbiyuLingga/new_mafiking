@@ -6,6 +6,7 @@ const projectRoot = path.join(__dirname, '..');
 const inputPath = process.env.INPUT || path.join(projectRoot, 'db', 'question-bank.json');
 const targetDbPath = process.env.TARGET_DB || path.join(projectRoot, 'db', 'database.sqlite');
 const force = process.argv.includes('--force') || process.env.FORCE_IMPORT === '1';
+const merge = process.argv.includes('--merge') || process.env.MERGE_IMPORT === '1';
 
 if (!fs.existsSync(inputPath)) {
   console.error(`Question bank not found: ${inputPath}`);
@@ -28,38 +29,92 @@ db.pragma('foreign_keys = ON');
 const schema = fs.readFileSync(path.join(projectRoot, 'db', 'schema.sql'), 'utf-8');
 db.exec(schema);
 
+function quoteIdentifier(identifier) {
+  return `"${String(identifier).replace(/"/g, '""')}"`;
+}
+
+function tableColumns(tableName) {
+  return new Set(
+    db.prepare(`PRAGMA table_info(${quoteIdentifier(tableName)})`)
+      .all()
+      .map((column) => column.name)
+  );
+}
+
+function ensureColumn(tableName, columnName, ddl) {
+  if (!tableColumns(tableName).has(columnName)) {
+    db.exec(`ALTER TABLE ${quoteIdentifier(tableName)} ADD COLUMN ${columnName} ${ddl}`);
+  }
+}
+
+ensureColumn('chapters', 'mapel', "TEXT DEFAULT 'Matematika'");
+ensureColumn('chapters', 'semester', 'INTEGER DEFAULT 1');
+ensureColumn('chapters', 'description', "TEXT DEFAULT ''");
+ensureColumn('chapters', 'est', "TEXT DEFAULT ''");
+ensureColumn('chapters', 'topics', "TEXT DEFAULT '[]'");
+ensureColumn('problems', 'image_url', "TEXT DEFAULT ''");
+ensureColumn('problems', 'image_alt', "TEXT DEFAULT ''");
+
 const progressCount = db.prepare('SELECT COUNT(*) AS count FROM user_progress').get().count;
 const correctionCount = db.prepare(
   'SELECT COUNT(*) AS count FROM correction_attempts WHERE problem_id IS NOT NULL'
 ).get().count;
 
-if (!force && (progressCount > 0 || correctionCount > 0)) {
+if (!force && !merge && (progressCount > 0 || correctionCount > 0)) {
   console.error([
     'Refusing to replace question tables because progress/correction rows reference existing problems.',
-    'Run with --force only if you intentionally accept resetting question references.'
+    'Run with --merge to upsert bundled rows safely, or --force only if you intentionally accept resetting question references.'
   ].join('\n'));
   process.exit(1);
 }
 
 const insertChapter = db.prepare(`
-  INSERT INTO chapters (id, title, icon, sort_order)
-  VALUES (@id, @title, @icon, @sort_order)
+  INSERT INTO chapters (id, title, icon, sort_order, mapel, semester, description, est, topics)
+  VALUES (@id, @title, @icon, @sort_order, @mapel, @semester, @description, @est, @topics)
+  ON CONFLICT(id) DO UPDATE SET
+    title = excluded.title,
+    icon = excluded.icon,
+    sort_order = excluded.sort_order,
+    mapel = excluded.mapel,
+    semester = excluded.semester,
+    description = excluded.description,
+    est = excluded.est,
+    topics = excluded.topics
 `);
 const insertSubtopic = db.prepare(`
   INSERT INTO subtopics (id, chapter_id, slug, title, icon, description, sort_order)
   VALUES (@id, @chapter_id, @slug, @title, @icon, @description, @sort_order)
+  ON CONFLICT(id) DO UPDATE SET
+    chapter_id = excluded.chapter_id,
+    slug = excluded.slug,
+    title = excluded.title,
+    icon = excluded.icon,
+    description = excluded.description,
+    sort_order = excluded.sort_order
 `);
 const insertProblem = db.prepare(`
   INSERT INTO problems (
     id, subtopic_id, question_text, question_display, answer_display,
-    acceptable_answers, difficulty, question_type, mc_options, sort_order,
+    acceptable_answers, difficulty, question_type, mc_options, image_url, image_alt, sort_order,
     created_by, created_at
   )
   VALUES (
     @id, @subtopic_id, @question_text, @question_display, @answer_display,
-    @acceptable_answers, @difficulty, @question_type, @mc_options, @sort_order,
+    @acceptable_answers, @difficulty, @question_type, @mc_options, @image_url, @image_alt, @sort_order,
     NULL, COALESCE(@created_at, CURRENT_TIMESTAMP)
   )
+  ON CONFLICT(id) DO UPDATE SET
+    subtopic_id = excluded.subtopic_id,
+    question_text = excluded.question_text,
+    question_display = excluded.question_display,
+    answer_display = excluded.answer_display,
+    acceptable_answers = excluded.acceptable_answers,
+    difficulty = excluded.difficulty,
+    question_type = excluded.question_type,
+    mc_options = excluded.mc_options,
+    image_url = excluded.image_url,
+    image_alt = excluded.image_alt,
+    sort_order = excluded.sort_order
 `);
 const insertStep = db.prepare(`
   INSERT INTO problem_steps (
@@ -68,20 +123,38 @@ const insertStep = db.prepare(`
   VALUES (
     @id, @problem_id, @step_order, @title, @content, @why, @intuition, @mistakes, @mistake_result
   )
+  ON CONFLICT(id) DO UPDATE SET
+    problem_id = excluded.problem_id,
+    step_order = excluded.step_order,
+    title = excluded.title,
+    content = excluded.content,
+    why = excluded.why,
+    intuition = excluded.intuition,
+    mistakes = excluded.mistakes,
+    mistake_result = excluded.mistake_result
 `);
 
 const run = db.transaction(() => {
-  db.prepare('DELETE FROM problem_steps').run();
-  db.prepare('DELETE FROM problems').run();
-  db.prepare('DELETE FROM subtopics').run();
-  db.prepare('DELETE FROM chapters').run();
+  if (!merge) {
+    db.prepare('DELETE FROM problem_steps').run();
+    db.prepare('DELETE FROM problems').run();
+    db.prepare('DELETE FROM subtopics').run();
+    db.prepare('DELETE FROM chapters').run();
+  }
 
   for (const row of questionBank.chapters) {
     insertChapter.run({
       id: row.id,
       title: row.title || '',
       icon: row.icon || '',
-      sort_order: Number(row.sort_order) || 0
+      sort_order: Number(row.sort_order) || 0,
+      mapel: row.mapel || 'Matematika',
+      semester: Number(row.semester) || 1,
+      description: row.description || '',
+      est: row.est || '',
+      topics: typeof row.topics === 'string'
+        ? row.topics
+        : JSON.stringify(Array.isArray(row.topics) ? row.topics : [])
     });
   }
   for (const row of questionBank.subtopics) {
@@ -106,6 +179,8 @@ const run = db.transaction(() => {
       difficulty: row.difficulty || 'Easy',
       question_type: row.question_type || 'open',
       mc_options: row.mc_options || '[]',
+      image_url: row.image_url || '',
+      image_alt: row.image_alt || '',
       sort_order: Number(row.sort_order) || 0,
       created_at: row.created_at || null
     });

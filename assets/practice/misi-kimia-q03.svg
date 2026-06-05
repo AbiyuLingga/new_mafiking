@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 300" width="420" height="300" role="img">
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L7,3 z" fill="#0b1326"/></marker><marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L7,3 z" fill="#2563eb"/></marker><marker id="arrow-red" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L7,3 z" fill="#dc2626"/></marker></defs>
+
+  <line x1="210" y1="105" x2="135" y2="205" stroke="#0b1326" stroke-width="4"/>
+  <line x1="210" y1="105" x2="285" y2="205" stroke="#0b1326" stroke-width="4"/>
+  <circle cx="210" cy="95" r="40" fill="#fee2e2" stroke="#0b1326" stroke-width="3"/> <text x="210" y="102" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#0b1326" font-weight="700">O</text>
+  <circle cx="125" cy="215" r="34" fill="#f1f5f9" stroke="#0b1326" stroke-width="3"/> <text x="125" y="222" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#0b1326" font-weight="700">H</text>
+  <circle cx="295" cy="215" r="34" fill="#f1f5f9" stroke="#0b1326" stroke-width="3"/> <text x="295" y="222" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#0b1326" font-weight="700">H</text>
+  <circle cx="190" cy="45" r="4" fill="#0b1326"/><circle cx="230" cy="45" r="4" fill="#0b1326"/>
+  <circle cx="172" cy="78" r="4" fill="#0b1326"/><circle cx="248" cy="78" r="4" fill="#0b1326"/>
+</svg>

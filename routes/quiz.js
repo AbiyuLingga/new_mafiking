@@ -50,7 +50,7 @@ router.get('/init', (req, res) => {
 router.get('/subtopics/:id/problems', isAuthenticated, (req, res) => {
     const db = req.app.locals.db;
     const problems = db.prepare(
-        'SELECT id, subtopic_id, question_text, question_display, answer_display, difficulty, question_type, mc_options, sort_order FROM problems WHERE subtopic_id = ? ORDER BY sort_order, id'
+        'SELECT id, subtopic_id, question_text, question_display, answer_display, difficulty, question_type, mc_options, image_url, image_alt, sort_order FROM problems WHERE subtopic_id = ? ORDER BY sort_order, id'
     ).all(req.params.id);
     res.json(problems);
 });

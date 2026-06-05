@@ -422,6 +422,16 @@ const MissionQuestionText = ({ question, className }) => {
   return <span className={`mission-question-text${className ? ` ${className}` : ''}`}>{question}</span>;
 };
 
+const MissionQuestionMedia = ({ mission }) => {
+  const src = String(mission?.image_url || '').trim();
+  if (!src) return null;
+  return (
+    <figure className="mission-question-figure">
+      <img src={src} alt={mission?.image_alt || 'Gambar misi harian'} loading="lazy" />
+    </figure>
+  );
+};
+
 // ─── VARIANT · MAFIKING-LATIHAN_1 ─────────────────────────────────────────────
 const MissionMafikingLatihan = ({ timeline, setRoute, isAdmin, adminEdit, onDelete }) => {
   const [focusedDay, setFocusedDay] = useState(
@@ -537,6 +547,7 @@ const MissionMafikingLatihan = ({ timeline, setRoute, isAdmin, adminEdit, onDele
                         <p className="font-medium text-sm text-gray-500 w-full min-w-0">
                           <MissionQuestionText question={mission.question || `Soal otomatis terbuka pada ${missionReleaseLabel(mission)}.`} />
                         </p>
+                        {isAdmin && <MissionQuestionMedia mission={mission} />}
                       </AdminEditableMissionField>
                       {isAdmin && mission.release_date && (
                         <p className="text-[11px] text-ink/40 mt-2">Stock admin · terbuka {mission.release_date}</p>
@@ -549,6 +560,7 @@ const MissionMafikingLatihan = ({ timeline, setRoute, isAdmin, adminEdit, onDele
                         <p className={`font-medium w-full min-w-0 ${isActive ? "text-gray-900 text-lg leading-relaxed relative z-10" : "text-gray-600 text-sm"}`}>
                           <MissionQuestionText question={mission.question} />
                         </p>
+                        <MissionQuestionMedia mission={mission} />
                       </AdminEditableMissionField>
                     </>
                   )}
@@ -608,6 +620,7 @@ const MissionTimeline = ({ timeline, setRoute, isAdmin, adminEdit, onDelete }) =
                   <p className="text-sm text-ink/70 leading-relaxed w-full min-w-0">
                     <MissionQuestionText question={m.question} />
                   </p>
+                  <MissionQuestionMedia mission={m} />
                 </AdminEditableMissionField>
               )}
               {isLocked && <p className="text-xs text-ink/55">Terbuka pada {missionReleaseLabel(m)}.</p>}

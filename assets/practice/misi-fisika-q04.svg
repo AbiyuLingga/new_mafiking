@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 360" width="560" height="360" role="img">
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L7,3 z" fill="#0b1326"/></marker><marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L7,3 z" fill="#2563eb"/></marker><marker id="arrow-red" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L7,3 z" fill="#dc2626"/></marker></defs>
+
+  <polygon points="90,290 470,290 470,70" fill="none" stroke="#0b1326" stroke-width="4"/>
+  <g transform="translate(280 160) rotate(-30)"><rect x="-45" y="-35" width="90" height="70" rx="4" fill="#ddd6fe" stroke="#0b1326" stroke-width="4"/></g>
+  <path d="M395 290 A62 62 0 0 1 450 260" fill="none" stroke="#0b1326" stroke-width="4"/>
+  <text x="420" y="274" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#0b1326" font-weight="700">30?</text>
+</svg>

@@ -2248,6 +2248,23 @@ button:focus-visible, a:focus-visible {
   text-align: center;
 }
 
+.mafiking-question-figure {
+  background: #fff;
+  border: 1px solid #dbe3ee;
+  border-radius: 16px;
+  margin: 18px auto 0;
+  max-width: min(100%, 520px);
+  padding: 16px;
+}
+
+.mafiking-question-figure img {
+  display: block;
+  height: auto;
+  max-height: 320px;
+  object-fit: contain;
+  width: 100%;
+}
+
 .mafiking-choice-list {
   display: grid;
   gap: 12px;
@@ -2645,6 +2662,23 @@ button:focus-visible, a:focus-visible {
   display: inline;
   white-space: normal;
   word-break: normal;
+}
+
+.mission-question-figure {
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 14px;
+  margin: 12px auto 0;
+  max-width: 100%;
+  padding: 10px;
+}
+
+.mission-question-figure img {
+  display: block;
+  height: auto;
+  max-height: 180px;
+  object-fit: contain;
+  width: 100%;
 }
 
 .eq-root {
