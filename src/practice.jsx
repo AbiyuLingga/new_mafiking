@@ -1140,6 +1140,11 @@ const ChoiceView = ({
   const isAnswered = attempt?.mode === "choice";
   const isCorrect = Boolean(attempt?.evaluation?.isCorrect);
   const firstStep = (problem.steps || [])[0];
+  const firstStepHintPlain = firstStep?.hintPlain || firstStep?.hint || "";
+  const firstStepHintLatex = firstStep?.hintLatex || "";
+  const fallbackHint = firstStep
+    ? `${firstStep.title || ""}. ${firstStep.why || firstStep.intuition || firstStep.body || firstStep.description || ""}`.trim()
+    : "";
   const canSubmitChoice = selectedChoiceIndex != null && !isAnswered && choices.length > 0 && !timeExpired;
 
   const [qDraft, setQDraft] = useState(null);
@@ -1384,7 +1389,8 @@ const ChoiceView = ({
 
             {showHint && !isAnswered && firstStep ? (
               <div className="mafiking-hint-box">
-                <strong>Petunjuk:</strong> <Eq value={firstStep.title || ""} />. <Eq value={firstStep.why || firstStep.intuition || firstStep.body || firstStep.description || ""} />
+                <strong>Petunjuk:</strong>{' '}
+                <MathNarrative plain={firstStepHintPlain || fallbackHint} latex={firstStepHintLatex} />
               </div>
             ) : null}
 

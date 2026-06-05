@@ -54,6 +54,9 @@ ensureColumn('chapters', 'est', "TEXT DEFAULT ''");
 ensureColumn('chapters', 'topics', "TEXT DEFAULT '[]'");
 ensureColumn('problems', 'image_url', "TEXT DEFAULT ''");
 ensureColumn('problems', 'image_alt', "TEXT DEFAULT ''");
+ensureColumn('problem_steps', 'hint', "TEXT DEFAULT ''");
+ensureColumn('problem_steps', 'hintPlain', "TEXT DEFAULT ''");
+ensureColumn('problem_steps', 'hintLatex', "TEXT DEFAULT ''");
 
 const progressCount = db.prepare('SELECT COUNT(*) AS count FROM user_progress').get().count;
 const correctionCount = db.prepare(
@@ -118,10 +121,12 @@ const insertProblem = db.prepare(`
 `);
 const insertStep = db.prepare(`
   INSERT INTO problem_steps (
-    id, problem_id, step_order, title, content, why, intuition, mistakes, mistake_result
+    id, problem_id, step_order, title, content, why, intuition, mistakes, mistake_result,
+    hint, hintPlain, hintLatex
   )
   VALUES (
-    @id, @problem_id, @step_order, @title, @content, @why, @intuition, @mistakes, @mistake_result
+    @id, @problem_id, @step_order, @title, @content, @why, @intuition, @mistakes, @mistake_result,
+    @hint, @hintPlain, @hintLatex
   )
   ON CONFLICT(id) DO UPDATE SET
     problem_id = excluded.problem_id,
@@ -131,7 +136,10 @@ const insertStep = db.prepare(`
     why = excluded.why,
     intuition = excluded.intuition,
     mistakes = excluded.mistakes,
-    mistake_result = excluded.mistake_result
+    mistake_result = excluded.mistake_result,
+    hint = excluded.hint,
+    hintPlain = excluded.hintPlain,
+    hintLatex = excluded.hintLatex
 `);
 
 const run = db.transaction(() => {
@@ -140,6 +148,16 @@ const run = db.transaction(() => {
     db.prepare('DELETE FROM problems').run();
     db.prepare('DELETE FROM subtopics').run();
     db.prepare('DELETE FROM chapters').run();
+  } else {
+    const problemIdsWithSteps = Array.from(new Set(
+      questionBank.problem_steps
+        .map((row) => Number(row.problem_id))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    ));
+    const deleteStepsForProblem = db.prepare('DELETE FROM problem_steps WHERE problem_id = ?');
+    for (const problemId of problemIdsWithSteps) {
+      deleteStepsForProblem.run(problemId);
+    }
   }
 
   for (const row of questionBank.chapters) {
@@ -195,7 +213,10 @@ const run = db.transaction(() => {
       why: row.why || '',
       intuition: row.intuition || '',
       mistakes: row.mistakes || '',
-      mistake_result: row.mistake_result || ''
+      mistake_result: row.mistake_result || '',
+      hint: row.hint || '',
+      hintPlain: row.hintPlain || '',
+      hintLatex: row.hintLatex || ''
     });
   }
 });

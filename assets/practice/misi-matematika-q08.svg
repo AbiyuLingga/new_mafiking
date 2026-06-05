@@ -1,4 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180" role="img">
-  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L7,3 z" fill="#0b1326"/></marker><marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L7,3 z" fill="#2563eb"/></marker><marker id="arrow-red" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L7,3 z" fill="#dc2626"/></marker></defs>
-<text x="160" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" fill="#0b1326" font-weight="700">Gambar soal</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 300" width="420" height="300" role="img" aria-label="Daerah di bawah kurva y sama dengan minus x kuadrat tambah 4x dari x sama dengan 0 sampai x sama dengan 4">
+  <defs>
+    <marker id="axis-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L7,3 z" fill="#0b1326"/>
+    </marker>
+  </defs>
+  <line x1="55" y1="245" x2="360" y2="245" stroke="#0b1326" stroke-width="3" marker-end="url(#axis-arrow)"/>
+  <line x1="90" y1="270" x2="90" y2="35" stroke="#0b1326" stroke-width="3" marker-end="url(#axis-arrow)"/>
+  <path d="M90 245 C135 115 175 85 210 85 C245 85 285 115 330 245 L90 245 Z" fill="#c7c9ff" opacity="0.78"/>
+  <path d="M90 245 C135 115 175 85 210 85 C245 85 285 115 330 245" fill="none" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/>
+  <text x="370" y="250" font-family="Arial, sans-serif" font-size="22" fill="#0b1326">x</text>
+  <text x="82" y="28" font-family="Arial, sans-serif" font-size="22" fill="#0b1326">y</text>
+  <text x="68" y="91" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#0b1326">4</text>
+  <text x="330" y="270" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#0b1326">4</text>
 </svg>
