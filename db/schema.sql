@@ -32,7 +32,12 @@ CREATE TABLE IF NOT EXISTS chapters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     icon TEXT,
-    sort_order INTEGER DEFAULT 0
+    sort_order INTEGER DEFAULT 0,
+    mapel TEXT DEFAULT 'Matematika',
+    semester INTEGER DEFAULT 1,
+    description TEXT DEFAULT '',
+    est TEXT DEFAULT '',
+    topics TEXT DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS subtopics (
@@ -55,6 +60,8 @@ CREATE TABLE IF NOT EXISTS problems (
     difficulty TEXT DEFAULT 'Easy',
     question_type TEXT DEFAULT 'open',
     mc_options TEXT DEFAULT '[]',
+    image_url TEXT DEFAULT '',
+    image_alt TEXT DEFAULT '',
     sort_order INTEGER DEFAULT 0,
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -82,6 +89,8 @@ CREATE TABLE IF NOT EXISTS daily_missions (
     mapel TEXT NOT NULL DEFAULT '?',
     target TEXT NOT NULL DEFAULT '',
     question TEXT NOT NULL DEFAULT '',
+    image_url TEXT DEFAULT '',
+    image_alt TEXT DEFAULT '',
     xp INTEGER NOT NULL DEFAULT 150,
     week_label TEXT DEFAULT 'Pekan 1',
     sort_order INTEGER DEFAULT 0

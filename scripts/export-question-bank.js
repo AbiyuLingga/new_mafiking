@@ -52,7 +52,12 @@ const questionBank = {
       { name: 'id', fallback: 'NULL' },
       { name: 'title', fallback: "''" },
       { name: 'icon', fallback: "''" },
-      { name: 'sort_order', fallback: '0' }
+      { name: 'sort_order', fallback: '0' },
+      { name: 'mapel', fallback: "'Matematika'" },
+      { name: 'semester', fallback: '1' },
+      { name: 'description', fallback: "''" },
+      { name: 'est', fallback: "''" },
+      { name: 'topics', fallback: "'[]'" }
     ],
     orderBy: 'sort_order, id'
   }),
@@ -81,6 +86,8 @@ const questionBank = {
       { name: 'difficulty', fallback: "'Easy'" },
       { name: 'question_type', fallback: "'open'" },
       { name: 'mc_options', fallback: "'[]'" },
+      { name: 'image_url', fallback: "''" },
+      { name: 'image_alt', fallback: "''" },
       { name: 'sort_order', fallback: '0' },
       { name: 'created_at', fallback: 'NULL' }
     ],

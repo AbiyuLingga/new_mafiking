@@ -1281,6 +1281,7 @@ const ChoiceView = ({
                 <p className={`mafiking-question-title ${isAdmin && !questionText ? "is-admin-empty" : ""}`}>
                   {questionText ? React.createElement(Eq, { value: questionText }) : "Klik untuk isi soal / angka"}
                 </p>
+                <QuestionImage problem={problem} />
                 {isAdmin && (
                   <div className="admin-question-edit-hint">
                     <AdminIcon.Pencil /> Klik untuk edit soal
@@ -1834,6 +1835,7 @@ const CanvasView = ({
                 <div className="mafiking-canvas-equation">
                   <Eq value={problem.question_display || problem.question_text} />
                 </div>
+                <QuestionImage problem={problem} />
                 <p className="mafiking-canvas-instruction">
                   Tulis langkah penyelesaian langsung di paper. AI akan membaca canvas dan menjelaskan bagian yang salah.
                 </p>
@@ -1985,7 +1987,6 @@ function chooseQuestionSource(init, context) {
   if (!context) return { subtopic: withProblems[0], type: "subtopic" };
 
   const mapel = normalizeText(context.mapel);
-  if (mapel && mapel !== "matematika") return null;
 
   if (context.tryoutMode === "math") {
     const mathChapters = chapters.filter((chapter) => normalizeText(chapter.mapel || "Matematika") === "matematika");
@@ -2014,11 +2015,27 @@ function chooseQuestionSource(init, context) {
     .map(normalizeText)
     .flatMap((t) => [t, ...topicAliases(t)])
     .filter(Boolean);
-  const matched = withProblems.find((s) => {
+  const searchableSubtopics = mapel
+    ? chapters
+        .filter((chapter) => normalizeText(chapter.mapel || "Matematika") === mapel)
+        .flatMap((chapter) => chapter.subtopics || [])
+        .filter((subtopic) => Number(problemCounts[subtopic.id] || 0) > 0)
+    : withProblems;
+  const matched = searchableSubtopics.find((s) => {
     const haystack = normalizeText(`${s.title} ${s.slug} ${s.description || ""}`);
     return searchTerms.some((t) => haystack.includes(t) || t.includes(haystack));
   });
   return matched ? { subtopic: matched, type: "subtopic" } : null;
+}
+
+function QuestionImage({ problem }) {
+  const src = String(problem?.image_url || "").trim();
+  if (!src) return null;
+  return (
+    <figure className="mafiking-question-figure">
+      <img src={src} alt={problem?.image_alt || "Gambar soal"} loading="lazy" />
+    </figure>
+  );
 }
 
 function limitProblems(problems, limit) {

@@ -237,6 +237,20 @@ else
   echo "db/tryout-bank.json tidak ada, skip import Try Out bundled."
 fi
 
+if [ -f db/question-bank.json ]; then
+  echo "Mengimpor bank latihan bundled secara merge aman..."
+  run_app npm run import:questions -- --merge
+else
+  echo "db/question-bank.json tidak ada, skip import latihan bundled."
+fi
+
+if [ -f db/daily-missions.json ]; then
+  echo "Mengimpor misi harian bundled..."
+  run_app npm run import:missions
+else
+  echo "db/daily-missions.json tidak ada, skip import misi harian bundled."
+fi
+
 if [ -f /etc/letsencrypt/live/mafiking.com/fullchain.pem ] && [ -f /etc/letsencrypt/live/mafiking.com/privkey.pem ]; then
   $SUDO tee "/etc/nginx/sites-available/$APP_NAME" >/dev/null <<EOF
 server {
