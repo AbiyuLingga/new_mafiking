@@ -1,6 +1,30 @@
 // Practice route — choice (multiple choice) default, optional canvas mode.
 
 const CANVAS_DEMO_VIDEO_SRC = "/assets/saas_demo_video_popup.mp4";
+const CANVAS_INTRO_LAST_SHOWN_KEY = "mafiking:canvasIntroLastShownAt";
+const CANVAS_INTRO_COOLDOWN_MS = 15 * 60 * 1000;
+const CANVAS_INTRO_PLAYBACK_RATE = 1.25;
+
+function shouldShowCanvasIntro(context) {
+  if (context?.disableCanvasIntro) return false;
+  if (typeof window === "undefined" || !window.localStorage) return true;
+  const lastShownAt = Number(window.localStorage.getItem(CANVAS_INTRO_LAST_SHOWN_KEY) || 0);
+  return !lastShownAt || Date.now() - lastShownAt >= CANVAS_INTRO_COOLDOWN_MS;
+}
+
+function markCanvasIntroShown() {
+  if (typeof window === "undefined" || !window.localStorage) return;
+  window.localStorage.setItem(CANVAS_INTRO_LAST_SHOWN_KEY, String(Date.now()));
+}
+
+const PracticeAdminIcon = {
+  Pencil: ({ className = "w-4 h-4" }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5z" />
+    </svg>
+  ),
+};
 
 const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthenticated = false, hasPremiumAccess = false }) => {
   const boardRef = useRef(null);
@@ -18,7 +42,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   const [canvasProcess, setCanvasProcess] = useState(null);
   const [canvasProcessSlow, setCanvasProcessSlow] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
-  const [showCanvasIntro, setShowCanvasIntro] = useState(() => !context?.disableCanvasIntro);
+  const [showCanvasIntro, setShowCanvasIntro] = useState(() => shouldShowCanvasIntro(context));
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(() => {
     const limit = Number(context?.timeLimitSeconds || 0);
     return limit > 0 ? limit : null;
@@ -80,9 +104,13 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     const limit = Number(context?.timeLimitSeconds || 0);
     setTimeLeftSeconds(limit > 0 ? limit : null);
     timeExpiredNoticeRef.current = false;
-    setShowCanvasIntro(!context?.disableCanvasIntro);
+    setShowCanvasIntro(shouldShowCanvasIntro(context));
     setMode(context?.initialMode === "canvas" ? "canvas" : "choice");
   }, [context?.id, context?.timeLimitSeconds, context?.disableCanvasIntro, context?.initialMode]);
+
+  useEffect(() => {
+    if (showCanvasIntro) markCanvasIntroShown();
+  }, [showCanvasIntro]);
 
   useEffect(() => {
     if (!isTimedTryout) return undefined;
@@ -1290,7 +1318,7 @@ const ChoiceView = ({
                 <QuestionImage problem={problem} />
                 {isAdmin && (
                   <div className="admin-question-edit-hint">
-                    <AdminIcon.Pencil /> Klik untuk edit soal
+                    <PracticeAdminIcon.Pencil /> Klik untuk edit soal
                   </div>
                 )}
               </div>
@@ -1849,7 +1877,7 @@ const CanvasView = ({
               </div>
               {isAdmin && (
                 <div className="admin-question-edit-hint">
-                  <AdminIcon.Pencil /> Klik untuk edit soal
+                  <PracticeAdminIcon.Pencil /> Klik untuk edit soal
                 </div>
               )}
             </div>
@@ -1962,10 +1990,27 @@ function getCurrentChapter(context, session, availableChapters) {
 }
 
 async function loadQuestionSource(questionSource) {
+  if (questionSource.type === "public-easy") {
+    const subtopicSessions = await Promise.all(
+      questionSource.subtopics.map((s) => MafikingAPI.get(`/api/quiz/subtopics/${s.id}/full`).catch(() => null))
+    );
+    const problems = subtopicSessions
+      .filter(Boolean)
+      .flatMap((data) => data.problems.map((p) => ({ ...p, sourceSubtopic: data.subtopic })));
+    const easyProblems = filterProblemsByDifficulty(problems, "Easy", { strict: true });
+    return {
+      problems: limitProblems(easyProblems, questionSource.limit || 1),
+      subtopic: { id: "public-easy-canvas", title: questionSource.title || "Latihan Canvas Mudah" },
+    };
+  }
+
   if (questionSource.type === "subtopic") {
     const data = await MafikingAPI.get(`/api/quiz/subtopics/${questionSource.subtopic.id}/full`);
     const problems = limitProblems(
-      data.problems.map((p) => ({ ...p, sourceSubtopic: data.subtopic })),
+      filterProblemsByDifficulty(
+        data.problems.map((p) => ({ ...p, sourceSubtopic: data.subtopic })),
+        questionSource.difficulty
+      ),
       questionSource.limit
     );
     return {
@@ -1980,7 +2025,7 @@ async function loadQuestionSource(questionSource) {
     data.problems.map((p) => ({ ...p, sourceSubtopic: data.subtopic }))
   );
   return {
-    problems: limitProblems(problems, questionSource.limit),
+    problems: limitProblems(filterProblemsByDifficulty(problems, questionSource.difficulty), questionSource.limit),
     subtopic: { id: questionSource.chapter.id, title: questionSource.title },
   };
 }
@@ -1994,6 +2039,23 @@ function chooseQuestionSource(init, context) {
   if (!context) return { subtopic: withProblems[0], type: "subtopic" };
 
   const mapel = normalizeText(context.mapel);
+  const limit = Number(context.problemLimit || 0);
+  const difficulty = context.difficulty || "";
+  if (context.publicEasyCanvas) {
+    const subtopics = mapel
+      ? chapters
+          .filter((chapter) => normalizeText(chapter.mapel || "Matematika") === mapel)
+          .flatMap((chapter) => chapter.subtopics || [])
+          .filter((subtopic) => Number(problemCounts[subtopic.id] || 0) > 0)
+      : withProblems;
+    if (!subtopics.length) return null;
+    return {
+      limit: limit || 1,
+      subtopics,
+      title: context.title || "Latihan Canvas Mudah",
+      type: "public-easy",
+    };
+  }
 
   if (context.tryoutMode === "math") {
     const mathChapters = chapters.filter((chapter) => normalizeText(chapter.mapel || "Matematika") === "matematika");
@@ -2015,7 +2077,7 @@ function chooseQuestionSource(init, context) {
     const integralChapter = chapters.find((c) => normalizeText(c.title).includes("integral"));
     const subtopics = (integralChapter?.subtopics || []).filter((s) => Number(problemCounts[s.id] || 0) > 0);
     if (!integralChapter || !subtopics.length) return null;
-    return { chapter: integralChapter, subtopics, title: context.title, type: "chapter" };
+    return { chapter: integralChapter, difficulty, limit, subtopics, title: context.title, type: "chapter" };
   }
 
   const searchTerms = [context.title, ...(context.topics || [])]
@@ -2032,7 +2094,9 @@ function chooseQuestionSource(init, context) {
     const haystack = normalizeText(`${s.title} ${s.slug} ${s.description || ""}`);
     return searchTerms.some((t) => haystack.includes(t) || t.includes(haystack));
   });
-  return matched ? { subtopic: matched, type: "subtopic" } : null;
+  if (matched) return { difficulty, limit, subtopic: matched, type: "subtopic" };
+  if (mapel && searchableSubtopics.length) return { difficulty, limit, subtopic: searchableSubtopics[0], type: "subtopic" };
+  return null;
 }
 
 function QuestionImage({ problem }) {
@@ -2049,6 +2113,14 @@ function limitProblems(problems, limit) {
   const safeLimit = Number(limit || 0);
   if (!safeLimit || safeLimit < 1) return problems;
   return problems.slice(0, safeLimit);
+}
+
+function filterProblemsByDifficulty(problems, difficulty, options = {}) {
+  const wanted = normalizeText(difficulty);
+  if (!wanted) return problems;
+  const filtered = problems.filter((problem) => normalizeText(problem.difficulty || "Easy") === wanted);
+  if (options.strict) return filtered;
+  return filtered.length ? filtered : problems;
 }
 
 function normalizeText(value) {
@@ -2889,6 +2961,18 @@ const ResultModal = ({ attempt, onClose }) => {
 const CanvasIntroModal = ({ onDismiss, onOpenCanvas }) => {
   const videoRef = React.useRef(null);
   const [soundEnabled, setSoundEnabled] = React.useState(false);
+  const [canDismiss, setCanDismiss] = React.useState(false);
+
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setCanDismiss(true), 3000);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  React.useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.playbackRate = CANVAS_INTRO_PLAYBACK_RATE;
+  }, []);
 
   const toggleSound = async () => {
     const video = videoRef.current;
@@ -2896,6 +2980,7 @@ const CanvasIntroModal = ({ onDismiss, onOpenCanvas }) => {
     const nextEnabled = !soundEnabled;
     video.muted = !nextEnabled;
     video.volume = nextEnabled ? 1 : video.volume;
+    video.playbackRate = CANVAS_INTRO_PLAYBACK_RATE;
     try {
       await video.play();
       setSoundEnabled(nextEnabled);
@@ -2913,9 +2998,11 @@ const CanvasIntroModal = ({ onDismiss, onOpenCanvas }) => {
         className="canvas-intro-dialog"
         role="dialog"
       >
-        <button className="canvas-intro-close" onClick={onDismiss} aria-label="Tutup popup canvas" type="button">
-          <Icon.X className="w-4 h-4" />
-        </button>
+        {canDismiss ? (
+          <button className="canvas-intro-close" onClick={onDismiss} aria-label="Tutup popup canvas" type="button">
+            <Icon.X className="w-4 h-4" />
+          </button>
+        ) : null}
 
         <div className="canvas-demo-video" aria-label="Preview demo mode canvas">
           <video

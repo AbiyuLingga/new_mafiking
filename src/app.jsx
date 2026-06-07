@@ -1,15 +1,35 @@
 // MAFIKING — App router + Tweaks integration
 
 class ScreenErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { error: null }; }
+  constructor(props) {
+    super(props);
+    this.state = { error: null, retryCount: 0 };
+    this.retryTimer = null;
+  }
   static getDerivedStateFromError(error) { return { error }; }
-  componentDidCatch(error) { console.error('[ScreenErrorBoundary]', error); }
+  componentDidCatch(error, info) {
+    console.error('[ScreenErrorBoundary]', error);
+    if (window.reportMafikingClientError) {
+      window.reportMafikingClientError('react.error-boundary', error, {
+        componentStack: info && info.componentStack ? info.componentStack : '',
+      });
+    }
+    if (!this.retryTimer && this.state.retryCount < 1) {
+      this.retryTimer = window.setTimeout(() => {
+        this.retryTimer = null;
+        this.setState((state) => ({ error: null, retryCount: state.retryCount + 1 }));
+      }, 350);
+    }
+  }
+  componentWillUnmount() {
+    if (this.retryTimer) window.clearTimeout(this.retryTimer);
+  }
   render() {
     if (this.state.error) return (
-      <div style={{ padding: 32, fontFamily: 'monospace', fontSize: 13, background: '#fff8f8', border: '1px solid #fca5a5', borderRadius: 12, margin: 24, color: '#dc2626' }}>
-        <strong>Render error:</strong> {this.state.error.message}
+      <div style={{ padding: 32, fontFamily: 'monospace', fontSize: 13, background: '#ffffff', border: '1px solid rgba(11, 19, 38, 0.12)', borderRadius: 12, margin: 24, color: '#0b1326' }}>
+        <strong>Memuat ulang tampilan:</strong> {this.state.error.message}
         <br /><br />
-        <button onClick={() => this.setState({ error: null })} style={{ padding: '6px 16px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace' }}>Coba lagi</button>
+        <button onClick={() => this.setState((state) => ({ error: null, retryCount: state.retryCount + 1 }))} style={{ padding: '6px 16px', background: '#0b1326', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace' }}>Coba lagi</button>
       </div>
     );
     return this.props.children;
@@ -48,6 +68,11 @@ const AdminChunkFallback = ({ status }) => (
 
 const AUTH_BACK_ROUTE_STORAGE_KEY = "mafiking:last-non-auth-route";
 const AUTH_BACK_PATH_STORAGE_KEY = "mafiking:last-non-auth-path";
+const CLERK_OAUTH_CALLBACK_PATH = "/sso-callback";
+
+function isClerkOAuthCallbackPath() {
+  return normalizeAppPath(window.location.pathname) === CLERK_OAUTH_CALLBACK_PATH;
+}
 
 function readStoredAuthBackRoute() {
   try {
@@ -90,9 +115,11 @@ const App = () => {
   const [authBackRoute, setAuthBackRoute] = React.useState(null);
   const [authState, setAuthState] = React.useState(() => initialLocationRef.current.authState || null);
   const [pendingClerkUser, setPendingClerkUser] = React.useState(null);
+  const [authReady, setAuthReady] = React.useState(false);
   const [authCallbackLoading, setAuthCallbackLoading] = React.useState(() => {
-    return Boolean(window.MafikingClerk && typeof window.MafikingClerk.isRedirectCallback === "function" && window.MafikingClerk.isRedirectCallback());
+    return isClerkOAuthCallbackPath();
   });
+  const [clerkCallbackReadyTick, setClerkCallbackReadyTick] = React.useState(0);
   const [belajarSection, setBelajarSection] = React.useState(null);
   const [activePackages, setActivePackages] = React.useState([]);
   const [confirmAction, setConfirmAction] = React.useState(null);
@@ -127,7 +154,8 @@ const App = () => {
         setCurrentUser(null);
         setActivePackages([]);
         if (hasOrder) setRoute("payment");
-      });
+      })
+      .finally(() => setAuthReady(true));
   }, [refreshCurrentUser]);
 
   const navigate = React.useCallback((next) => {
@@ -212,6 +240,8 @@ const App = () => {
   }, [route, practiceContext, tryoutContext, paymentContext, belajarSection, authMode, authBackRoute]);
 
   React.useEffect(() => {
+    if (isClerkOAuthCallbackPath()) return undefined;
+
     const handlePopState = (event) => {
       if (event.state) {
         const state = event.state;
@@ -301,6 +331,7 @@ const App = () => {
   }
 
   const handleAuthSuccess = React.useCallback((user, redirect) => {
+    setAuthReady(true);
     setCurrentUser(user);
     setPendingClerkUser(null);
     MafikingAPI.get("/api/payment/active-packages")
@@ -318,24 +349,73 @@ const App = () => {
   React.useEffect(() => { window.__mafikingNavigate = navigate; }, [navigate]);
 
   React.useEffect(() => {
-    if (!window.MafikingClerk || typeof window.MafikingClerk.completeRedirectAuth !== "function") return undefined;
-    if (typeof window.MafikingClerk.isRedirectCallback !== "function" || !window.MafikingClerk.isRedirectCallback()) return undefined;
+    if (!isClerkOAuthCallbackPath()) {
+      if (authCallbackLoading) setAuthCallbackLoading(false);
+      return undefined;
+    }
+    if (!window.MafikingClerk || typeof window.MafikingClerk.completeRedirectAuth !== "function") {
+      setAuthCallbackLoading(true);
+      const retry = () => setClerkCallbackReadyTick((tick) => tick + 1);
+      window.addEventListener("clerk-ready", retry);
+      const retryTimer = window.setTimeout(retry, 250);
+      const hardStopTimer = window.setTimeout(() => {
+        if (!isClerkOAuthCallbackPath()) {
+          setAuthCallbackLoading(false);
+          return;
+        }
+        console.warn("[clerk-callback] bridge unavailable, leaving callback page");
+        window.history.replaceState({ route: "lobby" }, document.title, "/");
+        setAuthCallbackLoading(false);
+        refreshCurrentUser()
+          .then((user) => handleAuthSuccess(user, null))
+          .catch(() => navigate({ route: "lobby", publicLanding: true }));
+      }, 9000);
+      return () => {
+        window.removeEventListener("clerk-ready", retry);
+        window.clearTimeout(retryTimer);
+        window.clearTimeout(hardStopTimer);
+      };
+    }
+    if (typeof window.MafikingClerk.isRedirectCallback === "function" && !window.MafikingClerk.isRedirectCallback()) {
+      setAuthCallbackLoading(false);
+      return undefined;
+    }
 
     let cancelled = false;
     let completed = false;
     setAuthCallbackLoading(true);
+    const clearCallbackUrl = () => {
+      if (isClerkOAuthCallbackPath()) {
+        window.history.replaceState({ route: "lobby" }, document.title, "/");
+      }
+    };
+    const finishAuthSuccess = (user, redirect) => {
+      if (cancelled || completed || !user) return;
+      completed = true;
+      clearCallbackUrl();
+      setAuthCallbackLoading(false);
+      handleAuthSuccess(user, redirect);
+    };
     const leaveCallback = () => {
       if (cancelled || completed) return;
       completed = true;
-      window.location.replace("/");
+      clearCallbackUrl();
+      setAuthCallbackLoading(false);
+      refreshCurrentUser()
+        .then((user) => {
+          if (cancelled) return;
+          handleAuthSuccess(user, null);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          navigate({ route: "lobby", publicLanding: true });
+        });
     };
     const fallbackTimer = window.setTimeout(() => {
       if (cancelled || completed) return;
       window.MafikingClerk.syncSession()
         .then((user) => {
-          if (cancelled || completed) return;
-          completed = true;
-          handleAuthSuccess(user, null);
+          finishAuthSuccess(user, null);
         })
         .catch((err) => {
           console.error("[clerk-callback:fallback]", err);
@@ -354,9 +434,8 @@ const App = () => {
 
     window.MafikingClerk.completeRedirectAuth()
       .then((result) => {
-        if (cancelled || completed || !result || !result.user) return;
-        completed = true;
-        handleAuthSuccess(result.user, result.redirect);
+        if (!result || !result.user) return;
+        finishAuthSuccess(result.user, result.redirect);
       })
       .catch((err) => {
         console.error("[clerk-callback]", err);
@@ -375,7 +454,7 @@ const App = () => {
       window.clearTimeout(fallbackTimer);
       window.clearTimeout(hardStopTimer);
     };
-  }, [handleAuthSuccess, navigate]);
+  }, [authCallbackLoading, clerkCallbackReadyTick, handleAuthSuccess, navigate, refreshCurrentUser]);
 
   React.useEffect(() => {
     if (!isAdminAccount) {
@@ -494,7 +573,7 @@ const App = () => {
           className={route === "practice" || route === "lobby" || isTryoutFullscreenRoute ? "" : "app-route-transition"}
         >
           {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={canEditInlineAsAdmin} authMode={authMode} authRedirect={authRedirect} authBackRoute={authBackRoute} authState={authState} onAuthSuccess={handleAuthSuccess} pendingClerkUser={pendingClerkUser} />}
-          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={canEditInlineAsAdmin} isLoggedIn={isLoggedIn} currentUser={currentUser} hasPremiumAccess={hasPremiumAccess} initialSection={belajarSection} onSectionChange={setBelajarSection} />}
+          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={canEditInlineAsAdmin} isLoggedIn={isLoggedIn} currentUser={currentUser} authReady={authReady} hasPremiumAccess={hasPremiumAccess} initialSection={belajarSection} onSectionChange={setBelajarSection} />}
           {route === "misi" && (
             <ScreenErrorBoundary>
               {hasPremiumAccess
@@ -514,7 +593,11 @@ const App = () => {
             : <LoginRedirect setRoute={navigate} />
           )}
           {route === "payment" && <Payment setRoute={navigate} currentUser={currentUser} context={paymentContext} />}
-          {route === "practice" && <Practice setRoute={navigate} context={practiceContext} isAdmin={canEditInlineAsAdmin} isLoggedIn={isLoggedIn} isAuthenticated={Boolean(currentUser)} hasPremiumAccess={hasPremiumAccess} />}
+          {route === "practice" && (
+            <ScreenErrorBoundary>
+              <Practice setRoute={navigate} context={practiceContext} isAdmin={canEditInlineAsAdmin} isLoggedIn={isLoggedIn} isAuthenticated={Boolean(currentUser)} hasPremiumAccess={hasPremiumAccess} />
+            </ScreenErrorBoundary>
+          )}
         </div>
       </main>
 
@@ -874,4 +957,8 @@ function routeLabel(r) {
   })[r] || r;
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <ScreenErrorBoundary>
+    <App />
+  </ScreenErrorBoundary>
+);

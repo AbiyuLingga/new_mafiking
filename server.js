@@ -39,6 +39,7 @@ const webhookRoutes = require('./routes/webhooks');
 const { isLocalAdminMode } = require('./middleware/admin');
 const {
   createPerformanceStore,
+  normalizeClientErrorPayload,
   normalizeVitalsPayload,
   setPublicApiCache,
   shouldLogRequestTiming,
@@ -48,6 +49,12 @@ const { helmetCspOptions } = require('./lib/csp');
 const { createCsrfProtection } = require('./lib/csrf-protection');
 const { SQLiteSessionStore } = require('./lib/sqlite-session-store');
 const { createCanaryMiddleware } = require('./lib/canary');
+const { startExpirySweeper } = require('./lib/payment-expiry-sweeper');
+const { startMutasikuPoller } = require('./lib/reconcilers/mutasiku');
+const {
+  areTryoutPackagesEnabled,
+  ensureDefaultAppSettings,
+} = require('./lib/app-settings');
 const auditLog = require('./lib/audit-log');
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
@@ -81,7 +88,7 @@ for (const migration of [
   "ALTER TABLE problem_steps ADD COLUMN hintPlain TEXT DEFAULT ''",
   "ALTER TABLE problem_steps ADD COLUMN hintLatex TEXT DEFAULT ''",
   "ALTER TABLE problems ADD COLUMN created_by INTEGER REFERENCES users(id) ON DELETE SET NULL",
-  "ALTER TABLE problems ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP",
+  "ALTER TABLE problems ADD COLUMN created_at DATETIME",
   "ALTER TABLE problems ADD COLUMN question_text TEXT DEFAULT ''",
   "ALTER TABLE users ADD COLUMN fakultas TEXT DEFAULT ''",
   "ALTER TABLE users ADD COLUMN phone_number TEXT DEFAULT ''",
@@ -105,6 +112,7 @@ for (const migration of [
   "ALTER TABLE chapters ADD COLUMN description TEXT DEFAULT ''",
   "ALTER TABLE chapters ADD COLUMN est TEXT DEFAULT ''",
   "ALTER TABLE chapters ADD COLUMN topics TEXT DEFAULT '[]'",
+  "ALTER TABLE chapters ADD COLUMN is_hidden INTEGER DEFAULT 0",
   "ALTER TABLE daily_missions ADD COLUMN release_date TEXT DEFAULT ''",
   "ALTER TABLE daily_missions ADD COLUMN image_url TEXT DEFAULT ''",
   "ALTER TABLE daily_missions ADD COLUMN image_alt TEXT DEFAULT ''",
@@ -117,11 +125,51 @@ for (const migration of [
   "ALTER TABLE ai_token_usage ADD COLUMN tokens_used INTEGER DEFAULT 0",
   "ALTER TABLE ai_token_usage ADD COLUMN created_at DATETIME",
   "ALTER TABLE tryout_packages ADD COLUMN tryout_id TEXT DEFAULT ''",
+  "ALTER TABLE payments ADD COLUMN qris_base_amount INTEGER",
+  "ALTER TABLE payments ADD COLUMN qris_suffix INTEGER",
+  "ALTER TABLE payments ADD COLUMN qris_full_amount INTEGER",
+  "ALTER TABLE payments ADD COLUMN qris_dynamic_string TEXT",
+  "ALTER TABLE payments ADD COLUMN qris_image_data_url TEXT",
+  "ALTER TABLE payments ADD COLUMN expires_at DATETIME",
+  "ALTER TABLE payments ADD COLUMN paid_at DATETIME",
+  "ALTER TABLE payments ADD COLUMN reconciled_via TEXT",
+  "ALTER TABLE payments ADD COLUMN reconciled_by INTEGER REFERENCES users(id)",
+  "ALTER TABLE payments ADD COLUMN webhook_secret_hash TEXT",
   "CREATE INDEX IF NOT EXISTS idx_tryout_packages_tryout_id ON tryout_packages (tryout_id)",
+  `CREATE TABLE IF NOT EXISTS qris_suffix_locks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    base_amount INTEGER NOT NULL,
+    suffix INTEGER NOT NULL,
+    merchant_order_id TEXT UNIQUE NOT NULL,
+    locked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    released_at DATETIME
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_qris_suffix_locks_active_unique
+    ON qris_suffix_locks(base_amount, suffix)
+    WHERE released_at IS NULL`,
+  `CREATE INDEX IF NOT EXISTS idx_qris_suffix_locks_order
+    ON qris_suffix_locks(merchant_order_id)`,
+  `CREATE TABLE IF NOT EXISTS payment_reconciliation_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    merchant_order_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    actor_id INTEGER REFERENCES users(id),
+    source TEXT NOT NULL,
+    details TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_payment_reconciliation_order
+    ON payment_reconciliation_log(merchant_order_id, created_at DESC)`,
   "ALTER TABLE tryout_questions ADD COLUMN image_url TEXT DEFAULT ''",
   "ALTER TABLE tryout_questions ADD COLUMN image_alt TEXT DEFAULT ''",
   "ALTER TABLE tryout_attempts ADD COLUMN answers_json TEXT DEFAULT '{}'",
   "ALTER TABLE tryout_attempts ADD COLUMN review_snapshot_json TEXT DEFAULT '{}'",
+  `CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT '',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
   `CREATE TABLE IF NOT EXISTS landing_media (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     slot TEXT UNIQUE NOT NULL,
@@ -178,7 +226,26 @@ for (const migration of [
     mistake_result TEXT
   )`,
   `CREATE INDEX IF NOT EXISTS idx_tryout_question_steps_question
-    ON tryout_question_steps (tryout_question_id, step_order, id)`
+    ON tryout_question_steps (tryout_question_id, step_order, id)`,
+  `CREATE TABLE IF NOT EXISTS tryout_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tryout_id TEXT NOT NULL,
+    tryout_title TEXT NOT NULL,
+    session_token TEXT NOT NULL,
+    session_seed TEXT NOT NULL DEFAULT '',
+    problem_ids_json TEXT NOT NULL DEFAULT '[]',
+    answers_json TEXT NOT NULL DEFAULT '{}',
+    choice_map_json TEXT NOT NULL DEFAULT '{}',
+    started_at DATETIME NOT NULL,
+    expires_at DATETIME NOT NULL,
+    time_limit_seconds INTEGER NOT NULL DEFAULT 0,
+    submitted_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_tryout_sessions_user_tryout
+    ON tryout_sessions (user_id, tryout_id, submitted_at, started_at DESC)`
 ]) {
   try {
     db.exec(migration);
@@ -345,11 +412,14 @@ if (db.prepare('SELECT COUNT(*) as n FROM tryout_packages').get().n === 0) {
 
 ensureTryoutPackageIds(db);
 seedInitialTryoutQuestions(db);
+ensureDefaultAppSettings(db);
 
 ensureFixedAdminUser(db);
 
 app.locals.db = db;
 app.locals.performanceStore = createPerformanceStore();
+startExpirySweeper(db, Number(process.env.PAYMENT_EXPIRY_SWEEP_INTERVAL_MS) || 60000);
+startMutasikuPoller(db);
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
@@ -445,6 +515,25 @@ app.get('/api/config/clerk', (_req, res) => {
 app.get('/api/csrf-token', csrfTokenRoute);
 app.use(csrfProtection);
 
+function privateApiNoStore(req, res, next) {
+  if (!req.path.startsWith('/api/')) return next();
+
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.vary('Authorization');
+  res.vary('Cookie');
+
+  // Auth/session endpoints must return fresh JSON after OAuth redirects. If a
+  // browser has an older ETag, Express can otherwise answer 304 with no body.
+  delete req.headers['if-none-match'];
+  delete req.headers['if-modified-since'];
+
+  return next();
+}
+
+app.use(privateApiNoStore);
+
 // CSP violation report endpoint. Browsers POST JSON-encoded reports here when
 // a Content-Security-Policy directive is violated. Always returns 204 to keep
 // the channel quiet for the browser.
@@ -476,6 +565,20 @@ app.post('/api/performance/vitals', performanceLimiter, (req, res) => {
       userId: req.session?.userId || null,
     });
   }
+  res.status(204).end();
+});
+
+app.post('/api/performance/client-error', performanceLimiter, (req, res) => {
+  const normalized = normalizeClientErrorPayload({
+    ...(req.body || {}),
+    userAgent: req.get('user-agent') || req.body?.userAgent || '',
+  });
+  const payload = {
+    ...normalized,
+    userId: req.session?.userId || req.userId || null,
+  };
+  req.app.locals.performanceStore?.recordClientError(payload);
+  console.warn('[client-error]', normalized.source, normalized.message, `route=${normalized.route}`, `user=${payload.userId || '-'}`);
   res.status(204).end();
 });
 
@@ -560,10 +663,13 @@ app.use((req, res, next) => {
     req.path === '/api/health' ||
     req.path === '/api/config/clerk' ||
     req.path === '/api/payment/callback' ||
+    req.path === '/api/payment/reconcile/webhook' ||
     req.path === '/api/landing-media' ||
     req.path === '/api/performance/vitals' ||
+    req.path === '/api/performance/client-error' ||
     req.path === '/api/payment/config' ||
     req.path === '/api/quiz/init' ||
+    req.path === '/api/tryout-packages/access' ||
     req.path === '/api/tryout-packages' ||
     req.path === '/api/webhooks/clerk' ||
     req.path === '/api/auth/login' ||
@@ -634,6 +740,10 @@ function hasMissionManualAccess(database, userId) {
   }
 }
 
+function canReadLockedTryoutPackages(req) {
+  return Boolean((req.session && req.session.role === 'admin') || isLocalAdminMode(req));
+}
+
 function serializeMissionForViewer(row, { canSeeDrafts = false, hasManualAccess = false } = {}) {
   const released = isReleasedMission(row);
   const effectiveStatus = effectiveMissionStatus(row, released);
@@ -683,8 +793,23 @@ app.get('/api/missions', (req, res) => {
 
 app.get('/api/tryout-packages', (req, res) => {
   try {
+    if (!areTryoutPackagesEnabled(db) && !canReadLockedTryoutPackages(req)) {
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.json([]);
+      return;
+    }
     setPublicApiCache(res, 30, 120);
     res.json(db.prepare('SELECT * FROM tryout_packages ORDER BY sort_order, id').all());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/tryout-packages/access', (req, res) => {
+  try {
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({
+      enabled: areTryoutPackagesEnabled(db) || canReadLockedTryoutPackages(req),
+      locked: !areTryoutPackagesEnabled(db) && !canReadLockedTryoutPackages(req),
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -707,6 +832,7 @@ app.get('/api/landing-media', (_req, res) => {
 app.use('/api/progress', require('./routes/progress'));
 app.use('/api/admin/import', require('./routes/admin-import'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/admin/payments', require('./routes/admin-payments'));
 app.use('/api/payment', require('./routes/payment'));
 app.use('/api/correction', require('./routes/correction'));
 
@@ -771,9 +897,31 @@ const devSourceCache = {
 
 const devSourceStatic = express.static(path.join(__dirname, 'src'), devSourceCache);
 
+function findLatestDistAsset(prefix, extension) {
+  try {
+    const assetsDir = path.join(distDir, 'assets');
+    const files = fs.readdirSync(assetsDir)
+      .filter((file) => file.startsWith(`${prefix}-`) && file.endsWith(extension))
+      .map((file) => ({
+        file,
+        mtimeMs: fs.statSync(path.join(assetsDir, file)).mtimeMs,
+      }))
+      .sort((a, b) => b.mtimeMs - a.mtimeMs);
+    return files[0] ? path.join(assetsDir, files[0].file) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 app.use('/assets', setStaticCacheHint);
 app.use('/assets', express.static(path.join(distDir, 'assets'), distAssetCache));
 app.use('/assets', express.static(path.join(__dirname, 'assets'), staticCache));
+app.get(/^\/assets\/(index|generated-admin|vendor-react)-[^/]+\.(js|css)$/, (req, res, next) => {
+  const fallbackAsset = findLatestDistAsset(req.params[0], `.${req.params[1]}`);
+  if (!fallbackAsset) return next();
+  res.setHeader('Cache-Control', 'no-cache');
+  return res.sendFile(fallbackAsset);
+});
 app.use('/video', setStaticCacheHint);
 app.use('/video', express.static(path.join(__dirname, 'assets'), staticCache));
 app.use('/src', (req, res, next) => {
@@ -799,7 +947,7 @@ app.get(['/syarat-ketentuan.html', '/terms.html', '/tnc.html'], (_req, res) => {
 
 function sendAppHtml(_req, res) {
   if (hasBuiltClient()) {
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     return res.sendFile(distIndexPath);
   }
 

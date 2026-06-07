@@ -188,17 +188,21 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
   }
 
   function openCanvasWeaknessPractice() {
+    openEasyCanvasPractice();
+  }
+
+  function openEasyCanvasPractice() {
     setRoute({
       route: "practice",
       practice: {
-        id: 1,
-        title: "Teknik Integrasi",
+        title: "Latihan Canvas Mudah",
         mapel: "Matematika",
         semester: 1,
-        topics: ["Substitusi U", "Integral parsial", "Trigonometri"],
         problemLimit: 1,
+        difficulty: "Easy",
         initialMode: "canvas",
         disableCanvasIntro: true,
+        publicEasyCanvas: true,
       },
     });
   }
@@ -422,7 +426,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
 
                 <div className="relative z-10 flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] uppercase tracking-widest font-semibold text-white/50">AI Tutor Assessment</span>
+                    <span className="text-[10px] uppercase tracking-widest font-semibold text-white/50">AI Analysis</span>
                     {summaryLoading ? (
                       <span className="flex items-center gap-1.5 text-[10px] font-semibold text-amber-300">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
@@ -491,7 +495,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                       </span>
                     )) : (
                       <p className="text-xs text-ink/45">
-                        Selesaikan pengerjaan dengan benar untuk mendeteksi kekuatan konsepmu.
+                        -
                       </p>
                     )}
                   </div>
@@ -512,7 +516,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                       </span>
                     )) : (
                       <p className="text-xs text-ink/45">
-                        Hebat! Belum ada kelemahan konsep terdeteksi. Pertahankan!
+                        -
                       </p>
                     )}
                   </div>
@@ -530,8 +534,6 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                     </svg>
                   )}
                 </div>
-                <p className="text-xs text-ink/50 mb-5">Rekomendasi soal berdasarkan kelemahan kamu</p>
-
                 {summaryLoading ? (
                   <div className="grid gap-3">
                     {[0, 1, 2].map((i) => (
@@ -608,9 +610,9 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                   </div>
                 ) : (
                   <div className="rounded-xl border border-dashed border-ink/15 p-6 text-center">
-                    <p className="text-sm text-ink/50">Belum ada rekomendasi soal yang bisa ditampilkan.</p>
+                    <p className="text-sm text-ink/50">Belum pernah mengerjakan di Canvas</p>
                     <button
-                      onClick={() => setRoute("belajar")}
+                      onClick={openEasyCanvasPractice}
                       className="btn-ink mt-3 !py-2 !px-4 text-xs"
                     >
                       Mulai Latihan Baru
@@ -672,7 +674,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                   </div>
                 ) : (
                   <div className="p-8 text-center">
-                    <p className="text-sm text-ink/50">Belum ada riwayat pengerjaan. Mari kerjakan soal di canvas!</p>
+                    <p className="text-sm text-ink/50">Belum pernah mengerjakan di Canvas</p>
                   </div>
                 )}
               </div>

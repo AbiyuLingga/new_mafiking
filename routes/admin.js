@@ -3,6 +3,11 @@ const bcrypt = require('bcrypt');
 const xss = require('xss');
 const { isAuthenticated } = require('../middleware/auth');
 const { isAdmin } = require('../middleware/admin');
+const {
+    areTryoutPackagesEnabled,
+    normalizeSettingBoolean,
+    setTryoutPackagesEnabled,
+} = require('../lib/app-settings');
 const router = express.Router();
 
 router.use(isAuthenticated, isAdmin);
@@ -11,6 +16,10 @@ const ACCESS_TYPES = new Set(['tryout', 'mission', 'subscription', 'package', 'm
 const USER_ROLES = new Set(['admin', 'user']);
 const DEFAULT_ADMIN_RESET_PASSWORD = '123456';
 const SAFE_MEDIA_PATH_RE = /^\/(?:assets|tryout-media)\/[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$/;
+
+function toDbBoolean(value) {
+    return value === true || value === 1 || value === '1' || value === 'true' || value === 'on' ? 1 : 0;
+}
 
 function parsePositiveId(value) {
     const id = Number(value);
@@ -98,11 +107,11 @@ router.get('/chapters', (req, res) => {
 router.post('/chapters', (req, res) => {
     try {
         const db = req.app.locals.db;
-        const { title, sort_order, mapel, semester, description, est, topics } = req.body;
+        const { title, sort_order, mapel, semester, description, est, topics, is_hidden } = req.body;
         const topicsJson = typeof topics === 'string' ? topics : JSON.stringify(Array.isArray(topics) ? topics : []);
         const result = db.prepare(
-            'INSERT INTO chapters (title, icon, sort_order, mapel, semester, description, est, topics) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-        ).run(xss(title), '', sort_order || 0, xss(mapel || 'Matematika'), Number(semester) || 1, xss(description || ''), xss(est || ''), topicsJson);
+            'INSERT INTO chapters (title, icon, sort_order, mapel, semester, description, est, topics, is_hidden) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(xss(title), '', sort_order || 0, xss(mapel || 'Matematika'), Number(semester) || 1, xss(description || ''), xss(est || ''), topicsJson, toDbBoolean(is_hidden));
         res.json({ ok: true, id: result.lastInsertRowid });
     } catch (e) { console.error('POST /chapters error:', e); res.status(500).json({ error: e.message }); }
 });
@@ -110,11 +119,11 @@ router.post('/chapters', (req, res) => {
 router.put('/chapters/:id', (req, res) => {
     try {
         const db = req.app.locals.db;
-        const { title, sort_order, mapel, semester, description, est, topics } = req.body;
+        const { title, sort_order, mapel, semester, description, est, topics, is_hidden } = req.body;
         const topicsJson = typeof topics === 'string' ? topics : JSON.stringify(Array.isArray(topics) ? topics : []);
         db.prepare(
-            'UPDATE chapters SET title = ?, icon = ?, sort_order = ?, mapel = ?, semester = ?, description = ?, est = ?, topics = ? WHERE id = ?'
-        ).run(xss(title), '', sort_order || 0, xss(mapel || 'Matematika'), Number(semester) || 1, xss(description || ''), xss(est || ''), topicsJson, req.params.id);
+            'UPDATE chapters SET title = ?, icon = ?, sort_order = ?, mapel = ?, semester = ?, description = ?, est = ?, topics = ?, is_hidden = ? WHERE id = ?'
+        ).run(xss(title), '', sort_order || 0, xss(mapel || 'Matematika'), Number(semester) || 1, xss(description || ''), xss(est || ''), topicsJson, toDbBoolean(is_hidden), req.params.id);
         res.json({ ok: true });
     } catch (e) { console.error('PUT /chapters error:', e); res.status(500).json({ error: e.message }); }
 });
@@ -302,6 +311,23 @@ router.delete('/missions/:id', (req, res) => {
     try {
         req.app.locals.db.prepare('DELETE FROM daily_missions WHERE id=?').run(req.params.id);
         res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== SETTINGS =====
+router.get('/settings/tryout-packages-access', (req, res) => {
+    try {
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.json({ enabled: areTryoutPackagesEnabled(req.app.locals.db) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/settings/tryout-packages-access', (req, res) => {
+    try {
+        const enabled = normalizeSettingBoolean(req.body && req.body.enabled, false);
+        setTryoutPackagesEnabled(req.app.locals.db, enabled);
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.json({ ok: true, enabled });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

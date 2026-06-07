@@ -8,6 +8,7 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context })
   const [tab, setTab] = useState("beli");
   const [packages, setPackages] = useState([]);
   const [activePackages, setActivePackages] = useState([]);
+  const [packagesLocked, setPackagesLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editPkg, setEditPkg] = useState(null);
   const [inlineEdit, setInlineEdit] = useState(null);
@@ -67,12 +68,24 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context })
   async function loadPackages() {
     setLoading(true);
     try {
+      const access = await MafikingAPI.get('/api/tryout-packages/access').catch(() => ({ enabled: true, locked: false }));
+      const lockedForUser = !canEditPackages && access && access.locked;
+      setPackagesLocked(Boolean(lockedForUser));
+      if (lockedForUser) {
+        setPackages([]);
+        setActivePackages([]);
+        setLoading(false);
+        return;
+      }
+
       const data = await MafikingAPI.get('/api/tryout-packages');
       setPackages(data.map(p => ({ ...p, features: parseFeatures(p.features) })));
       
       const activeData = await MafikingAPI.get('/api/payment/active-packages');
       setActivePackages(activeData || []);
-    } catch (_) {}
+    } catch (_) {
+      setPackagesLocked(false);
+    }
     setLoading(false);
   }
 
@@ -207,21 +220,36 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context })
                 </button>
               )}
             </div>
-            <div className="lg:col-span-5 flex lg:justify-end">
-              <SlidingSegmented
-                value={tab}
-                onChange={setTab}
-                options={[
-                  { id: "beli", label: "Semua Paket" },
-                  { id: "milikku", label: "Paket Saya" },
-                ]}
-              />
-            </div>
+            {!packagesLocked && (
+              <div className="lg:col-span-5 flex lg:justify-end">
+                <SlidingSegmented
+                  value={tab}
+                  onChange={setTab}
+                  options={[
+                    { id: "beli", label: "Semua Paket" },
+                    { id: "milikku", label: "Paket Saya" },
+                  ]}
+                />
+              </div>
+            )}
           </div>
         </div>
       </section>
 
-      {tab === "beli" && (
+      {packagesLocked ? (
+        <section>
+          <div className="max-w-3xl mx-auto px-6 md:px-8 pb-16">
+            <div className="paket-locked-panel">
+              <div className="kicker mb-2">Akses Paket Dikunci</div>
+              <h2>Paket belum bisa diakses sementara.</h2>
+              <p>Admin sedang menutup halaman paket. Kamu tetap bisa lanjut belajar dari materi dan latihan gratis yang tersedia.</p>
+              <button className="btn-ink mt-5" onClick={() => setRoute({ route: "belajar" })} type="button">
+                Kembali ke Belajar
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : tab === "beli" && (
         <section>
           <div className="max-w-6xl mx-auto px-6 md:px-8 pb-10">
             {loading ? (
@@ -249,7 +277,7 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context })
         </section>
       )}
 
-      {tab === "milikku" && (
+      {!packagesLocked && tab === "milikku" && (
         <section className="animate-fade-in">
           <div className="max-w-6xl mx-auto px-6 md:px-8 pb-10">
             {packages.filter(hasAccess).length > 0 ? (
@@ -675,6 +703,8 @@ const FreeMathTryoutExam = ({ setRoute, context, isLoggedIn = false, isAdmin = f
   const pendingSubmitDraftRef = useRef(context?.pendingSubmitDraft || readTryoutDraftFromStorage(tryoutId));
   const pendingAutoSubmitRef = useRef(false);
   const sessionSeedRef = useRef({ tryoutId: "", seed: "" });
+  const lastSavedDraftRef = useRef("");
+  const draftSaveTimerRef = useRef(null);
   if (sessionSeedRef.current.tryoutId !== tryoutId) {
     sessionSeedRef.current = {
       tryoutId,
@@ -729,6 +759,17 @@ const FreeMathTryoutExam = ({ setRoute, context, isLoggedIn = false, isAdmin = f
     if (timeLeft === 0 && problems.length && !finishing) finishTryout();
   }, [timeLeft, problems.length, finishing]);
 
+  useEffect(() => {
+    if (!sessionInfo?.sessionToken || !problems.length || finishing || timeExpired) return undefined;
+    if (draftSaveTimerRef.current) window.clearTimeout(draftSaveTimerRef.current);
+    draftSaveTimerRef.current = window.setTimeout(() => {
+      saveTryoutDraft(answers).catch(() => {});
+    }, 700);
+    return () => {
+      if (draftSaveTimerRef.current) window.clearTimeout(draftSaveTimerRef.current);
+    };
+  }, [answers, problems.length, sessionInfo?.sessionToken, finishing, timeExpired]);
+
   async function loadTryoutProblems() {
     setLoading(true);
     setError("");
@@ -737,7 +778,10 @@ const FreeMathTryoutExam = ({ setRoute, context, isLoggedIn = false, isAdmin = f
       const questions = Array.isArray(data.questions) ? data.questions : [];
       const requestedLimit = Number(context?.problemLimit || context?.total || 0);
       const limit = requestedLimit > 0 ? Math.min(requestedLimit, questions.length) : questions.length;
-      const sessionSeed = sessionSeedRef.current.seed;
+      const session = data.session || {};
+      const sessionSeed = session.sessionSeed || sessionSeedRef.current.seed;
+      sessionSeedRef.current = { tryoutId, seed: sessionSeed };
+      const serverChoiceMap = session.choiceMap && typeof session.choiceMap === "object" ? session.choiceMap : {};
       const selectedProblems = questions.slice(0, limit);
       const shuffledProblems = shuffleTryoutChoices(
         selectedProblems,
@@ -745,16 +789,18 @@ const FreeMathTryoutExam = ({ setRoute, context, isLoggedIn = false, isAdmin = f
       );
       const nextProblems = shuffledProblems.map((problem, index) => {
         const choices = getBaseTryoutChoices(problem, shuffledProblems);
+        const savedChoices = serverChoiceMap[String(problem.id)] || serverChoiceMap[problem.id];
         return {
           ...problem,
-          sessionChoices: shuffleTryoutChoices(
-            choices,
-            hashTryoutValue(`choices:${tryoutId}:${sessionSeed}:${problem.id}:${index}`)
-          ),
+          sessionChoices: Array.isArray(savedChoices) && savedChoices.length
+            ? savedChoices
+            : shuffleTryoutChoices(
+                choices,
+                hashTryoutValue(`choices:${tryoutId}:${sessionSeed}:${problem.id}:${index}`)
+              ),
         };
       });
       const tryoutMeta = data.tryout || {};
-      const session = data.session || {};
       setSessionInfo({
         id: session.id || session.tryoutId || tryoutId,
         title: session.title || session.tryoutTitle || tryoutMeta.title || context?.packageTitle || context?.title || "Try Out",
@@ -762,14 +808,20 @@ const FreeMathTryoutExam = ({ setRoute, context, isLoggedIn = false, isAdmin = f
         startedAt: session.startedAt || null,
         expiresAt: session.expiresAt || null,
         sessionToken: session.sessionToken || "",
+        sessionSeed,
       });
       setProblems(nextProblems);
       setProblemIndex(0);
       const pendingDraft = pendingSubmitDraftRef.current;
+      const serverAnswers = session.answers && typeof session.answers === "object" ? session.answers : {};
       const restoredAnswers = pendingDraft && pendingDraft.tryoutId === tryoutId && pendingDraft.answers
         ? pendingDraft.answers
-        : {};
+        : serverAnswers;
       setAnswers(restoredAnswers);
+      lastSavedDraftRef.current = JSON.stringify({
+        answers: restoredAnswers,
+        choiceMap: serverChoiceMap,
+      });
       setDoubtful({});
       setMobileNavOpen(false);
       setFinishing(false);
@@ -790,7 +842,9 @@ const FreeMathTryoutExam = ({ setRoute, context, isLoggedIn = false, isAdmin = f
 
   function selectChoice(choiceIndex) {
     if (!activeProblem || timeExpired) return;
-    setAnswers((current) => ({ ...current, [activeProblem.id]: choiceIndex }));
+    const nextAnswers = { ...answers, [activeProblem.id]: choiceIndex };
+    setAnswers(nextAnswers);
+    saveTryoutDraft(nextAnswers).catch(() => {});
   }
 
   function moveProblem(delta) {
@@ -818,6 +872,22 @@ const FreeMathTryoutExam = ({ setRoute, context, isLoggedIn = false, isAdmin = f
       choiceMap,
       durationSeconds,
     };
+  }
+
+  async function saveTryoutDraft(answersSource = answers) {
+    if (!sessionInfo?.sessionToken || !problems.length || timeExpired || finishing) return null;
+    const payload = buildTryoutSubmissionPayload({ answersSource });
+    const draftKey = JSON.stringify({
+      answers: payload.answers,
+      choiceMap: payload.choiceMap,
+    });
+    if (draftKey === lastSavedDraftRef.current) return null;
+    lastSavedDraftRef.current = draftKey;
+    return MafikingAPI.put(`/api/tryouts/${encodeURIComponent(tryoutId)}/session`, {
+      sessionToken: sessionInfo.sessionToken,
+      answers: payload.answers,
+      choiceMap: payload.choiceMap,
+    });
   }
 
   function redirectGuestToLoginWithDraft() {

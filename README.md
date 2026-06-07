@@ -84,6 +84,11 @@ Create `.env` from `.env.example`.
 | `DUITKU_API_KEY` | Required for payments | Duitku API key. |
 | `DUITKU_CALLBACK_URL` | Required for deployed payments | Payment callback URL. |
 | `DUITKU_RETURN_URL` | Required for deployed payments | Browser return URL after payment. |
+| `PAYMENT_PROVIDER` | Optional | `qris` by default; use `duitku` for legacy gateway or `both` for QRIS-first fallback. |
+| `QRIS_STATIC_STRING` | Required when `PAYMENT_PROVIDER=qris` | Static QRIS merchant payload scanned from the owner QRIS. |
+| `QRIS_EXPIRY_MINUTES` | Optional | Pending QR expiry window, default `20`. |
+| `QRIS_ADMIN_WHATSAPP` | Optional | WhatsApp number shown on QRIS fallback confirmation. |
+| `PAYMENT_WEBHOOK_SECRET` | Optional | HMAC secret for `/api/payment/reconcile/webhook`. |
 
 Without Gemini or Groq keys, practice pages still open, but canvas evaluation endpoints return an API-key error. With only Gemini keys, the pool can still serve via Gemini; with `MAFIKING_POOL_ENABLED=false`, correction uses the direct Gemini fallback path. The profile summary endpoint can still return a local fallback summary. Profile narrative uses Gemma through Gemini keys; catalog recommendation items still come from the local deterministic engine.
 
@@ -120,12 +125,14 @@ The canonical PM2 process and Nginx site name is `new_mafiking`; legacy
 process/site names such as `mafiking` and `new-mafiking` should be removed when
 deploying so `mafiking.com` cannot accidentally point at an older app process.
 
-`deploy.sh` does not overwrite the server database by default. It runs
-`npm run import:tryouts` after dependencies are ready so bundled Try Out content
-from `db/tryout-bank.json` reaches production safely. The import script updates
-package metadata and replaces questions only for Try Outs that do not yet have
-submitted `tryout_attempts`. Use `FORCE_IMPORT=1 npm run import:tryouts` only
-when intentionally accepting that risk.
+`deploy.sh` does not overwrite the server database by default, and normal deploys
+also skip bundled content imports so admin/server-side content edits stay intact.
+Use `DEPLOY_IMPORTS=1 ./deploy.sh <ip> <user>` only when intentionally syncing
+`db/tryout-bank.json`, `db/question-bank.json`, and `db/daily-missions.json`
+into production. Fresh database bootstrap and `DEPLOY_DB=1` still run imports
+once to populate the initial content. Use `FORCE_IMPORT=1 npm run import:tryouts`
+only when intentionally accepting replacement of Try Out questions with existing
+attempt history.
 
 ## Admin Account
 
@@ -505,5 +512,5 @@ Browser checks:
 - `src/admin-monitoring.jsx` must load before `src/admin.jsx` because it exports `window.AdminMonitoringPanel`.
 - Gemini/Gemma token "remaining" values are monitoring estimates from configured daily limits, not a live Google quota lookup.
 - Duitku routes point at sandbox base URL in code. Review payment environment and base URL before production use.
-- Before production deploy, confirm `db/tryout-bank.json` contains the intended Try Out content and run `npm run import:tryouts` against a temporary DB if the bank changed.
+- Before production deploy with `DEPLOY_IMPORTS=1`, confirm bundled JSON contains the intended content and run the import against a temporary DB if the bank changed.
 - `db/mafiking.db` exists but is the wrong file — use `db/database.sqlite`.

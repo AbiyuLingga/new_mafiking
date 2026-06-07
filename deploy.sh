@@ -13,6 +13,8 @@
 #   production dasar dan kamu perlu mengisi API key langsung di server.
 # - database.sqlite lokal hanya dipakai untuk bootstrap jika database server
 #   belum ada. Untuk memaksa overwrite database server: DEPLOY_DB=1 ./deploy.sh ...
+# - Deploy biasa mempertahankan isi database server dan tidak mengimpor ulang
+#   bank JSON. Untuk sengaja sinkron konten bundled: DEPLOY_IMPORTS=1 ./deploy.sh ...
 
 set -euo pipefail
 
@@ -119,6 +121,7 @@ ENDSSH
 echo ""
 echo "[3/6] Mengirim file aplikasi..."
 rsync -az --delete --human-readable --info=progress2,stats2 \
+  --filter "P dist/assets/***" \
   --exclude ".git" \
   --exclude ".agents" \
   --exclude ".codex" \
@@ -147,7 +150,7 @@ fi
 
 echo ""
 echo "[4/6] Menyiapkan .env dan database..."
-ssh "$SSH_TARGET" "APP_PORT='$APP_PORT' APP_NAME='$APP_NAME' REMOTE_DIR='$REMOTE_DIR' REMOTE_DB='$REMOTE_DB' REMOTE_TMP_DB='$REMOTE_TMP_DB' DEPLOY_DB='${DEPLOY_DB:-0}' bash -s" <<'ENDSSH'
+ssh "$SSH_TARGET" "APP_PORT='$APP_PORT' APP_NAME='$APP_NAME' REMOTE_DIR='$REMOTE_DIR' REMOTE_DB='$REMOTE_DB' REMOTE_TMP_DB='$REMOTE_TMP_DB' DEPLOY_DB='${DEPLOY_DB:-0}' DEPLOY_IMPORTS='${DEPLOY_IMPORTS:-0}' bash -s" <<'ENDSSH'
 set -euo pipefail
 
 cd "$REMOTE_DIR"
@@ -180,24 +183,29 @@ else
 fi
 
 mkdir -p db
+RUN_CONTENT_IMPORTS="$DEPLOY_IMPORTS"
 if [ "$DEPLOY_DB" = "1" ] && [ -f "$REMOTE_TMP_DB" ]; then
   if [ -f "$REMOTE_DB" ]; then
     cp "$REMOTE_DB" "$REMOTE_DB.backup-$(date +%Y%m%d-%H%M%S)"
   fi
   mv "$REMOTE_TMP_DB" "$REMOTE_DB"
+  RUN_CONTENT_IMPORTS="1"
   echo "Database server dioverwrite karena DEPLOY_DB=1."
 elif [ ! -f "$REMOTE_DB" ] && [ -f "$REMOTE_TMP_DB" ]; then
   mv "$REMOTE_TMP_DB" "$REMOTE_DB"
+  RUN_CONTENT_IMPORTS="1"
   echo "Database awal dipasang dari lokal."
 else
   rm -f "$REMOTE_TMP_DB"
   echo "Database server dipertahankan."
 fi
+
+printf "%s\n" "$RUN_CONTENT_IMPORTS" > .deploy-run-content-imports
 ENDSSH
 
 echo ""
 echo "[5/6] Install dependency dan setup Nginx..."
-ssh "$SSH_TARGET" "APP_PORT='$APP_PORT' APP_NAME='$APP_NAME' REMOTE_DIR='$REMOTE_DIR' SERVER_IP='$SERVER_IP' DEPS_HASH='$DEPS_HASH' APP_RUN_USER='$APP_RUN_USER' bash -s" <<'ENDSSH'
+ssh "$SSH_TARGET" "APP_PORT='$APP_PORT' APP_NAME='$APP_NAME' REMOTE_DIR='$REMOTE_DIR' SERVER_IP='$SERVER_IP' DEPS_HASH='$DEPS_HASH' APP_RUN_USER='$APP_RUN_USER' DEPLOY_IMPORTS='${DEPLOY_IMPORTS:-0}' bash -s" <<'ENDSSH'
 set -euo pipefail
 
 if command -v sudo >/dev/null 2>&1; then
@@ -230,25 +238,42 @@ else
   printf "%s\n" "$DEPS_HASH" > .deploy-deps.sha
 fi
 
-if [ -f db/tryout-bank.json ]; then
-  echo "Mengimpor bank Try Out bundled secara aman..."
-  run_app npm run import:tryouts
-else
-  echo "db/tryout-bank.json tidak ada, skip import Try Out bundled."
+RUN_CONTENT_IMPORTS="0"
+if [ -f .deploy-run-content-imports ]; then
+  RUN_CONTENT_IMPORTS="$(cat .deploy-run-content-imports)"
 fi
+rm -f .deploy-run-content-imports
 
-if [ -f db/question-bank.json ]; then
-  echo "Mengimpor bank latihan bundled secara merge aman..."
-  run_app npm run import:questions -- --merge
-else
-  echo "db/question-bank.json tidak ada, skip import latihan bundled."
-fi
+if [ "$RUN_CONTENT_IMPORTS" = "1" ]; then
+  if [ "$DEPLOY_IMPORTS" = "1" ]; then
+    echo "DEPLOY_IMPORTS=1 aktif, mengimpor konten bundled ke database server."
+  else
+    echo "Database baru/overwrite terdeteksi, mengimpor konten bundled awal."
+  fi
 
-if [ -f db/daily-missions.json ]; then
-  echo "Mengimpor misi harian bundled..."
-  run_app npm run import:missions
+  if [ -f db/tryout-bank.json ]; then
+    echo "Mengimpor bank Try Out bundled secara aman..."
+    run_app npm run import:tryouts
+  else
+    echo "db/tryout-bank.json tidak ada, skip import Try Out bundled."
+  fi
+
+  if [ -f db/question-bank.json ]; then
+    echo "Mengimpor bank latihan bundled secara merge aman..."
+    run_app npm run import:questions -- --merge
+  else
+    echo "db/question-bank.json tidak ada, skip import latihan bundled."
+  fi
+
+  if [ -f db/daily-missions.json ]; then
+    echo "Mengimpor misi harian bundled..."
+    run_app npm run import:missions
+  else
+    echo "db/daily-missions.json tidak ada, skip import misi harian bundled."
+  fi
 else
-  echo "db/daily-missions.json tidak ada, skip import misi harian bundled."
+  echo "Database server sudah ada dan DEPLOY_IMPORTS!=1, skip import konten bundled."
+  echo "Perubahan konten langsung di server dipertahankan."
 fi
 
 if [ -f /etc/letsencrypt/live/mafiking.com/fullchain.pem ] && [ -f /etc/letsencrypt/live/mafiking.com/privkey.pem ]; then
@@ -386,4 +411,6 @@ fi
 echo ""
 echo "Jika ingin deploy ulang sambil overwrite database server:"
 echo "  DEPLOY_DB=1 ./deploy.sh $SERVER_IP $SERVER_USER"
+echo "Jika ingin sinkron konten bundled JSON ke database server:"
+echo "  DEPLOY_IMPORTS=1 ./deploy.sh $SERVER_IP $SERVER_USER"
 echo "========================================"

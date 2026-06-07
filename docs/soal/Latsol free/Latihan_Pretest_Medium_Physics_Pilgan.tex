@@ -1,0 +1,124 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[indonesian]{babel}
+\usepackage{amsmath, amssymb}
+\usepackage{tikz}
+\usepackage{geometry}
+\usepackage{enumitem}
+\usetikzlibrary{calc,patterns,angles,quotes}
+\geometry{a4paper, margin=2cm}
+
+\title{\textbf{Latihan Soal Pre-Test TPB ITB: Fisika (Tingkat Sedang)}\\ \large Modul Tambahan Eksklusif}
+\author{MAFIKING Edu}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section*{Bagian 1: Soal Latihan}
+
+\begin{enumerate}
+    \item \textbf{(Kinematika Benda Titik - Gerak Parabola)} \textit{Perhatikan lintasan proyektil berikut.} \\
+    Sebuah bola ditendang dengan kecepatan awal $v_0 = 20 \text{ m/s}$ dan sudut elevasi $30^\circ$. Jika gesekan udara diabaikan dan $g = 10 \text{ m/s}^2$, tentukan jarak mendatar maksimum ($R$) yang dicapai bola tersebut.
+    \begin{center}
+    \begin{tikzpicture}
+        \draw[->, thick] (-0.5,0) -- (6,0) node[right]{$x$};
+        \draw[->, thick] (0,-0.5) -- (0,3) node[above]{$y$};
+        \draw[dashed, thick, blue, domain=0:5.2, variable=\x] plot ({\x}, {-0.2*\x*\x + 1.04*\x});
+        \draw[->, thick, red] (0,0) -- (1.5,1.5) node[above]{$v_0$};
+        \draw (0.8,0) arc (0:45:0.8);
+        \node at (1.1,0.3) {$\theta$};
+        \node[below] at (5.2,0) {$R$};
+    \end{tikzpicture}
+    \end{center}
+    \begin{enumerate}[label=\alph*.]
+        \item $10\sqrt{3} \text{ meter}$
+        \item $20\sqrt{2} \text{ meter}$
+        \item $20\sqrt{3} \text{ meter}$
+        \item $40 \text{ meter}$
+        \item $40\sqrt{3} \text{ meter}$
+    \end{enumerate}
+
+    \item \textbf{(Benda Tegar - Momen Inersia)} Tiga buah partikel bermassa $m_1 = 2 \text{ kg}$, $m_2 = 1 \text{ kg}$, dan $m_3 = 3 \text{ kg}$ dihubungkan oleh batang tak bermassa sepanjang sumbu-$x$. Posisi partikel berturut-turut adalah $x_1 = 0 \text{ m}$, $x_2 = 2 \text{ m}$, dan $x_3 = 4 \text{ m}$. Tentukan momen inersia sistem jika diputar terhadap sumbu-$y$ (yang melalui $x=0$).
+    \begin{enumerate}[label=\alph*.]
+        \item $48 \text{ kg}\cdot\text{m}^2$
+        \item $50 \text{ kg}\cdot\text{m}^2$
+        \item $52 \text{ kg}\cdot\text{m}^2$
+        \item $54 \text{ kg}\cdot\text{m}^2$
+        \item $56 \text{ kg}\cdot\text{m}^2$
+    \end{enumerate}
+
+    \item \textbf{(Usaha dan Energi)} Sebuah kotak bermassa $5 \text{ kg}$ didorong dengan gaya mendatar $40 \text{ N}$ di atas lantai kasar sejauh $4 \text{ m}$. Jika koefisien gesekan kinetik antara kotak dan lantai adalah $0.2$, hitunglah usaha total yang bekerja pada kotak! ($g = 10 \text{ m/s}^2$).
+    \begin{enumerate}[label=\alph*.]
+        \item 80 Joule
+        \item 100 Joule
+        \item 120 Joule
+        \item 140 Joule
+        \item 160 Joule
+    \end{enumerate}
+
+    \item \textbf{(Momentum Linier)} Sebuah peluru bermassa $10 \text{ gram}$ ditembakkan mendatar menembus sebuah balok kayu bermassa $990 \text{ gram}$ yang diam di atas meja licin. Jika peluru bersarang di dalam balok dan keduanya bergerak bersama dengan kecepatan $2 \text{ m/s}$ setelah tumbukan, berapakah kecepatan awal peluru tersebut?
+    \begin{enumerate}[label=\alph*.]
+        \item 100 m/s
+        \item 150 m/s
+        \item 200 m/s
+        \item 250 m/s
+        \item 300 m/s
+    \end{enumerate}
+
+    \item \textbf{(Gelombang Mekanik)} Sepotong dawai yang panjangnya $80 \text{ cm}$ dan bermassa $16 \text{ gram}$ ditegangkan dengan gaya $800 \text{ N}$. Tentukan frekuensi nada dasar yang dihasilkan oleh dawai tersebut!
+    \begin{enumerate}[label=\alph*.]
+        \item 50 Hz
+        \item 75 Hz
+        \item 100 Hz
+        \item 125 Hz
+        \item 150 Hz
+    \end{enumerate}
+\end{enumerate}
+
+\newpage
+\section*{Bagian 2: Pembahasan (Step-by-Step)}
+
+\textbf{1. Pembahasan:} \hfill \textbf{Jawaban: c}
+\begin{itemize}
+    \item Step 1: Identifikasi variabel: $v_0 = 20 \text{ m/s}$, $\theta = 30^\circ$.
+    \item Step 2: Gunakan rumus jarak mendatar maksimum (jangkauan): $R = \frac{v_0^2 \sin(2\theta)}{g}$.
+    \item Step 3: Substitusi nilai: $R = \frac{20^2 \sin(2 \times 30^\circ)}{10} = \frac{400 \sin(60^\circ)}{10}$.
+    \item Step 4: Karena $\sin(60^\circ) = \frac{1}{2}\sqrt{3}$, maka $R = 40 \times \frac{1}{2}\sqrt{3} = 20\sqrt{3} \text{ meter}$.
+\end{itemize}
+
+\textbf{2. Pembahasan:} \hfill \textbf{Jawaban: c}
+\begin{itemize}
+    \item Step 1: Sumbu putar adalah sumbu-$y$, berada di titik $x = 0$. Jarak setiap partikel ke sumbu putar: $r_1 = 0 \text{ m}$, $r_2 = 2 \text{ m}$, $r_3 = 4 \text{ m}$.
+    \item Step 2: Rumus momen inersia partikel diskrit: $I = \Sigma m_i r_i^2$.
+    \item Step 3: Hitung masing-masing: $I = m_1 r_1^2 + m_2 r_2^2 + m_3 r_3^2$.
+    \item Step 4: $I = (2)(0)^2 + (1)(2)^2 + (3)(4)^2 = 0 + 4 + 48 = 52 \text{ kg}\cdot\text{m}^2$.
+\end{itemize}
+
+\textbf{3. Pembahasan:} \hfill \textbf{Jawaban: c}
+\begin{itemize}
+    \item Step 1: Usaha total $W_{\text{total}} = W_F + W_f$, atau $W_{\text{total}} = \Sigma F \cdot s$.
+    \item Step 2: Hitung gaya gesek kinetik: $f_k = \mu_k \cdot N = \mu_k \cdot (m \cdot g) = 0.2 \times (5 \times 10) = 0.2 \times 50 = 10 \text{ N}$.
+    \item Step 3: Hitung gaya resultan (arah mendatar): $\Sigma F = F - f_k = 40 - 10 = 30 \text{ N}$.
+    \item Step 4: Hitung usaha total: $W_{\text{total}} = 30 \text{ N} \times 4 \text{ m} = 120 \text{ Joule}$.
+\end{itemize}
+
+\textbf{4. Pembahasan:} \hfill \textbf{Jawaban: c}
+\begin{itemize}
+    \item Step 1: Ini adalah tumbukan tidak lenting sama sekali. Konversi massa: $m_p = 0.01 \text{ kg}$, $m_b = 0.99 \text{ kg}$.
+    \item Step 2: Gunakan hukum kekekalan momentum: $m_p v_p + m_b v_b = (m_p + m_b)v'$.
+    \item Step 3: Balok diam $\implies v_b = 0$. Kecepatan akhir $v' = 2 \text{ m/s}$.
+    \item Step 4: Substitusi: $0.01 \cdot v_p + 0 = (0.01 + 0.99) \cdot 2$.
+    \item Step 5: $0.01 \cdot v_p = (1) \cdot 2 \implies v_p = \frac{2}{0.01} = 200 \text{ m/s}$.
+\end{itemize}
+
+\textbf{5. Pembahasan:} \hfill \textbf{Jawaban: d}
+\begin{itemize}
+    \item Step 1: Ubah satuan ke SI: $L = 0.8 \text{ m}$, $m = 0.016 \text{ kg}$.
+    \item Step 2: Hitung massa per satuan panjang ($\mu$): $\mu = \frac{m}{L} = \frac{0.016}{0.8} = 0.02 \text{ kg/m}$.
+    \item Step 3: Hitung cepat rambat gelombang (Hukum Melde): $v = \sqrt{\frac{F}{\mu}} = \sqrt{\frac{800}{0.02}} = \sqrt{40000} = 200 \text{ m/s}$.
+    \item Step 4: Rumus frekuensi nada dasar dawai ($n=0$): $f_0 = \frac{v}{2L}$.
+    \item Step 5: $f_0 = \frac{200}{2 \times 0.8} = \frac{200}{1.6} = 125 \text{ Hz}$.
+\end{itemize}
+
+\end{document}

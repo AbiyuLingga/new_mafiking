@@ -9,6 +9,9 @@ const {
 } = require('../lib/tryout-ranking');
 const {
     FREE_MATH_TRYOUT_ID,
+    normalizeTryoutDraftAnswers,
+    normalizeTryoutDraftChoiceMap,
+    parseTryoutSessionJson,
     verifyTryoutSessionToken,
 } = require('../lib/tryout-session');
 const router = express.Router();
@@ -368,6 +371,26 @@ function loadTryoutQuestionsWithSteps(db, tryoutId, questionIds) {
         .map((question) => ({ ...question, steps: stepsStmt.all(question.id) }));
 }
 
+function readActiveTryoutSession(db, { userId, tryoutId, sessionToken }) {
+    if (!userId || !tryoutId || !sessionToken) return null;
+    return db.prepare(`
+        SELECT *
+        FROM tryout_sessions
+        WHERE user_id = ? AND tryout_id = ? AND session_token = ? AND submitted_at IS NULL
+        ORDER BY started_at DESC, id DESC
+        LIMIT 1
+    `).get(userId, tryoutId, sessionToken);
+}
+
+function calculateServerSessionDuration(session) {
+    const startedAtMs = Date.parse(session && session.startedAt);
+    const expiresAtMs = Date.parse(session && session.expiresAt);
+    const limit = Number(session && session.timeLimitSeconds) || 0;
+    if (!Number.isFinite(startedAtMs) || !Number.isFinite(expiresAtMs) || !limit) return null;
+    const effectiveEnd = Math.min(Date.now(), expiresAtMs);
+    return Math.min(limit, Math.max(0, Math.ceil((effectiveEnd - startedAtMs) / 1000)));
+}
+
 // GET /api/progress/tryout-attempts/latest - review terakhir user untuk satu tryout
 router.get('/tryout-attempts/latest', isAuthenticated, requireRegisteredUser, (req, res) => {
     try {
@@ -403,17 +426,24 @@ router.post('/tryout-attempts', isAuthenticated, requireRegisteredUser, (req, re
     let tryoutTitle = input.tryoutTitle;
     let problemIds = input.problemIds;
     let durationSeconds = input.durationSeconds;
+    let answers = input.answers;
+    let choiceMap = input.choiceMap;
+    let activeSessionRow = null;
 
     if (input.tryoutId === FREE_MATH_TRYOUT_ID || input.sessionToken) {
         if (!input.sessionToken) {
             return res.status(400).json({ error: 'Token sesi tryout diperlukan' });
         }
-        const verified = verifyTryoutSessionToken(input.sessionToken, { userId });
+        const verified = verifyTryoutSessionToken(input.sessionToken, { userId, allowExpired: true });
         if (!verified.ok) {
             return res.status(403).json({ error: verified.error });
         }
         tryoutId = verified.session.tryoutId;
         tryoutTitle = verified.session.tryoutTitle || input.tryoutTitle;
+        activeSessionRow = readActiveTryoutSession(db, { userId, tryoutId, sessionToken: input.sessionToken });
+        if (!activeSessionRow) {
+            return res.status(404).json({ error: 'Sesi tryout tidak ditemukan atau sudah disubmit.' });
+        }
         const verifiedIds = verified.session.problemIds;
         const verifiedSet = new Set(verifiedIds.map(String));
         const submittedIds = input.problemIds;
@@ -423,7 +453,12 @@ router.post('/tryout-attempts', isAuthenticated, requireRegisteredUser, (req, re
             return res.status(400).json({ error: 'Daftar soal tryout tidak cocok dengan sesi.' });
         }
         problemIds = submittedIds;
-        durationSeconds = Math.min(input.durationSeconds, Number(verified.session.timeLimitSeconds) || input.durationSeconds);
+        const savedAnswers = normalizeTryoutDraftAnswers(parseTryoutSessionJson(activeSessionRow.answers_json, {}), verifiedIds);
+        const savedChoiceMap = normalizeTryoutDraftChoiceMap(parseTryoutSessionJson(activeSessionRow.choice_map_json, {}), verifiedIds);
+        answers = { ...savedAnswers, ...input.answers };
+        choiceMap = { ...savedChoiceMap, ...input.choiceMap };
+        durationSeconds = calculateServerSessionDuration(verified.session)
+            ?? Math.min(input.durationSeconds, Number(verified.session.timeLimitSeconds) || input.durationSeconds);
     }
 
     if (!problemIds.length) {
@@ -450,11 +485,11 @@ router.post('/tryout-attempts', isAuthenticated, requireRegisteredUser, (req, re
         tryoutId,
         tryoutTitle,
         questions: orderedProblems,
-        answers: input.answers,
-        choiceMap: input.choiceMap,
+        answers,
+        choiceMap,
         durationSeconds
     });
-    const stats = reviewSnapshot.stats || calculateTryoutAttemptStats({ problems: orderedProblems, answers: input.answers, choiceMap: input.choiceMap });
+    const stats = reviewSnapshot.stats || calculateTryoutAttemptStats({ problems: orderedProblems, answers, choiceMap });
 
     const info = db.prepare(`
         INSERT INTO tryout_attempts (
@@ -479,10 +514,21 @@ router.post('/tryout-attempts', isAuthenticated, requireRegisteredUser, (req, re
         stats.totalQuestions,
         stats.answeredCount,
         durationSeconds,
-        JSON.stringify(input.answers),
+        JSON.stringify(answers),
         JSON.stringify(reviewSnapshot),
         new Date().toISOString()
     );
+
+    if (activeSessionRow) {
+        db.prepare(`
+            UPDATE tryout_sessions
+            SET answers_json = ?,
+                choice_map_json = ?,
+                submitted_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        `).run(JSON.stringify(answers), JSON.stringify(choiceMap), activeSessionRow.id);
+    }
 
     res.json({
         ok: true,

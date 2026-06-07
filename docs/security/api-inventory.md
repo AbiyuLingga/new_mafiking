@@ -40,18 +40,21 @@ gap analysis, and the CSRF / CORS coverage tests.
 | GET | `/api/health` | public | n/a | none | Liveness. Returns counts. |
 | GET | `/api/config/clerk` | public | n/a | none | Returns publishable key only. `CLERK_SECRET_KEY` must never appear. |
 | GET | `/api/performance/summary` | admin | n/a | admin | Admin-only perf summary. |
-| GET | `/api/payment/config` | public | n/a | none | Returns `paymentGatewayState()` (mock vs real Duitku). Cached 30s. |
+| GET | `/api/payment/config` | public | n/a | none | Returns `paymentGatewayState()` (QRIS local, mock, or Duitku). Cached 30s. |
 | GET | `/api/payment/active-packages` | session | n/a | user-scoped | Filters by `user_id`. No `:id` exposure. |
 | GET | `/api/payment/mock-gateway` | public | n/a | none | Dev-only mock payment UI; refuses to render in production. |
 | GET | `/api/payment/mock-complete` | public | n/a | none | Dev-only mock completion; only when `isMockPaymentEnabled()`. |
 | POST | `/api/csp-report`, `/api/csp-report/` | public | exempt | none | CSP violation sink. 32 KB cap, 204. |
+| POST | `/api/performance/client-error` | public | exempt | none | Client runtime error sink. Behind `performanceLimiter`. |
 | POST | `/api/performance/vitals` | public | exempt | none | Web Vitals ingest. Behind `performanceLimiter`. |
 | POST | `/api/webhooks/clerk`, `/` | clerk-public | exempt | n/a | svix signature verified. Raw body. |
 | POST | `/api/payment/callback` | clerk-public | exempt | n/a | Duitku MD5 signature verified. URL-encoded body. |
+| POST | `/api/payment/reconcile/webhook` | public | exempt | n/a | QRIS reconciliation webhook. HMAC SHA-256 signature + timestamp required. |
 | GET | `/api/csrf-token` | session | n/a | n/a | Issues double-submit token. |
 | GET | `/api/landing-media` | public | n/a | none | Reads from `landing_media` table. Cached 60s. |
 | GET | `/api/missions` | public | n/a | none | Daily missions catalog. `?admin=1` returns drafts only if `canReadMissionDrafts` (admin/local). `hasMissionManualAccess` for free users. |
-| GET | `/api/tryout-packages` | public | n/a | none | Public read of `tryout_packages`. Cached 30s. Exempt from auto-guest (no session needed). |
+| GET | `/api/tryout-packages` | public | n/a | none | Public read of `tryout_packages` only when package access is enabled; locked user response is `[]` with private no-store. Exempt from auto-guest. |
+| GET | `/api/tryout-packages/access` | public | n/a | none | Returns package access state for the viewer. Private no-store. Exempt from auto-guest. |
 | GET | `/SOP-DEEPSEEK-IMPORT-SOAL.md` | admin | n/a | admin | Static file. 403 unless `req.session.role === 'admin'`. |
 | GET | `/tweaks-panel.jsx` | public | n/a | none | Dev-only tweak panel source. 404 when `canServeLegacySource()` is false (production / built client). |
 | GET | `/syarat-ketentuan.html`, `/terms.html`, `/tnc.html` | public | n/a | none | Static T&C page. |
@@ -89,7 +92,8 @@ public catalog data. All routes are `GET` so CSRF is `n/a`.
 
 | Method | Path | Auth | CSRF | BOLA | Notes |
 |---|---|---|---|---|---|
-| GET | `/api/tryouts/:tryoutId/full` | session | n/a | id-scoped | Reads tryout by id; catalog data. |
+| GET | `/api/tryouts/:tryoutId/full` | session | n/a | user/id-scoped | Reads tryout by id and creates/resumes the viewer's active timed session. |
+| PUT | `/api/tryouts/:tryoutId/session` | session | ✓ | user/id-scoped | Autosaves answers/choice snapshot for the viewer's active timed session before final submit. |
 
 ### Progress (routes/progress.js)
 
@@ -127,12 +131,25 @@ All routes `isAuthenticated`. Body validation lives in
 | Method | Path | Auth | CSRF | BOLA | Notes |
 |---|---|---|---|---|---|
 | GET | `/api/payment/config` | public | n/a | none | `paymentGatewayState`. Cached 30s. |
-| POST | `/api/payment/create` | registered | ✓ | user-scoped | Duitku or mock. Body: `email`, `name`, `packageId`. |
+| POST | `/api/payment/create` | registered | ✓ | user-scoped | QRIS local, Duitku, or mock. Body: `email`, `name`, package selector. |
 | GET | `/api/payment/status/:merchantOrderId` | session | n/a | id-scoped | Filters by `user_id = ? AND merchant_order_id = ?` — explicit ownership check. |
 | GET | `/api/payment/active-packages` | session | n/a | user-scoped | Own data only. |
 | POST | `/api/payment/callback` | clerk-public | exempt | n/a | Duitku MD5-signed. Updates `payments` by `merchant_order_id`. |
+| POST | `/api/payment/reconcile/webhook` | public | exempt | n/a | QRIS HMAC-signed reconciliation endpoint. Calls idempotent reconciler. |
 | GET | `/api/payment/mock-gateway` | public | n/a | none | Dev-only. |
 | GET | `/api/payment/mock-complete` | public | n/a | none | Dev-only. |
+
+### Admin payments (routes/admin-payments.js)
+
+All routes `isAuthenticated` + `isAdmin` and use `adminPaymentLimiter`.
+
+| Method | Path | Auth | CSRF | BOLA | Notes |
+|---|---|---|---|---|---|
+| GET | `/api/admin/payments/pending` | admin | n/a | admin | Pending QRIS/gateway payments for manual reconciliation. |
+| GET | `/api/admin/payments/` | admin | n/a | admin | Filterable payment list by status/search. |
+| POST | `/api/admin/payments/:merchantOrderId/mark-paid` | admin | ✓ | admin | Marks payment `SUCCESS`, releases suffix, grants access, logs audit row. |
+| POST | `/api/admin/payments/:merchantOrderId/mark-failed` | admin | ✓ | admin | Marks payment `FAILED`, releases suffix, logs audit row. |
+| GET | `/api/admin/payments/:merchantOrderId/audit-log` | admin | n/a | admin | Reads reconciliation audit log for one order. |
 
 ### Admin import (routes/admin-import.js)
 
@@ -169,6 +186,8 @@ All routes `isAdmin`. Routes that take `:id` operate on catalog content
 | POST | `/api/admin/missions` | admin | ✓ | admin | |
 | PUT | `/api/admin/missions/:id` | admin | ✓ | admin | |
 | DELETE | `/api/admin/missions/:id` | admin | ✓ | admin | |
+| GET | `/api/admin/settings/tryout-packages-access` | admin | n/a | admin | Reads the admin-controlled package access switch. |
+| PUT | `/api/admin/settings/tryout-packages-access` | admin | ✓ | admin | Toggles whether users can view and buy tryout packages. |
 | GET | `/api/admin/tryout-packages` | admin | n/a | admin | |
 | POST | `/api/admin/tryout-packages` | admin | ✓ | admin | |
 | PUT | `/api/admin/tryout-packages/:id` | admin | ✓ | admin | |

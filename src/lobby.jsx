@@ -1552,11 +1552,17 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
                   </div>
                   <div className="absolute bottom-4 sm:bottom-10 -left-2 sm:-left-4 z-20 w-48 sm:w-72 rounded-2xl sm:rounded-3xl border border-slate-100 bg-white p-3 sm:p-6 shadow-2xl transition-transform duration-300 hover:-translate-y-2 lg:left-0">
                     <div className="mb-2 sm:mb-4 flex items-center gap-2 sm:gap-4"><div className="flex h-8 w-8 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-amber-50"><Icon.Trophy className="h-4 w-4 sm:h-7 sm:w-7 text-amber-500" /></div><div><div className="text-xs sm:text-base font-bold text-slate-900">Juara Internasional</div><div className="text-[10px] sm:text-xs font-medium text-slate-500">Olimpiade Fisika</div></div></div>
-                    <div className="flex items-center gap-2 sm:gap-3"><div className="h-6 w-6 sm:h-10 sm:w-10 rounded-full bg-slate-200" /><div className="h-1.5 sm:h-2 w-full rounded-full bg-slate-100" /></div>
                   </div>
-                  <div className="absolute inset-x-4 sm:inset-x-8 bottom-10 sm:bottom-20 top-16 sm:top-32 z-10 flex flex-col overflow-hidden rounded-[1.5rem] sm:rounded-[2.5rem] border border-slate-200 bg-white shadow-sm">
+                  <div className="absolute inset-x-0 sm:inset-x-2 bottom-4 sm:bottom-10 top-10 sm:top-20 z-10 flex flex-col overflow-hidden rounded-[1.5rem] sm:rounded-[2.5rem] bg-white shadow-sm">
                     <div className="flex h-10 sm:h-14 items-center gap-1.5 sm:gap-2 border-b border-slate-100 bg-slate-50/50 px-3 sm:px-6"><div className="h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-slate-200" /><div className="h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-slate-200" /><div className="h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-slate-200" /></div>
-                    <div className="flex flex-grow flex-col gap-2 sm:gap-4 p-3 sm:p-6"><div className="h-14 sm:h-24 w-full animate-pulse rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50" /><div className="h-14 sm:h-24 w-3/4 animate-pulse rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50" style={{ animationDelay: "150ms" }} /><div className="h-14 sm:h-24 w-5/6 animate-pulse rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50" style={{ animationDelay: "300ms" }} /></div>
+                    <div className="relative flex-grow overflow-hidden bg-slate-50">
+                      <img
+                        alt="Preview landing page Mafiking"
+                        className="h-full w-full object-cover"
+                        loading="eager"
+                        src="/assets/landing_page.png"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

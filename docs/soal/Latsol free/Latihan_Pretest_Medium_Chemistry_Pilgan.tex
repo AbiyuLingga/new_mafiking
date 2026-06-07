@@ -1,0 +1,133 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[indonesian]{babel}
+\usepackage{amsmath, amssymb, mhchem}
+\usepackage{tikz}
+\usepackage{geometry}
+\usepackage{enumitem}
+\geometry{a4paper, margin=2cm}
+
+\title{\textbf{Latihan Soal Pre-Test TPB ITB: Kimia (Tingkat Sedang)}\\ \large Modul Tambahan Eksklusif}
+\author{MAFIKING Edu}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section*{Bagian 1: Soal Latihan}
+
+\begin{enumerate}
+    \item \textbf{(Laju Reaksi)} \textit{Perhatikan grafik perubahan konsentrasi terhadap waktu berikut.} \\
+    Grafik menunjukkan penguraian zat A menjadi zat B ($\ce{A -> B}$). Dalam 10 detik pertama, konsentrasi A turun dari $0.5 \text{ M}$ menjadi $0.3 \text{ M}$. Tentukan laju rata-rata penguraian zat A dalam selang waktu tersebut!
+    \begin{center}
+    \begin{tikzpicture}[scale=0.8]
+        \draw[->, thick] (0,0) -- (5,0) node[right]{Waktu (s)};
+        \draw[->, thick] (0,0) -- (0,5) node[above]{Konsentrasi (M)};
+        \draw[thick, blue, smooth] plot coordinates {(0,4) (1,2.8) (2,2) (3,1.4) (4,1)};
+        \draw[thick, red, smooth] plot coordinates {(0,0) (1,1.2) (2,2) (3,2.6) (4,3)};
+        \node[left] at (0,4) {0.5};
+        \node[below] at (2,0) {10};
+        \node[blue, right] at (4,1) {Zat A};
+        \node[red, right] at (4,3) {Zat B};
+    \end{tikzpicture}
+    \end{center}
+    \begin{enumerate}[label=\alph*.]
+        \item $0.01 \text{ M/s}$
+        \item $0.02 \text{ M/s}$
+        \item $0.03 \text{ M/s}$
+        \item $0.04 \text{ M/s}$
+        \item $0.05 \text{ M/s}$
+    \end{enumerate}
+
+    \item \textbf{(Stoikiometri - Pereaksi Pembatas)} Sebanyak $5.4 \text{ gram}$ logam Aluminium (Ar Al = 27) direaksikan dengan $200 \text{ mL}$ larutan $\ce{HCl}$ $2 \text{ M}$. Reaksi yang terjadi: $\ce{2Al(s) + 6HCl(aq) -> 2AlCl3(aq) + 3H2(g)}$. Tentukan volume gas hidrogen yang dihasilkan pada keadaan STP.
+    \begin{enumerate}[label=\alph*.]
+        \item 1.12 Liter
+        \item 2.24 Liter
+        \item 3.36 Liter
+        \item 4.48 Liter
+        \item 5.60 Liter
+    \end{enumerate}
+
+    \item \textbf{(Reaksi Redoks)} Setarakan persamaan reaksi redoks berikut dalam suasana asam menggunakan metode setengah reaksi atau perubahan biloks: $\ce{MnO4^- + Fe^{2+} -> Mn^{2+} + Fe^{3+}}$. Berapakah perbandingan koefisien $\ce{MnO4^-}$ dan $\ce{Fe^{2+}}$ setelah disetarakan?
+    \begin{enumerate}[label=\alph*.]
+        \item $1 : 2$
+        \item $1 : 5$
+        \item $2 : 5$
+        \item $5 : 1$
+        \item $5 : 2$
+    \end{enumerate}
+
+    \item \textbf{(Asam dan Basa - Penyangga)} Ke dalam $100 \text{ mL}$ larutan $\ce{CH3COOH}$ $0.1 \text{ M}$ ($K_a = 10^{-5}$) ditambahkan $50 \text{ mL}$ larutan $\ce{NaOH}$ $0.1 \text{ M}$. Tentukan pH larutan yang terbentuk!
+    \begin{enumerate}[label=\alph*.]
+        \item 4
+        \item 5
+        \item 6
+        \item 8
+        \item 9
+    \end{enumerate}
+
+    \item \textbf{(Tabel Periodik \& Sifat Keperiodikan)} Urutkan unsur-unsur berikut: Natrium ($\ce{_{11}Na}$), Magnesium ($\ce{_{12}Mg}$), dan Aluminium ($\ce{_{13}Al}$) berdasarkan energi ionisasi pertamanya dari yang terkecil hingga terbesar.
+    \begin{enumerate}[label=\alph*.]
+        \item $\ce{Na} < \ce{Mg} < \ce{Al}$
+        \item $\ce{Mg} < \ce{Na} < \ce{Al}$
+        \item $\ce{Al} < \ce{Na} < \ce{Mg}$
+        \item $\ce{Na} < \ce{Al} < \ce{Mg}$
+        \item $\ce{Mg} < \ce{Al} < \ce{Na}$
+    \end{enumerate}
+\end{enumerate}
+
+\newpage
+\section*{Bagian 2: Pembahasan (Step-by-Step)}
+
+\textbf{1. Pembahasan:} \hfill \textbf{Jawaban: b}
+\begin{itemize}
+    \item Step 1: Laju reaksi penguraian zat reaktan (A) dirumuskan sebagai $v_A = -\frac{\Delta[A]}{\Delta t}$.
+    \item Step 2: Perubahan konsentrasi $\Delta[A] = [A]_{akhir} - [A]_{awal} = 0.3 \text{ M} - 0.5 \text{ M} = -0.2 \text{ M}$.
+    \item Step 3: Perubahan waktu $\Delta t = 10 \text{ s} - 0 \text{ s} = 10 \text{ s}$.
+    \item Step 4: $v_A = -\frac{-0.2}{10} = 0.02 \text{ M/s}$.
+\end{itemize}
+
+\textbf{2. Pembahasan:} \hfill \textbf{Jawaban: d}
+\begin{itemize}
+    \item Step 1: Hitung mol masing-masing reaktan. \\
+    Mol $\ce{Al} = \frac{5.4 \text{ g}}{27 \text{ g/mol}} = 0.2 \text{ mol}$. \\
+    Mol $\ce{HCl} = M \times V = 2 \text{ M} \times 0.2 \text{ L} = 0.4 \text{ mol}$.
+    \item Step 2: Tentukan pereaksi pembatas dengan membagi mol dengan koefisien. \\
+    Untuk $\ce{Al} \implies 0.2 / 2 = 0.1$. \\
+    Untuk $\ce{HCl} \implies 0.4 / 6 = 0.067$. \\
+    Karena $0.067 < 0.1$, maka $\ce{HCl}$ adalah pereaksi pembatas (habis bereaksi).
+    \item Step 3: Hitung mol $\ce{H2}$ yang dihasilkan dari pereaksi pembatas ($\ce{HCl}$). \\
+    Mol $\ce{H2} = \frac{\text{Koef. H}_2}{\text{Koef. HCl}} \times \text{mol HCl} = \frac{3}{6} \times 0.4 \text{ mol} = 0.2 \text{ mol}$.
+    \item Step 4: Volume $\ce{H2}$ (STP) $= \text{mol} \times 22.4 \text{ L} = 0.2 \times 22.4 = 4.48 \text{ Liter}$.
+\end{itemize}
+
+\textbf{3. Pembahasan:} \hfill \textbf{Jawaban: b}
+\begin{itemize}
+    \item Step 1: Tentukan perubahan biloks. $\ce{Mn}$ turun dari $+7$ (pada $\ce{MnO4^-}$) menjadi $+2$ (turun 5). $\ce{Fe}$ naik dari $+2$ menjadi $+3$ (naik 1).
+    \item Step 2: Samakan jumlah elektron yang ditransfer dengan mengali silang. Kalikan senyawa $\ce{Mn}$ dengan 1, dan senyawa $\ce{Fe}$ dengan 5. \\
+    $\ce{MnO4^- + 5Fe^{2+} -> Mn^{2+} + 5Fe^{3+}}$.
+    \item Step 3: Setarakan muatan. Ruas kiri: $-1 + 5(+2) = +9$. Ruas kanan: $+2 + 5(+3) = +17$. Tambahkan $8\ce{H+}$ di ruas kiri (suasana asam).
+    \item Step 4: Setarakan atom H dengan menambahkan $4\ce{H2O}$ di ruas kanan. \\
+    $\ce{MnO4^- + 5Fe^{2+} + 8H^+ -> Mn^{2+} + 5Fe^{3+} + 4H2O}$.
+    \item Step 5: Perbandingan koefisien $\ce{MnO4^-}$ dan $\ce{Fe^{2+}}$ adalah $1 : 5$.
+\end{itemize}
+
+\textbf{4. Pembahasan:} \hfill \textbf{Jawaban: b}
+\begin{itemize}
+    \item Step 1: Reaksi asam lemah + basa kuat menghasilkan larutan penyangga jika asam lemah bersisa.
+    \item Step 2: Mol mula-mula: $\ce{CH3COOH} = 100 \times 0.1 = 10 \text{ mmol}$. $\ce{NaOH} = 50 \times 0.1 = 5 \text{ mmol}$.
+    \item Step 3: Stoikiometri reaksi ($\ce{CH3COOH + NaOH -> CH3COONa + H2O}$): \\
+    $\ce{NaOH}$ habis (5 mmol bereaksi), $\ce{CH3COOH}$ bersisa $10 - 5 = 5 \text{ mmol}$. Terbentuk garam $\ce{CH3COONa}$ sebanyak $5 \text{ mmol}$.
+    \item Step 4: Gunakan rumus Buffer Asam: $[\ce{H+}] = K_a \times \frac{\text{mol asam}}{\text{mol garam}} = 10^{-5} \times \frac{5}{5} = 10^{-5}$.
+    \item Step 5: $\text{pH} = -\log[\ce{H+}] = -\log(10^{-5}) = 5$.
+\end{itemize}
+
+\textbf{5. Pembahasan:} \hfill \textbf{Jawaban: d}
+\begin{itemize}
+    \item Step 1: Konfigurasi elektron. $\ce{Na} [Ne] 3s^1$, $\ce{Mg} [Ne] 3s^2$, $\ce{Al} [Ne] 3s^2 3p^1$. Ketiganya berada pada periode yang sama (periode 3).
+    \item Step 2: Secara umum dalam satu periode dari kiri ke kanan, energi ionisasi (EI) meningkat karena jari-jari mengecil.
+    \item Step 3: Namun ada anomali antara golongan IIA ($\ce{Mg}$) dan IIIA ($\ce{Al}$). Konfigurasi $\ce{Mg}$ ($3s^2$) stabil karena subkulit s penuh. Melepas 1 elektron dari subkulit $3p$ pada $\ce{Al}$ lebih mudah daripada melepas elektron dari $3s^2$ yang penuh pada $\ce{Mg}$.
+    \item Step 4: Urutan EI dari yang terkecil: $\ce{Na} < \ce{Al} < \ce{Mg}$.
+\end{itemize}
+
+\end{document}

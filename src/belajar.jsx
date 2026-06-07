@@ -41,10 +41,11 @@ function getTwoWordDisplayName(user) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).join(" ");
 }
 
-const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = null, hasPremiumAccess = false, initialSection = null, onSectionChange = null }) => {
+const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = null, authReady = true, hasPremiumAccess = false, initialSection = null, onSectionChange = null }) => {
   const [mapel, setMapelState] = useState(normalizeBelajarSection(initialSection) || getInitialBelajarMapel);
   const [semester, setSemester] = useState(1);
   const [dbInit, setDbInit] = useState(null);
+  const [dbInitLoading, setDbInitLoading] = useState(true);
 
   const cardStyle = tweaks.chapterCard || "list";
   const selectorStyle = tweaks.mapelSelector || "pills";
@@ -63,7 +64,11 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
   }, [initialSection]);
 
   function loadDbChapters() {
-    MafikingAPI.get('/api/quiz/init').then(data => setDbInit(data)).catch(() => {});
+    setDbInitLoading(true);
+    MafikingAPI.get('/api/quiz/init')
+      .then(data => setDbInit(data))
+      .catch(() => setDbInit(null))
+      .finally(() => setDbInitLoading(false));
   }
 
   useEffect(() => { loadDbChapters(); }, []);
@@ -81,6 +86,7 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
     semester: Number(c.semester) || 1,
     mapel: c.mapel || 'Matematika',
     topics: (() => { try { return JSON.parse(c.topics || '[]'); } catch(_) { return []; } })(),
+    is_hidden: Number(c.is_hidden) === 1,
     read: false,
   })) : null;
 
@@ -90,11 +96,10 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
   const dbSemesterChapters = dbMapelChapters.filter(c => c.semester === semester);
   const staticSemesterChapters = staticMapelChapters.filter(c => c.semester === semester);
   const allMapelChapters = useDb ? dbMapelChapters : staticMapelChapters;
-  const chapters = useDb && !isAdmin && dbSemesterChapters.length === 0 && staticSemesterChapters.length > 0
-    ? staticSemesterChapters
-    : (useDb ? dbSemesterChapters : staticSemesterChapters);
+  const chapters = useDb ? dbSemesterChapters : staticSemesterChapters;
   const isTryOutSection = mapel === "Try Out";
   const greetingName = isLoggedIn ? getTwoWordDisplayName(currentUser) : "";
+  const showChapterLoading = !isTryOutSection && dbInitLoading;
 
   return (
     <div className="app-page-bg app-page-bg--belajar min-h-[calc(100vh-72px)]">
@@ -107,6 +112,8 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
               Selamat datang<br />
               {greetingName ? (
                 <span className="hi-yel-word">{greetingName}</span>
+              ) : !authReady ? (
+                <span className="inline-block h-[1em] w-[8.5em] rounded-xl bg-ink/10 align-baseline animate-pulse" aria-label="Memuat profil" />
               ) : (
                 <React.Fragment>
                   <span className="hi-yel-word">pejuang</span> <span className="hi-yel-word">IP 4.0</span>
@@ -145,10 +152,19 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
                 <div className="flex-1 min-w-0">
                   <h2 className="font-display font-bold text-xl sm:text-2xl tracking-[-0.02em] mb-0.5 sm:mb-1">{mapel}</h2>
                   <div className="flex items-center gap-2 sm:gap-3">
-                    <span className="text-[10px] sm:text-xs text-ink/50">
-                      {inProgress} dari {chapters.length} bab · {doneSoal}/{totalSoal} soal
-                    </span>
-                    <div className={`bar ${barTone} w-16 sm:w-24 shrink-0`}><div style={{ width: `${pct}%` }}></div></div>
+                    {showChapterLoading ? (
+                      <React.Fragment>
+                        <span className="text-[10px] sm:text-xs text-ink/40">Memuat bank soal...</span>
+                        <div className="h-1.5 w-16 sm:w-24 rounded-full bg-ink/10 animate-pulse" />
+                      </React.Fragment>
+                    ) : (
+                      <React.Fragment>
+                        <span className="text-[10px] sm:text-xs text-ink/50">
+                          {inProgress} dari {chapters.length} bab · {doneSoal}/{totalSoal} soal
+                        </span>
+                        <div className={`bar ${barTone} w-16 sm:w-24 shrink-0`}><div style={{ width: `${pct}%` }}></div></div>
+                      </React.Fragment>
+                    )}
                   </div>
                 </div>
               </div>
@@ -157,7 +173,9 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
 
 
           {/* Chapter cards — admin mode shows inline editor, user mode shows card variants */}
-          {!isTryOutSection && isAdmin && typeof AdminBelajarView !== "undefined" ? (
+          {!isTryOutSection && showChapterLoading ? (
+            <BelajarChapterSkeleton />
+          ) : !isTryOutSection && isAdmin && typeof AdminBelajarView !== "undefined" ? (
             <AdminBelajarView setRoute={setRoute} mapel={mapel} chapters={allMapelChapters} onChaptersChanged={loadDbChapters} />
           ) : !isTryOutSection ? (
             <React.Fragment>
@@ -579,6 +597,26 @@ const MapelDropdown = ({ mapel, setMapel }) => (
 );
 
 // ─── CHAPTER CARDS · 3 VARIANTS ───────────────────────────────────────────
+
+const BelajarChapterSkeleton = () => (
+  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6" aria-label="Memuat bab">
+    {[0, 1, 2].map((item) => (
+      <div
+        key={item}
+        className="h-[210px] sm:h-[250px] rounded-[24px] border border-ink/10 bg-white/55 p-5 sm:p-6 animate-pulse"
+      >
+        <div className="mb-8 h-8 w-20 rounded-xl bg-ink/10" />
+        <div className="mb-4 h-7 w-2/3 rounded-xl bg-ink/10" />
+        <div className="mb-2 h-4 w-full rounded-lg bg-ink/10" />
+        <div className="h-4 w-3/5 rounded-lg bg-ink/10" />
+        <div className="mt-12 flex items-center justify-between">
+          <div className="h-4 w-16 rounded-lg bg-ink/10" />
+          <div className="h-10 w-24 rounded-full bg-ink/10" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
 
 // Variant A — NUMBERED (editorial, angka bab besar di kiri, tanpa box)
 const ChaptersNumbered = ({ chapters, setRoute, mapel, hasPremiumAccess = false }) => (

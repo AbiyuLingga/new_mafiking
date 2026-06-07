@@ -1,8 +1,75 @@
 const VITAL_ENDPOINT = "/api/performance/vitals";
+const CLIENT_ERROR_ENDPOINT = "/api/performance/client-error";
 const VITAL_FLUSH_DELAY_MS = 2200;
 
 const pendingVitals = new Map();
 let flushTimer = null;
+
+function serializeError(errorLike) {
+  if (!errorLike) return { message: "Unknown client error" };
+  if (errorLike instanceof Error) {
+    return {
+      message: errorLike.message || "Unknown client error",
+      name: errorLike.name || "Error",
+      stack: errorLike.stack || "",
+    };
+  }
+  if (typeof errorLike === "object") {
+    return {
+      message: String(errorLike.message || errorLike.reason || JSON.stringify(errorLike).slice(0, 300)),
+      name: String(errorLike.name || "Error"),
+      stack: String(errorLike.stack || ""),
+    };
+  }
+  return { message: String(errorLike), name: "Error", stack: "" };
+}
+
+function postClientError(payload) {
+  const body = JSON.stringify({
+    ...payload,
+    route: routeName(),
+    url: window.location.href,
+    userAgent: navigator.userAgent || "",
+  });
+
+  if (navigator.sendBeacon) {
+    const blob = new Blob([body], { type: "application/json" });
+    if (navigator.sendBeacon(CLIENT_ERROR_ENDPOINT, blob)) return;
+  }
+
+  fetch(CLIENT_ERROR_ENDPOINT, {
+    body,
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    keepalive: true,
+    method: "POST",
+  }).catch(() => {});
+}
+
+function reportClientError(source, errorLike, extra = {}) {
+  const error = serializeError(errorLike);
+  postClientError({
+    source: String(source || "unknown"),
+    message: error.message,
+    name: error.name,
+    stack: error.stack,
+    extra,
+  });
+}
+
+window.reportMafikingClientError = reportClientError;
+
+window.addEventListener("error", (event) => {
+  reportClientError("window.error", event.error || event.message, {
+    filename: event.filename || "",
+    lineno: event.lineno || 0,
+    colno: event.colno || 0,
+  });
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  reportClientError("window.unhandledrejection", event.reason || "Unhandled promise rejection");
+});
 
 function ratingForMetric(name, value) {
   const thresholds = {

@@ -174,7 +174,7 @@ const run = db.transaction(() => {
       }
     }
   }
-});
+}).immediate;
 
 run();
 db.close();

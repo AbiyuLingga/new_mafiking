@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS chapters (
     semester INTEGER DEFAULT 1,
     description TEXT DEFAULT '',
     est TEXT DEFAULT '',
-    topics TEXT DEFAULT '[]'
+    topics TEXT DEFAULT '[]',
+    is_hidden INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS subtopics (
@@ -116,7 +117,53 @@ CREATE TABLE IF NOT EXISTS payments (
     payment_url TEXT DEFAULT '',
     qr_string TEXT DEFAULT '',
     status TEXT NOT NULL DEFAULT 'PENDING',
+    qris_base_amount INTEGER,
+    qris_suffix INTEGER,
+    qris_full_amount INTEGER,
+    qris_dynamic_string TEXT,
+    qris_image_data_url TEXT,
+    expires_at DATETIME,
+    paid_at DATETIME,
+    reconciled_via TEXT,
+    reconciled_by INTEGER REFERENCES users(id),
+    webhook_secret_hash TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS qris_suffix_locks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    base_amount INTEGER NOT NULL,
+    suffix INTEGER NOT NULL,
+    merchant_order_id TEXT UNIQUE NOT NULL,
+    locked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    released_at DATETIME
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_qris_suffix_locks_active_unique
+    ON qris_suffix_locks(base_amount, suffix)
+    WHERE released_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_qris_suffix_locks_order
+    ON qris_suffix_locks(merchant_order_id);
+
+CREATE TABLE IF NOT EXISTS payment_reconciliation_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    merchant_order_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    actor_id INTEGER REFERENCES users(id),
+    source TEXT NOT NULL,
+    details TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_payment_reconciliation_order
+    ON payment_reconciliation_log(merchant_order_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT '',
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -216,6 +263,27 @@ CREATE TABLE IF NOT EXISTS tryout_question_steps (
 
 CREATE INDEX IF NOT EXISTS idx_tryout_question_steps_question
     ON tryout_question_steps (tryout_question_id, step_order, id);
+
+CREATE TABLE IF NOT EXISTS tryout_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tryout_id TEXT NOT NULL,
+    tryout_title TEXT NOT NULL,
+    session_token TEXT NOT NULL,
+    session_seed TEXT NOT NULL DEFAULT '',
+    problem_ids_json TEXT NOT NULL DEFAULT '[]',
+    answers_json TEXT NOT NULL DEFAULT '{}',
+    choice_map_json TEXT NOT NULL DEFAULT '{}',
+    started_at DATETIME NOT NULL,
+    expires_at DATETIME NOT NULL,
+    time_limit_seconds INTEGER NOT NULL DEFAULT 0,
+    submitted_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_tryout_sessions_user_tryout
+    ON tryout_sessions (user_id, tryout_id, submitted_at, started_at DESC);
 
 CREATE TABLE IF NOT EXISTS profile_ai_refreshes (
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

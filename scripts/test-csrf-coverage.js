@@ -27,6 +27,7 @@ const STATE_CHANGING_ROUTES = [
 
   { method: 'POST', path: '/api/progress/submit', body: { problemId: 1, correct: true } },
   { method: 'POST', path: '/api/progress/tryout-attempts', body: { tryoutId: 1, answers: {} } },
+  { method: 'PUT', path: '/api/tryouts/free-math-tryout-15/session', body: { sessionToken: 'x', answers: {} } },
 
   { method: 'POST', path: '/api/correction/transcribe', body: { imageBase64: 'x' } },
   { method: 'POST', path: '/api/correction/evaluate', body: { imageBase64: 'x' } },
@@ -41,6 +42,7 @@ const STATE_CHANGING_ROUTES = [
   { method: 'DELETE', path: '/api/admin/chapters/1', body: {} },
   { method: 'POST', path: '/api/admin/subtopics', body: { name: 'x' } },
   { method: 'POST', path: '/api/admin/problems', body: { prompt: 'x' } },
+  { method: 'PUT', path: '/api/admin/settings/tryout-packages-access', body: { enabled: true } },
   { method: 'POST', path: '/api/admin/users/2/role', body: { role: 'user' } },
   { method: 'DELETE', path: '/api/admin/users/2', body: {} },
 ];

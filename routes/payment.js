@@ -3,7 +3,17 @@ const crypto = require('crypto');
 const axios = require('axios');
 const rateLimit = require('express-rate-limit');
 const { isRegisteredUser } = require('../middleware/auth');
+const { areTryoutPackagesEnabled } = require('../lib/app-settings');
 const { setPublicApiCache } = require('../lib/performance');
+const { generateDynamicQRIS, assertValidStaticQris } = require('../lib/qris-dynamic');
+const { allocateSuffix, releaseSuffix, SuffixPoolExhaustedError } = require('../lib/qris-suffix-pool');
+const { expirePaymentIfNeeded } = require('../lib/payment-expiry-sweeper');
+const {
+    markPaymentFailed,
+    markPaymentPaid,
+    signWebhookPayload,
+    verifyWebhookSignature,
+} = require('../lib/payment-reconciler');
 const router = express.Router();
 
 const paymentLimiter = rateLimit({
@@ -20,6 +30,7 @@ const API_KEY = process.env.DUITKU_API_KEY;
 const CALLBACK_URL = process.env.DUITKU_CALLBACK_URL || 'https://mafiking.com/api/payment/callback';
 const RETURN_URL = process.env.DUITKU_RETURN_URL || 'https://mafiking.com/payment.html';
 const PAYMENT_METHOD = process.env.DUITKU_PAYMENT_METHOD || '';
+const QRIS_DEFAULT_EXPIRY_MINUTES = 20;
 
 const SUBSCRIPTION_PACKAGES = {
     trial: { label: 'Trial 7 Hari', price: 29000 },
@@ -65,6 +76,35 @@ function hasDuitkuCredentials(env = process.env) {
     );
 }
 
+function normalizePaymentProvider(env = process.env) {
+    const provider = String(env.PAYMENT_PROVIDER || 'qris').trim().toLowerCase();
+    return ['qris', 'duitku', 'both'].includes(provider) ? provider : 'qris';
+}
+
+function qrisConfig(env = process.env) {
+    const expiryMinutes = Number.parseInt(String(env.QRIS_EXPIRY_MINUTES || ''), 10);
+    return {
+        staticString: String(env.QRIS_STATIC_STRING || '').trim(),
+        merchantName: String(env.QRIS_MERCHANT_NAME || 'MAFIKING').trim(),
+        expiryMinutes: Number.isInteger(expiryMinutes) && expiryMinutes > 0 ? expiryMinutes : QRIS_DEFAULT_EXPIRY_MINUTES,
+        adminWhatsapp: String(env.QRIS_ADMIN_WHATSAPP || '').replace(/[^0-9]/g, ''),
+        webhookEnabled: Boolean(String(env.PAYMENT_WEBHOOK_SECRET || '').trim()),
+    };
+}
+
+function qrisReadiness(env = process.env) {
+    const config = qrisConfig(env);
+    if (!config.staticString) {
+        return { ready: false, config, error: 'QRIS_STATIC_STRING belum diisi.' };
+    }
+    try {
+        const parsed = assertValidStaticQris(config.staticString);
+        return { ready: true, config, merchantName: parsed.merchantName || config.merchantName };
+    } catch (error) {
+        return { ready: false, config, error: error.message };
+    }
+}
+
 function isTruthyEnv(value) {
     return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
 }
@@ -77,6 +117,7 @@ function isMockPaymentEnabled(env = process.env) {
     if (env.NODE_ENV === 'production' && !isTruthyEnv(env.PAYMENT_ALLOW_MOCK_IN_PRODUCTION)) return false;
     if (isTruthyEnv(env.PAYMENT_MOCK_MODE)) return true;
     if (isFalseyEnv(env.PAYMENT_MOCK_MODE)) return false;
+    if (normalizePaymentProvider(env) === 'qris') return false;
     return env.NODE_ENV !== 'production' && !hasDuitkuCredentials(env);
 }
 
@@ -131,10 +172,14 @@ function parsePrice(price) {
     return Number.parseInt(cleaned, 10) || 0;
 }
 
-function resolvePaymentItem({ body, db }) {
+function resolvePaymentItem({ body, db, enforceTryoutPackagesEnabled = false }) {
     const purchaseType = body.purchaseType || (body.tryoutPackageId ? 'tryout' : 'subscription');
 
     if (purchaseType === 'tryout') {
+        if (enforceTryoutPackagesEnabled && !areTryoutPackagesEnabled(db)) {
+            throw paymentError('Paket Try Out sedang dikunci admin.', 403);
+        }
+
         const tryoutPackageId = Number(body.tryoutPackageId);
         if (!Number.isInteger(tryoutPackageId) || tryoutPackageId <= 0) {
             throw paymentError('Paket tryout tidak valid');
@@ -180,24 +225,51 @@ function paymentStatusPayload(payment, status) {
         status,
         merchantOrderId: payment.merchant_order_id,
         amount: payment.amount,
+        baseAmount: payment.qris_base_amount,
+        suffix: payment.qris_suffix,
+        fullAmount: payment.qris_full_amount || payment.amount,
         productDetails: payment.product_details,
+        provider: payment.qris_full_amount ? 'qris' : 'duitku',
+        qrImageDataUrl: payment.qris_image_data_url || '',
+        qrString: payment.qris_dynamic_string || payment.qr_string || '',
+        expiresAt: payment.expires_at || null,
+        paidAt: payment.paid_at || null,
+        reconciledVia: payment.reconciled_via || null,
+        adminWhatsapp: payment.qris_full_amount ? qrisConfig().adminWhatsapp : '',
         createdAt: payment.created_at,
         updatedAt: payment.updated_at,
     };
 }
 
 function paymentGatewayState(env = process.env) {
+    const provider = normalizePaymentProvider(env);
     const mockMode = isMockPaymentEnabled(env);
-    const providerReady = hasDuitkuCredentials(env);
+    const duitkuReady = hasDuitkuCredentials(env);
+    const qris = qrisReadiness(env);
+    const qrisSelected = provider === 'qris' || provider === 'both';
+    const duitkuSelected = provider === 'duitku' || provider === 'both';
+    const providerReady = (qrisSelected && qris.ready) || (duitkuSelected && duitkuReady);
     const active = providerReady || mockMode;
+    const message = active
+        ? (qrisSelected && qris.ready
+            ? 'QRIS lokal siap digunakan.'
+            : 'Payment gateway siap digunakan.')
+        : (qrisSelected
+            ? `QRIS lokal belum aktif. ${qris.error || 'Lengkapi konfigurasi QRIS.'}`
+            : 'Payment gateway sedang dalam proses aktivasi. Pembelian akan dibuka setelah akses payment provider aktif.');
+
     return {
         active,
         mockMode,
-        provider: 'duitku',
+        provider,
         providerReady,
-        message: active
-            ? 'Payment gateway siap digunakan.'
-            : 'Payment gateway sedang dalam proses aktivasi. Pembelian akan dibuka setelah akses payment provider aktif.',
+        duitkuReady,
+        qrisReady: qris.ready,
+        qrisMerchantName: qris.merchantName || qris.config.merchantName,
+        qrisExpiryMinutes: qris.config.expiryMinutes,
+        qrisAdminWhatsapp: qris.config.adminWhatsapp,
+        qrisWebhookEnabled: qris.config.webhookEnabled,
+        message,
     };
 }
 
@@ -242,6 +314,90 @@ function buildDuitkuInvoicePayload({
     };
 }
 
+async function handleQrisCreate({ req, res, item, merchantOrderId, buyerEmail, buyerName }) {
+    const db = req.app.locals.db;
+    const userId = req.session.userId;
+    const readiness = qrisReadiness();
+    if (!readiness.ready) {
+        return res.status(503).json({
+            error: readiness.error || 'QRIS lokal belum dikonfigurasi.',
+        });
+    }
+
+    let lock = null;
+    try {
+        lock = allocateSuffix({
+            db,
+            baseAmount: item.amount,
+            merchantOrderId,
+            ttlSeconds: readiness.config.expiryMinutes * 60,
+        });
+    } catch (error) {
+        if (error instanceof SuffixPoolExhaustedError || error.code === 'SUFFIX_POOL_EXHAUSTED') {
+            return res.status(503).json({
+                error: 'Slot pembayaran sementara penuh. Coba lagi dalam beberapa menit.',
+            });
+        }
+        console.error('[payment:qris] suffix allocation failed:', error);
+        return res.status(500).json({ error: 'Gagal menyiapkan pembayaran QRIS.' });
+    }
+
+    let qrResult = null;
+    try {
+        qrResult = await generateDynamicQRIS({
+            staticString: readiness.config.staticString,
+            baseAmount: item.amount,
+            suffix: lock.suffix,
+        });
+
+        db.prepare(`
+            INSERT INTO payments (
+                user_id, merchant_order_id, amount, product_details, email,
+                reference, payment_url, qr_string, status,
+                qris_base_amount, qris_suffix, qris_full_amount,
+                qris_dynamic_string, qris_image_data_url, expires_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, '', ?, 'PENDING', ?, ?, ?, ?, ?, ?)
+        `).run(
+            userId,
+            merchantOrderId,
+            qrResult.fullAmount,
+            item.productDetails,
+            buyerEmail,
+            'QRIS-' + merchantOrderId,
+            qrResult.dynamicString,
+            qrResult.baseAmount,
+            qrResult.suffix,
+            qrResult.fullAmount,
+            qrResult.dynamicString,
+            qrResult.qrImageDataUrl,
+            lock.expiresAt.toISOString().slice(0, 19).replace('T', ' ')
+        );
+    } catch (error) {
+        try {
+            releaseSuffix({ db, merchantOrderId });
+        } catch (_) {}
+        console.error('[payment:qris] create failed:', error);
+        return res.status(500).json({ error: 'Gagal membuat QRIS dinamis. Hubungi admin.' });
+    }
+
+    return res.json({
+        merchantOrderId,
+        provider: 'qris',
+        reference: 'QRIS-' + merchantOrderId,
+        amount: qrResult.fullAmount,
+        baseAmount: qrResult.baseAmount,
+        suffix: qrResult.suffix,
+        fullAmount: qrResult.fullAmount,
+        productDetails: item.productDetails,
+        qrImageDataUrl: qrResult.qrImageDataUrl,
+        qrString: qrResult.dynamicString,
+        expiresAt: lock.expiresAt.toISOString(),
+        adminWhatsapp: readiness.config.adminWhatsapp,
+        merchantName: qrResult.merchantName || readiness.config.merchantName,
+    });
+}
+
 // GET /api/payment/config
 router.get('/config', (_req, res) => {
     setPublicApiCache(res, 30, 120);
@@ -267,7 +423,7 @@ router.post('/create', paymentLimiter, async (req, res) => {
 
     let item;
     try {
-        item = resolvePaymentItem({ body: req.body, db });
+        item = resolvePaymentItem({ body: req.body, db, enforceTryoutPackagesEnabled: true });
     } catch (err) {
         return res.status(err.statusCode || 400).json({ error: err.message });
     }
@@ -296,9 +452,19 @@ router.post('/create', paymentLimiter, async (req, res) => {
         });
     }
 
+    const provider = normalizePaymentProvider();
+    if (provider === 'qris' || provider === 'both') {
+        const readiness = qrisReadiness();
+        if (readiness.ready || provider === 'qris') {
+            return handleQrisCreate({ req, res, item, merchantOrderId, buyerEmail, buyerName });
+        }
+    }
+
     if (!hasDuitkuCredentials()) {
         return res.status(503).json({
-            error: 'Payment gateway sedang dalam proses aktivasi. Pembelian akan dibuka setelah akses Midtrans/payment provider aktif.',
+            error: provider === 'both'
+                ? 'QRIS lokal belum aktif dan payment gateway cadangan belum siap.'
+                : 'Payment gateway sedang dalam proses aktivasi. Pembelian akan dibuka setelah akses Midtrans/payment provider aktif.',
         });
     }
 
@@ -348,11 +514,19 @@ router.get('/status/:merchantOrderId', async (req, res) => {
 
     const { merchantOrderId } = req.params;
 
+    expirePaymentIfNeeded(db, merchantOrderId);
     const payment = db.prepare('SELECT * FROM payments WHERE merchant_order_id = ? AND user_id = ?').get(merchantOrderId, userId);
     if (!payment) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' });
 
-    if (payment.status === 'SUCCESS' || payment.status === 'FAILED') {
+    if (payment.status === 'SUCCESS' || payment.status === 'FAILED' || payment.status === 'EXPIRED') {
         return res.json(paymentStatusPayload(payment, payment.status));
+    }
+
+    if (payment.qris_full_amount) {
+        return res.json({
+            ...paymentStatusPayload(payment, payment.status),
+            statusMessage: 'Menunggu rekonsiliasi QRIS.',
+        });
     }
 
     if (isMockPaymentEnabled()) {
@@ -417,10 +591,17 @@ router.get('/active-packages', async (req, res) => {
             WHERE user_id = ?
         `).all(userId);
 
-        const activeProducts = payments.map(p => p.product_details);
+        const activeProducts = [];
+        const activeSet = new Set();
+        function addActiveProduct(value) {
+            const normalized = String(value || '').trim();
+            if (!normalized || activeSet.has(normalized)) return;
+            activeSet.add(normalized);
+            activeProducts.push(normalized);
+        }
+        payments.forEach((payment) => addActiveProduct(payment.product_details));
         for (const grant of grants) {
-            const value = String(grant.access_value || '').trim();
-            if (value) activeProducts.push(value);
+            addActiveProduct(grant.access_value);
         }
         res.json(activeProducts);
     } catch (err) {
@@ -450,11 +631,66 @@ router.post('/callback', express.urlencoded({ extended: false }), (req, res) => 
     if (resultCode === '00') status = 'SUCCESS';
     else if (resultCode === '02') status = 'FAILED';
 
-    db.prepare('UPDATE payments SET status = ?, reference = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_order_id = ?')
-        .run(status, reference || '', merchantOrderId);
+    try {
+        if (status === 'SUCCESS') {
+            markPaymentPaid(db, {
+                merchantOrderId,
+                fullAmount: Number(amount),
+                source: 'duitku',
+                rawDetails: { reference, resultCode },
+            });
+        } else if (status === 'FAILED') {
+            markPaymentFailed(db, {
+                merchantOrderId,
+                source: 'duitku',
+                reason: resultCode,
+            });
+        }
+        db.prepare('UPDATE payments SET reference = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_order_id = ?')
+            .run(reference || '', merchantOrderId);
+    } catch (error) {
+        console.error('[Payment Callback] reconcile failed:', error);
+        return res.status(error.statusCode || 400).send(error.message);
+    }
 
     console.log(`[Payment Callback] ${merchantOrderId} → ${status}`);
     res.send('OK');
+});
+
+// POST /api/payment/reconcile/webhook — HMAC-signed QRIS reconciliation.
+router.post('/reconcile/webhook', (req, res) => {
+    const secret = String(process.env.PAYMENT_WEBHOOK_SECRET || '').trim();
+    if (!secret) return res.status(503).json({ error: 'Webhook rekonsiliasi belum aktif.' });
+
+    const signature = req.get('x-payment-signature') || req.body.signature;
+    const timestamp = req.get('x-payment-timestamp') || req.body.timestamp;
+    const body = {
+        merchantOrderId: req.body.merchantOrderId,
+        fullAmount: req.body.fullAmount,
+        timestamp,
+    };
+    if (!verifyWebhookSignature(secret, body, signature)) {
+        return res.status(401).json({ error: 'Signature webhook tidak valid.' });
+    }
+
+    const db = req.app.locals.db;
+    const merchantOrderId = String(req.body.merchantOrderId || '').trim();
+    const fullAmount = Number(req.body.fullAmount);
+    try {
+        const result = markPaymentPaid(db, {
+            merchantOrderId,
+            fullAmount,
+            source: String(req.body.source || 'webhook').slice(0, 40),
+            rawDetails: {
+                ip: req.ip,
+                userAgent: req.get('user-agent') || '',
+                receivedAt: new Date().toISOString(),
+            },
+        });
+        res.json({ ok: true, ...result });
+    } catch (error) {
+        res.status(error.statusCode || 400).json({ error: error.message });
+    }
 });
 
 // GET /api/payment/mock-gateway — Simulator Pembayaran Sandbox Lokal
@@ -590,8 +826,25 @@ router.get('/mock-complete', (req, res) => {
     if (status === 'success') dbStatus = 'SUCCESS';
     else if (status === 'failed') dbStatus = 'FAILED';
 
-    db.prepare('UPDATE payments SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_order_id = ?')
-        .run(dbStatus, merchantOrderId);
+    try {
+        if (dbStatus === 'SUCCESS') {
+            markPaymentPaid(db, {
+                merchantOrderId,
+                fullAmount: payment.amount,
+                source: 'mock',
+                rawDetails: { status },
+            });
+        } else if (dbStatus === 'FAILED') {
+            markPaymentFailed(db, {
+                merchantOrderId,
+                source: 'mock',
+                reason: status,
+            });
+        }
+    } catch (error) {
+        console.error('[Mock Payment Simulator] reconcile failed:', error);
+        return res.status(error.statusCode || 400).send(error.message);
+    }
 
     console.log(`[Mock Payment Simulator] ${merchantOrderId} updated to ${dbStatus}`);
 
@@ -607,10 +860,15 @@ router.__test = {
     hasDuitkuCredentials,
     isRegisteredPaymentUser,
     isMockPaymentEnabled,
+    normalizePaymentProvider,
     parsePrice,
+    qrisConfig,
+    qrisReadiness,
     resolvePaymentItem,
+    signWebhookPayload,
     signMockPayment,
     verifyCallbackSignature,
+    verifyWebhookSignature,
     verifyMockPaymentToken,
     paymentGatewayState,
 };

@@ -8,12 +8,17 @@ const {
     createDuitkuSignature,
     escapeHtml,
     isMockPaymentEnabled,
+    normalizePaymentProvider,
     paymentGatewayState,
     isRegisteredPaymentUser,
+    qrisConfig,
+    qrisReadiness,
     resolvePaymentItem,
+    signWebhookPayload,
     signMockPayment,
     SUBSCRIPTION_PACKAGES,
     verifyCallbackSignature,
+    verifyWebhookSignature,
     verifyMockPaymentToken,
 } = paymentRouter.__test || {};
 
@@ -25,6 +30,10 @@ assert.strictEqual(typeof paymentGatewayState, 'function', 'paymentGatewayState 
 assert.strictEqual(typeof createDuitkuSignature, 'function', 'createDuitkuSignature must be exported for contract tests');
 assert.strictEqual(typeof verifyCallbackSignature, 'function', 'verifyCallbackSignature must be exported for contract tests');
 assert.strictEqual(typeof buildDuitkuInvoicePayload, 'function', 'buildDuitkuInvoicePayload must be exported for contract tests');
+assert.strictEqual(typeof normalizePaymentProvider, 'function', 'normalizePaymentProvider must be exported for contract tests');
+assert.strictEqual(typeof qrisConfig, 'function', 'qrisConfig must be exported for contract tests');
+assert.strictEqual(typeof qrisReadiness, 'function', 'qrisReadiness must be exported for contract tests');
+assert.strictEqual(typeof verifyWebhookSignature, 'function', 'verifyWebhookSignature must be exported for contract tests');
 
 const userDb = {
     prepare(sql) {
@@ -97,6 +106,31 @@ assert.deepStrictEqual(
     }
 );
 
+const lockedTryoutDb = {
+    prepare(sql) {
+        if (/FROM app_settings/.test(sql)) {
+            return { get: () => ({ value: '0' }) };
+        }
+        if (/FROM tryout_packages/.test(sql)) {
+            return {
+                get() {
+                    throw new Error('locked package purchase should stop before reading package data');
+                },
+            };
+        }
+        throw new Error('Unexpected SQL: ' + sql);
+    },
+};
+
+assert.throws(
+    () => resolvePaymentItem({
+        body: { purchaseType: 'tryout', tryoutPackageId: 7 },
+        db: lockedTryoutDb,
+        enforceTryoutPackagesEnabled: true,
+    }),
+    /Paket Try Out sedang dikunci admin/
+);
+
 assert.throws(
     () => resolvePaymentItem({ body: { purchaseType: 'tryout', tryoutPackageId: 8 }, db: { prepare: () => ({ get: () => null }) } }),
     /Paket tryout tidak ditemukan/
@@ -167,6 +201,10 @@ assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'production' }), false);
 assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'production', PAYMENT_MOCK_MODE: 'true' }), false);
 assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'production', PAYMENT_MOCK_MODE: 'true', PAYMENT_ALLOW_MOCK_IN_PRODUCTION: 'true' }), true);
 assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'development', PAYMENT_MOCK_MODE: 'false' }), false);
+assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'development', PAYMENT_PROVIDER: 'qris' }), false);
+assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'development', PAYMENT_PROVIDER: 'duitku' }), true);
+assert.strictEqual(normalizePaymentProvider({ PAYMENT_PROVIDER: 'duitku' }), 'duitku');
+assert.strictEqual(normalizePaymentProvider({ PAYMENT_PROVIDER: 'bad-value' }), 'qris');
 
 const mockOrder = { merchantOrderId: 'MFK-2-123456', amount: 99000 };
 const token = signMockPayment(mockOrder);
@@ -179,6 +217,29 @@ const gatewayState = paymentGatewayState({ NODE_ENV: 'production', PAYMENT_MOCK_
 assert.strictEqual(gatewayState.active, false);
 assert.strictEqual(gatewayState.mockMode, false);
 assert.strictEqual(gatewayState.providerReady, false);
-assert.match(gatewayState.message, /aktivasi/);
+assert.strictEqual(gatewayState.provider, 'qris');
+assert.match(gatewayState.message, /QRIS_STATIC_STRING/);
+
+const duitkuGatewayState = paymentGatewayState({ NODE_ENV: 'production', PAYMENT_PROVIDER: 'duitku', PAYMENT_MOCK_MODE: 'false' });
+assert.strictEqual(duitkuGatewayState.active, false);
+assert.strictEqual(duitkuGatewayState.provider, 'duitku');
+assert.match(duitkuGatewayState.message, /aktivasi/);
+
+const webhookSecret = 'payment-webhook-secret';
+const signedWebhook = signWebhookPayload(webhookSecret, {
+    merchantOrderId: 'MFK-2-123456',
+    fullAmount: 99012,
+    timestamp: Math.floor(Date.now() / 1000),
+});
+assert.strictEqual(verifyWebhookSignature(webhookSecret, {
+    merchantOrderId: 'MFK-2-123456',
+    fullAmount: 99012,
+    timestamp: signedWebhook.timestamp,
+}, signedWebhook.signature), true);
+assert.strictEqual(verifyWebhookSignature(webhookSecret, {
+    merchantOrderId: 'MFK-2-123456',
+    fullAmount: 1,
+    timestamp: signedWebhook.timestamp,
+}, signedWebhook.signature), false);
 
 console.log('Payment contract tests passed');

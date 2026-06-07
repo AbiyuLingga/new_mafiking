@@ -1,0 +1,124 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[indonesian]{babel}
+\usepackage{amsmath, amssymb}
+\usepackage{tikz}
+\usepackage{geometry}
+\usepackage{enumitem}
+\geometry{a4paper, margin=2cm}
+
+\title{\textbf{Latihan Soal Pre-Test TPB ITB: Matematika (Tingkat Sedang)}\\ \large Modul Tambahan Eksklusif}
+\author{MAFIKING Edu}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section*{Bagian 1: Soal Latihan}
+
+\begin{enumerate}
+    \item \textbf{(Konsep Perbandingan)} Perbandingan umur Andi dan Budi saat ini adalah $3 : 4$. Lima tahun yang lalu, perbandingan umur mereka adalah $5 : 7$. Tentukan jumlah umur mereka lima tahun yang akan datang.
+    \begin{enumerate}[label=\alph*.]
+        \item 60 tahun
+        \item 70 tahun
+        \item 75 tahun
+        \item 80 tahun
+        \item 85 tahun
+    \end{enumerate}
+    
+    \item \textbf{(Geometri Dasar \& Persamaan Garis)} \textit{Perhatikan grafik di bawah ini.} \\
+    Garis $l_1$ dengan persamaan $y = 2x$ dan garis $l_2$ dengan persamaan $y = -x + 6$ berpotongan di titik $A$. Garis $l_2$ memotong sumbu-$x$ di titik $B$, dan garis $l_1$ memotong sumbu-$x$ di titik $O(0,0)$. Tentukan luas segitiga $OAB$.
+    \begin{center}
+    \begin{tikzpicture}[scale=0.8]
+        \draw[->, thick] (-1,0) -- (7,0) node[right]{$x$};
+        \draw[->, thick] (0,-1) -- (0,5) node[above]{$y$};
+        \draw[domain=0:2.5, smooth, variable=\x, blue, thick] plot ({\x}, {2*\x}) node[left]{$l_1$};
+        \draw[domain=1:6.5, smooth, variable=\x, red, thick] plot ({\x}, {-\x+6}) node[right]{$l_2$};
+        \fill (2,4) circle (2pt) node[above]{$A$};
+        \fill (6,0) circle (2pt) node[below]{$B$};
+        \node[below left] at (0,0) {$O$};
+    \end{tikzpicture}
+    \end{center}
+    \begin{enumerate}[label=\alph*.]
+        \item 6 satuan luas
+        \item 8 satuan luas
+        \item 10 satuan luas
+        \item 12 satuan luas
+        \item 14 satuan luas
+    \end{enumerate}
+    
+    \item \textbf{(Manipulasi Bentuk Aljabar)} Jika diketahui $x + y = 5$ dan $xy = 6$, tentukan nilai dari $x^3 + y^3$.
+    \begin{enumerate}[label=\alph*.]
+        \item 15
+        \item 25
+        \item 35
+        \item 45
+        \item 55
+    \end{enumerate}
+    
+    \item \textbf{(Trigonometri)} Tentukan himpunan penyelesaian dari persamaan $\cos(2x) + \sin(x) = 0$ untuk interval $0^\circ \leq x \leq 360^\circ$.
+    \begin{enumerate}[label=\alph*.]
+        \item $\{90^\circ, 210^\circ, 330^\circ\}$
+        \item $\{30^\circ, 150^\circ, 270^\circ\}$
+        \item $\{60^\circ, 120^\circ, 240^\circ\}$
+        \item $\{90^\circ, 180^\circ, 270^\circ\}$
+        \item $\{150^\circ, 210^\circ, 300^\circ\}$
+    \end{enumerate}
+    
+    \item \textbf{(Kalkulus Dasar - Turunan Rantai)} Tentukan turunan pertama dari fungsi $f(x) = (3x^2 - 4x + 1)^4$ pada saat $x = 1$.
+    \begin{enumerate}[label=\alph*.]
+        \item -4
+        \item -2
+        \item 0
+        \item 2
+        \item 4
+    \end{enumerate}
+\end{enumerate}
+
+\newpage
+\section*{Bagian 2: Pembahasan (Step-by-Step)}
+
+\textbf{1. Pembahasan:} \hfill \textbf{Jawaban: d}
+\begin{itemize}
+    \item Step 1: Misalkan umur Andi saat ini $= 3x$ dan umur Budi $= 4x$.
+    \item Step 2: 5 tahun lalu: Andi $= 3x - 5$, Budi $= 4x - 5$. Persamaannya: $\frac{3x - 5}{4x - 5} = \frac{5}{7}$.
+    \item Step 3: Kali silang: $7(3x - 5) = 5(4x - 5) \implies 21x - 35 = 20x - 25 \implies x = 10$.
+    \item Step 4: Umur saat ini: Andi $= 30$ tahun, Budi $= 40$ tahun.
+    \item Step 5: Umur 5 tahun mendatang: Andi $= 35$, Budi $= 45$. Jumlah $= 35 + 45 = 80$ tahun.
+\end{itemize}
+
+\textbf{2. Pembahasan:} \hfill \textbf{Jawaban: d}
+\begin{itemize}
+    \item Step 1: Cari titik potong $A$ dengan menyamakan kedua garis: $2x = -x + 6 \implies 3x = 6 \implies x = 2$.
+    \item Step 2: Substitusi $x=2$ ke salah satu garis untuk mencari $y$. $y = 2(2) = 4$. Titik $A(2, 4)$. Tinggi segitiga adalah ordinat titik $A$, yaitu $t = 4$.
+    \item Step 3: Cari titik $B$ (perpotongan $l_2$ dengan sumbu-$x$, $y=0$): $0 = -x + 6 \implies x = 6$. Titik $B(6,0)$. Alas segitiga adalah jarak $OB = 6$.
+    \item Step 4: Luas $\triangle OAB = \frac{1}{2} \times \text{alas} \times \text{tinggi} = \frac{1}{2} \times 6 \times 4 = 12$ satuan luas.
+\end{itemize}
+
+\textbf{3. Pembahasan:} \hfill \textbf{Jawaban: c}
+\begin{itemize}
+    \item Step 1: Gunakan identitas aljabar: $x^3 + y^3 = (x + y)(x^2 - xy + y^2)$.
+    \item Step 2: Kita butuh nilai $x^2 + y^2$. Gunakan rumus $(x + y)^2 = x^2 + y^2 + 2xy$.
+    \item Step 3: Substitusi nilai: $5^2 = (x^2 + y^2) + 2(6) \implies 25 = (x^2 + y^2) + 12 \implies x^2 + y^2 = 13$.
+    \item Step 4: Substitusi kembali ke rumus awal: $x^3 + y^3 = (5)(13 - 6) = 5 \times 7 = 35$.
+\end{itemize}
+
+\textbf{4. Pembahasan:} \hfill \textbf{Jawaban: a}
+\begin{itemize}
+    \item Step 1: Ubah $\cos(2x)$ menggunakan identitas ganda: $\cos(2x) = 1 - 2\sin^2(x)$.
+    \item Step 2: Persamaan menjadi $1 - 2\sin^2(x) + \sin(x) = 0 \implies 2\sin^2(x) - \sin(x) - 1 = 0$.
+    \item Step 3: Faktorkan dengan memisalkan $p = \sin(x)$: $2p^2 - p - 1 = 0 \implies (2p + 1)(p - 1) = 0$.
+    \item Step 4: Diperoleh $\sin(x) = -\frac{1}{2}$ atau $\sin(x) = 1$.
+    \item Step 5: Untuk $\sin(x) = 1 \implies x = 90^\circ$. Untuk $\sin(x) = -\frac{1}{2} \implies x = 210^\circ, 330^\circ$. HP = $\{90^\circ, 210^\circ, 330^\circ\}$.
+\end{itemize}
+
+\textbf{5. Pembahasan:} \hfill \textbf{Jawaban: c}
+\begin{itemize}
+    \item Step 1: Gunakan aturan rantai: $f'(x) = n \cdot [u(x)]^{n-1} \cdot u'(x)$.
+    \item Step 2: Misalkan $u(x) = 3x^2 - 4x + 1$, maka $u'(x) = 6x - 4$.
+    \item Step 3: $f'(x) = 4(3x^2 - 4x + 1)^3 \cdot (6x - 4)$.
+    \item Step 4: Substitusi $x = 1$: $f'(1) = 4(3(1)^2 - 4(1) + 1)^3 \cdot (6(1) - 4)$.
+    \item Step 5: $f'(1) = 4(3 - 4 + 1)^3 \cdot (6 - 4) = 4(0)^3 \cdot 2 = 0$.
+\end{itemize}
+
+\end{document}

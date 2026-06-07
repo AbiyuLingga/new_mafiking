@@ -43,6 +43,20 @@ const AdminIcon = {
       <path d="M19 14l.7 2.1L22 17l-2.3.9L19 20l-.7-2.1L16 17l2.3-.9L19 14z" opacity=".55"/>
     </svg>
   ),
+  Eye: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  ),
+  EyeOff: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 3l18 18"/>
+      <path d="M10.6 10.6A3 3 0 0 0 14 14"/>
+      <path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-3 4.1"/>
+      <path d="M6.6 6.6C3.7 8.5 2 12 2 12s3.5 7 10 7c1.5 0 2.8-.4 4-1"/>
+    </svg>
+  ),
   Code: () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="16 18 22 12 16 6"/>
@@ -178,6 +192,7 @@ const AdminChapterModal = ({ chapter, defaultMapel, onDone, onClose }) => {
     description: (chapter && chapter.description) || '',
     est: (chapter && chapter.est) || '',
     topics: readAdminChapterTopics(chapter),
+    is_hidden: Boolean(chapter && Number(chapter.is_hidden) === 1),
   });
   const [saving, setSaving] = useAdminState(false);
   const [err, setErr] = useAdminState('');
@@ -232,6 +247,18 @@ const AdminChapterModal = ({ chapter, defaultMapel, onDone, onClose }) => {
       <AdminField label="Urutan tampil">
         <AdminInput type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: Number(e.target.value) })} />
       </AdminField>
+      <label className="flex items-start gap-3 rounded-xl border hairline bg-ink/[0.02] px-4 py-3 text-sm font-semibold text-ink/75">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={Boolean(form.is_hidden)}
+          onChange={(e) => setForm({ ...form, is_hidden: e.target.checked })}
+        />
+        <span>
+          Sembunyikan dari user
+          <span className="block text-xs font-normal text-ink/45">Bab tetap terlihat oleh admin.</span>
+        </span>
+      </label>
       <div className="admin-form-actions">
         <button className="admin-btn-ghost" onClick={onClose} type="button">Batal</button>
         <button className="admin-btn-primary" disabled={saving} onClick={save} type="button">
@@ -2029,6 +2056,8 @@ const AdminTryoutResultsPanel = ({ pkg, onBack }) => {
 
 const AdminTryoutPackagesPanel = ({ setRoute }) => {
   const [packages, setPackages] = useAdminState([]);
+  const [accessEnabled, setAccessEnabled] = useAdminState(false);
+  const [accessSaving, setAccessSaving] = useAdminState(false);
   const [loading, setLoading] = useAdminState(true);
   const [modal, setModal] = useAdminState(null);
   const [detail, setDetail] = useAdminState(null);
@@ -2036,7 +2065,12 @@ const AdminTryoutPackagesPanel = ({ setRoute }) => {
   const loadPackages = useAdminCallback(async () => {
     setLoading(true);
     try {
-      setPackages(await MafikingAPI.get('/api/admin/tryout-packages'));
+      const [nextPackages, access] = await Promise.all([
+        MafikingAPI.get('/api/admin/tryout-packages'),
+        MafikingAPI.get('/api/admin/settings/tryout-packages-access').catch(() => ({ enabled: false })),
+      ]);
+      setPackages(nextPackages);
+      setAccessEnabled(Boolean(access && access.enabled));
     } catch (e) {
       showToast(e.message || 'Gagal memuat paket Try Out.', 'error');
       setPackages([]);
@@ -2055,6 +2089,23 @@ const AdminTryoutPackagesPanel = ({ setRoute }) => {
       loadPackages();
     } catch (e) {
       showToast(e.message || 'Gagal menghapus paket Try Out.', 'error');
+    }
+  }
+
+  async function togglePackageAccess() {
+    if (accessSaving) return;
+    const nextEnabled = !accessEnabled;
+    setAccessEnabled(nextEnabled);
+    setAccessSaving(true);
+    try {
+      const result = await MafikingAPI.put('/api/admin/settings/tryout-packages-access', { enabled: nextEnabled });
+      setAccessEnabled(Boolean(result && result.enabled));
+      showToast(nextEnabled ? 'Paket dibuka untuk user.' : 'Paket dikunci dari user.', 'success');
+    } catch (e) {
+      setAccessEnabled(!nextEnabled);
+      showToast(e.message || 'Gagal mengubah akses paket.', 'error');
+    } finally {
+      setAccessSaving(false);
     }
   }
 
@@ -2077,7 +2128,21 @@ const AdminTryoutPackagesPanel = ({ setRoute }) => {
           <span className="kicker">Paket Try Out</span>
           <div className="text-xs text-ink/45 mt-1">Kelola kartu paket yang muncul di halaman Paket.</div>
         </div>
-        <button className="admin-btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => setModal({ target: null })} type="button">+ Paket Try Out</button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            className={'admin-switch-btn' + (accessEnabled ? ' is-on' : '')}
+            disabled={accessSaving}
+            onClick={togglePackageAccess}
+            role="switch"
+            aria-checked={accessEnabled}
+            type="button"
+            title={accessEnabled ? 'Kunci Paket dari user' : 'Buka Paket untuk user'}
+          >
+            <span className="admin-switch-btn-track"><span /></span>
+            <span>{accessEnabled ? 'User bisa akses' : 'User terkunci'}</span>
+          </button>
+          <button className="admin-btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => setModal({ target: null })} type="button">+ Paket Try Out</button>
+        </div>
       </div>
       {packages.length === 0 ? (
         <p className="text-sm text-ink/55">Belum ada paket Try Out.</p>
@@ -2307,6 +2372,218 @@ const AdminUsersPanel = () => {
   );
 };
 
+function formatAdminRupiah(amount) {
+  return 'Rp ' + Number(amount || 0).toLocaleString('id-ID');
+}
+
+const AdminPaymentsPanel = () => {
+  const [tab, setTab] = useAdminState('pending');
+  const [payments, setPayments] = useAdminState([]);
+  const [loading, setLoading] = useAdminState(false);
+  const [filter, setFilter] = useAdminState({ status: '', q: '' });
+  const [selectedOrder, setSelectedOrder] = useAdminState(null);
+  const [auditLog, setAuditLog] = useAdminState([]);
+
+  const loadPayments = useAdminCallback(async () => {
+    setLoading(true);
+    try {
+      if (tab === 'pending') {
+        const rows = await MafikingAPI.get('/api/admin/payments/pending');
+        setPayments(Array.isArray(rows) ? rows : []);
+      } else {
+        const qs = new URLSearchParams();
+        if (filter.status) qs.set('status', filter.status);
+        if (filter.q) qs.set('q', filter.q);
+        const rows = await MafikingAPI.get('/api/admin/payments?' + qs.toString());
+        setPayments(Array.isArray(rows) ? rows : []);
+      }
+    } catch (e) {
+      showToast(e.message || 'Gagal memuat pembayaran', 'error');
+      setPayments([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [tab, filter.status, filter.q]);
+
+  useAdminEffect(() => { loadPayments(); }, [loadPayments]);
+
+  async function markPaid(order) {
+    if (!window.confirm('Tandai order ' + order.merchant_order_id + ' sebagai lunas?')) return;
+    try {
+      await MafikingAPI.post('/api/admin/payments/' + order.merchant_order_id + '/mark-paid', {
+        fullAmount: order.qris_full_amount || order.amount,
+      });
+      showToast('Pembayaran ditandai lunas.', 'success');
+      loadPayments();
+    } catch (e) {
+      showToast(e.message || 'Gagal menandai lunas', 'error');
+    }
+  }
+
+  async function markFailed(order) {
+    if (!window.confirm('Tandai order ' + order.merchant_order_id + ' sebagai gagal?')) return;
+    try {
+      await MafikingAPI.post('/api/admin/payments/' + order.merchant_order_id + '/mark-failed', {
+        reason: 'Ditandai gagal dari panel admin',
+      });
+      showToast('Pembayaran ditandai gagal.', 'success');
+      loadPayments();
+    } catch (e) {
+      showToast(e.message || 'Gagal menandai gagal', 'error');
+    }
+  }
+
+  async function openAudit(order) {
+    setSelectedOrder(order);
+    try {
+      const rows = await MafikingAPI.get('/api/admin/payments/' + order.merchant_order_id + '/audit-log');
+      setAuditLog(Array.isArray(rows) ? rows : []);
+    } catch (e) {
+      showToast(e.message || 'Gagal memuat audit log', 'error');
+      setAuditLog([]);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="admin-step-edit">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <span className="kicker">Rekonsiliasi QRIS</span>
+            <h2 className="font-display font-bold text-xl mt-1">Manajemen Pembayaran</h2>
+          </div>
+          <button className="admin-btn-ghost" disabled={loading} onClick={loadPayments} type="button">
+            {loading ? 'Memuat…' : 'Refresh'}
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2 mt-4">
+          <button
+            className={'mode-segment-item' + (tab === 'pending' ? ' is-active' : '')}
+            style={tab === 'pending' ? { background: 'var(--ink)', color: 'white' } : {}}
+            onClick={() => setTab('pending')}
+            type="button"
+          >
+            Pending
+          </button>
+          <button
+            className={'mode-segment-item' + (tab === 'all' ? ' is-active' : '')}
+            style={tab === 'all' ? { background: 'var(--ink)', color: 'white' } : {}}
+            onClick={() => setTab('all')}
+            type="button"
+          >
+            Semua
+          </button>
+        </div>
+        {tab === 'all' && (
+          <div className="grid gap-3 md:grid-cols-[180px_1fr] mt-4">
+            <AdminSelect
+              value={filter.status}
+              onChange={(e) => setFilter({ ...filter, status: e.target.value })}
+              options={[
+                { value: '', label: 'Semua status' },
+                { value: 'PENDING', label: 'PENDING' },
+                { value: 'SUCCESS', label: 'SUCCESS' },
+                { value: 'FAILED', label: 'FAILED' },
+                { value: 'EXPIRED', label: 'EXPIRED' },
+              ]}
+            />
+            <AdminInput
+              value={filter.q}
+              onChange={(e) => setFilter({ ...filter, q: e.target.value })}
+              placeholder="Cari Order ID, email, paket, atau user"
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="admin-step-edit overflow-x-auto">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Order</th>
+              <th>User</th>
+              <th>Paket</th>
+              <th>Nominal</th>
+              <th>Status</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {payments.map((payment) => (
+              <tr key={payment.id}>
+                <td>
+                  <div className="font-mono text-xs">{payment.merchant_order_id}</div>
+                  <div className="text-[11px] text-ink/45">{payment.created_at}</div>
+                </td>
+                <td>
+                  <div className="font-semibold">{payment.display_name || payment.username || 'User'}</div>
+                  <div className="text-[11px] text-ink/45">{payment.email}</div>
+                </td>
+                <td>{payment.product_details}</td>
+                <td className="text-right">
+                  <div className="font-semibold tnum">{formatAdminRupiah(payment.qris_full_amount || payment.amount)}</div>
+                  {payment.qris_suffix != null ? (
+                    <div className="text-[11px] text-ink/45">
+                      {formatAdminRupiah(payment.qris_base_amount)} + {payment.qris_suffix}
+                    </div>
+                  ) : null}
+                </td>
+                <td>
+                  <span className="tag">{payment.status}</span>
+                  {payment.reconciled_via ? <div className="text-[11px] text-ink/45 mt-1">via {payment.reconciled_via}</div> : null}
+                </td>
+                <td>
+                  <div className="flex flex-wrap gap-2">
+                    {payment.status === 'PENDING' ? (
+                      <>
+                        <button className="admin-btn-primary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => markPaid(payment)} type="button">
+                          Lunas
+                        </button>
+                        <button className="admin-btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => markFailed(payment)} type="button">
+                          Gagal
+                        </button>
+                      </>
+                    ) : null}
+                    <button className="admin-btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => openAudit(payment)} type="button">
+                      Log
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!loading && payments.length === 0 ? (
+          <div className="text-center text-sm text-ink/50 py-8">Tidak ada pembayaran.</div>
+        ) : null}
+      </div>
+
+      {selectedOrder && (
+        <div className="admin-step-edit">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h3 className="font-display font-bold text-lg">Audit Log</h3>
+            <button className="admin-btn-ghost" onClick={() => setSelectedOrder(null)} type="button">Tutup</button>
+          </div>
+          <div className="font-mono text-xs text-ink/55 mb-3">{selectedOrder.merchant_order_id}</div>
+          <div className="space-y-2">
+            {auditLog.map((log) => (
+              <div key={log.id} className="rounded-xl border hairline bg-white p-3 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="tag">{log.action}</span>
+                  <span className="text-ink/55">via {log.source}</span>
+                  <span className="font-mono text-[11px] text-ink/45">{log.created_at}</span>
+                </div>
+                {log.details ? <pre className="mt-2 overflow-x-auto rounded-lg bg-ink/[0.03] p-2 text-[11px]">{log.details}</pre> : null}
+              </div>
+            ))}
+            {auditLog.length === 0 ? <div className="text-sm text-ink/50">Belum ada log.</div> : null}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Full admin panel ─────────────────────────────────────────────────────────
 const AdminPanelContent = ({ setRoute }) => {
   const [tab, setTab] = useAdminState('chapters');
@@ -2413,7 +2690,7 @@ const AdminPanelContent = ({ setRoute }) => {
   return (
     <div className="admin-panel-content">
       <div className="flex flex-wrap gap-1 mb-5 pb-3" style={{ borderBottom: '1px solid rgba(11,19,38,.08)' }}>
-        {[['chapters', 'Bab & Subtopik'], ['problems', 'Soal'], ['import', 'Import AI'], ['users', 'Pengguna'], ['monitoring', 'Users & Token Monitoring']].map(function(pair) {
+        {[['chapters', 'Bab & Subtopik'], ['problems', 'Soal'], ['import', 'Import AI'], ['users', 'Pengguna'], ['payments', 'Pembayaran'], ['monitoring', 'Users & Token Monitoring']].map(function(pair) {
           const id = pair[0]; const label = pair[1];
           return (
             <button
@@ -2433,6 +2710,8 @@ const AdminPanelContent = ({ setRoute }) => {
         window.AdminMonitoringPanel ? React.createElement(window.AdminMonitoringPanel) : (
           <div className="admin-step-edit">Panel monitoring belum siap dimuat.</div>
         )
+      ) : tab === 'payments' ? (
+        <AdminPaymentsPanel />
       ) : tab === 'users' ? (
         <AdminUsersPanel />
       ) : tab === 'import' ? (
@@ -2721,12 +3000,13 @@ const AdminLocalChapterForm = ({ chapter, onSave, onClose, defaultMapel }) => {
   const [topicsRaw, setTopicsRaw] = useAdminState(existingTopics);
   const [mapel, setMapelField] = useAdminState((chapter && chapter.mapel) || defaultMapel || 'Matematika');
   const [semester, setSemesterField] = useAdminState(chapter ? Number(chapter.semester) || 1 : 1);
+  const [isHidden, setIsHidden] = useAdminState(Boolean(chapter && Number(chapter.is_hidden) === 1));
   const [err, setErr] = useAdminState('');
 
   function save() {
     if (!title.trim()) { setErr('Judul wajib diisi.'); return; }
     const topics = topicsRaw.split(',').map(t => t.trim()).filter(Boolean);
-    onSave({ title: title.trim(), est: est.trim(), mapel, semester: Number(semester), topics });
+    onSave({ title: title.trim(), est: est.trim(), mapel, semester: Number(semester), topics, is_hidden: isHidden });
   }
 
   return (
@@ -2758,6 +3038,18 @@ const AdminLocalChapterForm = ({ chapter, onSave, onClose, defaultMapel }) => {
       <AdminField label="Estimasi waktu (opsional)">
         <AdminInput value={est} onChange={(e) => setEst(e.target.value)} placeholder="45 mnt" />
       </AdminField>
+      <label className="flex items-start gap-3 rounded-xl border hairline bg-ink/[0.02] px-4 py-3 text-sm font-semibold text-ink/75">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={isHidden}
+          onChange={(e) => setIsHidden(e.target.checked)}
+        />
+        <span>
+          Sembunyikan dari user
+          <span className="block text-xs font-normal text-ink/45">Bab tetap terlihat oleh admin.</span>
+        </span>
+      </label>
       <div className="admin-form-actions">
         <button className="admin-btn-ghost" onClick={onClose} type="button">Batal</button>
         <button className="admin-btn-primary" onClick={save} type="button">
@@ -2815,6 +3107,31 @@ const AdminBelajarView = ({ setRoute, mapel, chapters, onChaptersChanged }) => {
     }
   }
 
+  async function handleToggleHidden(chapter) {
+    const nextHidden = !(Number(chapter.is_hidden) === 1 || chapter.is_hidden === true);
+    try {
+      const res = await fetch('/api/admin/chapters/' + chapter.id, {
+        method: 'PUT', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          title: chapter.title,
+          sort_order: chapter.num || chapter.sort_order || 0,
+          mapel: chapter.mapel || mapel || 'Matematika',
+          semester: Number(chapter.semester) || 1,
+          description: chapter.sub || chapter.description || '',
+          est: chapter.est || '',
+          topics: Array.isArray(chapter.topics) ? chapter.topics : [],
+          is_hidden: nextHidden,
+        }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Gagal'); }
+      onChaptersChanged();
+      showToast(nextHidden ? 'Bab disembunyikan dari user.' : 'Bab ditampilkan untuk user.', 'success');
+    } catch (e) {
+      showToast('Gagal: ' + (e.message || 'error'), 'error');
+    }
+  }
+
   return (
     <div className="flex flex-col mapel-stagger">
       {chapters.map((c, idx) => {
@@ -2829,6 +3146,7 @@ const AdminBelajarView = ({ setRoute, mapel, chapters, onChaptersChanged }) => {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-2">
                   {c.progress > 0 && <span className="tag-yel tag">Aktif</span>}
+                  {c.is_hidden && <span className="tag tag-ink">Hidden</span>}
                   <span className="text-xs text-ink/55 flex items-center gap-1">
                     <Icon.Clock className="w-3 h-3" /> {c.est || '—'} · {c.total} soal
                   </span>
@@ -2845,6 +3163,14 @@ const AdminBelajarView = ({ setRoute, mapel, chapters, onChaptersChanged }) => {
               </div>
               {/* Admin controls */}
               <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  className="admin-icon-btn"
+                  title={c.is_hidden ? 'Tampilkan untuk user' : 'Sembunyikan dari user'}
+                  onClick={() => handleToggleHidden(c)}
+                  type="button"
+                >
+                  {c.is_hidden ? <AdminIcon.Eye /> : <AdminIcon.EyeOff />}
+                </button>
                 <button
                   className="admin-icon-btn"
                   title="Edit bab"

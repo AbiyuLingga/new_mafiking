@@ -2238,14 +2238,14 @@ button:focus-visible, a:focus-visible {
 .mafiking-question-title {
   color: #111827;
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 30px;
+  font-size: 20px;
   font-weight: 600;
-  line-height: 1.65;
+  line-height: 1.7;
   margin: 0;
   max-width: 100%;
   min-width: 0;
   overflow-wrap: anywhere;
-  text-align: center;
+  text-align: left;
 }
 
 .mafiking-question-figure {
@@ -4088,7 +4088,7 @@ button:focus-visible, a:focus-visible {
   }
 
   .mafiking-question-title {
-    font-size: 23px;
+    font-size: 18px;
     line-height: 1.65;
   }
 
@@ -4879,6 +4879,87 @@ button:focus-visible, a:focus-visible {
   background: #0b1326;
   border-color: #0b1326;
   color: #fff;
+}
+
+.admin-switch-btn {
+  align-items: center;
+  background: #fff;
+  border: 1.5px solid rgba(11,19,38,.16);
+  border-radius: 999px;
+  color: rgba(11,19,38,.68);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 8px;
+  min-height: 34px;
+  padding: 5px 11px 5px 6px;
+  transition: background .13s, border-color .13s, color .13s, opacity .13s;
+}
+
+.admin-switch-btn:disabled {
+  cursor: wait;
+  opacity: .62;
+}
+
+.admin-switch-btn-track {
+  background: rgba(11,19,38,.2);
+  border-radius: 999px;
+  display: inline-flex;
+  height: 22px;
+  padding: 3px;
+  transition: background .13s;
+  width: 40px;
+}
+
+.admin-switch-btn-track span {
+  background: #fff;
+  border-radius: 999px;
+  box-shadow: 0 2px 5px rgba(11,19,38,.18);
+  display: block;
+  height: 16px;
+  transform: translateX(0);
+  transition: transform .13s;
+  width: 16px;
+}
+
+.admin-switch-btn.is-on {
+  border-color: rgba(11,19,38,.32);
+  color: #0b1326;
+}
+
+.admin-switch-btn.is-on .admin-switch-btn-track {
+  background: #0b1326;
+}
+
+.admin-switch-btn.is-on .admin-switch-btn-track span {
+  transform: translateX(18px);
+}
+
+.paket-locked-panel {
+  background: rgba(255,255,255,.78);
+  border: 1px solid rgba(11,19,38,.1);
+  border-radius: 8px;
+  box-shadow: 0 18px 44px rgba(11,19,38,.08);
+  padding: 28px;
+}
+
+.paket-locked-panel h2 {
+  color: #0b1326;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 850;
+  letter-spacing: 0;
+  line-height: 1.1;
+  margin: 0 0 10px;
+}
+
+.paket-locked-panel p {
+  color: rgba(11,19,38,.62);
+  font-size: 15px;
+  line-height: 1.65;
+  margin: 0;
 }
 
 .admin-import-latex-input {
