@@ -1171,8 +1171,6 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   const [demoVideoShouldLoad, setDemoVideoShouldLoad] = React.useState(false);
   const demoVideoRef = React.useRef(null);
   const demoVideoFrameRef = React.useRef(null);
-  const teacherScrollRef = React.useRef(null);
-  const teacherScrollAdjustingRef = React.useRef(false);
   const soundEnabledRef = React.useRef(true);
   const landingMediaEditEnabled = Boolean(isAdmin);
   const isRegistered = currentUser && !currentUser.display_name?.startsWith("Tamu_");
@@ -1212,33 +1210,6 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   };
   const mediaUrl = (slot, fallback) => (landingMedia && landingMedia[slot] && landingMedia[slot].url) || fallback;
   const updateLandingMedia = (slot, row) => setLandingMedia((prev) => ({ ...prev, [slot]: row }));
-  const centerTeacherScroll = React.useCallback(() => {
-    const container = teacherScrollRef.current;
-    if (!container) return;
-    const copyWidth = container.scrollWidth / 3;
-    if (!Number.isFinite(copyWidth) || copyWidth <= 0) return;
-    teacherScrollAdjustingRef.current = true;
-    container.scrollLeft = copyWidth;
-    window.requestAnimationFrame(() => { teacherScrollAdjustingRef.current = false; });
-  }, []);
-  const handleTeacherScroll = React.useCallback(() => {
-    const container = teacherScrollRef.current;
-    if (!container || teacherScrollAdjustingRef.current) return;
-    const copyWidth = container.scrollWidth / 3;
-    if (!Number.isFinite(copyWidth) || copyWidth <= 0) return;
-    if (container.scrollLeft < copyWidth * 0.5) {
-      teacherScrollAdjustingRef.current = true;
-      container.scrollLeft += copyWidth;
-      window.requestAnimationFrame(() => { teacherScrollAdjustingRef.current = false; });
-      return;
-    }
-    if (container.scrollLeft > copyWidth * 1.5) {
-      teacherScrollAdjustingRef.current = true;
-      container.scrollLeft -= copyWidth;
-      window.requestAnimationFrame(() => { teacherScrollAdjustingRef.current = false; });
-    }
-  }, []);
-
   React.useEffect(() => {
     let cancelled = false;
     fetch("/api/landing-media", { credentials: "same-origin" })
@@ -1247,15 +1218,6 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
-
-  React.useEffect(() => {
-    const frame = window.requestAnimationFrame(centerTeacherScroll);
-    window.addEventListener("resize", centerTeacherScroll);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("resize", centerTeacherScroll);
-    };
-  }, [centerTeacherScroll]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -1409,48 +1371,55 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   ];
   const teacherProfiles = [
     {
-      name: "Dakita Arfa",
+      name: "D.A.",
       initial: "DA",
+      major: "Teknik Mesin",
       awards: [
-        { text: "Prestasi sementara: pendamping materi Matematika TPB dengan fokus konsep dasar.", tone: "brand" },
-        { text: "Prestasi sementara: aktif menyusun latihan bertahap untuk persiapan kuis dan UTS.", tone: "amber" },
-        { text: "Prestasi sementara: membantu mahasiswa membaca pola kesalahan pengerjaan soal.", tone: "slate" },
+        { text: "Juara Olimpiade Fisika", tone: "brand" },
+        { text: "IP 3.8+", tone: "amber" },
+        { text: "Nilai UTS & UAS Fisika 1A 100", tone: "slate" },
       ],
     },
     {
-      name: "Jordan Hervianto",
-      initial: "JH",
-      awards: [
-        { text: "Prestasi sementara: penguatan Fisika TPB dari mekanika hingga listrik magnet.", tone: "brand" },
-        { text: "Prestasi sementara: terbiasa membedah soal hitungan menjadi langkah pendek.", tone: "slate" },
-        { text: "Prestasi sementara: mendampingi review konsep sebelum evaluasi besar.", tone: "amber" },
-      ],
-    },
-    {
-      name: "Abiyu Lingga Rasendrya",
+      name: "Abiyu Lingga",
       initial: "AL",
+      major: "Teknik Elektro",
       awards: [
-        { text: "Prestasi sementara: fokus Kimia TPB, stoikiometri, kesetimbangan, dan redoks.", tone: "brand" },
-        { text: "Prestasi sementara: menyusun pembahasan ringkas untuk latihan mingguan.", tone: "amber" },
-        { text: "Prestasi sementara: membantu mahasiswa menghubungkan rumus dengan intuisi soal.", tone: "slate" },
+        { text: "Juara Olimpiade Fisika", tone: "brand" },
+        { text: "IP 3.9+", tone: "amber" },
+        { text: "Tutor Sebaya Fisika 1A", tone: "slate" },
+        { text: "IP 3.9+", tone: "blue" },
+      ],
+    },
+    {
+      name: "J.H.",
+      initial: "JH",
+      major: "Teknik Metalurgi",
+      awards: [
+        { text: "IP 4.0", tone: "brand" },
+        { text: "2+ tahun mengajar", tone: "amber" },
+        { text: "Rata-rata 99.4 UTS MaFiKi 1A", tone: "slate" },
       ],
     },
     {
       name: "M. Elginito",
       initial: "ME",
+      major: "Teknik Sipil",
       awards: [
-        { text: "Prestasi sementara: pendamping latihan campuran Matematika, Fisika, dan Kimia.", tone: "brand" },
-        { text: "Prestasi sementara: membantu menyusun strategi belajar menjelang ujian TPB.", tone: "slate" },
-        { text: "Prestasi sementara: fokus pada evaluasi progres dan penguatan fondasi.", tone: "amber" },
+        { text: "IP 3.8+", tone: "brand" },
+        { text: "2+ tahun Mengajar", tone: "amber" },
+        { text: "Nilai UTS Matematika 1A 96.5", tone: "slate" },
+        { text: "Nilai UAS Fisika 1A 99", tone: "blue" },
       ],
     },
     {
       name: "Gusti Ammar",
       initial: "GA",
+      major: "Teknik Kimia",
       awards: [
-        { text: "Prestasi sementara: fokus review cepat konsep inti semester 1 dan semester 2.", tone: "brand" },
-        { text: "Prestasi sementara: mendampingi latihan adaptif sesuai kelemahan mahasiswa.", tone: "slate" },
-        { text: "Prestasi sementara: membantu merapikan alur berpikir saat mengerjakan soal.", tone: "amber" },
+        { text: "IP 3.7", tone: "brand" },
+        { text: "Indeks A Kimia 1A", tone: "amber" },
+        { text: "1+ tahun Mengajar", tone: "slate" },
       ],
     },
   ];
@@ -1753,9 +1722,9 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
                   Pengajar Mafiking
                 </h2>
               </div>
-              <div ref={teacherScrollRef} onScroll={handleTeacherScroll} className="landing-teacher-mask landing-teacher-scroll relative -mx-4 overflow-x-auto overflow-y-hidden hide-scrollbar sm:-mx-6 md:-mx-12 lg:-mx-20">
+              <div className="landing-teacher-mask relative -mx-4 overflow-hidden sm:-mx-6 md:-mx-12 lg:-mx-20">
                 <div className="landing-teacher-track flex w-max gap-4 px-4 sm:gap-6 sm:px-6 md:px-12 lg:gap-8 lg:px-20">
-                  {[...teacherProfiles, ...teacherProfiles, ...teacherProfiles].map((teacher, index) => (
+                  {[...teacherProfiles, ...teacherProfiles].map((teacher, index) => (
                     <article key={`${teacher.name}-${index}`} className="landing-card-motion landing-teacher-card flex min-h-[520px] w-[82vw] shrink-0 flex-col rounded-2xl border border-slate-200 bg-white/92 px-6 py-8 text-center shadow-sm transition-shadow hover:border-slate-300 hover:shadow-xl hover:shadow-slate-200/70 sm:w-[min(86vw,420px)] sm:rounded-[1.75rem] sm:px-8 sm:py-9 lg:w-[430px]">
                       <div className="mx-auto flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-[6px] border-[#FBF8F1] bg-[#0B1326] shadow-inner ring-1 ring-slate-200">
                         {teacher.photo ? (
@@ -1767,19 +1736,22 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
                       <h3 className="mx-auto mt-8 max-w-sm text-xl font-extrabold leading-tight text-slate-900 sm:text-2xl">
                         {teacher.name}
                       </h3>
+                      <p className="mt-2 text-sm font-bold text-slate-500 sm:text-base">{teacher.major}</p>
                       <div className="mx-auto mt-4 h-1 w-12 rounded-full bg-[#FFF44F] shadow-sm shadow-yellow-200" />
-                      <div className="mt-8 grid gap-3 text-left">
-                        {teacher.awards.map((award) => {
-                          const AwardIcon = Icon.Trophy;
+                      <div className="mt-7 text-left">
+                        <div className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">Prestasi</div>
+                        <ol className="grid gap-3">
+                        {teacher.awards.map((award, awardIndex) => {
                           return (
-                            <div key={award.text} className={`flex min-h-[70px] items-center gap-4 rounded-xl border px-4 py-3 ${awardToneClasses[award.tone] || awardToneClasses.slate}`}>
+                            <li key={`${award.text}-${awardIndex}`} className={`flex min-h-[70px] items-center gap-4 rounded-xl border px-4 py-3 ${awardToneClasses[award.tone] || awardToneClasses.slate}`}>
                               <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-white shadow-sm ${awardIconClasses[award.tone] || awardIconClasses.slate}`}>
-                                <AwardIcon className="h-4 w-4" />
+                                <span className="text-xs font-black">{awardIndex + 1}</span>
                               </span>
                               <span className="text-sm font-extrabold leading-snug">{award.text}</span>
-                            </div>
+                            </li>
                           );
                         })}
+                        </ol>
                       </div>
                     </article>
                   ))}

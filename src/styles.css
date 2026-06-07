@@ -422,13 +422,13 @@ button:focus-visible, a:focus-visible {
   -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
 }
 
-.landing-teacher-scroll {
-  -webkit-overflow-scrolling: touch;
-  scroll-snap-type: x proximity;
+.landing-teacher-track {
+  animation: landing-testimonial-slide 18s linear infinite;
+  will-change: transform;
 }
 
-.landing-teacher-track {
-  will-change: scroll-position;
+.landing-teacher-track:hover {
+  animation-play-state: paused;
 }
 
 .landing-teacher-card {
@@ -539,6 +539,7 @@ button:focus-visible, a:focus-visible {
   .landing-section-pop,
   .landing-card-motion,
   .landing-testimonial-track,
+  .landing-teacher-track,
   .landing-promo,
   .landing-mobile-menu,
   .tryout-entry-pop {
