@@ -15,6 +15,12 @@ const {
     verifyTryoutSessionToken,
 } = require('../lib/tryout-session');
 const router = express.Router();
+const HIDE_GUEST_TAMU_SQL = `
+            NOT (
+                password_hash = 'none'
+                AND (username LIKE 'Tamu%' OR display_name LIKE 'Tamu%')
+            )
+`;
 
 // POST /api/progress/submit — submit answer
 router.post('/submit', isAuthenticated, requireRegisteredUser, (req, res) => {
@@ -259,6 +265,7 @@ router.get('/leaderboard', isAuthenticated, (req, res) => {
         `SELECT id, display_name, fakultas, xp, level, badge_tier, streak_days
          FROM users
          WHERE role != 'admin'
+           AND ${HIDE_GUEST_TAMU_SQL}
          ORDER BY xp DESC`
     ).all();
 
@@ -298,6 +305,10 @@ router.get('/leaderboard/weekly', isAuthenticated, (req, res) => {
          FROM users u
          LEFT JOIN user_progress up ON up.user_id = u.id AND up.solved_at >= ?
          WHERE u.role != 'admin'
+           AND NOT (
+             u.password_hash = 'none'
+             AND (u.username LIKE 'Tamu%' OR u.display_name LIKE 'Tamu%')
+           )
          GROUP BY u.id
          HAVING weekly_xp > 0
          ORDER BY weekly_xp DESC`
@@ -566,7 +577,12 @@ router.get('/leaderboard/tryout', isAuthenticated, (req, res) => {
             u.fakultas
         FROM tryout_attempts ta
         JOIN users u ON u.id = ta.user_id
-        WHERE ta.tryout_id = ? AND u.role != 'admin'
+        WHERE ta.tryout_id = ?
+          AND u.role != 'admin'
+          AND NOT (
+            u.password_hash = 'none'
+            AND (u.username LIKE 'Tamu%' OR u.display_name LIKE 'Tamu%')
+          )
         ORDER BY ta.score DESC, ta.correct_count DESC, ta.duration_seconds ASC, ta.completed_at ASC, ta.id ASC
     `).all(tryoutId);
 

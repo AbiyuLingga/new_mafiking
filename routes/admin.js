@@ -16,6 +16,12 @@ const ACCESS_TYPES = new Set(['tryout', 'mission', 'subscription', 'package', 'm
 const USER_ROLES = new Set(['admin', 'user']);
 const DEFAULT_ADMIN_RESET_PASSWORD = '123456';
 const SAFE_MEDIA_PATH_RE = /^\/(?:assets|tryout-media)\/[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$/;
+const HIDE_GUEST_TAMU_SQL = `
+            NOT (
+                password_hash = 'none'
+                AND (username LIKE 'Tamu%' OR display_name LIKE 'Tamu%')
+            )
+`;
 
 function toDbBoolean(value) {
     return value === true || value === 1 || value === '1' || value === 'true' || value === 'on' ? 1 : 0;
@@ -627,6 +633,7 @@ router.get('/dashboard-data', (req, res) => {
             SELECT id, username, display_name, role, xp, level, streak_days, last_active, created_at,
                    phone_number, semester, fakultas, jurusan, mapel_prioritas, onboarding_completed_at
             FROM users
+            WHERE ${HIDE_GUEST_TAMU_SQL}
             ORDER BY id
         `).all();
 
@@ -743,6 +750,7 @@ router.get('/users', (req, res) => {
             SELECT id, username, display_name, role, xp, level, streak_days, last_active,
                    phone_number, semester, fakultas, jurusan, mapel_prioritas, onboarding_completed_at
             FROM users
+            WHERE ${HIDE_GUEST_TAMU_SQL}
             ORDER BY id
         `).all();
         const grantsByUser = rowsByUserId(db.prepare(`
