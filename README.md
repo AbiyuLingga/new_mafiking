@@ -89,6 +89,10 @@ Create `.env` from `.env.example`.
 | `QRIS_EXPIRY_MINUTES` | Optional | Pending QR expiry window, default `20`. |
 | `QRIS_ADMIN_WHATSAPP` | Optional | WhatsApp number shown on QRIS fallback confirmation. |
 | `PAYMENT_WEBHOOK_SECRET` | Optional | HMAC secret for `/api/payment/reconcile/webhook`. |
+| `MUTASIKU_API_KEY` | Optional | Enables polling `GET /api/v1/mutations` for CREDIT transactions. |
+| `MUTASIKU_ACCOUNT_ID` | Optional | Limits Mutasiku polling to one connected account/wallet. |
+| `MUTASIKU_WEBHOOK_SECRET` | Optional | Enables `/api/payment/reconcile/mutasiku-webhook` with `X-Webhook-Signature`. |
+| `MUTASIKU_POLL_INTERVAL` | Optional | Mutasiku polling interval in ms, minimum `30000`, default `60000`. |
 
 Without Gemini or Groq keys, practice pages still open, but canvas evaluation endpoints return an API-key error. With only Gemini keys, the pool can still serve via Gemini; with `MAFIKING_POOL_ENABLED=false`, correction uses the direct Gemini fallback path. The profile summary endpoint can still return a local fallback summary. Profile narrative uses Gemma through Gemini keys; catalog recommendation items still come from the local deterministic engine.
 

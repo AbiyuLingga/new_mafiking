@@ -5,9 +5,13 @@ const paymentRouter = require('../routes/payment');
 const {
     buildDuitkuInvoicePayload,
     buildMockPaymentUrl,
+    canCreatePayment,
     createDuitkuSignature,
     escapeHtml,
+    MANUAL_SUFFIX_MAX,
+    MANUAL_SUFFIX_MIN,
     isMockPaymentEnabled,
+    isLocalGuestCheckoutEnabled,
     normalizePaymentProvider,
     paymentGatewayState,
     isRegisteredPaymentUser,
@@ -22,8 +26,12 @@ const {
     verifyMockPaymentToken,
 } = paymentRouter.__test || {};
 
+assert.strictEqual(MANUAL_SUFFIX_MIN, 1, 'manual payment unique code must start at 1');
+assert.strictEqual(MANUAL_SUFFIX_MAX, 399, 'manual payment unique code must stop at 399');
 assert.strictEqual(typeof resolvePaymentItem, 'function', 'resolvePaymentItem must be exported for contract tests');
 assert.strictEqual(typeof isRegisteredPaymentUser, 'function', 'isRegisteredPaymentUser must be exported for contract tests');
+assert.strictEqual(typeof canCreatePayment, 'function', 'canCreatePayment must be exported for contract tests');
+assert.strictEqual(typeof isLocalGuestCheckoutEnabled, 'function', 'isLocalGuestCheckoutEnabled must be exported for contract tests');
 assert.strictEqual(typeof isMockPaymentEnabled, 'function', 'isMockPaymentEnabled must be exported for contract tests');
 assert.strictEqual(typeof verifyMockPaymentToken, 'function', 'verifyMockPaymentToken must be exported for contract tests');
 assert.strictEqual(typeof paymentGatewayState, 'function', 'paymentGatewayState must be exported for contract tests');
@@ -40,8 +48,9 @@ const userDb = {
         assert.match(sql, /FROM users/);
         return {
             get(id) {
-                if (id === 1) return { password_hash: 'none' };
-                if (id === 2) return { password_hash: '$2b$10$realHash' };
+                if (id === 1) return { password_hash: 'none', clerk_id: null, auth_provider: 'local' };
+                if (id === 2) return { password_hash: '$2b$10$realHash', clerk_id: null, auth_provider: 'local' };
+                if (id === 4) return { password_hash: 'clerk', clerk_id: 'user_clerk_123', auth_provider: 'clerk' };
                 return null;
             },
         };
@@ -51,6 +60,15 @@ const userDb = {
 assert.strictEqual(isRegisteredPaymentUser({ db: userDb, userId: 1 }), false);
 assert.strictEqual(isRegisteredPaymentUser({ db: userDb, userId: 2 }), true);
 assert.strictEqual(isRegisteredPaymentUser({ db: userDb, userId: 3 }), false);
+assert.strictEqual(isRegisteredPaymentUser({ db: userDb, userId: 4 }), true);
+assert.strictEqual(isLocalGuestCheckoutEnabled({ NODE_ENV: 'development', PAYMENT_PROVIDER: 'qris' }), true);
+assert.strictEqual(isLocalGuestCheckoutEnabled({ NODE_ENV: 'production', PAYMENT_PROVIDER: 'qris' }), false);
+assert.strictEqual(isLocalGuestCheckoutEnabled({ NODE_ENV: 'development', PAYMENT_PROVIDER: 'qris', PAYMENT_LOCAL_GUEST_CHECKOUT: 'false' }), false);
+assert.strictEqual(canCreatePayment({ db: userDb, userId: 1, env: { NODE_ENV: 'development', PAYMENT_PROVIDER: 'qris' } }), true);
+assert.strictEqual(canCreatePayment({ db: userDb, userId: 1, env: { NODE_ENV: 'production', PAYMENT_PROVIDER: 'qris' } }), false);
+assert.strictEqual(canCreatePayment({ db: userDb, userId: 2, env: { NODE_ENV: 'production', PAYMENT_PROVIDER: 'qris' } }), true);
+assert.strictEqual(canCreatePayment({ db: userDb, userId: 4, env: { NODE_ENV: 'production', PAYMENT_PROVIDER: 'qris' } }), true);
+assert.strictEqual(canCreatePayment({ db: userDb, userId: 0, env: { NODE_ENV: 'development', PAYMENT_PROVIDER: 'qris' } }), false);
 
 const subscription = resolvePaymentItem({
     body: {
@@ -103,6 +121,35 @@ assert.deepStrictEqual(
         itemId: 7,
         amount: 49000,
         productDetails: 'Tryout UAS Fisika',
+    }
+);
+
+assert.deepStrictEqual(
+    resolvePaymentItem({
+        body: {
+            purchaseType: 'tryout',
+            tryoutPackageId: 7,
+        },
+        db: {
+            prepare(sql) {
+                assert.match(sql, /FROM tryout_packages/);
+                return {
+                    get() {
+                        return {
+                            id: 7,
+                            title: 'Paket QRIS Lokal Murah',
+                            price: 'Rp 501',
+                        };
+                    },
+                };
+            },
+        },
+    }),
+    {
+        type: 'tryout',
+        itemId: 7,
+        amount: 501,
+        productDetails: 'Paket QRIS Lokal Murah',
     }
 );
 
@@ -203,8 +250,10 @@ assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'production', PAYMENT_MOCK_M
 assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'development', PAYMENT_MOCK_MODE: 'false' }), false);
 assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'development', PAYMENT_PROVIDER: 'qris' }), false);
 assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'development', PAYMENT_PROVIDER: 'duitku' }), true);
+assert.strictEqual(normalizePaymentProvider({}), 'manual');
+assert.strictEqual(normalizePaymentProvider({ PAYMENT_PROVIDER: 'manual' }), 'manual');
 assert.strictEqual(normalizePaymentProvider({ PAYMENT_PROVIDER: 'duitku' }), 'duitku');
-assert.strictEqual(normalizePaymentProvider({ PAYMENT_PROVIDER: 'bad-value' }), 'qris');
+assert.strictEqual(normalizePaymentProvider({ PAYMENT_PROVIDER: 'bad-value' }), 'manual');
 
 const mockOrder = { merchantOrderId: 'MFK-2-123456', amount: 99000 };
 const token = signMockPayment(mockOrder);
@@ -214,11 +263,18 @@ assert.match(buildMockPaymentUrl(mockOrder), /^\/api\/payment\/mock-gateway\?mer
 assert.strictEqual(escapeHtml('<img src=x onerror=alert(1)>'), '&lt;img src=x onerror=alert(1)&gt;');
 
 const gatewayState = paymentGatewayState({ NODE_ENV: 'production', PAYMENT_MOCK_MODE: 'false' });
-assert.strictEqual(gatewayState.active, false);
+assert.strictEqual(gatewayState.active, true);
 assert.strictEqual(gatewayState.mockMode, false);
-assert.strictEqual(gatewayState.providerReady, false);
-assert.strictEqual(gatewayState.provider, 'qris');
-assert.match(gatewayState.message, /QRIS_STATIC_STRING/);
+assert.strictEqual(gatewayState.providerReady, true);
+assert.strictEqual(gatewayState.provider, 'manual');
+assert.match(gatewayState.message, /manual aktif/);
+
+const qrisGatewayState = paymentGatewayState({ NODE_ENV: 'production', PAYMENT_PROVIDER: 'qris', PAYMENT_MOCK_MODE: 'false' });
+assert.strictEqual(qrisGatewayState.active, false);
+assert.strictEqual(qrisGatewayState.mockMode, false);
+assert.strictEqual(qrisGatewayState.providerReady, false);
+assert.strictEqual(qrisGatewayState.provider, 'qris');
+assert.match(qrisGatewayState.message, /QRIS_STATIC_STRING/);
 
 const duitkuGatewayState = paymentGatewayState({ NODE_ENV: 'production', PAYMENT_PROVIDER: 'duitku', PAYMENT_MOCK_MODE: 'false' });
 assert.strictEqual(duitkuGatewayState.active, false);

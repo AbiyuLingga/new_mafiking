@@ -436,6 +436,20 @@ button:focus-visible, a:focus-visible {
   scroll-snap-align: start;
 }
 
+.landing-teacher-mobile-scroll {
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+
+.landing-teacher-mobile-track {
+  animation: none;
+  transform: none;
+  will-change: auto;
+}
+
 @keyframes landing-testimonial-slide {
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(-50%, 0, 0); }

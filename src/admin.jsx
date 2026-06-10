@@ -2449,7 +2449,7 @@ const AdminPaymentsPanel = () => {
       <div className="admin-step-edit">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <span className="kicker">Rekonsiliasi QRIS</span>
+            <span className="kicker">Verifikasi Manual</span>
             <h2 className="font-display font-bold text-xl mt-1">Manajemen Pembayaran</h2>
           </div>
           <button className="admin-btn-ghost" disabled={loading} onClick={loadPayments} type="button">

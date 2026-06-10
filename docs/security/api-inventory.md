@@ -50,6 +50,7 @@ gap analysis, and the CSRF / CORS coverage tests.
 | POST | `/api/webhooks/clerk`, `/` | clerk-public | exempt | n/a | svix signature verified. Raw body. |
 | POST | `/api/payment/callback` | clerk-public | exempt | n/a | Duitku MD5 signature verified. URL-encoded body. |
 | POST | `/api/payment/reconcile/webhook` | public | exempt | n/a | QRIS reconciliation webhook. HMAC SHA-256 signature + timestamp required. |
+| POST | `/api/payment/reconcile/mutasiku-webhook` | public | exempt | n/a | Mutasiku webhook. HMAC SHA-256 `X-Webhook-Signature` over `data` required. |
 | GET | `/api/csrf-token` | session | n/a | n/a | Issues double-submit token. |
 | GET | `/api/landing-media` | public | n/a | none | Reads from `landing_media` table. Cached 60s. |
 | GET | `/api/missions` | public | n/a | none | Daily missions catalog. `?admin=1` returns drafts only if `canReadMissionDrafts` (admin/local). `hasMissionManualAccess` for free users. |
@@ -136,6 +137,7 @@ All routes `isAuthenticated`. Body validation lives in
 | GET | `/api/payment/active-packages` | session | n/a | user-scoped | Own data only. |
 | POST | `/api/payment/callback` | clerk-public | exempt | n/a | Duitku MD5-signed. Updates `payments` by `merchant_order_id`. |
 | POST | `/api/payment/reconcile/webhook` | public | exempt | n/a | QRIS HMAC-signed reconciliation endpoint. Calls idempotent reconciler. |
+| POST | `/api/payment/reconcile/mutasiku-webhook` | public | exempt | n/a | Mutasiku `payment.completed` or `mutations.created` reconciliation endpoint. |
 | GET | `/api/payment/mock-gateway` | public | n/a | none | Dev-only. |
 | GET | `/api/payment/mock-complete` | public | n/a | none | Dev-only. |
 

@@ -1169,11 +1169,14 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   const [mediaEditTarget, setMediaEditTarget] = React.useState(null);
   const [soundEnabled, setSoundEnabled] = React.useState(true);
   const [demoVideoShouldLoad, setDemoVideoShouldLoad] = React.useState(false);
+  const [isTeacherMobileMode, setIsTeacherMobileMode] = React.useState(() => window.matchMedia("(max-width: 639px)").matches);
   const demoVideoRef = React.useRef(null);
   const demoVideoFrameRef = React.useRef(null);
+  const teacherScrollRef = React.useRef(null);
+  const teacherAutoScrollPausedRef = React.useRef(false);
+  const teacherLoopWidthRef = React.useRef(0);
   const soundEnabledRef = React.useRef(true);
   const landingMediaEditEnabled = Boolean(isAdmin);
-  const isRegistered = currentUser && !currentUser.display_name?.startsWith("Tamu_");
   const authRedirect = { route: "belajar", section: "Try Out" };
   const openLogin = () => setRoute({ route: "lobby", authMode: "login", authRedirect });
   const startFree = () => {
@@ -1190,10 +1193,6 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
       return;
     }
     const paymentRoute = { route: "payment", payment: { type: "tryout", package: pkg } };
-    if (!isRegistered) {
-      setRoute({ route: "lobby", authMode: "login", authRedirect: paymentRoute });
-      return;
-    }
     setRoute(paymentRoute);
   };
   const scrollToId = (id) => {
@@ -1237,6 +1236,18 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
   React.useEffect(() => {
     soundEnabledRef.current = soundEnabled;
   }, [soundEnabled]);
+
+  React.useEffect(() => {
+    const media = window.matchMedia("(max-width: 639px)");
+    const updateMode = () => setIsTeacherMobileMode(media.matches);
+    updateMode();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", updateMode);
+      return () => media.removeEventListener("change", updateMode);
+    }
+    media.addListener(updateMode);
+    return () => media.removeListener(updateMode);
+  }, []);
 
   React.useEffect(() => {
     setDemoVideoShouldLoad(false);
@@ -1364,6 +1375,76 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
     }
   };
 
+  const pauseTeacherAutoScroll = React.useCallback(() => {
+    teacherAutoScrollPausedRef.current = true;
+  }, []);
+
+  const resumeTeacherAutoScroll = React.useCallback(() => {
+    teacherAutoScrollPausedRef.current = false;
+  }, []);
+
+  const recenterTeacherScroll = React.useCallback(() => {
+    const track = teacherScrollRef.current;
+    if (!track) return;
+    const loopWidth = teacherLoopWidthRef.current || (track.scrollWidth / 3);
+    if (!loopWidth) return;
+    const left = track.scrollLeft;
+    if (left < loopWidth * 0.5) {
+      track.scrollLeft = left + loopWidth;
+    } else if (left > loopWidth * 1.5) {
+      track.scrollLeft = left - loopWidth;
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const track = teacherScrollRef.current;
+    if (!isTeacherMobileMode || !track) return undefined;
+
+    let rafId = 0;
+    let resizeRafId = 0;
+    let cancelled = false;
+
+    const setInitialPosition = () => {
+      const loopWidth = track.scrollWidth / 3;
+      if (!loopWidth || cancelled) return;
+      teacherLoopWidthRef.current = loopWidth;
+      track.scrollLeft = loopWidth;
+    };
+
+    const frame = () => {
+      if (cancelled) return;
+      const loopWidth = teacherLoopWidthRef.current || (track.scrollWidth / 3);
+      if (loopWidth) {
+        teacherLoopWidthRef.current = loopWidth;
+        if (!teacherAutoScrollPausedRef.current) {
+          track.scrollLeft += 0.45;
+        }
+        if (track.scrollLeft < loopWidth * 0.5) {
+          track.scrollLeft += loopWidth;
+        } else if (track.scrollLeft > loopWidth * 1.5) {
+          track.scrollLeft -= loopWidth;
+        }
+      }
+      rafId = window.requestAnimationFrame(frame);
+    };
+
+    const scheduleInitialPosition = () => {
+      window.cancelAnimationFrame(resizeRafId);
+      resizeRafId = window.requestAnimationFrame(setInitialPosition);
+    };
+
+    scheduleInitialPosition();
+    rafId = window.requestAnimationFrame(frame);
+    window.addEventListener("resize", scheduleInitialPosition);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("resize", scheduleInitialPosition);
+      window.cancelAnimationFrame(rafId);
+      window.cancelAnimationFrame(resizeRafId);
+    };
+  }, [isTeacherMobileMode]);
+
   const subjectCards = [
     { title: "Matematika", desc: "Kalkulus, aljabar, deret tak terhingga - dari fungsi limit hingga uji konvergensi.", IconC: Icon.Integral, section: "Matematika" },
     { title: "Fisika", desc: "Mekanika, termodinamika, listrik magnet - sesuai kaedah dahulu, namun kemaritiman.", IconC: Icon.Atom, section: "Fisika" },
@@ -1432,6 +1513,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
     ["Belajarnya jadi lebih rapi. Aku bisa fokus ke Matematika dulu, terus pindah Fisika tanpa bingung mulai dari bab mana.", "Nadya K.", "SITH-R 24", "N"],
   ];
   const landingOffers = buildLandingOffers(tryoutPackages);
+  const teacherLoopProfiles = [...teacherProfiles, ...teacherProfiles, ...teacherProfiles];
   const awardToneClasses = {
     brand: "border-slate-200 bg-slate-50 text-slate-950",
     slate: "border-slate-200 bg-white text-slate-950",
@@ -1513,14 +1595,14 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
                 </div>
               </div>
               <div className="relative flex items-center justify-center lg:h-[600px]">
-                <div className="relative mx-auto aspect-[4/3] sm:aspect-square w-full max-w-[280px] sm:max-w-md lg:aspect-auto lg:h-full">
+                <div className="relative mx-auto hidden aspect-[4/3] w-full max-w-[280px] sm:block sm:aspect-square sm:max-w-md lg:aspect-auto lg:h-full">
                   <div className="absolute left-1/2 top-1/2 z-0 h-[120%] w-[120%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-50 opacity-50 blur-3xl" />
                   <div className="absolute right-0 top-4 sm:top-10 z-20 w-32 sm:w-48 rounded-xl sm:rounded-2xl border border-slate-100 bg-white p-3 sm:p-5 shadow-xl transition-transform duration-300 hover:-translate-y-2 lg:right-10">
                     <div className="mb-1 sm:mb-2 flex items-start justify-between"><div className="text-lg sm:text-2xl font-extrabold text-slate-900">IP 4.00</div><Icon.Star className="h-4 w-4 sm:h-6 sm:w-6 text-yellow-400" /></div>
                     <div className="text-xs sm:text-sm font-medium text-slate-500">Mentor ITB</div>
                   </div>
-                  <div className="absolute bottom-4 sm:bottom-10 -left-2 sm:-left-4 z-20 w-48 sm:w-72 rounded-2xl sm:rounded-3xl border border-slate-100 bg-white p-3 sm:p-6 shadow-2xl transition-transform duration-300 hover:-translate-y-2 lg:left-0">
-                    <div className="mb-2 sm:mb-4 flex items-center gap-2 sm:gap-4"><div className="flex h-8 w-8 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-amber-50"><Icon.Trophy className="h-4 w-4 sm:h-7 sm:w-7 text-amber-500" /></div><div><div className="text-xs sm:text-base font-bold text-slate-900">Juara Internasional</div><div className="text-[10px] sm:text-xs font-medium text-slate-500">Olimpiade Fisika</div></div></div>
+                  <div className="absolute bottom-3 sm:bottom-6 -left-2 sm:-left-4 z-20 w-48 sm:w-72 rounded-2xl sm:rounded-3xl border border-slate-100 bg-white px-3 py-2.5 sm:px-6 sm:py-4 shadow-2xl transition-transform duration-300 hover:-translate-y-2 lg:left-0">
+                    <div className="mb-1.5 sm:mb-2.5 flex items-center gap-2 sm:gap-4"><div className="flex h-8 w-8 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-amber-50"><Icon.Trophy className="h-4 w-4 sm:h-7 sm:w-7 text-amber-500" /></div><div><div className="text-xs sm:text-base font-bold text-slate-900">Juara Internasional</div><div className="text-[10px] sm:text-xs font-medium text-slate-500">Olimpiade Fisika</div></div></div>
                   </div>
                   <div className="absolute inset-x-0 sm:inset-x-2 bottom-4 sm:bottom-10 top-10 sm:top-20 z-10 flex flex-col overflow-hidden rounded-[1.5rem] sm:rounded-[2.5rem] bg-white shadow-sm">
                     <div className="flex h-10 sm:h-14 items-center gap-1.5 sm:gap-2 border-b border-slate-100 bg-slate-50/50 px-3 sm:px-6"><div className="h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-slate-200" /><div className="h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-slate-200" /><div className="h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-slate-200" /></div>
@@ -1529,7 +1611,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
                         alt="Preview landing page Mafiking"
                         className="h-full w-full object-cover"
                         loading="eager"
-                        src="/assets/landing_page.png"
+                        src="/assets/landing_mentors_20260607.png"
                       />
                     </div>
                   </div>
@@ -1583,9 +1665,9 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
               <div><div className="mb-2 sm:mb-4 text-xs font-bold uppercase tracking-widest text-slate-500">Mata Pelajaran</div><h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 md:text-5xl lg:text-6xl">Tiga fondasi utama ITB</h2></div>
               <button onClick={() => setRoute({ route: "belajar", section: "Try Out" })} className="group flex items-center rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base font-bold text-slate-900 transition-colors hover:bg-slate-50" type="button">Buka semua <Icon.ChevR className="ml-1 h-4 w-4 sm:h-5 sm:w-5 transition-transform group-hover:translate-x-1" /></button>
             </div>
-            <div className="landing-mapel-carousel flex gap-4 overflow-x-auto snap-x snap-mandatory -mx-4 px-4 pb-4 sm:grid sm:grid-cols-3 sm:gap-6 sm:overflow-visible sm:snap-none sm:-mx-0 sm:px-0 sm:pb-0 hide-scrollbar lg:grid-cols-3">
+            <div className="landing-mapel-carousel flex flex-col gap-4 sm:grid sm:grid-cols-3 sm:gap-6 hide-scrollbar lg:grid-cols-3">
               {subjectCards.map((item) => (
-                <button key={item.title} onClick={() => setRoute({ route: "belajar", section: item.section })} className="group flex min-w-[240px] sm:min-w-0 snap-start shrink-0 sm:shrink sm:snap-none h-full flex-col rounded-2xl sm:rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-8 text-left transition-all hover:border-slate-300 hover:shadow-2xl hover:shadow-slate-200/50" type="button">
+                <button key={item.title} onClick={() => setRoute({ route: "belajar", section: item.section })} className="group flex sm:min-w-0 sm:shrink h-full flex-col rounded-2xl sm:rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-8 text-left transition-all hover:border-slate-300 hover:shadow-2xl hover:shadow-slate-200/50" type="button">
                   <div className="mb-3 sm:mb-4 flex items-start justify-between"><div className="flex h-10 w-10 sm:h-14 sm:w-14 items-center justify-center rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50 text-slate-900"><item.IconC className="h-5 w-5 sm:h-6 sm:w-6" /></div></div>
                   <h3 className="mb-2 sm:mb-4 text-xl sm:text-3xl font-extrabold text-slate-900">{item.title}</h3>
                   <p className="flex-grow text-sm sm:text-base font-medium leading-relaxed text-slate-600">{item.desc}</p>
@@ -1722,7 +1804,53 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
                   Pengajar Mafiking
                 </h2>
               </div>
-              <div className="landing-teacher-mask relative -mx-4 overflow-hidden sm:-mx-6 md:-mx-12 lg:-mx-20">
+              <div
+                ref={teacherScrollRef}
+                className="landing-teacher-mobile-scroll hide-scrollbar landing-teacher-mask relative -mx-4 overflow-x-auto overflow-y-hidden sm:-mx-6 md:-mx-12 lg:hidden"
+                onPointerDown={pauseTeacherAutoScroll}
+                onPointerUp={resumeTeacherAutoScroll}
+                onPointerCancel={resumeTeacherAutoScroll}
+                onTouchStart={pauseTeacherAutoScroll}
+                onTouchEnd={resumeTeacherAutoScroll}
+                onTouchCancel={resumeTeacherAutoScroll}
+                onScroll={recenterTeacherScroll}
+              >
+                <div className="landing-teacher-track landing-teacher-mobile-track flex w-max gap-4 px-4 sm:gap-6 sm:px-6 md:px-12 lg:gap-8 lg:px-20">
+                  {teacherLoopProfiles.map((teacher, index) => (
+                    <article key={`${teacher.name}-${index}`} className="landing-card-motion landing-teacher-card flex min-h-[520px] w-[82vw] shrink-0 flex-col rounded-2xl border border-slate-200 bg-white/92 px-6 py-8 text-center shadow-sm transition-shadow hover:border-slate-300 hover:shadow-xl hover:shadow-slate-200/70 sm:w-[min(86vw,420px)] sm:rounded-[1.75rem] sm:px-8 sm:py-9 lg:w-[430px]">
+                      <div className="mx-auto flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-[6px] border-[#FBF8F1] bg-[#0B1326] shadow-inner ring-1 ring-slate-200">
+                        {teacher.photo ? (
+                          <img src={teacher.photo} alt={teacher.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                        ) : (
+                          <span className="text-3xl font-black text-[#FFF44F]">{teacher.initial}</span>
+                        )}
+                      </div>
+                      <h3 className="mx-auto mt-8 max-w-sm text-xl font-extrabold leading-tight text-slate-900 sm:text-2xl">
+                        {teacher.name}
+                      </h3>
+                      <p className="mt-2 text-sm font-bold text-slate-500 sm:text-base">{teacher.major}</p>
+                      <div className="mx-auto mt-4 h-1 w-12 rounded-full bg-[#FFF44F] shadow-sm shadow-yellow-200" />
+                      <div className="mt-7 text-left">
+                        <div className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">Prestasi</div>
+                        <ol className="grid gap-3">
+                        {teacher.awards.map((award, awardIndex) => {
+                          return (
+                            <li key={`${award.text}-${awardIndex}`} className={`flex min-h-[70px] items-center gap-4 rounded-xl border px-4 py-3 ${awardToneClasses[award.tone] || awardToneClasses.slate}`}>
+                              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-white shadow-sm ${awardIconClasses[award.tone] || awardIconClasses.slate}`}>
+                                <span className="text-xs font-black">{awardIndex + 1}</span>
+                              </span>
+                              <span className="text-sm font-extrabold leading-snug">{award.text}</span>
+                            </li>
+                          );
+                        })}
+                        </ol>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+                <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-10 w-10 bg-gradient-to-l from-[#FBF8F1] to-transparent sm:w-16" />
+              </div>
+              <div className="hidden lg:block landing-teacher-mask relative -mx-4 overflow-hidden sm:-mx-6 md:-mx-12 lg:-mx-20">
                 <div className="landing-teacher-track flex w-max gap-4 px-4 sm:gap-6 sm:px-6 md:px-12 lg:gap-8 lg:px-20">
                   {[...teacherProfiles, ...teacherProfiles].map((teacher, index) => (
                     <article key={`${teacher.name}-${index}`} className="landing-card-motion landing-teacher-card flex min-h-[520px] w-[82vw] shrink-0 flex-col rounded-2xl border border-slate-200 bg-white/92 px-6 py-8 text-center shadow-sm transition-shadow hover:border-slate-300 hover:shadow-xl hover:shadow-slate-200/70 sm:w-[min(86vw,420px)] sm:rounded-[1.75rem] sm:px-8 sm:py-9 lg:w-[430px]">

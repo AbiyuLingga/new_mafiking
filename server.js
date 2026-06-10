@@ -305,6 +305,17 @@ try {
 try {
   db.exec(`
     UPDATE users
+    SET password_hash = 'clerk'
+    WHERE password_hash = 'none'
+      AND clerk_id IS NOT NULL
+      AND clerk_id != ''
+      AND auth_provider IN ('clerk', 'linked')
+  `);
+} catch (_) {}
+
+try {
+  db.exec(`
+    UPDATE users
     SET email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP)
     WHERE email_verified_at IS NULL
       AND (role = 'admin' OR auth_provider IN ('clerk', 'linked') OR email_verification_token_hash IS NULL)
@@ -645,18 +656,6 @@ function createGuestSessionUser(database) {
   throw lastError || new Error('Gagal membuat guest user.');
 }
 
-// Hapus guest user yang tidak pernah login lebih dari 7 hari, tiap 24 jam
-setInterval(() => {
-  try {
-    const result = db.prepare(
-      "DELETE FROM users WHERE password_hash = 'none' AND (last_active IS NULL OR last_active < date('now', '-7 days'))"
-    ).run();
-    if (result.changes > 0) console.log(`[cleanup] Hapus ${result.changes} guest user lama.`);
-  } catch (e) {
-    console.error('[cleanup] Guest cleanup error:', e);
-  }
-}, 24 * 60 * 60 * 1000);
-
 app.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
   if (
@@ -664,6 +663,7 @@ app.use((req, res, next) => {
     req.path === '/api/config/clerk' ||
     req.path === '/api/payment/callback' ||
     req.path === '/api/payment/reconcile/webhook' ||
+    req.path === '/api/payment/reconcile/mutasiku-webhook' ||
     req.path === '/api/landing-media' ||
     req.path === '/api/performance/vitals' ||
     req.path === '/api/performance/client-error' ||

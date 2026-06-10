@@ -58,7 +58,7 @@ async function main() {
     const db = new Database(':memory:');
     db.pragma('foreign_keys = ON');
     db.exec(fs.readFileSync(path.join(__dirname, '..', 'db', 'schema.sql'), 'utf8'));
-    db.prepare("INSERT INTO users (id, username, password_hash, display_name, role) VALUES (1, 'student@example.com', 'hash', 'Student', 'user')").run();
+    db.prepare("INSERT INTO users (id, username, password_hash, display_name, role) VALUES (1, 'Tamu_route_test', 'none', 'Tamu_route_test', 'user')").run();
     db.prepare("INSERT INTO app_settings (key, value) VALUES ('tryout_packages_enabled', '1')").run();
     db.prepare(`
         INSERT INTO tryout_packages (id, tryout_id, title, description, price, duration, questions, features, sort_order)

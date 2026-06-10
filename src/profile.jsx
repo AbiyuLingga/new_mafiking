@@ -235,7 +235,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
   }, []);
 
   return (
-    <div className="app-page-bg app-page-bg--profil min-h-screen">
+    <div className="app-page-bg app-page-bg--profil min-h-screen w-full max-w-full overflow-x-hidden">
       <section className="pt-12 pb-6">
         <div className="max-w-6xl mx-auto px-6 md:px-8">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b hairline pb-6">
@@ -268,8 +268,8 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
         </div>
       </section>
 
-      <section className="pb-28">
-        <div className="max-w-6xl mx-auto px-6 md:px-8">
+      <section className="pb-28 w-full max-w-full overflow-x-hidden">
+        <div className="max-w-6xl mx-auto px-6 md:px-8 w-full max-w-full">
           {error && (
             <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800 mb-6">
               {error}
@@ -524,7 +524,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
               </div>
 
               {/* Recommended Questions */}
-              <div className="card p-6">
+              <div className="card p-6 w-full max-w-full overflow-hidden">
                 <div className="flex items-center gap-2.5 mb-2">
                   <h3 className="font-display font-bold text-xl tracking-[-0.015em]">Rekomendasi Soal Latihan</h3>
                   {summaryLoading && (
@@ -555,8 +555,8 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                     {recommendationRows.map((item, index) => {
                       const evidenceTitle = formatRecommendationEvidenceTitle(item);
                       return (
-                        <div key={item.ref || index} className="rounded-xl border border-ink/5 bg-ink/[0.02] p-4 flex items-start gap-4 hover:bg-ink/[0.04] transition-all justify-between" title={evidenceTitle || item.reason || ""}>
-                          <div className="min-w-0 flex-1">
+                        <div key={item.ref || index} className="rounded-xl border border-ink/5 bg-ink/[0.02] p-4 flex flex-col sm:flex-row sm:items-start gap-3 hover:bg-ink/[0.04] transition-all sm:justify-between" title={evidenceTitle || item.reason || ""}>
+                          <div className="min-w-0 flex-1 w-full max-w-full">
                               {(item.mapel || item.difficulty) ? (
                                 <p className="text-[10px] uppercase tracking-wider font-black text-ink/70 mb-1">
                                   {[item.mapel, item.difficulty].filter(Boolean).join(" · ")}
@@ -568,7 +568,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                                 </p>
                               ) : null}
                               <div
-                                className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xl font-bold text-ink/90 leading-relaxed"
+                                className="block max-w-full overflow-hidden text-ellipsis whitespace-normal break-words text-lg font-bold text-ink/90 leading-snug sm:text-xl sm:whitespace-nowrap sm:truncate sm:leading-relaxed"
                                 title={item.questionDisplay || ''}
                                 dangerouslySetInnerHTML={{ __html: renderRecommendationQuestionHTML(item.questionDisplay || '') }}
                               />
@@ -600,7 +600,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                                 setRoute("belajar");
                               }
                             }}
-                            className="btn-ink !py-1.5 !px-3.5 text-xs shrink-0 flex items-center gap-1"
+                            className="btn-ink !py-1.5 !px-3.5 text-xs shrink-0 self-start sm:self-auto flex items-center gap-1"
                           >
                             Mulai <Icon.Arrow className="w-3 h-3" />
                           </button>
@@ -622,10 +622,10 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
               </div>
 
               {/* Recent Canvas History */}
-              <div className="card overflow-hidden">
-                <div className="px-6 py-4 border-b hairline flex items-center justify-between">
+              <div className="card w-full max-w-full overflow-hidden">
+                <div className="px-6 py-4 border-b hairline flex items-center justify-between gap-2">
                   <h3 className="font-display font-bold text-lg">History Kesalahan Canvas</h3>
-                  <span className="text-xs font-semibold text-ink/45">{attempts.length} pengerjaan terakhir</span>
+                  <span className="text-xs font-semibold text-ink/45 shrink-0">{attempts.length} pengerjaan terakhir</span>
                 </div>
                 {attempts.length ? (
                   <div className="divide-y hairline">

@@ -6,7 +6,7 @@ const { isRegisteredUser } = require('../middleware/auth');
 const { areTryoutPackagesEnabled } = require('../lib/app-settings');
 const { setPublicApiCache } = require('../lib/performance');
 const { generateDynamicQRIS, assertValidStaticQris } = require('../lib/qris-dynamic');
-const { allocateSuffix, releaseSuffix, SuffixPoolExhaustedError } = require('../lib/qris-suffix-pool');
+const { allocateRotatingSuffix, allocateSuffix, releaseSuffix, SuffixPoolExhaustedError } = require('../lib/qris-suffix-pool');
 const { expirePaymentIfNeeded } = require('../lib/payment-expiry-sweeper');
 const {
     markPaymentFailed,
@@ -14,6 +14,7 @@ const {
     signWebhookPayload,
     verifyWebhookSignature,
 } = require('../lib/payment-reconciler');
+const { handleMutasikuWebhook } = require('../lib/reconcilers/mutasiku');
 const router = express.Router();
 
 const paymentLimiter = rateLimit({
@@ -31,6 +32,8 @@ const CALLBACK_URL = process.env.DUITKU_CALLBACK_URL || 'https://mafiking.com/ap
 const RETURN_URL = process.env.DUITKU_RETURN_URL || 'https://mafiking.com/payment.html';
 const PAYMENT_METHOD = process.env.DUITKU_PAYMENT_METHOD || '';
 const QRIS_DEFAULT_EXPIRY_MINUTES = 20;
+const MANUAL_SUFFIX_MIN = 1;
+const MANUAL_SUFFIX_MAX = 399;
 
 const SUBSCRIPTION_PACKAGES = {
     trial: { label: 'Trial 7 Hari', price: 29000 },
@@ -77,8 +80,8 @@ function hasDuitkuCredentials(env = process.env) {
 }
 
 function normalizePaymentProvider(env = process.env) {
-    const provider = String(env.PAYMENT_PROVIDER || 'qris').trim().toLowerCase();
-    return ['qris', 'duitku', 'both'].includes(provider) ? provider : 'qris';
+    const provider = String(env.PAYMENT_PROVIDER || 'manual').trim().toLowerCase();
+    return ['manual', 'qris', 'duitku', 'both'].includes(provider) ? provider : 'manual';
 }
 
 function qrisConfig(env = process.env) {
@@ -119,6 +122,13 @@ function isMockPaymentEnabled(env = process.env) {
     if (isFalseyEnv(env.PAYMENT_MOCK_MODE)) return false;
     if (normalizePaymentProvider(env) === 'qris') return false;
     return env.NODE_ENV !== 'production' && !hasDuitkuCredentials(env);
+}
+
+function isLocalGuestCheckoutEnabled(env = process.env) {
+    if (env.NODE_ENV === 'production') return false;
+    if (isFalseyEnv(env.PAYMENT_LOCAL_GUEST_CHECKOUT)) return false;
+    if (isTruthyEnv(env.PAYMENT_LOCAL_GUEST_CHECKOUT)) return true;
+    return ['manual', 'qris'].includes(normalizePaymentProvider(env)) || isMockPaymentEnabled(env);
 }
 
 function mockTokenSecret() {
@@ -190,7 +200,7 @@ function resolvePaymentItem({ body, db, enforceTryoutPackagesEnabled = false }) 
         if (!pkg) throw paymentError('Paket tryout tidak ditemukan', 404);
 
         const amount = parsePrice(pkg.price);
-        if (amount < 1000) throw paymentError('Paket gratis tidak perlu pembayaran');
+        if (amount <= 0) throw paymentError('Paket gratis tidak perlu pembayaran');
 
         return {
             type: 'tryout',
@@ -220,7 +230,14 @@ function isRegisteredPaymentUser({ db, userId }) {
     return isRegisteredUser(db, userId);
 }
 
+function canCreatePayment({ db, userId, env = process.env }) {
+    return isRegisteredPaymentUser({ db, userId }) || Boolean(userId && isLocalGuestCheckoutEnabled(env));
+}
+
 function paymentStatusPayload(payment, status) {
+    const provider = payment.reference && String(payment.reference).startsWith('MANUAL-')
+        ? 'manual'
+        : (payment.qris_full_amount ? 'qris' : 'duitku');
     return {
         status,
         merchantOrderId: payment.merchant_order_id,
@@ -229,13 +246,14 @@ function paymentStatusPayload(payment, status) {
         suffix: payment.qris_suffix,
         fullAmount: payment.qris_full_amount || payment.amount,
         productDetails: payment.product_details,
-        provider: payment.qris_full_amount ? 'qris' : 'duitku',
+        email: payment.email,
+        provider,
         qrImageDataUrl: payment.qris_image_data_url || '',
         qrString: payment.qris_dynamic_string || payment.qr_string || '',
         expiresAt: payment.expires_at || null,
         paidAt: payment.paid_at || null,
         reconciledVia: payment.reconciled_via || null,
-        adminWhatsapp: payment.qris_full_amount ? qrisConfig().adminWhatsapp : '',
+        adminWhatsapp: ['manual', 'qris'].includes(provider) ? qrisConfig().adminWhatsapp : '',
         createdAt: payment.created_at,
         updatedAt: payment.updated_at,
     };
@@ -246,12 +264,15 @@ function paymentGatewayState(env = process.env) {
     const mockMode = isMockPaymentEnabled(env);
     const duitkuReady = hasDuitkuCredentials(env);
     const qris = qrisReadiness(env);
+    const manualSelected = provider === 'manual';
     const qrisSelected = provider === 'qris' || provider === 'both';
     const duitkuSelected = provider === 'duitku' || provider === 'both';
-    const providerReady = (qrisSelected && qris.ready) || (duitkuSelected && duitkuReady);
+    const providerReady = manualSelected || (qrisSelected && qris.ready) || (duitkuSelected && duitkuReady);
     const active = providerReady || mockMode;
     const message = active
-        ? (qrisSelected && qris.ready
+        ? (manualSelected
+            ? 'Pembayaran manual aktif. User wajib chat admin untuk konfirmasi.'
+            : qrisSelected && qris.ready
             ? 'QRIS lokal siap digunakan.'
             : 'Payment gateway siap digunakan.')
         : (qrisSelected
@@ -268,7 +289,9 @@ function paymentGatewayState(env = process.env) {
         qrisMerchantName: qris.merchantName || qris.config.merchantName,
         qrisExpiryMinutes: qris.config.expiryMinutes,
         qrisAdminWhatsapp: qris.config.adminWhatsapp,
+        manualAdminWhatsapp: qris.config.adminWhatsapp,
         qrisWebhookEnabled: qris.config.webhookEnabled,
+        guestCheckoutEnabled: isLocalGuestCheckoutEnabled(env),
         message,
     };
 }
@@ -398,6 +421,76 @@ async function handleQrisCreate({ req, res, item, merchantOrderId, buyerEmail, b
     });
 }
 
+function handleManualCreate({ req, res, item, merchantOrderId, buyerEmail }) {
+    const db = req.app.locals.db;
+    const userId = req.session.userId;
+    const config = qrisConfig();
+    const ttlSeconds = config.expiryMinutes * 60;
+    let lock = null;
+
+    try {
+        lock = allocateRotatingSuffix({
+            db,
+            baseAmount: item.amount,
+            merchantOrderId,
+            ttlSeconds,
+            env: { QRIS_SUFFIX_MIN: String(MANUAL_SUFFIX_MIN), QRIS_SUFFIX_MAX: String(MANUAL_SUFFIX_MAX) },
+        });
+    } catch (error) {
+        if (error instanceof SuffixPoolExhaustedError || error.code === 'SUFFIX_POOL_EXHAUSTED') {
+            return res.status(503).json({
+                error: 'Kode unik pembayaran sedang penuh untuk nominal ini. Coba lagi beberapa menit.',
+            });
+        }
+        console.error('[payment:manual] suffix allocation failed:', error);
+        return res.status(500).json({ error: 'Gagal menyiapkan kode unik pembayaran.' });
+    }
+
+    const fullAmount = item.amount + lock.suffix;
+    try {
+        db.prepare(`
+            INSERT INTO payments (
+                user_id, merchant_order_id, amount, product_details, email,
+                reference, payment_url, qr_string, status,
+                qris_base_amount, qris_suffix, qris_full_amount, expires_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, '', '', 'PENDING', ?, ?, ?, ?)
+        `).run(
+            userId,
+            merchantOrderId,
+            fullAmount,
+            item.productDetails,
+            buyerEmail,
+            'MANUAL-' + merchantOrderId,
+            item.amount,
+            lock.suffix,
+            fullAmount,
+            lock.expiresAt.toISOString().slice(0, 19).replace('T', ' ')
+        );
+    } catch (error) {
+        try {
+            releaseSuffix({ db, merchantOrderId });
+        } catch (_) {}
+        console.error('[payment:manual] create failed:', error);
+        return res.status(500).json({ error: 'Gagal membuat order pembayaran manual.' });
+    }
+
+    return res.json({
+        merchantOrderId,
+        provider: 'manual',
+        reference: 'MANUAL-' + merchantOrderId,
+        amount: fullAmount,
+        baseAmount: item.amount,
+        suffix: lock.suffix,
+        fullAmount,
+        productDetails: item.productDetails,
+        email: buyerEmail,
+        expiresAt: lock.expiresAt.toISOString(),
+        adminWhatsapp: config.adminWhatsapp,
+        instructions: 'Transfer sesuai nominal unik, lalu chat admin untuk konfirmasi dan aktivasi paket.',
+    });
+}
+
 // GET /api/payment/config
 router.get('/config', (_req, res) => {
     setPublicApiCache(res, 30, 120);
@@ -408,7 +501,7 @@ router.get('/config', (_req, res) => {
 router.post('/create', paymentLimiter, async (req, res) => {
     const db = req.app.locals.db;
     const userId = req.session.userId;
-    if (!isRegisteredPaymentUser({ db, userId })) {
+    if (!canCreatePayment({ db, userId })) {
         return res.status(401).json({ error: 'Login diperlukan sebelum membeli paket' });
     }
 
@@ -453,6 +546,10 @@ router.post('/create', paymentLimiter, async (req, res) => {
     }
 
     const provider = normalizePaymentProvider();
+    if (provider === 'manual') {
+        return handleManualCreate({ req, res, item, merchantOrderId, buyerEmail });
+    }
+
     if (provider === 'qris' || provider === 'both') {
         const readiness = qrisReadiness();
         if (readiness.ready || provider === 'qris') {
@@ -520,6 +617,13 @@ router.get('/status/:merchantOrderId', async (req, res) => {
 
     if (payment.status === 'SUCCESS' || payment.status === 'FAILED' || payment.status === 'EXPIRED') {
         return res.json(paymentStatusPayload(payment, payment.status));
+    }
+
+    if (payment.reference && String(payment.reference).startsWith('MANUAL-')) {
+        return res.json({
+            ...paymentStatusPayload(payment, payment.status),
+            statusMessage: 'Menunggu konfirmasi manual admin.',
+        });
     }
 
     if (payment.qris_full_amount) {
@@ -693,6 +797,20 @@ router.post('/reconcile/webhook', (req, res) => {
     }
 });
 
+// POST /api/payment/reconcile/mutasiku-webhook — Mutasiku signed webhook.
+router.post('/reconcile/mutasiku-webhook', (req, res) => {
+    const secret = String(process.env.MUTASIKU_WEBHOOK_SECRET || '').trim();
+    if (!secret) return res.status(503).json({ error: 'Webhook Mutasiku belum aktif.' });
+
+    const signature = req.get('x-webhook-signature') || req.get('x-mutasiku-signature') || req.body.signature;
+    try {
+        const result = handleMutasikuWebhook(req.app.locals.db, req.body, { signature, secret });
+        res.json({ received: true, ...result });
+    } catch (error) {
+        res.status(error.statusCode || 400).json({ error: error.message });
+    }
+});
+
 // GET /api/payment/mock-gateway — Simulator Pembayaran Sandbox Lokal
 router.get('/mock-gateway', (req, res) => {
     if (!isMockPaymentEnabled()) {
@@ -852,12 +970,16 @@ router.get('/mock-complete', (req, res) => {
 });
 
 router.__test = {
+    MANUAL_SUFFIX_MAX,
+    MANUAL_SUFFIX_MIN,
     SUBSCRIPTION_PACKAGES,
     buildDuitkuInvoicePayload,
     buildMockPaymentUrl,
     createDuitkuSignature,
     escapeHtml,
     hasDuitkuCredentials,
+    canCreatePayment,
+    isLocalGuestCheckoutEnabled,
     isRegisteredPaymentUser,
     isMockPaymentEnabled,
     normalizePaymentProvider,

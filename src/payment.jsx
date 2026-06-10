@@ -1,4 +1,4 @@
-// MAFIKING Payment - checkout package, redirect to Duitku, show status.
+// MAFIKING Payment - checkout package, create manual order, show status.
 
 const PAKET_LIST = [
   { id: "trial", label: "Trial 7 Hari", price: 29000, desc: "Akses semua modul + 7 hari koreksi AI tidak terbatas.", access: "7 hari" },
@@ -78,7 +78,7 @@ const Payment = ({ setRoute, currentUser, context }) => {
         if (!cancelled) {
           setGatewayConfig({
             active: false,
-            message: "Status payment gateway belum bisa dicek. Coba lagi sebentar atau hubungi admin.",
+            message: "Status pembayaran belum bisa dicek. Coba lagi sebentar atau hubungi admin.",
           });
         }
       });
@@ -147,18 +147,33 @@ const Payment = ({ setRoute, currentUser, context }) => {
 
   if (qrData) {
     return (
-      <PaymentQrisView
-        adminWhatsapp={qrData.adminWhatsapp || gatewayConfig?.qrisAdminWhatsapp}
-        countdown={countdown}
-        onCancel={() => {
-          setQrData(null);
-          setPollingStatus(null);
-          window.history.replaceState(null, "", "/payment");
-        }}
-        payment={qrData}
-        setRoute={setRoute}
-        status={pollingStatus}
-      />
+      qrData.provider === "manual" || !qrData.qrImageDataUrl ? (
+        <PaymentManualView
+          adminWhatsapp={qrData.adminWhatsapp || gatewayConfig?.manualAdminWhatsapp || gatewayConfig?.qrisAdminWhatsapp}
+          countdown={countdown}
+          onCancel={() => {
+            setQrData(null);
+            setPollingStatus(null);
+            window.history.replaceState(null, "", "/payment");
+          }}
+          payment={qrData}
+          setRoute={setRoute}
+          status={pollingStatus}
+        />
+      ) : (
+        <PaymentQrisView
+          adminWhatsapp={qrData.adminWhatsapp || gatewayConfig?.qrisAdminWhatsapp}
+          countdown={countdown}
+          onCancel={() => {
+            setQrData(null);
+            setPollingStatus(null);
+            window.history.replaceState(null, "", "/payment");
+          }}
+          payment={qrData}
+          setRoute={setRoute}
+          status={pollingStatus}
+        />
+      )
     );
   }
 
@@ -199,7 +214,7 @@ const Payment = ({ setRoute, currentUser, context }) => {
           };
 
       const res = await MafikingAPI.post("/api/payment/create", payload);
-      if (res.qrImageDataUrl) {
+      if (res.provider === "manual" || res.qrImageDataUrl) {
         setQrData(res);
         setPollingStatus({ status: "PENDING", ...res });
         setCountdown(remainingPaymentSeconds(res.expiresAt));
@@ -231,7 +246,7 @@ const Payment = ({ setRoute, currentUser, context }) => {
               {isTryoutCheckout ? "Konfirmasi pembelian." : "Mulai belajar lebih serius."}
             </h1>
             <p className="text-sm md:text-base text-ink/60 leading-relaxed mb-8 max-w-xl">
-              Cek paket, isi kontak pembelian, lalu lanjut ke payment gateway untuk QRIS atau transfer bank.
+              Cek paket, isi kontak pembelian, lalu chat admin untuk konfirmasi pembayaran.
             </p>
             <PaymentGatewayNotice config={gatewayConfig} />
 
@@ -361,7 +376,7 @@ const Payment = ({ setRoute, currentUser, context }) => {
             onClick={handleBeli}
             type="button"
           >
-            {loading ? "Memproses..." : gatewayReady ? `Bayar ${selectedPackage ? formatRupiah(selectedPackage.price) : "Sekarang"}` : "Payment belum aktif"}
+            {loading ? "Memproses..." : gatewayReady ? `Buat Order ${selectedPackage ? formatRupiah(selectedPackage.price) : ""}` : "Payment belum aktif"}
             {!loading && <Icon.Arrow className="w-4 h-4 transition-transform group-hover:translate-x-1" />}
           </button>
 
@@ -382,7 +397,7 @@ const Payment = ({ setRoute, currentUser, context }) => {
           onClick={handleBeli}
           type="button"
         >
-          {loading ? "Memproses..." : gatewayReady ? "Bayar" : "Belum aktif"}
+          {loading ? "Memproses..." : gatewayReady ? "Buat Order" : "Belum aktif"}
           {!loading && <Icon.Arrow className="w-4 h-4" />}
         </button>
       </div>
@@ -394,11 +409,18 @@ const PaymentGatewayNotice = ({ config }) => {
   if (!config) {
     return (
       <div className="mb-6 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-ink/60" aria-busy="true">
-        Mengecek kesiapan payment gateway...
+        Mengecek kesiapan pembayaran...
       </div>
     );
   }
   if (config.active) {
+    if (config.provider === "manual") {
+      return (
+        <div className="mb-6 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+          Pembayaran manual aktif. Setelah order dibuat, chat admin untuk konfirmasi.
+        </div>
+      );
+    }
     const readyText = config.provider === "qris" || config.qrisReady
       ? "QRIS lokal siap digunakan."
       : "Payment gateway siap digunakan.";
@@ -410,7 +432,7 @@ const PaymentGatewayNotice = ({ config }) => {
   }
   return (
     <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold leading-relaxed text-amber-900" role="status">
-      {config.message || "Payment gateway sedang dalam proses aktivasi. Pembelian akan dibuka setelah provider aktif."}
+      {config.message || "Pembayaran sedang dalam proses aktivasi. Pembelian akan dibuka setelah admin siap."}
     </div>
   );
 };
@@ -440,10 +462,149 @@ const OrderSummary = ({ selectedPackage, isTryoutCheckout }) => (
 
 const TrustNote = () => (
   <div className="text-center text-xs text-ink/55 mt-4 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
-    <span className="inline-flex items-center gap-1.5"><Icon.CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Diproses via QRIS atau gateway aktif</span>
-    <span className="inline-flex items-center gap-1.5"><Icon.CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Akses aktif setelah pembayaran terkonfirmasi</span>
+    <span className="inline-flex items-center gap-1.5"><Icon.CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Nominal memakai kode unik</span>
+    <span className="inline-flex items-center gap-1.5"><Icon.CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Akses aktif setelah admin verifikasi</span>
   </div>
 );
+
+const PaymentManualView = ({ payment, countdown, status, adminWhatsapp, onCancel, setRoute }) => {
+  const { useState } = React;
+  const [copied, setCopied] = useState("");
+  const statusValue = status?.status || payment.status || "PENDING";
+  const expired = statusValue === "EXPIRED" || (!["SUCCESS", "FAILED"].includes(statusValue) && countdown === 0);
+  const productDetails = payment.productDetails || "Pesanan Mafiking";
+  const baseAmount = Number(payment.baseAmount || 0);
+  const uniqueCode = Number(payment.suffix || 0);
+  const fullAmount = Number(payment.fullAmount || payment.amount || 0);
+  const isTryout = !["Trial 7 Hari", "Bulanan", "Semester"].includes(productDetails);
+  const whatsappNumber = String(adminWhatsapp || "").replace(/[^0-9]/g, "");
+  const buyerEmail = String(payment.email || "-").trim() || "-";
+  const waMessage = encodeURIComponent(
+    [
+      "Halo admin Mafiking, saya ingin konfirmasi pembayaran.",
+      "",
+      `ID Payment: ${payment.merchantOrderId}`,
+      `Nominal: ${formatRupiah(fullAmount)}`,
+      `Email Akun: ${buyerEmail}`,
+      `Paket: ${productDetails}`,
+      "",
+      "Saya akan kirim bukti pembayaran setelah pesan ini.",
+    ].join("\n")
+  );
+
+  async function copyValue(value, key) {
+    try {
+      await navigator.clipboard.writeText(String(value));
+      setCopied(key);
+      window.setTimeout(() => setCopied(""), 1500);
+    } catch (_) {
+      setCopied("");
+    }
+  }
+
+  return (
+    <div className="bg-paper min-h-screen pb-28 md:pb-0">
+      <section>
+        <div className="max-w-md mx-auto px-6 md:px-8 pt-12 pb-20">
+          <button className="mafiking-back-button mb-8" onClick={onCancel} type="button">
+            <Icon.ChevL className="w-4 h-4" />
+            Kembali
+          </button>
+
+          <div className="text-center mb-6">
+            <div className="kicker mb-2">Konfirmasi Admin</div>
+            <h1 className="font-display font-bold text-2xl tracking-[-0.02em] mb-2">Transfer nominal unik</h1>
+            <p className="text-sm text-ink/60 leading-relaxed">
+              Setelah transfer, kirim Order ID dan bukti pembayaran ke admin agar paket diaktifkan.
+            </p>
+          </div>
+
+          <div className="card pad-d bg-white border hairline rounded-3xl p-6 mb-6">
+            <div className="text-center">
+              <div className="text-xs text-ink/50 mb-1">Total Transfer</div>
+              <div className="font-display font-bold text-3xl tnum text-ink">
+                {formatRupiah(fullAmount)}
+              </div>
+              {baseAmount && uniqueCode ? (
+                <div className="text-xs text-ink/50 mt-2">
+                  {formatRupiah(baseAmount)} + kode unik {uniqueCode}
+                </div>
+              ) : null}
+            </div>
+
+            {statusValue === "SUCCESS" ? (
+              <div className="mt-4 rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-3 text-center text-sm font-semibold text-emerald-700">
+                Pembayaran sudah diverifikasi. Akses sudah aktif.
+              </div>
+            ) : expired ? (
+              <div className="mt-4 rounded-xl bg-red-50 border border-red-100 px-3 py-3 text-center text-sm font-semibold text-red-700">
+                Order sudah kedaluwarsa. Buat order baru jika belum membayar.
+              </div>
+            ) : statusValue === "FAILED" ? (
+              <div className="mt-4 rounded-xl bg-red-50 border border-red-100 px-3 py-3 text-center text-sm font-semibold text-red-700">
+                Pembayaran ditandai gagal atau dibatalkan.
+              </div>
+            ) : (
+              <div className="mt-4 flex items-center justify-center gap-2 text-sm">
+                <Icon.Clock className="w-4 h-4 text-ink/50" />
+                <span className="text-ink/70">
+                  Konfirmasi dalam <strong className="tnum">{formatCountdown(countdown)}</strong>
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="card bg-white border hairline rounded-3xl p-6 mb-6">
+            <h3 className="font-display font-bold text-base mb-3">Detail Order</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <span className="text-ink/55">Paket</span>
+                <span className="font-semibold text-right">{productDetails}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-ink/55">Order ID</span>
+                <span className="font-mono text-xs text-right break-all">{payment.merchantOrderId}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-ink/55">Email Akun</span>
+                <span className="font-semibold text-right break-all">{buyerEmail}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-ink/55">Status</span>
+                <span className="font-semibold">{statusValue}</span>
+              </div>
+            </div>
+          </div>
+
+          {statusValue === "SUCCESS" ? (
+            <button className="btn-ink w-full justify-center group" onClick={() => setRoute(isTryout ? "tryout" : "belajar")} type="button">
+              {isTryout ? "Ke Halaman Tryout" : "Mulai Belajar"} <Icon.Arrow className="transition-transform group-hover:translate-x-1" />
+            </button>
+          ) : (
+            <div className="grid gap-3">
+              <button className="btn-ghost w-full justify-center" onClick={() => copyValue(fullAmount, "amount")} type="button">
+                <Icon.Copy className="w-4 h-4" /> {copied === "amount" ? "Nominal Disalin" : "Salin Nominal"}
+              </button>
+              <button className="btn-ghost w-full justify-center" onClick={() => copyValue(payment.merchantOrderId, "order")} type="button">
+                <Icon.Copy className="w-4 h-4" /> {copied === "order" ? "Order ID Disalin" : "Salin Order ID"}
+              </button>
+              {whatsappNumber ? (
+                <a
+                  className="btn-ink w-full justify-center"
+                  href={`https://wa.me/${whatsappNumber}?text=${waMessage}`}
+                  rel="noopener"
+                  target="_blank"
+                >
+                  Chat Admin untuk Konfirmasi
+                </a>
+              ) : null}
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+};
 
 const PaymentQrisView = ({ payment, countdown, status, adminWhatsapp, onCancel, setRoute }) => {
   const { useState } = React;
@@ -633,6 +794,18 @@ const PaymentStatus = ({ merchantOrderId, setRoute }) => {
   const isTryout = !["Trial 7 Hari", "Bulanan", "Semester"].includes(productDetails);
 
   if (status === "pending") {
+    if (payment.provider === "manual") {
+      return (
+        <PaymentManualView
+          adminWhatsapp={payment.adminWhatsapp}
+          countdown={countdown}
+          onCancel={() => leaveStatus(isTryout ? "tryout" : "belajar")}
+          payment={payment}
+          setRoute={setRoute}
+          status={payment}
+        />
+      );
+    }
     if (payment.qrImageDataUrl) {
       return (
         <PaymentQrisView

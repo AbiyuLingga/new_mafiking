@@ -200,6 +200,10 @@ router.post('/login', async (req, res) => {
         return res.status(401).json({ error: 'Email belum terdaftar' });
     }
 
+    if (String(user.auth_provider || '') === 'clerk' && String(user.password_hash || '') === 'clerk') {
+        return res.status(401).json({ error: 'Akun ini terdaftar dengan Google. Silakan login dengan Google.' });
+    }
+
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) {
         const current = loginAttempts.get(username) || { count: 0, lastAttempt: 0 };
