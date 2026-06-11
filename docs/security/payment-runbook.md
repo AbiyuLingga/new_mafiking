@@ -145,3 +145,62 @@ sqlite3 db/database.sqlite ".restore db/database.sqlite.bak"
 
 For issues not covered here, escalate via the MAFIKING security channel
 (see `docs/security/posture.md` for contacts).
+
+## Phase F: v3 Observability & Feature Flags (added 2026-06-12)
+
+### Quick health check (admin curl)
+```bash
+curl -s -H "Cookie: __Host-mafiking.sid=..." \
+  http://localhost:3000/api/admin/payments/metrics | jq
+```
+
+### Expected output (healthy)
+- `last24h.auto_paid` grows steadily
+- `last24h.bulk_paid`, `last24h.manual_paid` should be < 5% of `auto_paid`
+- `collector.state` is `"CLOSED"` (after Phase B)
+- `collector.lastSuccessAt` < 60 seconds ago
+- `broadcaster.trackedOrders` between 0 and 5
+- `last24h.ambiguous_open` < 10 (resolve via admin UI or auto-resolve from confidence matching)
+
+### Feature flag rollback (no restart needed for most flags)
+
+```env
+# Rollback to polling fallback (no SSE)
+SSE_PAYMENT_PUSH=false
+
+# Rollback to bulk-admin
+BULK_ADMIN=false
+
+# Rollback to confidence matching (back to exact-only)
+CONFIDENCE_MATCHING=false
+
+# Rollback to legacy collector loop
+SELF_HEALING_COLLECTOR=false
+
+# Disable success emails (still mark paid)
+PAYMENT_SUCCESS_EMAIL=false
+
+# Disable adaptive polling
+ADAPTIVE_POLLING=false
+```
+
+After changing env, `pm2 restart new-mafiking` (or equivalent).
+
+### Emergency: disable ALL v3 features at once
+```env
+MUTATION_COLLECTOR_ENABLED=false
+SSE_PAYMENT_PUSH=false
+BULK_ADMIN=false
+CONFIDENCE_MATCHING=false
+SELF_HEALING_COLLECTOR=false
+PAYMENT_SUCCESS_EMAIL=false
+ADAPTIVE_POLLING=false
+```
+Server falls back to: manual admin mark-paid + polling + legacy collector. User can still pay, but auto-verify stops.
+
+### New alert types (v3)
+- `Collector health degraded` — triggered when `lastSuccessAt` > 5 minutes
+- `High ambiguous payment rate` — > 5 per hour
+- `SSE payment push failed` — client disconnect during paid event
+- `Payment success email failed` — mailer error
+- `Admin bulk mark-paid` — info-level, expected
