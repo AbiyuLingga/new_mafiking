@@ -134,6 +134,7 @@ The frontend is not module-based. Components are defined in browser global scope
 | `src/tryout.jsx` | Paket / paid tryout package screen; `Semua Paket` and `Paket Saya` share the same `PackageCard` layout. |
 | `src/leaderboard.jsx` | Peringkat page with isolated-scroll leaderboard and `Semua` / `Top Mingguan` views. |
 | `src/payment.jsx` | Checkout popup plus QRIS/manual popup rendering and status polling. |
+| `src/invoices.jsx` | Authenticated user payment-history page, pending-status reopen action, and printable invoice view. |
 | `src/admin.jsx` | Admin page/modal shell, subject/Try Out content CRUD, import tab, users tab, and monitoring tab shell. |
 | `src/styles.css` | Local custom CSS and appended feature styles. |
 | `tweaks-panel.jsx` | Tweaks panel and persisted tweak state. |
@@ -406,6 +407,7 @@ QRIS-first payment integration with legacy Duitku fallback:
 
 - `POST /api/payment/create` creates a QRIS/manual/Duitku payment depending on `PAYMENT_PROVIDER`.
 - `POST /api/payment/pending` reopens an unexpired pending QRIS/manual order for the same user and package before the frontend creates a new order.
+- `GET /api/payment/invoices` returns at most 100 transactions owned by the current registered user. It derives ownership from the server session and returns an allowlisted invoice summary without QR payloads or buyer email.
 - QRIS/manual responses are rendered in-app by `src/payment.jsx` as a popup portal, then polled by `GET /api/payment/status/:merchantOrderId`.
 - Duitku responses may still redirect to `paymentUrl` in legacy/fallback mode.
 - `POST /api/payment/callback` verifies Duitku callback signatures.

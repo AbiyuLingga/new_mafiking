@@ -133,7 +133,7 @@ async function main() {
 
         const active = await request({ baseUrl, path: '/api/payment/active-packages' });
         assert.equal(active.status, 200, active.raw);
-        assert.deepStrictEqual(active.data, ['Tryout Route Test']);
+        assert.deepStrictEqual(active.data, ['Tryout Route Test', 'tryout-route-test']);
     } finally {
         await new Promise((resolve) => server.close(resolve));
         db.close();

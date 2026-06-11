@@ -128,6 +128,7 @@ const App = () => {
   const isGuest = currentUser && currentUser.display_name?.startsWith("Tamu_");
   const isLoggedIn = currentUser && !isGuest;
   const isAdminAccount = currentUser?.role === "admin";
+  const canSeeTryoutPage = isAdminAccount;
   const canEditInlineAsAdmin = isAdmin || isAdminAccount;
   const hasPremiumAccess = isAdminAccount || activePackages.length > 0;
 
@@ -481,6 +482,12 @@ const App = () => {
   }, [authMode, isLoggedIn, navigate, route]);
 
   React.useEffect(() => {
+    if (route === "tryout" && !canSeeTryoutPage) {
+      navigate({ route: "belajar" });
+    }
+  }, [canSeeTryoutPage, navigate, route]);
+
+  React.useEffect(() => {
     if (route !== "admin" || !isAdminAccount || !isAdmin || window.AdminPage) return undefined;
     let cancelled = false;
     setAdminChunkStatus("loading");
@@ -545,23 +552,25 @@ const App = () => {
   );
   const navRoute = route === "tryout" && (tryoutMode.startsWith("free-math") || tryoutMode.startsWith("tryout-"))
     ? "belajar"
-    : route;
+    : route === "invoices" ? "profile" : route;
   const currentSearchParams = new URLSearchParams(window.location.search);
 
-  const LoginRedirect = React.useCallback(({ setRoute: sr }) => {
+  const LoginRedirect = React.useCallback(({ setRoute: sr, redirectRoute = "profile" }) => {
     React.useEffect(() => {
       sr({
         route: "lobby",
         authMode: "login",
-        authRedirect: { route: "profile" },
+        authRedirect: { route: redirectRoute },
         authBackRoute: readStoredAuthBackRoute() || { route: "lobby" },
       });
-    }, [sr]);
+    }, [redirectRoute, sr]);
     return null;
   }, []);
 
   const isPaymentStatusRoute = route === "payment" && currentSearchParams.has("merchantOrderId");
   const hasAppShellNav = route !== "practice" && route !== "lobby" && !isTryoutFullscreenRoute && !isPaymentStatusRoute;
+  const showTryoutPage = route === "tryout" && canSeeTryoutPage;
+  const showBelajarPage = route === "belajar" || (route === "tryout" && !canSeeTryoutPage);
 
   return (
     <div className={`min-h-screen flex flex-col bg-paper text-ink ${hasAppShellNav ? "pb-24 md:pb-0" : ""}`}>
@@ -574,6 +583,7 @@ const App = () => {
           gamified={route === "belajar" || route === "misi" || route === "profile" || route === "tryout" || route === "leaderboard" || route === "admin"}
           isLoggedIn={isLoggedIn}
           isAdminMode={isAdmin}
+          showTryoutLink={canSeeTryoutPage}
           onLogoClick={handleLogoClick}
           onAdminPanelOpen={() => navigate("admin")}
         />
@@ -585,8 +595,8 @@ const App = () => {
           data-screen-label={routeLabel(route)}
           className={route === "practice" || route === "lobby" || isTryoutFullscreenRoute ? "" : "app-route-transition"}
         >
-          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={canEditInlineAsAdmin} authMode={authMode} authRedirect={authRedirect} authBackRoute={authBackRoute} authState={authState} onAuthSuccess={handleAuthSuccess} pendingClerkUser={pendingClerkUser} />}
-          {route === "belajar" && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={canEditInlineAsAdmin} isLoggedIn={isLoggedIn} currentUser={currentUser} authReady={authReady} hasPremiumAccess={hasPremiumAccess} initialSection={belajarSection} onSectionChange={setBelajarSection} />}
+          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={canEditInlineAsAdmin} showTryoutLink={canSeeTryoutPage} authMode={authMode} authRedirect={authRedirect} authBackRoute={authBackRoute} authState={authState} onAuthSuccess={handleAuthSuccess} pendingClerkUser={pendingClerkUser} />}
+          {showBelajarPage && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={canEditInlineAsAdmin} isLoggedIn={isLoggedIn} currentUser={currentUser} authReady={authReady} hasPremiumAccess={hasPremiumAccess} initialSection={belajarSection} onSectionChange={setBelajarSection} />}
           {route === "misi" && (
             <ScreenErrorBoundary>
               {hasPremiumAccess
@@ -594,7 +604,7 @@ const App = () => {
                 : <AccessGate setRoute={navigate} title="Akses Paket" message="Beli paket untuk mendapat akses ke misi harian dan latihan terarah setiap hari" variant="misi" showFreeTryout={false} hideKicker />}
             </ScreenErrorBoundary>
           )}
-          {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={canEditInlineAsAdmin} isAdminMode={isAdmin} isLoggedIn={isLoggedIn} context={tryoutContext} currentUser={currentUser} />}
+          {showTryoutPage && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={canEditInlineAsAdmin} isAdminMode={isAdmin} isLoggedIn={isLoggedIn} context={tryoutContext} currentUser={currentUser} />}
           {route === "leaderboard" && window.Leaderboard && React.createElement(window.Leaderboard)}
           {route === "admin" && isAdminAccount && isAdmin && (
             window.AdminPage
@@ -604,6 +614,10 @@ const App = () => {
           {route === "profile" && (isLoggedIn
             ? <Profile setRoute={navigate} isAdmin={canEditInlineAsAdmin} onRequestLanding={confirmLandingReturn} onRequestLogout={confirmLogout} />
             : <LoginRedirect setRoute={navigate} />
+          )}
+          {route === "invoices" && (isLoggedIn
+            ? <Invoices setRoute={navigate} />
+            : <LoginRedirect setRoute={navigate} redirectRoute="invoices" />
           )}
           {route === "payment" && <Payment setRoute={navigate} currentUser={currentUser} context={paymentContext} />}
           {route === "practice" && (
@@ -907,7 +921,7 @@ const AccessGate = ({ setRoute, title, message, requireLogin = false, variant = 
   );
 };
 
-const APP_ROUTE_NAMES = ["lobby", "belajar", "misi", "tryout", "leaderboard", "admin", "profile", "payment", "practice"];
+const APP_ROUTE_NAMES = ["lobby", "belajar", "misi", "tryout", "leaderboard", "admin", "profile", "invoices", "payment", "practice"];
 
 function normalizeAppPath(pathname) {
   return String(pathname || "/").replace(/\/+$/, "") || "/";
@@ -937,6 +951,7 @@ function parseAppLocation() {
   if (path === "/tryout") return { route: "tryout" };
   if (path === "/peringkat" || path === "/leaderboard") return { route: "leaderboard" };
   if (path === "/profil" || path === "/profile") return { route: "profile" };
+  if (path === "/invoices" || path === "/invoice") return { route: "invoices" };
   if (path === "/admin") return { route: "admin" };
   if (path === "/payment" || path === "/tryout/payment") return { route: "payment" };
   return { route: "lobby" };
@@ -959,6 +974,7 @@ function appStateToPath(state) {
   if (route === "practice") return "/belajar/practice";
   if (route === "leaderboard") return "/peringkat";
   if (route === "profile") return "/profil";
+  if (route === "invoices") return "/invoices";
   if (route === "payment") {
     const stateOrderId = String(state?.merchantOrderId || state?.payment?.merchantOrderId || "").trim();
     const currentParams = new URLSearchParams(window.location.search || "");
@@ -978,8 +994,9 @@ function routeLabel(r) {
     leaderboard: "05 Peringkat",
     admin: "06 Admin Panel",
     profile: "07 Profil",
-    payment: "08 Pembayaran",
-    practice: "09 Latihan",
+    invoices: "08 Riwayat Pembelian",
+    payment: "09 Pembayaran",
+    practice: "10 Latihan",
   })[r] || r;
 }
 

@@ -48,7 +48,13 @@ SSH_TARGET="$SERVER_USER@$SERVER_IP"
 LOCAL_DB="db/database.sqlite"
 REMOTE_DB="$REMOTE_DIR/db/database.sqlite"
 REMOTE_TMP_DB="/tmp/${APP_NAME}-database.sqlite"
-DEPS_HASH="$(sha256sum package.json package-lock.json | sha256sum | awk '{print $1}')"
+DEPS_HASH="$(
+  {
+    node -e 'const p=require("./package.json"); process.stdout.write(JSON.stringify({dependencies:p.dependencies||{},optionalDependencies:p.optionalDependencies||{},engines:p.engines||{}}));'
+    sha256sum package-lock.json | awk '{print $1}'
+  } | sha256sum | awk '{print $1}'
+)"
+LEGACY_DEPS_HASH="$(sha256sum package.json package-lock.json | sha256sum | awk '{print $1}')"
 
 echo "========================================"
 echo " Deploy new_mafiking ke Nevacloud"
@@ -95,12 +101,27 @@ else
   SUDO=""
 fi
 
-$SUDO apt-get update -y
-$SUDO apt-get install -y curl ca-certificates build-essential python3 rsync nginx openssl
-
 NODE_MAJOR=0
 if command -v node >/dev/null 2>&1; then
   NODE_MAJOR="$(node -p "Number(process.versions.node.split('.')[0])" 2>/dev/null || echo 0)"
+fi
+
+BOOTSTRAP_REQUIRED=0
+for command_name in curl rsync nginx openssl make g++ python3; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    BOOTSTRAP_REQUIRED=1
+  fi
+done
+if [ "$NODE_MAJOR" -lt 20 ] || ! command -v pm2 >/dev/null 2>&1; then
+  BOOTSTRAP_REQUIRED=1
+fi
+
+if [ "$BOOTSTRAP_REQUIRED" = "1" ]; then
+  echo "Komponen server belum lengkap, menjalankan bootstrap apt/npm..."
+  $SUDO apt-get update -y
+  $SUDO apt-get install -y curl ca-certificates build-essential python3 rsync nginx openssl
+else
+  echo "Komponen server sudah lengkap, skip apt-get update/install."
 fi
 
 if [ "$NODE_MAJOR" -lt 20 ]; then
@@ -205,7 +226,7 @@ ENDSSH
 
 echo ""
 echo "[5/6] Install dependency dan setup Nginx..."
-ssh "$SSH_TARGET" "APP_PORT='$APP_PORT' APP_NAME='$APP_NAME' REMOTE_DIR='$REMOTE_DIR' SERVER_IP='$SERVER_IP' DEPS_HASH='$DEPS_HASH' APP_RUN_USER='$APP_RUN_USER' DEPLOY_IMPORTS='${DEPLOY_IMPORTS:-0}' bash -s" <<'ENDSSH'
+ssh "$SSH_TARGET" "APP_PORT='$APP_PORT' APP_NAME='$APP_NAME' REMOTE_DIR='$REMOTE_DIR' SERVER_IP='$SERVER_IP' DEPS_HASH='$DEPS_HASH' LEGACY_DEPS_HASH='$LEGACY_DEPS_HASH' APP_RUN_USER='$APP_RUN_USER' DEPLOY_IMPORTS='${DEPLOY_IMPORTS:-0}' FORCE_NPM_CI='${FORCE_NPM_CI:-0}' bash -s" <<'ENDSSH'
 set -euo pipefail
 
 if command -v sudo >/dev/null 2>&1; then
@@ -227,14 +248,21 @@ run_app() {
   fi
 }
 
-if [ -f .deploy-deps.sha ] && [ "$(cat .deploy-deps.sha)" = "$DEPS_HASH" ] && [ -d node_modules ]; then
+if [ "$FORCE_NPM_CI" = "1" ]; then
+  echo "FORCE_NPM_CI=1 aktif, memasang ulang dependency production..."
+  run_app npm ci --omit=dev --prefer-offline --no-audit --no-fund
+  printf "%s\n" "$DEPS_HASH" > .deploy-deps.sha
+elif [ -f .deploy-deps.sha ] && [ "$(cat .deploy-deps.sha)" = "$DEPS_HASH" ] && [ -d node_modules ]; then
   echo "Dependency tidak berubah, skip npm ci."
+elif [ -f .deploy-deps.sha ] && [ "$(cat .deploy-deps.sha)" = "$LEGACY_DEPS_HASH" ] && [ -d node_modules ]; then
+  echo "Dependency sudah dipasang oleh deploy versi lama, memperbarui hash tanpa npm ci."
+  printf "%s\n" "$DEPS_HASH" > .deploy-deps.sha
 elif [ ! -f .deploy-deps.sha ] && [ -d node_modules ] && run_app npm ls --omit=dev --depth=0 >/dev/null 2>&1; then
   echo "Dependency server sudah valid, menyimpan hash dan skip npm ci."
   printf "%s\n" "$DEPS_HASH" > .deploy-deps.sha
 else
   echo "Dependency berubah atau belum terpasang, menjalankan npm ci..."
-  run_app npm ci --omit=dev
+  run_app npm ci --omit=dev --prefer-offline --no-audit --no-fund
   printf "%s\n" "$DEPS_HASH" > .deploy-deps.sha
 fi
 
@@ -356,7 +384,7 @@ ENDSSH
 
 echo ""
 echo "[6/6] Menjalankan aplikasi dengan PM2..."
-ssh "$SSH_TARGET" "APP_PORT='$APP_PORT' APP_NAME='$APP_NAME' REMOTE_DIR='$REMOTE_DIR' APP_RUN_USER='$APP_RUN_USER' bash -s" <<'ENDSSH'
+ssh "$SSH_TARGET" "APP_PORT='$APP_PORT' APP_NAME='$APP_NAME' REMOTE_DIR='$REMOTE_DIR' APP_RUN_USER='$APP_RUN_USER' HEALTHCHECK_ATTEMPTS='${HEALTHCHECK_ATTEMPTS:-30}' HEALTHCHECK_INTERVAL='${HEALTHCHECK_INTERVAL:-2}' bash -s" <<'ENDSSH'
 set -euo pipefail
 
 cd "$REMOTE_DIR"
@@ -381,14 +409,41 @@ if [ "$APP_RUN_USER" != "root" ]; then
   pm2 delete new-mafiking >/dev/null 2>&1 || true
 fi
 
-STARTUP_CMD="$(run_pm2 startup systemd -u "$APP_RUN_USER" --hp "$REMOTE_DIR" | tail -n 1 || true)"
-if echo "$STARTUP_CMD" | grep -q "sudo\\|env PATH"; then
-  eval "$STARTUP_CMD" || true
+if systemctl is-enabled "pm2-$APP_RUN_USER.service" >/dev/null 2>&1; then
+  echo "PM2 startup service sudah aktif, skip setup startup."
+else
+  STARTUP_CMD="$(run_pm2 startup systemd -u "$APP_RUN_USER" --hp "$REMOTE_DIR" | tail -n 1 || true)"
+  if echo "$STARTUP_CMD" | grep -q "sudo\\|env PATH"; then
+    eval "$STARTUP_CMD" || true
+  fi
 fi
 
-sleep 2
-curl -fsS "http://127.0.0.1:$APP_PORT/api/health" >/tmp/"$APP_NAME"-health.json
-cat /tmp/"$APP_NAME"-health.json
+HEALTH_URL="http://127.0.0.1:$APP_PORT/api/health"
+HEALTH_FILE="/tmp/$APP_NAME-health.json"
+HEALTH_OK=0
+
+echo "Menunggu aplikasi siap di $HEALTH_URL..."
+for attempt in $(seq 1 "$HEALTHCHECK_ATTEMPTS"); do
+  if curl --connect-timeout 2 --max-time 5 -fsS "$HEALTH_URL" >"$HEALTH_FILE" 2>/dev/null; then
+    HEALTH_OK=1
+    break
+  fi
+
+  if [ "$attempt" -lt "$HEALTHCHECK_ATTEMPTS" ]; then
+    sleep "$HEALTHCHECK_INTERVAL"
+  fi
+done
+
+if [ "$HEALTH_OK" != "1" ]; then
+  echo "Aplikasi belum sehat setelah $HEALTHCHECK_ATTEMPTS percobaan."
+  echo "Status PM2:"
+  run_pm2 describe "$APP_NAME" || true
+  echo "Log PM2 terakhir:"
+  run_pm2 logs "$APP_NAME" --nostream --lines 120 || true
+  exit 1
+fi
+
+cat "$HEALTH_FILE"
 echo ""
 ENDSSH
 
@@ -413,4 +468,6 @@ echo "Jika ingin deploy ulang sambil overwrite database server:"
 echo "  DEPLOY_DB=1 ./deploy.sh $SERVER_IP $SERVER_USER"
 echo "Jika ingin sinkron konten bundled JSON ke database server:"
 echo "  DEPLOY_IMPORTS=1 ./deploy.sh $SERVER_IP $SERVER_USER"
+echo "Jika ingin memaksa install ulang dependency production:"
+echo "  FORCE_NPM_CI=1 ./deploy.sh $SERVER_IP $SERVER_USER"
 echo "========================================"

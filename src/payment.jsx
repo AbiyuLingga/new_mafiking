@@ -1,5 +1,7 @@
 // MAFIKING Payment - checkout package, create manual order, show status.
 
+const QRIS_LOGO_SRC = "/assets/qris-logo.svg?v=20260612";
+
 const PAKET_LIST = [
   { id: "cek-payment", label: "Cek Payment", price: 500, desc: "Paket khusus untuk mengetes alur pembayaran web.", access: "Test" },
   { id: "trial", label: "Trial 7 Hari", price: 29000, desc: "Akses semua modul + 7 hari koreksi AI tidak terbatas.", access: "7 hari" },
@@ -704,6 +706,7 @@ const PaymentQrisView = ({ payment, countdown, status, onCancel, onCheckStatus, 
       <div className="qris-scan-section">
         <div className="qris-scan-title">Scan QR Code to Pay</div>
         <div className="qris-code-wrapper">
+          <img className="qris-code-logo" src={QRIS_LOGO_SRC} alt="QRIS" />
           <img src={payment.qrImageDataUrl} alt="QRIS pembayaran Mafiking" />
         </div>
         <div className="qris-nmid">NMID: {payment.qrisNmid || "ID" + Date.now()}</div>
@@ -786,7 +789,7 @@ const PaymentQrisViewDesktop = ({ payment, countdown, status, onCancel, onCheckS
         <div className="checkout-modal-main">
           <div className="qris-desktop-header">
             <div className="flex items-center gap-3">
-              <Icon.Wallet className="w-6 h-6 text-ink" />
+              <img src={QRIS_LOGO_SRC} alt="QRIS" className="h-8 w-auto shrink-0" />
               <div>
                 <h2>Scan QRIS</h2>
                 <p>Selesaikan pembayaran dengan nominal yang tertera.</p>
@@ -798,7 +801,8 @@ const PaymentQrisViewDesktop = ({ payment, countdown, status, onCancel, onCheckS
           </div>
 
           <div className="qris-desktop-qr">
-            <img src={payment.qrImageDataUrl} alt="QRIS pembayaran Mafiking" />
+            <img className="qris-code-logo" src={QRIS_LOGO_SRC} alt="QRIS" />
+            <img className="qris-payment-code" src={payment.qrImageDataUrl} alt="QRIS pembayaran Mafiking" />
           </div>
 
           {statusValue === "SUCCESS" ? (

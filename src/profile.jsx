@@ -255,6 +255,14 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
             </div>
             <div className="flex gap-2">
               <button
+                onClick={() => setRoute("invoices")}
+                className="btn-ghost !h-11 !px-4 text-sm inline-flex items-center justify-center gap-2"
+                type="button"
+              >
+                <Icon.Card className="w-4 h-4" />
+                <span className="hidden sm:inline">Riwayat Pembelian</span>
+              </button>
+              <button
                 onClick={() => loadProfile(true)}
                 className="btn-ghost !h-11 !w-11 !p-0 text-sm inline-flex items-center justify-center"
                 aria-label="Refresh raport"
@@ -269,7 +277,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
       </section>
 
       <section className="pb-28 w-full max-w-full overflow-x-hidden">
-        <div className="max-w-6xl mx-auto px-6 md:px-8 w-full max-w-full">
+        <div className="mx-auto w-full max-w-6xl px-6 md:px-8">
           {error && (
             <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800 mb-6">
               {error}

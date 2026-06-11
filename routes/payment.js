@@ -8,12 +8,20 @@ const { setPublicApiCache } = require('../lib/performance');
 const { generateDynamicQRIS, assertValidStaticQris } = require('../lib/qris-dynamic');
 const { allocateRotatingSuffix, allocateSuffix, releaseSuffix, SuffixPoolExhaustedError } = require('../lib/qris-suffix-pool');
 const { expirePaymentIfNeeded } = require('../lib/payment-expiry-sweeper');
+const { paymentRateLimiter: dbRateLimiter } = require('../lib/payment-rate-limiter');
 const {
+    canonicalAmount,
+    checkAndRecordWebhookEvent,
+    computeWebhookEventHash,
     markPaymentFailed,
     markPaymentPaid,
+    resolveIdempotencyKey,
     signWebhookPayload,
+    storeIdempotencyKey,
+    validateProviderStatus,
     verifyWebhookSignature,
 } = require('../lib/payment-reconciler');
+const { collectorIpAllowlist } = require('../lib/ip-allowlist');
 const { handleMutasikuWebhook } = require('../lib/reconcilers/mutasiku');
 const router = express.Router();
 
@@ -260,6 +268,24 @@ function paymentStatusPayload(payment, status) {
     };
 }
 
+function invoiceListPayload(payment) {
+    const payload = paymentStatusPayload(payment, payment.status);
+    return {
+        merchantOrderId: payload.merchantOrderId,
+        status: payload.status,
+        amount: payload.amount,
+        baseAmount: payload.baseAmount,
+        suffix: payload.suffix,
+        fullAmount: payload.fullAmount,
+        productDetails: payload.productDetails,
+        provider: payload.provider,
+        expiresAt: payload.expiresAt,
+        paidAt: payload.paidAt,
+        createdAt: payload.createdAt,
+        updatedAt: payload.updatedAt,
+    };
+}
+
 function findReusablePendingPayment({ db, userId, item, now = new Date() }) {
     if (!db || !userId || !item) return null;
     const nowSql = now.toISOString().slice(0, 19).replace('T', ' ');
@@ -362,7 +388,7 @@ function buildDuitkuInvoicePayload({
     };
 }
 
-async function handleQrisCreate({ req, res, item, merchantOrderId, buyerEmail, buyerName }) {
+async function handleQrisCreate({ req, res, item, merchantOrderId, buyerEmail, buyerName, idempotencyKey = null }) {
     const db = req.app.locals.db;
     const userId = req.session.userId;
     const readiness = qrisReadiness();
@@ -429,6 +455,11 @@ async function handleQrisCreate({ req, res, item, merchantOrderId, buyerEmail, b
         return res.status(500).json({ error: 'Gagal membuat QRIS dinamis. Hubungi admin.' });
     }
 
+    if (idempotencyKey) {
+        const keyHash = crypto.createHash('sha256').update(idempotencyKey).digest('hex');
+        storeIdempotencyKey(db, keyHash, merchantOrderId, Date.now() + 5 * 60 * 1000);
+    }
+
     return res.json({
         merchantOrderId,
         provider: 'qris',
@@ -446,7 +477,7 @@ async function handleQrisCreate({ req, res, item, merchantOrderId, buyerEmail, b
     });
 }
 
-function handleManualCreate({ req, res, item, merchantOrderId, buyerEmail }) {
+function handleManualCreate({ req, res, item, merchantOrderId, buyerEmail, idempotencyKey = null }) {
     const db = req.app.locals.db;
     const userId = req.session.userId;
     const config = qrisConfig();
@@ -498,6 +529,11 @@ function handleManualCreate({ req, res, item, merchantOrderId, buyerEmail }) {
         } catch (_) {}
         console.error('[payment:manual] create failed:', error);
         return res.status(500).json({ error: 'Gagal membuat order pembayaran manual.' });
+    }
+
+    if (idempotencyKey) {
+        const keyHash = crypto.createHash('sha256').update(idempotencyKey).digest('hex');
+        storeIdempotencyKey(db, keyHash, merchantOrderId, Date.now() + 5 * 60 * 1000);
     }
 
     return res.json({
@@ -552,7 +588,7 @@ router.post('/pending', async (req, res) => {
 });
 
 // POST /api/payment/create
-router.post('/create', paymentLimiter, async (req, res) => {
+router.post('/create', paymentLimiter, dbRateLimiter({ windowMs: 60 * 1000, maxRequests: 5, minIntervalMs: 3000 }), async (req, res) => {
     const db = req.app.locals.db;
     const userId = req.session.userId;
     if (!canCreatePayment({ db, userId })) {
@@ -575,6 +611,15 @@ router.post('/create', paymentLimiter, async (req, res) => {
         return res.status(err.statusCode || 400).json({ error: err.message });
     }
 
+    const idempotencyKey = String(req.body.idempotencyKey || '').trim();
+    if (idempotencyKey) {
+        const keyHash = crypto.createHash('sha256').update(idempotencyKey).digest('hex');
+        const existing = resolveIdempotencyKey(db, keyHash);
+        if (existing) {
+            return res.json({ idempotent: true, merchantOrderId: existing.merchant_order_id });
+        }
+    }
+
     const merchantOrderId = `MFK-${userId}-${Date.now()}`;
     const intAmount = item.amount;
     const productDetails = item.productDetails;
@@ -589,6 +634,11 @@ router.post('/create', paymentLimiter, async (req, res) => {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
         `).run(userId, merchantOrderId, intAmount, productDetails, buyerEmail, 'MOCK-REF-' + merchantOrderId, mockPaymentUrl, 'MOCK-QR-' + merchantOrderId);
 
+        if (idempotencyKey) {
+            const keyHash = crypto.createHash('sha256').update(idempotencyKey).digest('hex');
+            storeIdempotencyKey(db, keyHash, merchantOrderId, Date.now() + 5 * 60 * 1000);
+        }
+
         return res.json({
             merchantOrderId,
             reference: 'MOCK-REF-' + merchantOrderId,
@@ -601,13 +651,13 @@ router.post('/create', paymentLimiter, async (req, res) => {
 
     const provider = normalizePaymentProvider();
     if (provider === 'manual') {
-        return handleManualCreate({ req, res, item, merchantOrderId, buyerEmail });
+        return handleManualCreate({ req, res, item, merchantOrderId, buyerEmail, idempotencyKey });
     }
 
     if (provider === 'qris' || provider === 'both') {
         const readiness = qrisReadiness();
         if (readiness.ready || provider === 'qris') {
-            return handleQrisCreate({ req, res, item, merchantOrderId, buyerEmail, buyerName });
+            return handleQrisCreate({ req, res, item, merchantOrderId, buyerEmail, buyerName, idempotencyKey });
         }
     }
 
@@ -643,6 +693,11 @@ router.post('/create', paymentLimiter, async (req, res) => {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
         `).run(userId, merchantOrderId, intAmount, productDetails, buyerEmail, data.reference, data.paymentUrl, data.qrString || '');
 
+        if (idempotencyKey) {
+            const keyHash = crypto.createHash('sha256').update(idempotencyKey).digest('hex');
+            storeIdempotencyKey(db, keyHash, merchantOrderId, Date.now() + 5 * 60 * 1000);
+        }
+
         res.json({
             merchantOrderId,
             reference: data.reference,
@@ -654,6 +709,40 @@ router.post('/create', paymentLimiter, async (req, res) => {
     } catch (err) {
         console.error('Duitku request error:', err.response?.data || err.message);
         res.status(502).json({ error: 'Gagal menghubungi payment gateway' });
+    }
+});
+
+// GET /api/payment/invoices — authenticated user's own payment history.
+router.get('/invoices', (req, res) => {
+    const db = req.app.locals.db;
+    const userId = req.session.userId;
+    if (!isRegisteredPaymentUser({ db, userId })) {
+        return res.status(401).json({ error: 'Login diperlukan untuk melihat invoice.' });
+    }
+
+    try {
+        const pendingRows = db.prepare(`
+            SELECT merchant_order_id
+            FROM payments
+            WHERE user_id = ? AND status = 'PENDING'
+            ORDER BY created_at DESC, id DESC
+            LIMIT 100
+        `).all(userId);
+        pendingRows.forEach((payment) => expirePaymentIfNeeded(db, payment.merchant_order_id));
+
+        const invoices = db.prepare(`
+            SELECT *
+            FROM payments
+            WHERE user_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT 100
+        `).all(userId);
+
+        res.setHeader('Cache-Control', 'private, no-store');
+        return res.json(invoices.map(invoiceListPayload));
+    } catch (err) {
+        console.error('Failed to list invoices:', err);
+        return res.status(500).json({ error: 'Gagal mengambil riwayat pembelian.' });
     }
 });
 
@@ -858,6 +947,25 @@ router.post('/reconcile/webhook', (req, res) => {
     const db = req.app.locals.db;
     const merchantOrderId = String(req.body.merchantOrderId || '').trim();
     const fullAmount = Number(req.body.fullAmount);
+    const eventId = req.get('x-payment-event-id') || req.body.eventId || '';
+    const eventHash = computeWebhookEventHash({
+        provider: 'qris-webhook',
+        eventId,
+        timestamp,
+        merchantOrderId,
+        amount: fullAmount,
+    });
+
+    const dedup = checkAndRecordWebhookEvent(db, {
+        provider: 'qris-webhook',
+        eventId,
+        eventHash,
+        merchantOrderId,
+    });
+    if (dedup.alreadyProcessed) {
+        return res.json({ ok: true, alreadyProcessed: true, idempotent: true });
+    }
+
     try {
         const result = markPaymentPaid(db, {
             merchantOrderId,
@@ -881,6 +989,26 @@ router.post('/reconcile/mutasiku-webhook', (req, res) => {
     if (!secret) return res.status(503).json({ error: 'Webhook Mutasiku belum aktif.' });
 
     const signature = req.get('x-webhook-signature') || req.get('x-mutasiku-signature') || req.body.signature;
+    const eventId = req.body?.data?.reference || req.body?.id || '';
+    const merchantOrderId = req.body?.data?.merchantOrderId || req.body?.data?.order_id || '';
+    const eventHash = computeWebhookEventHash({
+        provider: 'mutasiku-webhook',
+        eventId,
+        timestamp: req.body?.timestamp || '',
+        merchantOrderId,
+        amount: req.body?.data?.amount || '',
+    });
+
+    const dedup = checkAndRecordWebhookEvent(req.app.locals.db, {
+        provider: 'mutasiku-webhook',
+        eventId,
+        eventHash,
+        merchantOrderId,
+    });
+    if (dedup.alreadyProcessed) {
+        return res.json({ received: true, alreadyProcessed: true, idempotent: true });
+    }
+
     try {
         const result = handleMutasikuWebhook(req.app.locals.db, req.body, { signature, secret });
         res.json({ received: true, ...result });
@@ -1129,5 +1257,76 @@ router.__test = {
     verifyMockPaymentToken,
     paymentGatewayState,
 };
+
+// POST /api/payment/reconcile/mutation-batch — Internal collector signed ingestion.
+router.post('/reconcile/mutation-batch', collectorIpAllowlist, (req, res) => {
+    const collectorSecret = String(process.env.COLLECTOR_HMAC_SECRET || '').trim();
+    if (!collectorSecret) {
+        return res.status(503).json({ error: 'Collector ingestion endpoint belum aktif.' });
+    }
+
+    const signature = req.get('x-collector-signature') || '';
+    const timestamp = req.get('x-collector-timestamp') || '';
+    const keyId = req.get('x-collector-key-id') || '';
+    const nonce = req.get('x-collector-nonce') || '';
+
+    if (!signature || !timestamp || !nonce) {
+        return res.status(401).json({ error: 'Missing collector headers' });
+    }
+
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const skew = Number(process.env.COLLECTOR_ALLOWED_CLOCK_SKEW_SEC || 300);
+    if (Math.abs(nowSeconds - Number(timestamp)) > skew) {
+        return res.status(401).json({ error: 'Timestamp out of range' });
+    }
+
+    const rawBody = JSON.stringify(req.body);
+    const expected = crypto
+        .createHmac('sha256', collectorSecret)
+        .update(`${keyId}:${nonce}:${timestamp}:${rawBody}`)
+        .digest('hex');
+    const expectedBuf = Buffer.from(expected);
+    const receivedBuf = Buffer.from(signature);
+    if (expectedBuf.length !== receivedBuf.length || !crypto.timingSafeEqual(expectedBuf, receivedBuf)) {
+        return res.status(401).json({ error: 'Signature tidak valid' });
+    }
+
+    const nonceHash = computeWebhookEventHash({
+        provider: 'collector-batch',
+        eventId: nonce,
+        timestamp,
+        merchantOrderId: '',
+        amount: '',
+    });
+    const dedup = checkAndRecordWebhookEvent(req.app.locals.db, {
+        provider: 'collector-batch',
+        eventId: nonce,
+        eventHash: nonceHash,
+        merchantOrderId: '',
+    });
+    if (dedup.alreadyProcessed) {
+        return res.json({ ok: true, alreadyProcessed: true, idempotent: true });
+    }
+
+    const mutations = req.body.mutations || [];
+    if (!Array.isArray(mutations) || mutations.length === 0) {
+        return res.status(400).json({ error: 'mutations array diperlukan' });
+    }
+
+    const { ingestBatch } = require('../lib/mutation-ingester');
+    const pepper = String(process.env.HASH_PEPPER || '');
+    const results = ingestBatch(req.app.locals.db, mutations, pepper);
+
+    const { processNewMutations } = require('../lib/mutation-matcher');
+    const matchResult = processNewMutations(req.app.locals.db, mutations, pepper);
+
+    res.json({
+        ok: true,
+        ingested: results.filter(r => r.inserted).length,
+        duplicates: results.filter(r => !r.inserted).length,
+        matched: matchResult.matched,
+        errors: matchResult.errors,
+    });
+});
 
 module.exports = router;

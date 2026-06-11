@@ -516,13 +516,134 @@ button:focus-visible, a:focus-visible {
   scroll-snap-type: x mandatory;
   scroll-behavior: auto;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
 }
 
 .landing-teacher-mobile-track {
   animation: none;
   transform: none;
   will-change: auto;
+}
+
+.invoice-print-sheet {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 18mm;
+    size: A4 portrait;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .invoice-print-sheet,
+  .invoice-print-sheet * {
+    visibility: visible !important;
+  }
+
+  .invoice-print-sheet {
+    background: #fff;
+    color: #0b1326;
+    display: block !important;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    inset: 0;
+    padding: 12mm;
+    position: absolute;
+    width: 100%;
+  }
+
+  .invoice-print-brand,
+  .invoice-print-head,
+  .invoice-print-product,
+  .invoice-print-details > div {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .invoice-print-brand {
+    border-bottom: 2px solid #0b1326;
+    padding-bottom: 18px;
+  }
+
+  .invoice-print-brand > span {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: .12em;
+  }
+
+  .invoice-print-head {
+    gap: 24px;
+    padding: 28px 0;
+  }
+
+  .invoice-print-head p,
+  .invoice-print-product span,
+  .invoice-print-details dt {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .invoice-print-head h1 {
+    font-size: 20px;
+    font-weight: 800;
+    margin-top: 6px;
+  }
+
+  .invoice-print-head > strong {
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  .invoice-print-product {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    gap: 24px;
+    padding: 18px;
+  }
+
+  .invoice-print-product strong {
+    max-width: 70%;
+    text-align: right;
+  }
+
+  .invoice-print-details {
+    border: 1px solid #e2e8f0;
+    border-top: 0;
+  }
+
+  .invoice-print-details > div {
+    border-bottom: 1px solid #e2e8f0;
+    gap: 24px;
+    padding: 14px 18px;
+  }
+
+  .invoice-print-details > div:last-child {
+    border-bottom: 0;
+  }
+
+  .invoice-print-details dd {
+    font-size: 13px;
+    font-weight: 700;
+    text-align: right;
+  }
+
+  .invoice-print-note {
+    color: #64748b;
+    font-size: 10px;
+    margin-top: 24px;
+    text-align: center;
+  }
 }
 
 @keyframes landing-testimonial-slide {
@@ -4802,6 +4923,13 @@ button:focus-visible, a:focus-visible {
   object-fit: contain;
 }
 
+.qris-code-logo {
+  display: block;
+  margin: 0 auto 12px;
+  height: 24px;
+  width: auto;
+}
+
 .qris-nmid {
   font-size: 13px;
   color: rgba(11, 19, 38, 0.5);
@@ -4910,14 +5038,21 @@ button:focus-visible, a:focus-visible {
 .qris-desktop-qr {
   background: #fff;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   padding: 16px;
   border-radius: 16px;
   border: 1px solid rgba(11, 19, 38, 0.08);
   margin-bottom: 0;
 }
 
-.qris-desktop-qr img {
+.qris-desktop-qr .qris-code-logo {
+  margin-bottom: 12px;
+  width: 96px;
+  height: auto;
+}
+
+.qris-desktop-qr .qris-payment-code {
   width: clamp(220px, 30vw, 280px);
   height: clamp(220px, 30vw, 280px);
   object-fit: contain;

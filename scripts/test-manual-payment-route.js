@@ -52,7 +52,9 @@ async function main() {
     const db = new Database(':memory:');
     db.pragma('foreign_keys = ON');
     db.exec(fs.readFileSync(path.join(__dirname, '..', 'db', 'schema.sql'), 'utf8'));
+    db.prepare("INSERT INTO users (id, username, password_hash, display_name, role) VALUES (1, 'guest-test', 'none', 'Tamu_Test', 'guest')").run();
     db.prepare("INSERT INTO users (id, username, password_hash, display_name, role) VALUES (2, 'student@example.com', '$2b$10$realHash', 'Student', 'user')").run();
+    db.prepare("INSERT INTO users (id, username, password_hash, display_name, role) VALUES (3, 'other@example.com', '$2b$10$realHash', 'Other Student', 'user')").run();
     db.prepare("INSERT INTO app_settings (key, value) VALUES ('tryout_packages_enabled', '1')").run();
     db.prepare(`
         INSERT INTO tryout_packages (id, tryout_id, title, description, price, duration, questions, features, sort_order)
@@ -62,9 +64,10 @@ async function main() {
     const paymentRouter = require('../routes/payment');
     const app = express();
     app.locals.db = db;
+    let sessionUserId = 2;
     app.use(express.json({ limit: '2mb' }));
     app.use((req, _res, next) => {
-        req.session = { userId: 2, role: 'user' };
+        req.session = { userId: sessionUserId, role: 'user' };
         next();
     });
     app.use('/api/payment', paymentRouter);
@@ -133,7 +136,24 @@ async function main() {
 
         const active = await request({ baseUrl, path: '/api/payment/active-packages' });
         assert.equal(active.status, 200, active.raw);
-        assert.deepStrictEqual(active.data, ['Tryout Manual Test']);
+        assert.deepStrictEqual(active.data, ['Tryout Manual Test', 'tryout-manual-test']);
+
+        const invoices = await request({ baseUrl, path: '/api/payment/invoices' });
+        assert.equal(invoices.status, 200, invoices.raw);
+        assert.equal(invoices.data.length, 3);
+        assert.equal(invoices.data[0].merchantOrderId, wrapped.data.merchantOrderId);
+        assert.equal(invoices.data.some((invoice) => invoice.merchantOrderId === first.data.merchantOrderId), true);
+        assert.equal(Object.hasOwn(invoices.data[0], 'qrImageDataUrl'), false);
+        assert.equal(Object.hasOwn(invoices.data[0], 'email'), false);
+
+        sessionUserId = 3;
+        const otherUserInvoices = await request({ baseUrl, path: '/api/payment/invoices' });
+        assert.equal(otherUserInvoices.status, 200, otherUserInvoices.raw);
+        assert.deepStrictEqual(otherUserInvoices.data, []);
+
+        sessionUserId = 1;
+        const guestInvoices = await request({ baseUrl, path: '/api/payment/invoices' });
+        assert.equal(guestInvoices.status, 401, guestInvoices.raw);
     } finally {
         await new Promise((resolve) => server.close(resolve));
         db.close();

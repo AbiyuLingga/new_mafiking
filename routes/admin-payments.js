@@ -2,6 +2,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { isAuthenticated } = require('../middleware/auth');
 const { isAdmin } = require('../middleware/admin');
+const { adminIpAllowlist } = require('../lib/ip-allowlist');
 const { markPaymentFailed, markPaymentPaid } = require('../lib/payment-reconciler');
 
 const router = express.Router();
@@ -14,7 +15,16 @@ const adminPaymentLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-router.use(isAuthenticated, isAdmin, adminPaymentLimiter);
+const adminMarkPaidLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 10,
+    message: { error: 'Terlalu banyak aksi mark-paid dalam 5 menit. Tunggu sebentar.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `admin:mark:${req.userId || req.session?.userId || 'unknown'}`,
+});
+
+router.use(isAuthenticated, isAdmin, adminIpAllowlist, adminPaymentLimiter);
 
 function normalizedLimit(value) {
     const limit = Number.parseInt(String(value || ''), 10);
@@ -89,7 +99,7 @@ router.get('/', (req, res) => {
     }
 });
 
-router.post('/:merchantOrderId/mark-paid', (req, res) => {
+router.post('/:merchantOrderId/mark-paid', adminMarkPaidLimiter, (req, res) => {
     try {
         const result = markPaymentPaid(req.app.locals.db, {
             merchantOrderId: req.params.merchantOrderId,
@@ -133,5 +143,78 @@ router.get('/:merchantOrderId/audit-log', (req, res) => {
         res.status(500).json({ error: 'Gagal memuat audit log pembayaran.' });
     }
 });
+
+router.get('/dashboard', (req, res) => {
+    const db = req.app.locals.db;
+    try {
+        const counts = db.prepare(`
+            SELECT status, COUNT(*) as count
+            FROM payments
+            WHERE 1=1
+            GROUP BY status
+        `).all();
+
+        const countsByStatus = {
+            PENDING: 0, SUCCESS: 0, FAILED: 0, EXPIRED: 0,
+        };
+        for (const row of counts) {
+            countsByStatus[row.status] = row.count;
+        }
+
+        const ambiguousCount = db.prepare(`
+            SELECT COUNT(*) as count FROM payment_reconciliation_log
+            WHERE action = 'auto_verify_ambiguous'
+              AND created_at > datetime('now', '-24 hours')
+        `).get()?.count || 0;
+
+        const invalidWebhookCount = db.prepare(`
+            SELECT COUNT(*) as count FROM payment_reconciliation_log
+            WHERE action = 'rejected_amount_mismatch'
+              AND created_at > datetime('now', '-24 hours')
+        `).get()?.count || 0;
+
+        const recentErrors = db.prepare(`
+            SELECT id, merchant_order_id, action, source, details, created_at
+            FROM payment_reconciliation_log
+            WHERE action IN (
+                'rejected_expired_resurrection',
+                'rejected_failed_resurrection',
+                'rejected_amount_mismatch',
+                'auto_verify_ambiguous',
+                'auto_verify_invalid_status'
+            )
+            ORDER BY created_at DESC, id DESC
+            LIMIT 20
+        `).all();
+
+        const lastIngest = db.prepare(`
+            SELECT received_at, provider FROM payment_webhook_events
+            ORDER BY received_at DESC LIMIT 1
+        `).get() || null;
+
+        const collectorStats = req.app.locals.mutationCollector?.getStats?.() || null;
+
+        res.json({
+            counts: countsByStatus,
+            last24h: {
+                ambiguousMatches: ambiguousCount,
+                invalidWebhooks: invalidWebhookCount,
+            },
+            recentErrors: recentErrors.map((row) => ({
+                ...row,
+                details: row.details ? safeJsonParse(row.details) : null,
+            })),
+            lastWebhookIngest: lastIngest,
+            collector: collectorStats,
+        });
+    } catch (error) {
+        console.error('GET /api/admin/payments/dashboard error:', error);
+        res.status(500).json({ error: 'Gagal memuat dashboard pembayaran.' });
+    }
+});
+
+function safeJsonParse(value) {
+    try { return JSON.parse(value); } catch (_) { return null; }
+}
 
 module.exports = router;

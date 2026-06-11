@@ -74,6 +74,43 @@ const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
+// Existing databases need these columns before schema.sql creates indexes that use them.
+const preSchemaMigrations = [
+  ['user_access_grants', 'payment_merchant_order_id', 'ALTER TABLE user_access_grants ADD COLUMN payment_merchant_order_id TEXT'],
+  ['user_access_grants', 'revoked', 'ALTER TABLE user_access_grants ADD COLUMN revoked INTEGER DEFAULT NULL'],
+];
+
+for (const [tableName, columnName, sql] of preSchemaMigrations) {
+  const tableExists = db.prepare(
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+  ).get(tableName);
+  if (!tableExists) continue;
+
+  const columnExists = db.prepare(`PRAGMA table_info("${tableName}")`).all()
+    .some((column) => column.name === columnName);
+  if (!columnExists) db.exec(sql);
+}
+
+const incomingMutationsExists = db.prepare(
+  "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'incoming_mutations'",
+).get();
+if (incomingMutationsExists) {
+  // Preserve historical duplicate rows, but only the earliest row keeps the provider event ID.
+  db.exec(`
+    UPDATE incoming_mutations
+    SET provider_mutation_id = NULL
+    WHERE provider_mutation_id IS NOT NULL
+      AND provider_mutation_id != ''
+      AND id NOT IN (
+        SELECT MIN(id)
+        FROM incoming_mutations
+        WHERE provider_mutation_id IS NOT NULL
+          AND provider_mutation_id != ''
+        GROUP BY provider, provider_mutation_id
+      )
+  `);
+}
+
 const schema = fs.readFileSync(path.join(dbDir, 'schema.sql'), 'utf-8');
 db.exec(schema);
 
@@ -246,7 +283,11 @@ for (const migration of [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_tryout_sessions_user_tryout
     ON tryout_sessions (user_id, tryout_id, submitted_at, started_at DESC)`,
-  "ALTER TABLE tryout_packages ADD COLUMN is_hidden INTEGER DEFAULT 0"
+  "ALTER TABLE tryout_packages ADD COLUMN is_hidden INTEGER DEFAULT 0",
+  "ALTER TABLE user_access_grants ADD COLUMN payment_merchant_order_id TEXT",
+  "ALTER TABLE user_access_grants ADD COLUMN revoked INTEGER DEFAULT NULL",
+  "CREATE TABLE IF NOT EXISTS payment_rate_limits (id INTEGER PRIMARY KEY AUTOINCREMENT, rate_hash TEXT NOT NULL, window_start INTEGER NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE INDEX IF NOT EXISTS idx_rate_limits_lookup ON payment_rate_limits(rate_hash, window_start)",
 ]) {
   try {
     db.exec(migration);

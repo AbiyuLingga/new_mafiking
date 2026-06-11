@@ -292,7 +292,7 @@ const SlidingSegmented = ({ options, value, onChange, className = "" }) => {
   );
 };
 
-const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn = false, isAdminMode = false, onLogoClick, onAdminPanelOpen }) => {
+const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn = false, isAdminMode = false, showTryoutLink = true, onLogoClick, onAdminPanelOpen }) => {
   const [scrolled, setScrolled] = useState(false);
   const [progressStats, setProgressStats] = useState(null);
   const navRef = useRef(null);
@@ -344,13 +344,13 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
     { id: "misi", label: "Misi Harian" },
     { id: "tryout", label: "Paket" },
     { id: "leaderboard", label: "Peringkat" },
-  ];
+  ].filter((item) => showTryoutLink || item.id !== "tryout");
   const mobilePrimaryLinks = [
     { id: "belajar", label: "Belajar", iconSrc: "/assets/Book.png" },
     { id: "misi", label: "Misi", IconC: Icon.Calendar },
     { id: "tryout", label: "Paket", iconSrc: "/assets/crown.png" },
     { id: "leaderboard", label: "Peringkat", iconSrc: "/assets/leaderboard.png" },
-  ];
+  ].filter((item) => showTryoutLink || item.id !== "tryout");
 
   const activeLinkId = route !== "lobby" && links.some((item) => item.id === route) ? route : "";
 
@@ -577,7 +577,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
 };
 
 // ─── Footer ───────────────────────────────────────────────────────────────
-const Footer = ({ setRoute }) => (
+const Footer = ({ setRoute, showTryoutLink = true }) => (
   <footer className="bg-ink text-white/85 mt-24">
     <div className="max-w-6xl mx-auto px-6 md:px-8 py-16">
       <div className="grid md:grid-cols-12 gap-10 pb-10 border-b border-white/10">
@@ -603,7 +603,7 @@ const Footer = ({ setRoute }) => (
             <div className="kicker mb-3 text-white/40">Platform</div>
             <ul className="space-y-2.5">
               <li><button onClick={() => setRoute("misi")} className="hover:text-yel">Misi Harian</button></li>
-              <li><button onClick={() => setRoute("tryout")} className="hover:text-yel">Tryout</button></li>
+              {showTryoutLink && <li><button onClick={() => setRoute("tryout")} className="hover:text-yel">Tryout</button></li>}
               <li><button className="hover:text-yel">Peringkat</button></li>
             </ul>
           </div>

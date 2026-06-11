@@ -1,6 +1,6 @@
 // MAFIKING Lobby — minimalist with 3 hero variants
 
-const Lobby = ({ setRoute, tweaks, currentUser, isAdmin = false, authMode = null, authRedirect = null, authBackRoute = null, authState = null, onAuthSuccess, pendingClerkUser = null }) => {
+const Lobby = ({ setRoute, tweaks, currentUser, isAdmin = false, showTryoutLink = true, authMode = null, authRedirect = null, authBackRoute = null, authState = null, onAuthSuccess, pendingClerkUser = null }) => {
   if (authMode) {
     return (
       <AuthScreen
@@ -18,7 +18,7 @@ const Lobby = ({ setRoute, tweaks, currentUser, isAdmin = false, authMode = null
 
   return (
     <div>
-      <Landing setRoute={setRoute} tweaks={tweaks} isAdmin={isAdmin} currentUser={currentUser} />
+      <Landing setRoute={setRoute} tweaks={tweaks} isAdmin={isAdmin} currentUser={currentUser} showTryoutLink={showTryoutLink} />
     </div>
   );
 };
@@ -741,7 +741,7 @@ const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authSta
 };
 
 // ─── Landing (marketing, untuk anonymous/guest) ───────────────────────────
-const LandingLegacy = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
+const LandingLegacy = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTryoutLink = true }) => {
   const isRegistered = currentUser && !currentUser.display_name?.startsWith("Tamu_");
   const startFree = () => setRoute({ route: "belajar", section: "Try Out" });
   const authRedirect = { route: "belajar", section: "Try Out" };
@@ -810,9 +810,11 @@ const LandingLegacy = ({ setRoute, tweaks, isAdmin = false, currentUser = null }
                 <button onClick={startFree} className="btn-ink !py-4 !px-7" type="button">
                   Coba Gratis <Icon.Arrow />
                 </button>
-                <button onClick={() => setRoute("tryout")} className="btn-ghost !py-4 !px-7" type="button">
-                  Lihat Paket
-                </button>
+                {showTryoutLink && (
+                  <button onClick={() => setRoute("tryout")} className="btn-ghost !py-4 !px-7" type="button">
+                    Lihat Paket
+                  </button>
+                )}
               </div>
               <div className="mt-9 grid max-w-2xl grid-cols-2 gap-4 text-sm text-slate-500 md:grid-cols-4">
                 {[
@@ -974,7 +976,7 @@ const LandingLegacy = ({ setRoute, tweaks, isAdmin = false, currentUser = null }
         </section>
       </main>
 
-      <Footer setRoute={setRoute} />
+      <Footer setRoute={setRoute} showTryoutLink={showTryoutLink} />
 
     </div>
   );
@@ -1162,7 +1164,7 @@ const LandingMediaUploadModal = ({ target, onClose, onUploaded }) => {
 };
 
 // Landing page adapted from the Google AI Studio design in the provided zip.
-const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
+const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTryoutLink = true }) => {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [landingMedia, setLandingMedia] = React.useState({});
   const [tryoutPackages, setTryoutPackages] = React.useState([]);
@@ -1189,7 +1191,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
       return;
     }
     if (!pkg || !pkg.id) {
-      setRoute("tryout");
+      setRoute(showTryoutLink ? "tryout" : "belajar");
       return;
     }
     const paymentRoute = { route: "payment", payment: { type: "tryout", package: pkg } };
@@ -1374,14 +1376,6 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
       setSoundEnabled(false);
     }
   };
-
-  const pauseTeacherAutoScroll = React.useCallback(() => {
-    teacherAutoScrollPausedRef.current = true;
-  }, []);
-
-  const resumeTeacherAutoScroll = React.useCallback(() => {
-    teacherAutoScrollPausedRef.current = false;
-  }, []);
 
   const recenterTeacherScroll = React.useCallback(() => {
     const track = teacherScrollRef.current;
@@ -1807,12 +1801,6 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null }) => {
               <div
                 ref={teacherScrollRef}
                 className="landing-teacher-mobile-scroll hide-scrollbar landing-teacher-mask relative -mx-4 overflow-x-auto overflow-y-hidden sm:-mx-6 md:-mx-12 lg:hidden"
-                onPointerDown={pauseTeacherAutoScroll}
-                onPointerUp={resumeTeacherAutoScroll}
-                onPointerCancel={resumeTeacherAutoScroll}
-                onTouchStart={pauseTeacherAutoScroll}
-                onTouchEnd={resumeTeacherAutoScroll}
-                onTouchCancel={resumeTeacherAutoScroll}
                 onScroll={recenterTeacherScroll}
               >
                 <div className="landing-teacher-track landing-teacher-mobile-track flex w-max gap-4 px-4 sm:gap-6 sm:px-6 md:px-12 lg:gap-8 lg:px-20">
@@ -2248,7 +2236,7 @@ const Dashboard = ({ user, setRoute, tweaks }) => {
 };
 
 // ─── HERO 1 · SPLIT (asymmetric, minimal photo right) ─────────────────────
-const HeroSplit = ({ setRoute }) => (
+const HeroSplit = ({ setRoute, showTryoutLink = true }) => (
   <section className="bg-paper">
     <div className="max-w-6xl mx-auto px-6 md:px-8 pt-12 md:pt-20 pb-16 md:pb-24">
       <div className="grid lg:grid-cols-12 gap-10 lg:gap-14 items-center">
@@ -2270,9 +2258,11 @@ const HeroSplit = ({ setRoute }) => (
             <button onClick={() => setRoute("belajar")} className="btn-ink">
               Coba Gratis <Icon.Arrow />
             </button>
-            <button onClick={() => setRoute("tryout")} className="text-ink/70 font-semibold text-sm hover:text-ink inline-flex items-center gap-1.5">
-              atau lihat tryout <Icon.Arrow className="w-3.5 h-3.5" />
-            </button>
+            {showTryoutLink && (
+              <button onClick={() => setRoute("tryout")} className="text-ink/70 font-semibold text-sm hover:text-ink inline-flex items-center gap-1.5">
+                atau lihat tryout <Icon.Arrow className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-6 mt-10 text-sm text-ink/55">
           </div>

@@ -1,0 +1,218 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:14e192fb-e0af-44ad-9f83-1ee5c08b572a",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-06-11T16:50:57.407Z",
+    "tools": [
+      {
+        "vendor": "new_mafiking",
+        "name": "build-sbom.js",
+        "version": "1.0.0"
+      }
+    ],
+    "component": {
+      "type": "application",
+      "name": "new_mafiking",
+      "version": "0.1.0"
+    },
+    "authors": [
+      {
+        "name": "MAFIKING"
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "@prasetya/qris",
+      "version": "0.2.1",
+      "description": "Zero-dependency QRIS parser, validator, and static→dynamic converter for Indonesian EMVCo payment codes",
+      "licenses": [
+        "MIT"
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "374db80bc5db49630e4162bed1c873956686f652e69bdc9144a7bb7f955b0625"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/andhikapraa/qris#readme"
+        },
+        {
+          "type": "source",
+          "url": "git+https://github.com/andhikapraa/qris.git"
+        }
+      ],
+      "properties": {
+        "declared": "0.2.1",
+        "transitiveDeps": 0
+      }
+    },
+    {
+      "type": "library",
+      "name": "qris-mutasi",
+      "version": "2.0.0",
+      "description": "",
+      "licenses": [
+        "MIT"
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "105fbaa650af23189feec992c2e64dafd726b5c688213cd87f9f70d7e6d3feba"
+        }
+      ],
+      "externalReferences": [],
+      "properties": {
+        "declared": "2.0.0",
+        "transitiveDeps": 1
+      }
+    },
+    {
+      "type": "library",
+      "name": "qrcode",
+      "version": "1.5.4",
+      "description": "QRCode / 2d Barcode api with both server side and client side support using canvas",
+      "licenses": [
+        "MIT"
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "cbe26d7282c802f4ab9c1f790c5d8450d2b5c82e8bb5f67e3a5c2641ea347d1d"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "http://github.com/soldair/node-qrcode"
+        },
+        {
+          "type": "source",
+          "url": "git://github.com/soldair/node-qrcode.git"
+        }
+      ],
+      "properties": {
+        "declared": "^1.5.4",
+        "transitiveDeps": 3
+      }
+    },
+    {
+      "type": "library",
+      "name": "axios",
+      "version": "1.16.1",
+      "description": "Promise based HTTP client for the browser and node.js",
+      "licenses": [
+        "MIT"
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c21984db80fc089ce401094bf9afa506b87db14c15aeddd94fc6df84b20764d9"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://axios-http.com"
+        },
+        {
+          "type": "source",
+          "url": "https://github.com/axios/axios.git"
+        }
+      ],
+      "properties": {
+        "declared": "^1.15.2",
+        "transitiveDeps": 4
+      }
+    },
+    {
+      "type": "library",
+      "name": "helmet",
+      "version": "8.1.0",
+      "description": "help secure Express/Connect apps with various HTTP headers",
+      "licenses": [
+        "MIT"
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a604937a460997f97569435aaa3b0ba96437d8c7dbec317e2f1e4b3a87350f43"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://helmetjs.github.io/"
+        },
+        {
+          "type": "source",
+          "url": "git://github.com/helmetjs/helmet.git"
+        }
+      ],
+      "properties": {
+        "declared": "^8.1.0",
+        "transitiveDeps": 0
+      }
+    },
+    {
+      "type": "library",
+      "name": "csrf-csrf",
+      "version": "4.0.3",
+      "description": "A utility package to help implement stateless CSRF protection using the Double Submit Cookie Pattern in express.",
+      "licenses": [
+        "ISC"
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6a4e050553a2b24e18cc487c8d96a11b81f30bafcb6650303496b13c6111a26c"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/Psifi-Solutions/csrf-csrf"
+        }
+      ],
+      "properties": {
+        "declared": "^4.0.3",
+        "transitiveDeps": 1
+      }
+    },
+    {
+      "type": "library",
+      "name": "express-rate-limit",
+      "version": "8.5.1",
+      "description": "Basic IP rate-limiting middleware for Express. Use to limit repeated requests to public APIs and/or endpoints such as password reset.",
+      "licenses": [
+        "MIT"
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "5c28468605d1fcbcfc5f2f687bcaf20e5f63534f37f4789937dabd94a740383d"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/express-rate-limit/express-rate-limit"
+        },
+        {
+          "type": "source",
+          "url": "git+https://github.com/express-rate-limit/express-rate-limit.git"
+        }
+      ],
+      "properties": {
+        "declared": "^8.3.2",
+        "transitiveDeps": 1
+      }
+    }
+  ]
+}

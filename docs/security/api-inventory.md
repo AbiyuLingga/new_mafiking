@@ -140,6 +140,8 @@ All routes `isAuthenticated`. Body validation lives in
 | POST | `/api/payment/callback` | clerk-public | exempt | n/a | Duitku MD5-signed. Updates `payments` by `merchant_order_id`. |
 | POST | `/api/payment/reconcile/webhook` | public | exempt | n/a | QRIS HMAC-signed reconciliation endpoint. Calls idempotent reconciler. |
 | POST | `/api/payment/reconcile/mutasiku-webhook` | public | exempt | n/a | Mutasiku `payment.completed` or `mutations.created` reconciliation endpoint. |
+| POST | `/api/payment/reconcile/mutation-batch` | collector-signed | exempt | n/a | Phase 4 internal collector ingestion. HMAC SHA-256 over `keyId:nonce:timestamp:rawBody`, 5-min clock skew, IP allowlist via `COLLECTOR_IP_ALLOWLIST`. |
+| GET | `/api/payment/invoices` | registered | n/a | user-scoped | Returns up to 100 current-user transactions across all statuses; response excludes buyer email and QR payloads. |
 | GET | `/api/payment/mock-gateway` | public | n/a | none | Dev-only. |
 | GET | `/api/payment/mock-complete` | public | n/a | none | Dev-only. |
 
@@ -151,7 +153,8 @@ All routes `isAuthenticated` + `isAdmin` and use `adminPaymentLimiter`.
 |---|---|---|---|---|---|
 | GET | `/api/admin/payments/pending` | admin | n/a | admin | Pending QRIS/gateway payments for manual reconciliation. |
 | GET | `/api/admin/payments/` | admin | n/a | admin | Filterable payment list by status/search. |
-| POST | `/api/admin/payments/:merchantOrderId/mark-paid` | admin | ✓ | admin | Marks payment `SUCCESS`, releases suffix, grants access, logs audit row. |
+| GET | `/api/admin/payments/dashboard` | admin | n/a | admin | Phase 7 dashboard: payment counts, 24h ambiguous/invalid-webhook counts, recent errors, last webhook ingest, collector stats. |
+| POST | `/api/admin/payments/:merchantOrderId/mark-paid` | admin | ✓ | admin | Marks payment `SUCCESS`, releases suffix, grants access, logs audit row. Stricter 5-min/10-action per-admin rate limit; IP allowlist if `ADMIN_IP_ALLOWLIST` is set. |
 | POST | `/api/admin/payments/:merchantOrderId/mark-failed` | admin | ✓ | admin | Marks payment `FAILED`, releases suffix, logs audit row. |
 | GET | `/api/admin/payments/:merchantOrderId/audit-log` | admin | n/a | admin | Reads reconciliation audit log for one order. |
 

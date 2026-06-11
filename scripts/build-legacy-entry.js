@@ -14,6 +14,7 @@ const legacyAppScripts = [
   'src/lobby.jsx',
   'src/belajar.jsx',
   'src/profile.jsx',
+  'src/invoices.jsx',
   'src/toolbar.jsx',
   'src/drawing-canvas.jsx',
   'src/answer-board.jsx',

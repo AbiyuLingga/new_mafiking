@@ -16,6 +16,7 @@ The active browser entry point is `MAFIKING.html`, served by `server.js`. The fr
 - Motion polish: app route transitions, the top-nav active pill, Belajar mapel underline, shared segmented controls, landing reveal effects, testimonial marquee, and mission carousel motion use local CSS/JS motion; no new frontend runtime dependency is required.
 - App backgrounds: Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and their locked access gates share a soft grid/glow page background with per-page color variants from `src/styles.css`.
 - Paket: `Semua Paket` and `Paket Saya` render the same `PackageCard` layout; accessible packages show `Mulai`, while locked packages route through login or open the checkout popup directly. Payment flow is `Beli` → checkout popup → `POST /api/payment/create` → QRIS/manual payment popup in `src/payment.jsx`; `/payment?merchantOrderId=...` reopens the status popup without the global app nav.
+- Invoice: logged-in users open `Riwayat Pembelian` from Profil. `/invoices` reads only the current user's transactions from `GET /api/payment/invoices`, can reopen pending payment status, and prints a selected invoice without exposing QR payloads or buyer email in the list response.
 - Admin mode: role-gated shield toggle button (bottom-right corner). Pressing shield enables admin mode; the top nav then shows an `Admin Panel` entry that opens the full admin page. The admin page can manage Try Out packages, per-package Try Out questions/import/results, Matematika/Fisika/Kimia chapters and subtopics, users/access, and Gemini usage backend data. The Users tab has quick manual grants for premium Try Out and daily missions. On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete.
 - SOP: `SOP-AI-INPUT-SOAL.md` documents the general AI question-entry guide. `SOP-DEEPSEEK-IMPORT-SOAL.md` is the stricter prompt contract for admin file import via DeepSeek.
 - Backend: Express 5, SQLite through `better-sqlite3`, session auth, API routes.
@@ -131,6 +132,13 @@ deploying so `mafiking.com` cannot accidentally point at an older app process.
 
 `deploy.sh` does not overwrite the server database by default, and normal deploys
 also skip bundled content imports so admin/server-side content edits stay intact.
+It also skips OS bootstrap and `npm ci` when the server tooling and production
+dependency hash have not changed. Dependency installs reuse the server npm cache.
+Use `FORCE_NPM_CI=1 ./deploy.sh <ip> <user>` only when intentionally rebuilding
+production dependencies.
+After PM2 starts, deploy waits up to roughly one minute for `/api/health`
+instead of assuming the app is ready after two seconds. Override this with
+`HEALTHCHECK_ATTEMPTS` and `HEALTHCHECK_INTERVAL` when a server needs longer.
 Use `DEPLOY_IMPORTS=1 ./deploy.sh <ip> <user>` only when intentionally syncing
 `db/tryout-bank.json`, `db/question-bank.json`, and `db/daily-missions.json`
 into production. Fresh database bootstrap and `DEPLOY_DB=1` still run imports
@@ -357,6 +365,7 @@ The import script refuses to replace question tables when user progress or corre
 7. Status is polled every 5s from `GET /api/payment/status/:merchantOrderId`.
 8. Duitku remains available for legacy/fallback provider modes that return `paymentUrl`; QRIS/local/manual payments stay in-app.
 9. Shows pending / success / failed/timeout states.
+10. Logged-in users can open `/invoices` from Profil to view their own payment history, continue a pending payment, or print an invoice.
 
 ## API Overview
 

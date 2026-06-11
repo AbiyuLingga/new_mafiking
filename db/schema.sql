@@ -161,6 +161,33 @@ CREATE TABLE IF NOT EXISTS payment_reconciliation_log (
 CREATE INDEX IF NOT EXISTS idx_payment_reconciliation_order
     ON payment_reconciliation_log(merchant_order_id, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS payment_webhook_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    event_id TEXT,
+    event_hash TEXT UNIQUE NOT NULL,
+    merchant_order_id TEXT,
+    received_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    processed_status TEXT NOT NULL DEFAULT 'PROCESSED'
+);
+
+CREATE INDEX IF NOT EXISTS idx_webhook_events_merchant_order
+    ON payment_webhook_events(merchant_order_id, received_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_webhook_events_lookup
+    ON payment_webhook_events(provider, event_id);
+
+CREATE TABLE IF NOT EXISTS payment_idempotency_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    key_hash TEXT UNIQUE NOT NULL,
+    merchant_order_id TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_idempotency_expires
+    ON payment_idempotency_keys(expires_at);
+
 CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL DEFAULT '',
@@ -337,11 +364,17 @@ CREATE TABLE IF NOT EXISTS user_access_grants (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     access_type TEXT NOT NULL,
     access_value TEXT NOT NULL,
-    granted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    payment_merchant_order_id TEXT,
+    granted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    revoked INTEGER DEFAULT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_access_grants_user_id
     ON user_access_grants (user_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_access_grants_payment_unique
+    ON user_access_grants(user_id, access_type, access_value, payment_merchant_order_id)
+    WHERE payment_merchant_order_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS ai_token_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -387,3 +420,49 @@ CREATE INDEX IF NOT EXISTS idx_mutations_matched
 
 CREATE INDEX IF NOT EXISTS idx_mutations_received
     ON incoming_mutations(received_at);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mutations_provider_id_unique
+    ON incoming_mutations(provider, provider_mutation_id)
+    WHERE provider_mutation_id IS NOT NULL AND provider_mutation_id != '';
+
+CREATE TABLE IF NOT EXISTS payment_rate_limits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rate_hash TEXT NOT NULL,
+    window_start INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_rate_limits_lookup
+    ON payment_rate_limits(rate_hash, window_start);
+
+CREATE TRIGGER IF NOT EXISTS trg_payment_reconciliation_log_no_update
+BEFORE UPDATE ON payment_reconciliation_log
+FOR EACH ROW
+WHEN OLD.action IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'payment_reconciliation_log is append-only; UPDATE is forbidden');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_payment_reconciliation_log_no_delete
+BEFORE DELETE ON payment_reconciliation_log
+FOR EACH ROW
+WHEN OLD.action IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'payment_reconciliation_log is append-only; DELETE is forbidden');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_payment_webhook_events_no_update
+BEFORE UPDATE ON payment_webhook_events
+FOR EACH ROW
+WHEN OLD.event_hash IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'payment_webhook_events is append-only; UPDATE is forbidden');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_payment_webhook_events_no_delete
+BEFORE DELETE ON payment_webhook_events
+FOR EACH ROW
+WHEN OLD.event_hash IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'payment_webhook_events is append-only; DELETE is forbidden');
+END;
