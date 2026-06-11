@@ -473,12 +473,23 @@ ensureFixedAdminUser(db);
 
 app.locals.db = db;
 app.locals.performanceStore = createPerformanceStore();
+app.locals.collectorHeartbeat = null;
 startExpirySweeper(db, Number(process.env.PAYMENT_EXPIRY_SWEEP_INTERVAL_MS) || 60000);
 startMutasikuPoller(db);
+
+// --- Internal heartbeat endpoint for the self-healing collector ---
+// Always mounted (even when the in-process collector is OFF) so an
+// out-of-process collector started via `scripts/collector.js` can still
+// report health. Validated by the `INTERNAL_API_SECRET` env var; the
+// endpoint returns 503 if the secret is not configured.
+app.use('/api/internal', require('./routes/internal'));
 
 // --- Auto-verification collector ---
 const MUTATION_COLLECTOR_ENABLED = ['1', 'true', 'yes', 'on'].includes(
     String(process.env.MUTATION_COLLECTOR_ENABLED || '').toLowerCase()
+);
+const SELF_HEALING_COLLECTOR_FLAG = !['false', '0', 'no', 'off'].includes(
+    String(process.env.SELF_HEALING_COLLECTOR || '').trim().toLowerCase()
 );
 
 if (MUTATION_COLLECTOR_ENABLED) {
@@ -504,6 +515,10 @@ if (MUTATION_COLLECTOR_ENABLED) {
         provider = new MockMutationProvider();
     }
 
+    // startMutationCollector transparently routes to the self-healing
+    // implementation when SELF_HEALING_COLLECTOR is on (default). When the
+    // flag is off, the legacy implementation is used. Both code paths
+    // return the same controller shape: { timer, stop, getStats }.
     const collector = startMutationCollector(db, provider, {
         intervalMs: Number(process.env.MUTATION_POLL_INTERVAL_MS) || 15000,
         maxConsecutiveErrors: Number(process.env.MUTATION_MAX_ERRORS) || 5,
@@ -512,6 +527,10 @@ if (MUTATION_COLLECTOR_ENABLED) {
 
     if (collector) {
         app.locals.mutationCollector = collector;
+        console.log(
+            `[collector] mode=${SELF_HEALING_COLLECTOR_FLAG ? 'self-healing' : 'legacy'} ` +
+            `provider=${provider.constructor.name}`
+        );
     }
 } else {
     console.log('[collector] MUTATION_COLLECTOR_ENABLED not set - auto-verify is OFF');
