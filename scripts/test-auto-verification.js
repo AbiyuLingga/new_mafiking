@@ -69,6 +69,7 @@ async function runAll() {
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             access_type TEXT NOT NULL,
             access_value TEXT NOT NULL,
+            payment_merchant_order_id TEXT,
             granted_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
     `);

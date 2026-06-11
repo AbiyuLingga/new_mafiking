@@ -4,8 +4,12 @@ const { isAuthenticated } = require('../middleware/auth');
 const { isAdmin } = require('../middleware/admin');
 const { adminIpAllowlist } = require('../lib/ip-allowlist');
 const { markPaymentFailed, markPaymentPaid } = require('../lib/payment-reconciler');
+const { isEnabled: isFeatureEnabled } = require('../lib/feature-flags');
+const paymentBroadcaster = require('../lib/payment-broadcaster');
 
 const router = express.Router();
+
+const BULK_ADMIN_ENABLED = isFeatureEnabled('BULK_ADMIN');
 
 const adminPaymentLimiter = rateLimit({
     windowMs: 60 * 1000,
@@ -22,6 +26,16 @@ const adminMarkPaidLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: (req) => `admin:mark:${req.userId || req.session?.userId || 'unknown'}`,
+});
+
+const adminBulkMarkPaidLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 5,
+    message: { error: 'Terlalu banyak aksi bulk mark-paid dalam 5 menit.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `admin:bulk:${req.userId || req.session?.userId || 'unknown'}`,
+    skip: () => !BULK_ADMIN_ENABLED,
 });
 
 router.use(isAuthenticated, isAdmin, adminIpAllowlist, adminPaymentLimiter);
@@ -216,5 +230,175 @@ router.get('/dashboard', (req, res) => {
 function safeJsonParse(value) {
     try { return JSON.parse(value); } catch (_) { return null; }
 }
+
+// GET /api/admin/payments/ambiguous — list unresolved ambiguous mutations
+router.get('/ambiguous', (req, res) => {
+    if (!BULK_ADMIN_ENABLED) {
+        return res.status(503).json({ error: 'Bulk admin feature belum aktif.' });
+    }
+    try {
+        const rows = req.app.locals.db.prepare(`
+            SELECT id, mutation_id, merchant_order_id, confidence_score,
+                   transacted_at, amount, payer_name_masked, created_at
+            FROM payment_ambiguous_queue
+            WHERE resolved_at IS NULL
+            ORDER BY created_at DESC, id DESC
+            LIMIT 100
+        `).all();
+        res.json(rows);
+    } catch (error) {
+        if (String(error.message || '').includes('no such table')) {
+            return res.json([]);
+        }
+        console.error('GET /api/admin/payments/ambiguous error:', error);
+        res.status(500).json({ error: 'Gagal memuat antrian ambigu.' });
+    }
+});
+
+// POST /api/admin/payments/ambiguous/:mutationId/resolve — force-resolve ke order tertentu
+router.post('/ambiguous/:mutationId/resolve', (req, res) => {
+    if (!BULK_ADMIN_ENABLED) {
+        return res.status(503).json({ error: 'Bulk admin feature belum aktif.' });
+    }
+    const { merchantOrderId, force = false } = req.body || {};
+    const mutationId = Number(req.params.mutationId);
+    if (!Number.isInteger(mutationId) || mutationId <= 0 || !merchantOrderId) {
+        return res.status(400).json({ error: 'mutationId dan merchantOrderId wajib diisi' });
+    }
+    const db = req.app.locals.db;
+    try {
+        const result = markPaymentPaid(db, {
+            merchantOrderId: String(merchantOrderId),
+            fullAmount: req.body.fullAmount != null && req.body.fullAmount !== '' ? Number(req.body.fullAmount) : null,
+            source: 'admin_force',
+            actorId: req.session.userId,
+            rawDetails: {
+                resolvedFromAmbiguousMutationId: mutationId,
+                force: Boolean(force),
+                note: String(req.body.note || '').slice(0, 500),
+            },
+        });
+        try {
+            db.prepare(`
+                UPDATE payment_ambiguous_queue
+                SET resolved_at = CURRENT_TIMESTAMP, resolved_by = ?, resolution = 'matched',
+                    resolution_details = ?
+                WHERE id = ?
+            `).run(String(req.session.userId || 'admin'), JSON.stringify({ merchantOrderId }), mutationId);
+        } catch (_) {
+            // table may not exist; ignore
+        }
+        res.json({ ok: true, ...result });
+    } catch (error) {
+        res.status(error.statusCode || 400).json({ error: error.message });
+    }
+});
+
+// POST /api/admin/payments/bulk-mark-paid — up to 50 items per call
+router.post('/bulk-mark-paid', adminBulkMarkPaidLimiter, (req, res) => {
+    if (!BULK_ADMIN_ENABLED) {
+        return res.status(503).json({ error: 'Bulk admin feature belum aktif.' });
+    }
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    if (items.length === 0 || items.length > 50) {
+        return res.status(400).json({ error: 'items array 1-50 wajib diisi' });
+    }
+    const db = req.app.locals.db;
+    const results = [];
+    const errors = [];
+    for (const item of items) {
+        const orderId = String(item.merchantOrderId || '').trim();
+        if (!orderId) {
+            errors.push({ merchantOrderId: orderId, error: 'merchantOrderId kosong' });
+            continue;
+        }
+        try {
+            const result = markPaymentPaid(db, {
+                merchantOrderId: orderId,
+                fullAmount: item.fullAmount != null && item.fullAmount !== '' ? Number(item.fullAmount) : null,
+                source: 'admin_bulk',
+                actorId: req.session.userId,
+                rawDetails: { note: String(item.note || 'bulk action').slice(0, 500) },
+            });
+            results.push({ merchantOrderId: orderId, ok: true, ...result });
+        } catch (err) {
+            errors.push({ merchantOrderId: orderId, error: err.message });
+        }
+    }
+    res.json({
+        ok: errors.length === 0,
+        results,
+        errors,
+        summary: { total: items.length, success: results.length, failed: errors.length },
+    });
+});
+
+// POST /api/admin/payments/:merchantOrderId/resend-email — kirim ulang email sukses
+router.post('/:merchantOrderId/resend-email', async (req, res) => {
+    const db = req.app.locals.db;
+    const orderId = String(req.params.merchantOrderId || '').trim();
+    const payment = db.prepare('SELECT * FROM payments WHERE merchant_order_id = ?').get(orderId);
+    if (!payment) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' });
+    if (payment.status !== 'SUCCESS') {
+        return res.status(409).json({ error: 'Hanya pembayaran SUCCESS yang bisa di-resend email' });
+    }
+    const user = db.prepare('SELECT id, email, display_name FROM users WHERE id = ?').get(payment.user_id);
+    if (!user || !user.email) return res.status(400).json({ error: 'User tidak punya email' });
+    try {
+        const mailer = require('../lib/mailer');
+        const emailTpl = require('../lib/email-templates');
+        const rendered = emailTpl.renderPaymentSuccess({ user, payment });
+        const send = mailer.sendMail || mailer.send;
+        if (typeof send !== 'function') {
+            return res.status(503).json({ error: 'Mailer belum dikonfigurasi.' });
+        }
+        await send({
+            to: user.email,
+            subject: rendered.subject,
+            html: rendered.html,
+            text: rendered.text,
+        });
+        db.prepare(`
+            INSERT INTO payment_reconciliation_log (merchant_order_id, action, actor_id, source, details)
+            VALUES (?, 'email_resent', ?, 'admin', ?)
+        `).run(orderId, req.session.userId || null, JSON.stringify({ to: user.email }));
+        res.json({ ok: true, sentTo: user.email });
+    } catch (err) {
+        console.error('[admin] resend-email failed:', err.message);
+        res.status(500).json({ error: 'Gagal kirim email: ' + err.message });
+    }
+});
+
+// GET /api/admin/payments/metrics — last 24h counts & collector health
+router.get('/metrics', (req, res) => {
+    const db = req.app.locals.db;
+    try {
+        const last24h = "datetime('now', '-24 hours')";
+        const count = (sql) => {
+            try {
+                return db.prepare(sql).get()?.count || 0;
+            } catch (_) {
+                return 0;
+            }
+        };
+        const counts = {
+            auto_paid: count(`SELECT COUNT(*) count FROM payment_reconciliation_log WHERE action='mark_paid' AND source='auto_verify' AND created_at > ${last24h}`),
+            manual_paid: count(`SELECT COUNT(*) count FROM payment_reconciliation_log WHERE action='mark_paid' AND source='admin' AND created_at > ${last24h}`),
+            bulk_paid: count(`SELECT COUNT(*) count FROM payment_reconciliation_log WHERE action='mark_paid' AND source='admin_bulk' AND created_at > ${last24h}`),
+            force_paid: count(`SELECT COUNT(*) count FROM payment_reconciliation_log WHERE action='mark_paid' AND source='admin_force' AND created_at > ${last24h}`),
+            webhook_paid: count(`SELECT COUNT(*) count FROM payment_reconciliation_log WHERE action='mark_paid' AND source='duitku' AND created_at > ${last24h}`),
+            ambiguous_resolved: count(`SELECT COUNT(*) count FROM payment_ambiguous_queue WHERE resolved_at > ${last24h}`),
+            ambiguous_open: count(`SELECT COUNT(*) count FROM payment_ambiguous_queue WHERE resolved_at IS NULL`),
+            emails_sent: count(`SELECT COUNT(*) count FROM payment_reconciliation_log WHERE action='email_sent' AND created_at > ${last24h}`),
+            emails_resent: count(`SELECT COUNT(*) count FROM payment_reconciliation_log WHERE action='email_resent' AND created_at > ${last24h}`),
+        };
+        const heartbeat = req.app.locals.collectorHeartbeat || null;
+        const broadcasterStats = paymentBroadcaster.getStats();
+        res.json({ last24h: counts, collector: heartbeat, broadcaster: broadcasterStats });
+    } catch (error) {
+        console.error('GET /api/admin/payments/metrics error:', error);
+        res.status(500).json({ error: 'Gagal memuat metrics.' });
+    }
+});
 
 module.exports = router;

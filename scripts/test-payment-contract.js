@@ -3,10 +3,8 @@ const crypto = require('crypto');
 const paymentRouter = require('../routes/payment');
 
 const {
-    buildDuitkuInvoicePayload,
     buildMockPaymentUrl,
     canCreatePayment,
-    createDuitkuSignature,
     escapeHtml,
     findReusablePendingPayment,
     MANUAL_SUFFIX_MAX,
@@ -22,7 +20,6 @@ const {
     signWebhookPayload,
     signMockPayment,
     SUBSCRIPTION_PACKAGES,
-    verifyCallbackSignature,
     verifyWebhookSignature,
     verifyMockPaymentToken,
 } = paymentRouter.__test || {};
@@ -37,9 +34,6 @@ assert.strictEqual(typeof isLocalGuestCheckoutEnabled, 'function', 'isLocalGuest
 assert.strictEqual(typeof isMockPaymentEnabled, 'function', 'isMockPaymentEnabled must be exported for contract tests');
 assert.strictEqual(typeof verifyMockPaymentToken, 'function', 'verifyMockPaymentToken must be exported for contract tests');
 assert.strictEqual(typeof paymentGatewayState, 'function', 'paymentGatewayState must be exported for contract tests');
-assert.strictEqual(typeof createDuitkuSignature, 'function', 'createDuitkuSignature must be exported for contract tests');
-assert.strictEqual(typeof verifyCallbackSignature, 'function', 'verifyCallbackSignature must be exported for contract tests');
-assert.strictEqual(typeof buildDuitkuInvoicePayload, 'function', 'buildDuitkuInvoicePayload must be exported for contract tests');
 assert.strictEqual(typeof normalizePaymentProvider, 'function', 'normalizePaymentProvider must be exported for contract tests');
 assert.strictEqual(typeof qrisConfig, 'function', 'qrisConfig must be exported for contract tests');
 assert.strictEqual(typeof qrisReadiness, 'function', 'qrisReadiness must be exported for contract tests');
@@ -248,72 +242,6 @@ assert.strictEqual(
 );
 assert.deepStrictEqual(pendingLookupArgs.slice(0, 2), [2, 'Paket QRIS Lokal Murah']);
 
-const duitkuSecret = 'sandbox-api-key';
-const createStringToSign = 'DXXXX1773728479616';
-const expectedCreateSignature = crypto.createHmac('sha256', duitkuSecret).update(createStringToSign).digest('hex');
-assert.strictEqual(createDuitkuSignature(createStringToSign, duitkuSecret), expectedCreateSignature);
-
-const callbackStringToSign = 'DXXXX150000abcde12345';
-const callbackSignature = crypto.createHmac('sha256', duitkuSecret).update(callbackStringToSign).digest('hex');
-assert.strictEqual(verifyCallbackSignature('DXXXX', '150000', 'abcde12345', duitkuSecret, callbackSignature), true);
-assert.strictEqual(verifyCallbackSignature('DXXXX', '150001', 'abcde12345', duitkuSecret, callbackSignature), false);
-
-assert.deepStrictEqual(
-    buildDuitkuInvoicePayload({
-        merchantCode: 'DXXXX',
-        item: {
-            type: 'tryout',
-            amount: 49000,
-            productDetails: 'Tryout UAS Fisika',
-        },
-        merchantOrderId: 'MFK-2-123',
-        buyerEmail: 'student@example.com',
-        buyerName: 'Student ITB',
-        userId: 2,
-        paymentMethod: '',
-        callbackUrl: 'https://mafiking.com/api/payment/callback',
-        returnUrl: 'https://mafiking.com/payment.html',
-        expiryPeriod: 60,
-    }),
-    {
-        merchantCode: 'DXXXX',
-        paymentAmount: 49000,
-        paymentMethod: '',
-        merchantOrderId: 'MFK-2-123',
-        productDetails: 'Tryout UAS Fisika',
-        additionalParam: 'tryout',
-        merchantUserInfo: 'student@example.com',
-        email: 'student@example.com',
-        customerVaName: 'Student ITB',
-        itemDetails: [
-            {
-                name: 'Tryout UAS Fisika',
-                price: 49000,
-                quantity: 1,
-            },
-        ],
-        customerDetail: {
-            firstName: 'Student ITB',
-            lastName: '',
-            email: 'student@example.com',
-            merchantCustomerId: '2',
-        },
-        callbackUrl: 'https://mafiking.com/api/payment/callback',
-        returnUrl: 'https://mafiking.com/payment.html',
-        expiryPeriod: 60,
-    }
-);
-
-assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'production' }), false);
-assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'production', PAYMENT_MOCK_MODE: 'true' }), false);
-assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'production', PAYMENT_MOCK_MODE: 'true', PAYMENT_ALLOW_MOCK_IN_PRODUCTION: 'true' }), true);
-assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'development', PAYMENT_MOCK_MODE: 'false' }), false);
-assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'development', PAYMENT_PROVIDER: 'qris' }), false);
-assert.strictEqual(isMockPaymentEnabled({ NODE_ENV: 'development', PAYMENT_PROVIDER: 'duitku' }), true);
-assert.strictEqual(normalizePaymentProvider({}), 'manual');
-assert.strictEqual(normalizePaymentProvider({ PAYMENT_PROVIDER: 'manual' }), 'manual');
-assert.strictEqual(normalizePaymentProvider({ PAYMENT_PROVIDER: 'duitku' }), 'duitku');
-assert.strictEqual(normalizePaymentProvider({ PAYMENT_PROVIDER: 'bad-value' }), 'manual');
 
 const mockOrder = { merchantOrderId: 'MFK-2-123456', amount: 99000 };
 const token = signMockPayment(mockOrder);
@@ -323,11 +251,18 @@ assert.match(buildMockPaymentUrl(mockOrder), /^\/api\/payment\/mock-gateway\?mer
 assert.strictEqual(escapeHtml('<img src=x onerror=alert(1)>'), '&lt;img src=x onerror=alert(1)&gt;');
 
 const gatewayState = paymentGatewayState({ NODE_ENV: 'production', PAYMENT_MOCK_MODE: 'false' });
-assert.strictEqual(gatewayState.active, true);
+assert.strictEqual(gatewayState.active, false);
 assert.strictEqual(gatewayState.mockMode, false);
-assert.strictEqual(gatewayState.providerReady, true);
-assert.strictEqual(gatewayState.provider, 'manual');
-assert.match(gatewayState.message, /manual aktif/);
+assert.strictEqual(gatewayState.providerReady, false);
+assert.strictEqual(gatewayState.provider, 'qris');
+assert.match(gatewayState.message, /QRIS/);
+
+const manualGatewayState = paymentGatewayState({ NODE_ENV: 'production', PAYMENT_PROVIDER: 'manual', PAYMENT_MOCK_MODE: 'false' });
+assert.strictEqual(manualGatewayState.active, true);
+assert.strictEqual(manualGatewayState.mockMode, false);
+assert.strictEqual(manualGatewayState.providerReady, true);
+assert.strictEqual(manualGatewayState.provider, 'manual');
+assert.match(manualGatewayState.message, /manual aktif/);
 
 const qrisGatewayState = paymentGatewayState({ NODE_ENV: 'production', PAYMENT_PROVIDER: 'qris', PAYMENT_MOCK_MODE: 'false' });
 assert.strictEqual(qrisGatewayState.active, false);
@@ -335,11 +270,6 @@ assert.strictEqual(qrisGatewayState.mockMode, false);
 assert.strictEqual(qrisGatewayState.providerReady, false);
 assert.strictEqual(qrisGatewayState.provider, 'qris');
 assert.match(qrisGatewayState.message, /QRIS_STATIC_STRING/);
-
-const duitkuGatewayState = paymentGatewayState({ NODE_ENV: 'production', PAYMENT_PROVIDER: 'duitku', PAYMENT_MOCK_MODE: 'false' });
-assert.strictEqual(duitkuGatewayState.active, false);
-assert.strictEqual(duitkuGatewayState.provider, 'duitku');
-assert.match(duitkuGatewayState.message, /aktivasi/);
 
 const webhookSecret = 'payment-webhook-secret';
 const signedWebhook = signWebhookPayload(webhookSecret, {

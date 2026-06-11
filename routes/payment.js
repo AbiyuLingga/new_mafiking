@@ -1,6 +1,5 @@
 const express = require('express');
 const crypto = require('crypto');
-const axios = require('axios');
 const rateLimit = require('express-rate-limit');
 const { isRegisteredUser } = require('../middleware/auth');
 const { areTryoutPackagesEnabled } = require('../lib/app-settings');
@@ -22,8 +21,11 @@ const {
     verifyWebhookSignature,
 } = require('../lib/payment-reconciler');
 const { collectorIpAllowlist } = require('../lib/ip-allowlist');
-const { handleMutasikuWebhook } = require('../lib/reconcilers/mutasiku');
+const paymentBroadcaster = require('../lib/payment-broadcaster');
+const { isEnabled: isFeatureEnabled } = require('../lib/feature-flags');
 const router = express.Router();
+
+const SSE_PAYMENT_PUSH_ENABLED = isFeatureEnabled('SSE_PAYMENT_PUSH');
 
 const paymentLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -33,12 +35,6 @@ const paymentLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-const DUITKU_BASE_URL = process.env.DUITKU_BASE_URL || 'https://api-sandbox.duitku.com/api'; // ganti ke https://api-prod.duitku.com/api saat production
-const MERCHANT_CODE = process.env.DUITKU_MERCHANT_CODE;
-const API_KEY = process.env.DUITKU_API_KEY;
-const CALLBACK_URL = process.env.DUITKU_CALLBACK_URL || 'https://mafiking.com/api/payment/callback';
-const RETURN_URL = process.env.DUITKU_RETURN_URL || 'https://mafiking.com/payment.html';
-const PAYMENT_METHOD = process.env.DUITKU_PAYMENT_METHOD || '';
 const QRIS_DEFAULT_EXPIRY_MINUTES = 20;
 const MANUAL_SUFFIX_MIN = 1;
 const MANUAL_SUFFIX_MAX = 399;
@@ -50,47 +46,15 @@ const SUBSCRIPTION_PACKAGES = {
     semester: { label: 'Semester', price: 249000 },
 };
 
-function makePOPHeaders() {
-    const timestamp = Date.now().toString();
-    const signature = createDuitkuSignature(MERCHANT_CODE + timestamp, API_KEY);
-    return {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'x-duitku-signature': signature,
-        'x-duitku-timestamp': timestamp,
-        'x-duitku-merchantcode': MERCHANT_CODE,
-    };
-}
-
-function createDuitkuSignature(stringToSign, apiKey = API_KEY) {
-    return crypto.createHmac('sha256', apiKey || '').update(String(stringToSign || '')).digest('hex');
-}
-
 function safeSignatureCompare(expected, received) {
     const expectedBuffer = Buffer.from(String(expected || ''));
     const receivedBuffer = Buffer.from(String(received || ''));
     return expectedBuffer.length === receivedBuffer.length && crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
 }
 
-function verifyCallbackSignature(merchantCode, amount, merchantOrderId, apiKey, received) {
-    const expected = createDuitkuSignature(`${merchantCode}${amount}${merchantOrderId}`, apiKey);
-    return safeSignatureCompare(expected, received);
-}
-
-function hasDuitkuCredentials(env = process.env) {
-    const merchantCode = env.DUITKU_MERCHANT_CODE;
-    const apiKey = env.DUITKU_API_KEY;
-    return Boolean(
-        merchantCode &&
-        apiKey &&
-        merchantCode !== 'mock' &&
-        merchantCode !== 'YOUR_DUITKU_MERCHANT_CODE'
-    );
-}
-
 function normalizePaymentProvider(env = process.env) {
-    const provider = String(env.PAYMENT_PROVIDER || 'manual').trim().toLowerCase();
-    return ['manual', 'qris', 'duitku', 'both'].includes(provider) ? provider : 'manual';
+    const provider = String(env.PAYMENT_PROVIDER || 'qris').trim().toLowerCase();
+    return ['manual', 'qris'].includes(provider) ? provider : 'qris';
 }
 
 function qrisConfig(env = process.env) {
@@ -130,7 +94,7 @@ function isMockPaymentEnabled(env = process.env) {
     if (isTruthyEnv(env.PAYMENT_MOCK_MODE)) return true;
     if (isFalseyEnv(env.PAYMENT_MOCK_MODE)) return false;
     if (normalizePaymentProvider(env) === 'qris') return false;
-    return env.NODE_ENV !== 'production' && !hasDuitkuCredentials(env);
+    return env.NODE_ENV !== 'production';
 }
 
 function isLocalGuestCheckoutEnabled(env = process.env) {
@@ -141,7 +105,7 @@ function isLocalGuestCheckoutEnabled(env = process.env) {
 }
 
 function mockTokenSecret() {
-    return process.env.PAYMENT_MOCK_SECRET || process.env.SESSION_SECRET || API_KEY || 'new-mafiking-local-payment-mock';
+    return process.env.PAYMENT_MOCK_SECRET || process.env.SESSION_SECRET || 'new-mafiking-local-payment-mock';
 }
 
 function signMockPayment({ merchantOrderId, amount }) {
@@ -246,7 +210,7 @@ function canCreatePayment({ db, userId, env = process.env }) {
 function paymentStatusPayload(payment, status) {
     const provider = payment.reference && String(payment.reference).startsWith('MANUAL-')
         ? 'manual'
-        : (payment.qris_full_amount ? 'qris' : 'duitku');
+        : 'qris';
     return {
         status,
         merchantOrderId: payment.merchant_order_id,
@@ -310,12 +274,10 @@ function findReusablePendingPayment({ db, userId, item, now = new Date() }) {
 function paymentGatewayState(env = process.env) {
     const provider = normalizePaymentProvider(env);
     const mockMode = isMockPaymentEnabled(env);
-    const duitkuReady = hasDuitkuCredentials(env);
     const qris = qrisReadiness(env);
     const manualSelected = provider === 'manual';
-    const qrisSelected = provider === 'qris' || provider === 'both';
-    const duitkuSelected = provider === 'duitku' || provider === 'both';
-    const providerReady = manualSelected || (qrisSelected && qris.ready) || (duitkuSelected && duitkuReady);
+    const qrisSelected = provider === 'qris';
+    const providerReady = manualSelected || (qrisSelected && qris.ready);
     const active = providerReady || mockMode;
     const message = active
         ? (manualSelected
@@ -332,59 +294,17 @@ function paymentGatewayState(env = process.env) {
         mockMode,
         provider,
         providerReady,
-        duitkuReady,
         qrisReady: qris.ready,
         qrisMerchantName: qris.merchantName || qris.config.merchantName,
         qrisExpiryMinutes: qris.config.expiryMinutes,
         qrisAdminWhatsapp: qris.config.adminWhatsapp,
         manualAdminWhatsapp: qris.config.adminWhatsapp,
         qrisWebhookEnabled: qris.config.webhookEnabled,
-        guestCheckoutEnabled: isLocalGuestCheckoutEnabled(env),
+         guestCheckoutEnabled: isLocalGuestCheckoutEnabled(env),
         autoVerifyEnabled: ['1', 'true', 'yes', 'on'].includes(
             String(env.MUTATION_COLLECTOR_ENABLED || '').toLowerCase()
         ),
         message,
-    };
-}
-
-function buildDuitkuInvoicePayload({
-    merchantCode = MERCHANT_CODE,
-    item,
-    merchantOrderId,
-    buyerEmail,
-    buyerName,
-    userId,
-    paymentMethod = PAYMENT_METHOD,
-    callbackUrl = CALLBACK_URL,
-    returnUrl = RETURN_URL,
-    expiryPeriod = 60,
-}) {
-    return {
-        merchantCode,
-        paymentAmount: item.amount,
-        paymentMethod,
-        merchantOrderId,
-        productDetails: item.productDetails,
-        additionalParam: item.type,
-        merchantUserInfo: buyerEmail,
-        email: buyerEmail,
-        customerVaName: buyerName,
-        itemDetails: [
-            {
-                name: item.productDetails,
-                price: item.amount,
-                quantity: 1,
-            },
-        ],
-        customerDetail: {
-            firstName: buyerName,
-            lastName: '',
-            email: buyerEmail,
-            merchantCustomerId: String(userId),
-        },
-        callbackUrl,
-        returnUrl,
-        expiryPeriod,
     };
 }
 
@@ -654,62 +574,13 @@ router.post('/create', paymentLimiter, dbRateLimiter({ windowMs: 60 * 1000, maxR
         return handleManualCreate({ req, res, item, merchantOrderId, buyerEmail, idempotencyKey });
     }
 
-    if (provider === 'qris' || provider === 'both') {
-        const readiness = qrisReadiness();
-        if (readiness.ready || provider === 'qris') {
-            return handleQrisCreate({ req, res, item, merchantOrderId, buyerEmail, buyerName, idempotencyKey });
-        }
+    if (provider === 'qris') {
+        return handleQrisCreate({ req, res, item, merchantOrderId, buyerEmail, buyerName, idempotencyKey });
     }
 
-    if (!hasDuitkuCredentials()) {
-        return res.status(503).json({
-            error: provider === 'both'
-                ? 'QRIS lokal belum aktif dan payment gateway cadangan belum siap.'
-                : 'Payment gateway sedang dalam proses aktivasi. Pembelian akan dibuka setelah akses Midtrans/payment provider aktif.',
-        });
-    }
-
-    const payload = buildDuitkuInvoicePayload({
-        item,
-        merchantOrderId,
-        buyerEmail,
-        buyerName,
-        userId,
+    return res.status(503).json({
+        error: 'Payment provider tidak dikenali. Hubungi admin.',
     });
-
-    try {
-        const { data } = await axios.post(`${DUITKU_BASE_URL}/merchant/createInvoice`, payload, {
-            headers: makePOPHeaders(),
-            timeout: 15000,
-        });
-
-        if (data.statusCode !== '00') {
-            console.error('Duitku create error:', data);
-            return res.status(502).json({ error: data.statusMessage || 'Gagal membuat pembayaran' });
-        }
-
-        db.prepare(`
-            INSERT INTO payments (user_id, merchant_order_id, amount, product_details, email, reference, payment_url, qr_string, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
-        `).run(userId, merchantOrderId, intAmount, productDetails, buyerEmail, data.reference, data.paymentUrl, data.qrString || '');
-
-        if (idempotencyKey) {
-            const keyHash = crypto.createHash('sha256').update(idempotencyKey).digest('hex');
-            storeIdempotencyKey(db, keyHash, merchantOrderId, Date.now() + 5 * 60 * 1000);
-        }
-
-        res.json({
-            merchantOrderId,
-            reference: data.reference,
-            paymentUrl: data.paymentUrl,
-            qrString: data.qrString || '',
-            amount: intAmount,
-            productDetails,
-        });
-    } catch (err) {
-        console.error('Duitku request error:', err.response?.data || err.message);
-        res.status(502).json({ error: 'Gagal menghubungi payment gateway' });
-    }
 });
 
 // GET /api/payment/invoices — authenticated user's own payment history.
@@ -780,44 +651,47 @@ router.get('/status/:merchantOrderId', async (req, res) => {
         return res.json({ ...paymentStatusPayload(payment, payment.status), statusMessage: 'Mock status checked' });
     }
 
-    if (!hasDuitkuCredentials()) {
-        return res.status(503).json({
-            error: 'Payment gateway sedang dalam proses aktivasi. Status pembayaran belum dapat disinkronkan.',
-        });
+    return res.json(paymentStatusPayload(payment, payment.status));
+});
+
+// GET /api/payment/stream/:merchantOrderId — Server-Sent Events for real-time payment status push.
+router.get('/stream/:merchantOrderId', (req, res) => {
+    if (!SSE_PAYMENT_PUSH_ENABLED) {
+        return res.status(503).json({ error: 'SSE payment push belum aktif.' });
     }
 
-    const timestamp = Date.now().toString();
-    const signature = createDuitkuSignature(MERCHANT_CODE + timestamp, API_KEY);
+    const userId = req.session.userId;
+    if (!userId) return res.status(401).end();
 
-    try {
-        const { data } = await axios.post(`${DUITKU_BASE_URL}/merchant/transactionStatus`, {
-            merchantCode: MERCHANT_CODE,
-            merchantOrderId,
-        }, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'x-duitku-signature': signature,
-                'x-duitku-timestamp': timestamp,
-                'x-duitku-merchantcode': MERCHANT_CODE,
-            },
-            timeout: 10000,
-        });
+    const { merchantOrderId } = req.params;
+    const db = req.app.locals.db;
 
-        let status = 'PENDING';
-        if (data.statusCode === '00') status = 'SUCCESS';
-        else if (data.statusCode === '02') status = 'FAILED';
-
-        if (status !== 'PENDING') {
-            db.prepare('UPDATE payments SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_order_id = ?')
-                .run(status, merchantOrderId);
-        }
-
-        res.json({ ...paymentStatusPayload(payment, status), statusMessage: data.statusMessage });
-    } catch (err) {
-        console.error('Duitku status error:', err.response?.data || err.message);
-        res.status(502).json({ error: 'Gagal cek status pembayaran' });
+    const payment = db.prepare(
+        'SELECT user_id, status FROM payments WHERE merchant_order_id = ?'
+    ).get(merchantOrderId);
+    if (!payment || payment.user_id !== userId) {
+        return res.status(403).end();
     }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    res.write(`event: status\ndata: ${JSON.stringify({ status: payment.status })}\n\n`);
+
+    const unsubscribe = paymentBroadcaster.subscribe(merchantOrderId, (payload) => {
+        res.write(`event: paid\ndata: ${JSON.stringify(payload)}\n\n`);
+    });
+
+    const heartbeat = setInterval(() => {
+        res.write(`: heartbeat\n\n`);
+    }, 15000);
+
+    req.on('close', () => {
+        unsubscribe();
+        clearInterval(heartbeat);
+    });
 });
 
 // GET /api/payment/active-packages
@@ -881,53 +755,6 @@ router.get('/active-packages', async (req, res) => {
     }
 });
 
-// POST /api/payment/callback — dipanggil Duitku server-to-server
-router.post('/callback', express.urlencoded({ extended: false }), (req, res) => {
-    const db = req.app.locals.db;
-    const {
-        merchantCode,
-        amount,
-        merchantOrderId,
-        resultCode,
-        reference,
-        signature: receivedSig,
-    } = req.body;
-
-    if (!hasDuitkuCredentials() || !verifyCallbackSignature(merchantCode, amount, merchantOrderId, API_KEY, receivedSig)) {
-        console.warn('Callback signature mismatch:', { merchantOrderId });
-        return res.status(400).send('Invalid signature');
-    }
-
-    let status = 'PENDING';
-    if (resultCode === '00') status = 'SUCCESS';
-    else if (resultCode === '02') status = 'FAILED';
-
-    try {
-        if (status === 'SUCCESS') {
-            markPaymentPaid(db, {
-                merchantOrderId,
-                fullAmount: Number(amount),
-                source: 'duitku',
-                rawDetails: { reference, resultCode },
-            });
-        } else if (status === 'FAILED') {
-            markPaymentFailed(db, {
-                merchantOrderId,
-                source: 'duitku',
-                reason: resultCode,
-            });
-        }
-        db.prepare('UPDATE payments SET reference = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_order_id = ?')
-            .run(reference || '', merchantOrderId);
-    } catch (error) {
-        console.error('[Payment Callback] reconcile failed:', error);
-        return res.status(error.statusCode || 400).send(error.message);
-    }
-
-    console.log(`[Payment Callback] ${merchantOrderId} → ${status}`);
-    res.send('OK');
-});
-
 // POST /api/payment/reconcile/webhook — HMAC-signed QRIS reconciliation.
 router.post('/reconcile/webhook', (req, res) => {
     const secret = String(process.env.PAYMENT_WEBHOOK_SECRET || '').trim();
@@ -978,40 +805,6 @@ router.post('/reconcile/webhook', (req, res) => {
             },
         });
         res.json({ ok: true, ...result });
-    } catch (error) {
-        res.status(error.statusCode || 400).json({ error: error.message });
-    }
-});
-
-// POST /api/payment/reconcile/mutasiku-webhook — Mutasiku signed webhook.
-router.post('/reconcile/mutasiku-webhook', (req, res) => {
-    const secret = String(process.env.MUTASIKU_WEBHOOK_SECRET || '').trim();
-    if (!secret) return res.status(503).json({ error: 'Webhook Mutasiku belum aktif.' });
-
-    const signature = req.get('x-webhook-signature') || req.get('x-mutasiku-signature') || req.body.signature;
-    const eventId = req.body?.data?.reference || req.body?.id || '';
-    const merchantOrderId = req.body?.data?.merchantOrderId || req.body?.data?.order_id || '';
-    const eventHash = computeWebhookEventHash({
-        provider: 'mutasiku-webhook',
-        eventId,
-        timestamp: req.body?.timestamp || '',
-        merchantOrderId,
-        amount: req.body?.data?.amount || '',
-    });
-
-    const dedup = checkAndRecordWebhookEvent(req.app.locals.db, {
-        provider: 'mutasiku-webhook',
-        eventId,
-        eventHash,
-        merchantOrderId,
-    });
-    if (dedup.alreadyProcessed) {
-        return res.json({ received: true, alreadyProcessed: true, idempotent: true });
-    }
-
-    try {
-        const result = handleMutasikuWebhook(req.app.locals.db, req.body, { signature, secret });
-        res.json({ received: true, ...result });
     } catch (error) {
         res.status(error.statusCode || 400).json({ error: error.message });
     }
@@ -1119,7 +912,7 @@ router.get('/mock-gateway', (req, res) => {
             </div>
 
             <p class="text-center text-[10px] text-ink/40 mt-6 leading-relaxed">
-              Halaman ini adalah simulator pembayaran sandbox lokal. Klik salah satu tombol di atas untuk mensimulasikan respon dari Duitku Gateway.
+              Halaman ini adalah simulator pembayaran sandbox lokal. Klik salah satu tombol di atas untuk mensimulasikan respon dari payment gateway.
             </p>
           </div>
         </body>
@@ -1235,11 +1028,8 @@ router.__test = {
     MANUAL_SUFFIX_MAX,
     MANUAL_SUFFIX_MIN,
     SUBSCRIPTION_PACKAGES,
-    buildDuitkuInvoicePayload,
     buildMockPaymentUrl,
-    createDuitkuSignature,
     escapeHtml,
-    hasDuitkuCredentials,
     canCreatePayment,
     isLocalGuestCheckoutEnabled,
     isRegisteredPaymentUser,
@@ -1252,7 +1042,6 @@ router.__test = {
     resolvePaymentItem,
     signWebhookPayload,
     signMockPayment,
-    verifyCallbackSignature,
     verifyWebhookSignature,
     verifyMockPaymentToken,
     paymentGatewayState,

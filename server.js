@@ -50,7 +50,6 @@ const { createCsrfProtection } = require('./lib/csrf-protection');
 const { SQLiteSessionStore } = require('./lib/sqlite-session-store');
 const { createCanaryMiddleware } = require('./lib/canary');
 const { startExpirySweeper } = require('./lib/payment-expiry-sweeper');
-const { startMutasikuPoller } = require('./lib/reconcilers/mutasiku');
 const {
   areTryoutPackagesEnabled,
   ensureDefaultAppSettings,
@@ -474,7 +473,6 @@ ensureFixedAdminUser(db);
 app.locals.db = db;
 app.locals.performanceStore = createPerformanceStore();
 startExpirySweeper(db, Number(process.env.PAYMENT_EXPIRY_SWEEP_INTERVAL_MS) || 60000);
-startMutasikuPoller(db);
 
 // --- Auto-verification collector ---
 const MUTATION_COLLECTOR_ENABLED = ['1', 'true', 'yes', 'on'].includes(
@@ -749,7 +747,6 @@ app.use((req, res, next) => {
     req.path === '/api/config/clerk' ||
     req.path === '/api/payment/callback' ||
     req.path === '/api/payment/reconcile/webhook' ||
-    req.path === '/api/payment/reconcile/mutasiku-webhook' ||
     req.path === '/api/landing-media' ||
     req.path === '/api/performance/vitals' ||
     req.path === '/api/performance/client-error' ||

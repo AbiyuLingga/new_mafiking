@@ -179,30 +179,86 @@ const PaymentCheckoutModal = ({ context, currentUser, onClose, setRoute }) => {
   useEffect(() => {
     if (!qrData?.merchantOrderId) return undefined;
     let cancelled = false;
-    let timer = null;
+    let pollTimer = null;
+    let eventSource = null;
 
-    function schedule() {
-      timer = window.setTimeout(check, 5000);
+    function setStatusSafe(updater) {
+      if (cancelled) return;
+      setPollingStatus((prev) => {
+        const base = prev || { status: "PENDING" };
+        return typeof updater === "function" ? updater(base) : { ...base, ...updater };
+      });
     }
 
-    function check() {
-      MafikingAPI.get(`/api/payment/status/${qrData.merchantOrderId}`)
-        .then((res) => {
-          if (cancelled) return;
-          setPollingStatus(res);
-          if (res.status === "PENDING") schedule();
-        })
-        .catch((err) => {
-          if (cancelled) return;
-          setPollingStatus({ status: "ERROR", error: err.message || "Status pembayaran belum terbaca." });
-          schedule();
-        });
+    function startPollingFallback() {
+      if (pollTimer) return;
+      const tick = () => {
+        MafikingAPI.get(`/api/payment/status/${qrData.merchantOrderId}`)
+          .then((res) => {
+            if (cancelled) return;
+            setStatusSafe(res);
+            if (res.status === "PENDING" || res.status === "ERROR") {
+              pollTimer = window.setTimeout(tick, 5000);
+            } else {
+              pollTimer = null;
+            }
+          })
+          .catch(() => {
+            if (cancelled) return;
+            setStatusSafe({ status: "ERROR", error: "Status pembayaran belum terbaca." });
+            pollTimer = window.setTimeout(tick, 5000);
+          });
+      };
+      pollTimer = window.setTimeout(tick, 500);
     }
 
-    check();
+    function startSSE() {
+      try {
+        eventSource = new EventSource(`/api/payment/stream/${qrData.merchantOrderId}`);
+      } catch (e) {
+        startPollingFallback();
+        return;
+      }
+      eventSource.addEventListener("status", (e) => {
+        if (cancelled) return;
+        try {
+          setStatusSafe(JSON.parse(e.data));
+        } catch (_) {}
+      });
+      eventSource.addEventListener("paid", (e) => {
+        if (cancelled) return;
+        try {
+          setStatusSafe(JSON.parse(e.data));
+        } catch (_) {}
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+      });
+      eventSource.onerror = () => {
+        if (cancelled) return;
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        startPollingFallback();
+      };
+    }
+
+    startSSE();
+    // Also start a single initial poll in case SSE first message is delayed
+    startPollingFallback();
+
     return () => {
       cancelled = true;
-      if (timer) window.clearTimeout(timer);
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      if (pollTimer) {
+        window.clearTimeout(pollTimer);
+        pollTimer = null;
+      }
     };
   }, [qrData?.merchantOrderId]);
 
@@ -578,7 +634,7 @@ const PaymentManualView = ({ payment, countdown, status, adminWhatsapp, onCancel
           </div>
 
           {statusValue === "SUCCESS" ? (
-            <div className="mt-4 rounded-xl bg-yel/20 border border-yel/60 px-3 py-3 text-center text-sm font-semibold text-ink">
+            <div className="mt-4 rounded-xl bg-green-50 border border-green-200 px-3 py-3 text-center text-sm font-semibold text-green-700">
               Pembayaran sudah diverifikasi. Akses sudah aktif.
             </div>
           ) : expired ? (
@@ -806,7 +862,7 @@ const PaymentQrisViewDesktop = ({ payment, countdown, status, onCancel, onCheckS
           </div>
 
           {statusValue === "SUCCESS" ? (
-            <div className="rounded-xl bg-yel/20 border border-yel/60 px-3 py-3 text-center text-sm font-semibold text-ink w-full">
+            <div className="rounded-xl bg-green-50 border border-green-200 px-3 py-3 text-center text-sm font-semibold text-green-700 w-full">
               Pembayaran berhasil. Akses sudah aktif.
             </div>
           ) : expired ? (
@@ -848,12 +904,6 @@ const PaymentQrisViewDesktop = ({ payment, countdown, status, onCancel, onCheckS
               <Icon.Download className="w-4 h-4" /> Download QR
             </button>
           </div>
-
-          {statusValue === "SUCCESS" ? (
-            <button className="checkout-pay-btn" onClick={() => setRoute(isTryout ? "tryout" : "belajar")} type="button">
-              {isTryout ? "Ke Halaman Tryout" : "Mulai Belajar"} <Icon.Arrow className="w-5 h-5" />
-            </button>
-          ) : null}
         </div>
 
         <div className="checkout-modal-sidebar">
