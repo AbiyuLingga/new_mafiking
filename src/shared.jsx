@@ -169,6 +169,26 @@ const Icon = {
       <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
     </svg>
   ),
+  Wallet: ({ className = "w-4 h-4" }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/>
+      <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/>
+      <path d="M18 12a2 2 0 1 0 0 4h4v-4h-4z"/>
+    </svg>
+  ),
+  Download: ({ className = "w-4 h-4" }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+  ),
+  Card: ({ className = "w-4 h-4" }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="5" width="20" height="14" rx="2"/>
+      <line x1="2" y1="10" x2="22" y2="10"/>
+    </svg>
+  ),
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────
@@ -274,7 +294,6 @@ const SlidingSegmented = ({ options, value, onChange, className = "" }) => {
 
 const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn = false, isAdminMode = false, onLogoClick, onAdminPanelOpen }) => {
   const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [progressStats, setProgressStats] = useState(null);
   const navRef = useRef(null);
   const previousActiveLinkRef = useRef("");
@@ -325,6 +344,12 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
     { id: "misi", label: "Misi Harian" },
     { id: "tryout", label: "Paket" },
     { id: "leaderboard", label: "Peringkat" },
+  ];
+  const mobilePrimaryLinks = [
+    { id: "belajar", label: "Belajar", iconSrc: "/assets/Book.png" },
+    { id: "misi", label: "Misi", IconC: Icon.Calendar },
+    { id: "tryout", label: "Paket", iconSrc: "/assets/crown.png" },
+    { id: "leaderboard", label: "Peringkat", iconSrc: "/assets/leaderboard.png" },
   ];
 
   const activeLinkId = route !== "lobby" && links.some((item) => item.id === route) ? route : "";
@@ -428,6 +453,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
     : "bg-transparent";
 
   return (
+    <>
     <header className={`sticky top-0 z-40 transition-all ${headerCls}`}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8 flex items-center justify-between h-14 sm:h-[72px]">
         <button onClick={() => {
@@ -515,28 +541,38 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
               <Icon.User className="w-4 h-4" />
             </button>
           )}
-          <button aria-label={menuOpen ? "Tutup menu" : "Buka menu"} aria-expanded={menuOpen} className={`md:hidden ml-1 w-10 h-10 inline-flex items-center justify-center rounded-full ${isInk ? "hover:bg-white/10 text-white" : "hover:bg-ink/5"}`} onClick={() => setMenuOpen(!menuOpen)} type="button">
-            {menuOpen ? <Icon.X /> : <Icon.Menu />}
-          </button>
         </div>
       </div>
-      {menuOpen && (
-        <div className="md:hidden fixed inset-0 z-30 bg-black/20 backdrop-blur-sm" onClick={() => setMenuOpen(false)}>
-          <div className={`absolute top-14 sm:top-[72px] left-0 right-0 border-b p-3 flex flex-col gap-0.5 shadow-xl ${isInk ? "bg-ink border-white/10" : "bg-white hairline"}`} onClick={(e) => e.stopPropagation()}>
-            {links.map(l => (
-              <button key={l.id} onClick={() => { goRoute(l.id); setMenuOpen(false); }} className={`text-left px-4 py-3 font-semibold rounded-xl transition-colors ${route === l.id ? (isInk ? "bg-white/10 text-white" : "bg-ink/5 text-ink") : (isInk ? "text-white/70 hover:bg-white/10 hover:text-white" : "text-ink/70 hover:bg-ink/5 hover:text-ink")}`}>
-                {l.label}
-              </button>
-            ))}
-            {isAdminMode && (
-              <button onClick={() => { if (typeof onAdminPanelOpen === 'function') onAdminPanelOpen(); setMenuOpen(false); }} className={`text-left px-4 py-3 font-semibold rounded-xl ${route === "admin" ? "bg-ink text-amber-300" : "bg-yel text-ink"}`} type="button">
-                Admin Panel
-              </button>
-            )}
-          </div>
-        </div>
-      )}
     </header>
+    {gamified && (
+      <nav className="mafiking-mobile-bottom-nav md:hidden" aria-label="Navigasi utama">
+        {mobilePrimaryLinks.map((item) => {
+          const active = activeLinkId === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => goRoute(item.id)}
+              className={`mafiking-mobile-bottom-nav-item ${active ? "is-active" : ""}`}
+              type="button"
+              aria-current={active ? "page" : undefined}
+            >
+              {item.iconSrc ? (
+                <img
+                  src={item.iconSrc}
+                  alt=""
+                  aria-hidden="true"
+                  className="mafiking-mobile-bottom-nav-icon h-5 w-5 object-contain"
+                />
+              ) : (
+                <item.IconC className="mafiking-mobile-bottom-nav-icon h-5 w-5" />
+              )}
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+    )}
+    </>
   );
 };
 

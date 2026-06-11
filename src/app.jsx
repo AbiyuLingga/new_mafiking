@@ -106,6 +106,7 @@ const App = () => {
   });
   const [practiceContext, setPracticeContext] = React.useState(null);
   const [paymentContext, setPaymentContext] = React.useState(null);
+  const [checkoutPaymentContext, setCheckoutPaymentContext] = React.useState(null);
   const [tryoutContext, setTryoutContext] = React.useState(null);
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [currentUser, setCurrentUser] = React.useState(null);
@@ -162,6 +163,11 @@ const App = () => {
     let nextRoute = "lobby";
     let stateObj = {};
     if (next && typeof next === "object") {
+      if (next.route === "payment" && next.payment && !next.merchantOrderId && !next.authMode) {
+        setCheckoutPaymentContext(next.payment);
+        return;
+      }
+      setCheckoutPaymentContext(null);
       if (next.practice) setPracticeContext(next.practice);
       if (next.tryout) setTryoutContext(next.tryout);
       else setTryoutContext(null);
@@ -219,6 +225,7 @@ const App = () => {
           : null
       };
     } else {
+      setCheckoutPaymentContext(null);
       setPaymentContext(null);
       setTryoutContext(null);
       setAuthMode(null);
@@ -249,6 +256,7 @@ const App = () => {
         setPracticeContext(state.practice || null);
         setTryoutContext(state.tryout || null);
         setPaymentContext(state.payment || null);
+        setCheckoutPaymentContext(null);
         setBelajarSection(state.belajarSection || null);
         setAuthMode(state.authMode || null);
         setAuthRedirect(state.authRedirect || null);
@@ -258,6 +266,7 @@ const App = () => {
         const parsed = parseAppLocation();
         setRoute(parsed.route);
         setBelajarSection(parsed.belajarSection || null);
+        setCheckoutPaymentContext(null);
       }
     };
     window.addEventListener("popstate", handlePopState);
@@ -537,6 +546,7 @@ const App = () => {
   const navRoute = route === "tryout" && (tryoutMode.startsWith("free-math") || tryoutMode.startsWith("tryout-"))
     ? "belajar"
     : route;
+  const currentSearchParams = new URLSearchParams(window.location.search);
 
   const LoginRedirect = React.useCallback(({ setRoute: sr }) => {
     React.useEffect(() => {
@@ -550,10 +560,13 @@ const App = () => {
     return null;
   }, []);
 
+  const isPaymentStatusRoute = route === "payment" && currentSearchParams.has("merchantOrderId");
+  const hasAppShellNav = route !== "practice" && route !== "lobby" && !isTryoutFullscreenRoute && !isPaymentStatusRoute;
+
   return (
-    <div className="min-h-screen flex flex-col bg-paper text-ink">
+    <div className={`min-h-screen flex flex-col bg-paper text-ink ${hasAppShellNav ? "pb-24 md:pb-0" : ""}`}>
       <OfflineBanner />
-      {route !== "practice" && route !== "lobby" && !isTryoutFullscreenRoute && (
+      {hasAppShellNav && (
         <Nav
           route={navRoute}
           setRoute={navigate}
@@ -581,7 +594,7 @@ const App = () => {
                 : <AccessGate setRoute={navigate} title="Akses Paket" message="Beli paket untuk mendapat akses ke misi harian dan latihan terarah setiap hari" variant="misi" showFreeTryout={false} hideKicker />}
             </ScreenErrorBoundary>
           )}
-          {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={canEditInlineAsAdmin} isAdminMode={isAdmin} isLoggedIn={isLoggedIn} context={tryoutContext} />}
+          {route === "tryout" && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={canEditInlineAsAdmin} isAdminMode={isAdmin} isLoggedIn={isLoggedIn} context={tryoutContext} currentUser={currentUser} />}
           {route === "leaderboard" && window.Leaderboard && React.createElement(window.Leaderboard)}
           {route === "admin" && isAdminAccount && isAdmin && (
             window.AdminPage
@@ -602,6 +615,13 @@ const App = () => {
       </main>
 
       <ToastContainer />
+
+      {checkoutPaymentContext && window.PaymentCheckoutModal && React.createElement(window.PaymentCheckoutModal, {
+        context: checkoutPaymentContext,
+        currentUser,
+        setRoute: navigate,
+        onClose: () => setCheckoutPaymentContext(null),
+      })}
 
       {isLoggedIn && !isAdminAccount && currentUser?.profile_needs_completion && window.ProfileOnboardingModal && React.createElement(window.ProfileOnboardingModal, {
         user: currentUser,
@@ -939,7 +959,13 @@ function appStateToPath(state) {
   if (route === "practice") return "/belajar/practice";
   if (route === "leaderboard") return "/peringkat";
   if (route === "profile") return "/profil";
-  if (route === "payment") return "/payment";
+  if (route === "payment") {
+    const stateOrderId = String(state?.merchantOrderId || state?.payment?.merchantOrderId || "").trim();
+    const currentParams = new URLSearchParams(window.location.search || "");
+    const currentOrderId = String(currentParams.get("merchantOrderId") || "").trim();
+    const merchantOrderId = stateOrderId || (normalizeAppPath(window.location.pathname) === "/payment" ? currentOrderId : "");
+    return merchantOrderId ? `/payment?merchantOrderId=${encodeURIComponent(merchantOrderId)}` : "/payment";
+  }
   return `/${route}`;
 }
 

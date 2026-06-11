@@ -34,7 +34,7 @@ Historical WSL path used by older notes:
 | Free Try Out | `Coba Gratis` routes to `Belajar -> Try Out`; `Mulai` opens a confirmation screen before the free 15-question / 15-minute session. Protected review paths require login/sign-up. |
 | Practice | Multiple-choice-first flow with optional canvas mode; OCR/transcription and answer evaluation use Gemini 3.1 Flash Lite. Unsupported chapters show empty state. |
 | Admin | Role-gated shield adds an `Admin Panel` page entry. Admin page manages content, landing media, users, AI import, and Try Out packages. |
-| Payment | Duitku create/status/callback routes exist; code uses sandbox base URL by default. |
+| Payment | QRIS-first package checkout creates an order in-app and shows a QRIS/manual popup; `/payment?merchantOrderId=...` reopens status without global nav. Duitku remains legacy/fallback provider code. |
 | Profile | Deterministic recommendation engine plus Gemma 4 31B narrative text, with local fallback. |
 
 ## Routes
@@ -85,7 +85,7 @@ Important caveat: `src/admin.jsx` currently references `window.AdminMonitoringPa
 | `src/profile.jsx` | Profile stats and recommendations. |
 | `src/misi.jsx` | Daily missions. |
 | `src/tryout.jsx` | Paket / package page. |
-| `src/payment.jsx` | Payment selection and status polling. |
+| `src/payment.jsx` | Payment selection, QRIS/manual popup rendering, and status polling. |
 | `src/admin.jsx` | Admin content, landing media, users, import, and tab shell. |
 | `src/styles.css` | Design tokens, landing motion, admin styles, confirmation modal support. |
 | `MAFIKING.html` | Active HTML shell and script load order. |

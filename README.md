@@ -15,7 +15,7 @@ The active browser entry point is `MAFIKING.html`, served by `server.js`. The fr
 - Peringkat: app nav includes a `Peringkat` route with an isolated-scroll leaderboard, static table header, and `Semua` / `Top Mingguan` segmented point views.
 - Motion polish: app route transitions, the top-nav active pill, Belajar mapel underline, shared segmented controls, landing reveal effects, testimonial marquee, and mission carousel motion use local CSS/JS motion; no new frontend runtime dependency is required.
 - App backgrounds: Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and their locked access gates share a soft grid/glow page background with per-page color variants from `src/styles.css`.
-- Paket: `Semua Paket` and `Paket Saya` render the same `PackageCard` layout; accessible packages show `Mulai`, while locked packages route through payment/login. Payment flow is package selection → Duitku redirect → status polling page (`src/payment.jsx`).
+- Paket: `Semua Paket` and `Paket Saya` render the same `PackageCard` layout; accessible packages show `Mulai`, while locked packages route through login or open the checkout popup directly. Payment flow is `Beli` → checkout popup → `POST /api/payment/create` → QRIS/manual payment popup in `src/payment.jsx`; `/payment?merchantOrderId=...` reopens the status popup without the global app nav.
 - Admin mode: role-gated shield toggle button (bottom-right corner). Pressing shield enables admin mode; the top nav then shows an `Admin Panel` entry that opens the full admin page. The admin page can manage Try Out packages, per-package Try Out questions/import/results, Matematika/Fisika/Kimia chapters and subtopics, users/access, and Gemini usage backend data. The Users tab has quick manual grants for premium Try Out and daily missions. On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete.
 - SOP: `SOP-AI-INPUT-SOAL.md` documents the general AI question-entry guide. `SOP-DEEPSEEK-IMPORT-SOAL.md` is the stricter prompt contract for admin file import via DeepSeek.
 - Backend: Express 5, SQLite through `better-sqlite3`, session auth, API routes.
@@ -245,7 +245,7 @@ The import script refuses to replace question tables when user progress or corre
 |   |-- correction.js          # Gemini transcription/evaluation and Gemma profile summary
 |   |-- admin.js               # Admin CRUD for content/users
 |   |-- admin-import.js        # Admin DeepSeek draft/commit import from PDF/DOCX/TXT/MD
-|   `-- payment.js             # Duitku create/status/callback
+|   `-- payment.js             # QRIS/manual/Duitku payment create/status/reconciliation
 |-- middleware/
 |   |-- auth.js
 |   |-- clerk-auth.js          # Dual auth bridge from Clerk Bearer token to local req/session user
@@ -271,7 +271,7 @@ The import script refuses to replace question tables when user progress or corre
 |   |-- misi.jsx               # Daily mission screen
 |   |-- tryout.jsx             # Paket / paid tryout package screen
 |   |-- leaderboard.jsx        # Peringkat page with isolated-scroll leaderboard
-|   |-- payment.jsx            # Payment package selection + Duitku redirect + status polling
+|   |-- payment.jsx            # Checkout popup + QRIS/manual popup + status polling
 |   |-- admin.jsx              # Admin UI: content CRUD, users, import, and monitoring tab shell
 |   `-- styles.css             # All CSS including admin styles appended at end
 |-- tweaks-panel.jsx
@@ -348,12 +348,15 @@ The import script refuses to replace question tables when user progress or corre
 
 ### Payment
 
-1. User navigates to `payment` route.
-2. Selects a package (Trial 7 hari Rp29k, Bulanan Rp99k, Semester Rp249k).
-3. Frontend posts to `POST /api/payment/create` → redirects to Duitku `paymentUrl`.
-4. On return, `?merchantOrderId=X` in URL triggers `PaymentStatus` component.
-5. Status is polled every 5s from `GET /api/payment/status/:merchantOrderId`.
-6. Shows pending / success / failed/timeout states.
+1. User presses `Beli` from a locked package; `src/app.jsx` intercepts the payment route intent and opens `PaymentCheckoutModal` instead of navigating to a checkout page.
+2. `GET /api/payment/config` determines whether QRIS/manual/Duitku is active.
+3. Pressing `Bayar Sekarang` first checks `POST /api/payment/pending` for an unexpired pending order for the same package.
+4. If a pending QRIS/manual order exists, the old QR/payment popup is reopened with the remaining countdown; otherwise the frontend posts to `POST /api/payment/create`.
+5. QRIS/manual responses render as a centered payment popup via `ReactDOM.createPortal`, so the overlay is mounted at `document.body` instead of inside the app shell.
+6. The URL is updated to `/payment?merchantOrderId=X`; `src/app.jsx` preserves that query during history sync and hides the global `Nav` while the payment status popup is active.
+7. Status is polled every 5s from `GET /api/payment/status/:merchantOrderId`.
+8. Duitku remains available for legacy/fallback provider modes that return `paymentUrl`; QRIS/local/manual payments stay in-app.
+9. Shows pending / success / failed/timeout states.
 
 ## API Overview
 
@@ -406,7 +409,8 @@ Most API routes require either a local session or a verified Clerk Bearer token.
 | `DELETE` | `/api/admin/users/:id` | Delete a non-admin user account (admin only; self/admin deletion is blocked). |
 | `POST` | `/api/admin/import/draft` | Upload file and ask DeepSeek for a reviewable import draft for a subtopic or Try Out package (admin only). |
 | `POST` | `/api/admin/import/commit` | Insert reviewed draft questions and steps into SQLite for a subtopic or Try Out package (admin only). |
-| `POST` | `/api/payment/create` | Create Duitku invoice. |
+| `POST` | `/api/payment/pending` | Reopen unexpired pending QRIS/manual order for the same package. |
+| `POST` | `/api/payment/create` | Create QRIS/manual/Duitku payment. |
 | `GET` | `/api/payment/status/:merchantOrderId` | Check payment status. |
 | `POST` | `/api/payment/callback` | Duitku server callback. |
 
@@ -459,7 +463,7 @@ owner), F-10 / F-11 / F-12 LLM-side follow-ups.
 - **Do not use IIFE `(function(){...})()`** in `src/*.jsx` files — variables inside are scoped and invisible to other scripts. Define components at top level.
 - Clerk auth is integrated through a static-Babel bridge in `src/clerk-auth.jsx`, not `@clerk/react` components. The CLI may install `@clerk/react`, but the live `MAFIKING.html` runtime uses Clerk's browser scripts dynamically.
 - `src/app.jsx` owns route state, tweaks defaults, and `isAdmin` toggle.
-- `src/app.jsx` intentionally does not render the global `Nav` while `route === "practice"`.
+- `src/app.jsx` intentionally does not render the global `Nav` while `route === "practice"` or while `/payment?merchantOrderId=...` is showing payment status.
 - `src/shared.jsx` owns the sliding top-nav active pill and reusable `SlidingSegmented` control used by Paket and Peringkat.
 - `src/styles.css` owns the shared `.app-page-bg` grid/glow background variants used by Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and locked access gates.
 - `src/leaderboard.jsx` is currently frontend-static data only; use backend leaderboard APIs before treating it as live ranking data.
@@ -503,7 +507,7 @@ Browser checks:
 - Click an unsupported chapter → empty state with "Pilih bab lain" button.
 - Open profile from nav.
 - In profile, confirm "Rekomendasi Soal Latihan" can show catalog refs, difficulty, Purcell reference, target skill, and recommendation reason when correction attempts contain mapped weakness tags.
-- Open `payment` route → package selection renders.
+- Press `Beli` on a locked package → checkout popup opens without navigating to `/payment`; pressing `Bayar Sekarang` creates an order and opens the QRIS/manual status popup directly. Refreshing `/payment?merchantOrderId=...` must keep the order query, hide the global nav, and show the popup without clipping the QR.
 
 ## Known Gotchas
 
@@ -515,6 +519,6 @@ Browser checks:
 - Admin shield visibility is role-gated in the frontend, and admin APIs remain protected by backend middleware. Local development still has localhost admin API bypass unless `LOCAL_ADMIN_MODE=false`.
 - `src/admin-monitoring.jsx` must load before `src/admin.jsx` because it exports `window.AdminMonitoringPanel`.
 - Gemini/Gemma token "remaining" values are monitoring estimates from configured daily limits, not a live Google quota lookup.
-- Duitku routes point at sandbox base URL in code. Review payment environment and base URL before production use.
+- QRIS is the default payment provider; Duitku routes remain as legacy/fallback provider code and point at sandbox base URL unless deliberately configured. Review payment environment, QRIS static string, reconciliation secrets, and any Duitku base URL before production use.
 - Before production deploy with `DEPLOY_IMPORTS=1`, confirm bundled JSON contains the intended content and run the import against a temporary DB if the bank changed.
 - `db/mafiking.db` exists but is the wrong file — use `db/database.sqlite`.

@@ -375,6 +375,17 @@ router.delete('/tryout-packages/:id', (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+router.put('/tryout-packages/:id/toggle-hidden', (req, res) => {
+    try {
+        const db = req.app.locals.db;
+        const pkg = db.prepare('SELECT id, is_hidden FROM tryout_packages WHERE id = ?').get(req.params.id);
+        if (!pkg) return res.status(404).json({ error: 'Paket tidak ditemukan.' });
+        const next = pkg.is_hidden ? 0 : 1;
+        db.prepare('UPDATE tryout_packages SET is_hidden = ? WHERE id = ?').run(next, req.params.id);
+        res.json({ ok: true, is_hidden: Boolean(next) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ===== TRYOUT QUESTIONS =====
 router.get('/tryout-questions', (req, res) => {
     try {

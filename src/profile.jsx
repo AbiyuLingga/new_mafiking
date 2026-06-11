@@ -609,14 +609,8 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                     })}
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-dashed border-ink/15 p-6 text-center">
-                    <p className="text-sm text-ink/50">Belum pernah mengerjakan di Canvas</p>
-                    <button
-                      onClick={openEasyCanvasPractice}
-                      className="btn-ink mt-3 !py-2 !px-4 text-xs"
-                    >
-                      Mulai Latihan Baru
-                    </button>
+                  <div className="rounded-xl border border-dashed border-ink/15 p-6 text-center text-2xl font-bold text-ink/45">
+                    -
                   </div>
                 )}
               </div>

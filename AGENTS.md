@@ -77,6 +77,9 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - `MAFIKING.html` loads Tailwind CDN, React UMD, ReactDOM UMD, Babel standalone, then `type="text/babel"` scripts.
 - `src/*.jsx` files use global symbols and assign components to `window.*`.
 - `src/app.jsx` owns route state and tweaks defaults.
+- `src/app.jsx` must preserve `/payment?merchantOrderId=...` when syncing route state to browser history. Do not normalize payment status URLs down to `/payment`, or refresh/deep-link QRIS status will break.
+- Normal package purchase must open `PaymentCheckoutModal` from `src/payment.jsx` over the current page when user presses `Beli`; do not restore the old full-page checkout at `/payment`.
+- If a user closes a pending QRIS/manual payment and clicks `Beli` for the same package again before expiry, reuse the existing order through `POST /api/payment/pending` instead of creating a duplicate QR/unique-code order.
 - `src/backend-api.jsx` is the same-origin API helper.
 - `src/clerk-auth.jsx` is the static-Babel Clerk bridge. It fetches only the public publishable key from `/api/config/clerk`, loads Clerk browser scripts, and exposes `window.MafikingClerk`.
 - `src/onboarding.jsx` owns the mandatory non-admin profile-completion modal. It must load after `src/shared.jsx` and before `src/app.jsx`.
@@ -94,6 +97,7 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - Landing media is stored in `landing_media` and served through `GET /api/landing-media`. The public landing should not expose inline `Ganti gambar` / `Ganti video` controls to admins.
 - The public landing uses local reveal/pop animations in `src/lobby.jsx` and `src/styles.css`. The demo video section should not have the old grid background.
 - The global `Nav` is intentionally not rendered on the `practice` route; practice owns its own compact session bars/toolbars.
+- The global `Nav` is also intentionally not rendered for `/payment?merchantOrderId=...`; QRIS/manual status owns a full-viewport popup overlay.
 - `db/database.sqlite` is generated local runtime state.
 - `db/question-bank.json` is the portable seeded question-bank source.
 
@@ -229,6 +233,7 @@ Rules:
 - Admin content management starts with a `Try Out` / `Matematika` / `Fisika` / `Kimia` selector in the `Bab & Subtopik` tab. `Try Out` opens package CRUD; subject options open chapter/subtopic CRUD filtered by `chapters.mapel`.
 - The admin shield is frontend-visible only for `currentUser.role === "admin"`; do not expose it to every user. Admin mode adds an `Admin Panel` button to the top nav, and that button navigates to the dedicated `admin` route/page.
 - Logout and return-to-landing confirmation dialogs are centered modals with Mafiking yellow/ink styling, not browser confirms or blue theme popups.
+- Payment checkout and QRIS/manual status dialogs are rendered through a portal from `src/payment.jsx` into `document.body` so they are not clipped by the route shell or hidden under app navigation. Keep the overlay scroll-safe for browser zoom and preserve the `merchantOrderId` URL query for status/deep-link routes.
 - Gemini/Gemma token usage is observational data in `ai_token_usage`, written by `lib/log-token-usage.js`. Logging failures must not break correction/transcription/profile AI requests.
 - `routes/correction.js` supports up to 20 Gemini keys: `GEMINI_KEY_1` through `GEMINI_KEY_20`.
 - Profile summary uses Gemma 4 31B via the Gemini API key pool and can fall back locally when keys/model calls are unavailable.

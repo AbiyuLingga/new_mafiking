@@ -245,7 +245,8 @@ for (const migration of [
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE INDEX IF NOT EXISTS idx_tryout_sessions_user_tryout
-    ON tryout_sessions (user_id, tryout_id, submitted_at, started_at DESC)`
+    ON tryout_sessions (user_id, tryout_id, submitted_at, started_at DESC)`,
+  "ALTER TABLE tryout_packages ADD COLUMN is_hidden INTEGER DEFAULT 0"
 ]) {
   try {
     db.exec(migration);
@@ -421,8 +422,10 @@ if (db.prepare('SELECT COUNT(*) as n FROM tryout_packages').get().n === 0) {
   ].forEach(r => ins.run(...r));
 }
 
+ensurePaymentTestTryoutPackage(db);
 ensureTryoutPackageIds(db);
 seedInitialTryoutQuestions(db);
+ensurePaymentTestTryoutQuestions(db);
 ensureDefaultAppSettings(db);
 
 ensureFixedAdminUser(db);
@@ -431,6 +434,48 @@ app.locals.db = db;
 app.locals.performanceStore = createPerformanceStore();
 startExpirySweeper(db, Number(process.env.PAYMENT_EXPIRY_SWEEP_INTERVAL_MS) || 60000);
 startMutasikuPoller(db);
+
+// --- Auto-verification collector ---
+const MUTATION_COLLECTOR_ENABLED = ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.MUTATION_COLLECTOR_ENABLED || '').toLowerCase()
+);
+
+if (MUTATION_COLLECTOR_ENABLED) {
+    const { startMutationCollector } = require('./lib/mutation-collector');
+    const providerName = String(process.env.MUTATION_PROVIDER || 'mock').toLowerCase();
+
+    let provider;
+    if (providerName === 'qris_merchant') {
+        const { QrisMutasiProvider } = require('./lib/providers/QrisMutasiProvider');
+        provider = new QrisMutasiProvider({
+            email: process.env.QRIS_MERCHANT_EMAIL,
+            password: process.env.QRIS_MERCHANT_PASSWORD,
+            cookieDir: process.env.QRIS_COOKIE_DIR || '/tmp',
+            filter: process.env.QRIS_MUTATION_FILTER || '',
+            lookbackDays: Number(process.env.QRIS_MUTATION_LOOKBACK_DAYS) || 1,
+            timeZone: process.env.QRIS_MUTATION_TIME_ZONE || 'Asia/Jakarta',
+            debug: ['1', 'true', 'yes', 'on'].includes(
+                String(process.env.QRIS_MUTATION_DEBUG || '').toLowerCase()
+            ),
+        });
+    } else {
+        const { MockMutationProvider } = require('./lib/providers/MockMutationProvider');
+        provider = new MockMutationProvider();
+    }
+
+    const collector = startMutationCollector(db, provider, {
+        intervalMs: Number(process.env.MUTATION_POLL_INTERVAL_MS) || 15000,
+        maxConsecutiveErrors: Number(process.env.MUTATION_MAX_ERRORS) || 5,
+        pepper: process.env.HASH_PEPPER,
+    });
+
+    if (collector) {
+        app.locals.mutationCollector = collector;
+    }
+} else {
+    console.log('[collector] MUTATION_COLLECTOR_ENABLED not set - auto-verify is OFF');
+}
+
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
@@ -799,7 +844,9 @@ app.get('/api/tryout-packages', (req, res) => {
       return;
     }
     setPublicApiCache(res, 30, 120);
-    res.json(db.prepare('SELECT * FROM tryout_packages ORDER BY sort_order, id').all());
+    const isAdmin = canReadLockedTryoutPackages(req);
+    const rows = db.prepare('SELECT * FROM tryout_packages ORDER BY sort_order, id').all();
+    res.json(isAdmin ? rows : rows.filter((p) => !p.is_hidden));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1026,6 +1073,131 @@ function ensureTryoutPackageIds(database) {
     }
     used.add(candidate);
     update.run(candidate, row.id);
+  }
+}
+
+function ensurePaymentTestTryoutPackage(database) {
+  const payload = {
+    tryout_id: 'cek-payment-tryout',
+    title: 'Cek Payment',
+    description: 'Paket khusus untuk mengetes alur pembayaran web.',
+    price: 'Rp 500',
+    original_price: null,
+    badge: 'Test',
+    duration: '10 mnt',
+    questions: 5,
+    features: JSON.stringify(['Cek QRIS payment', 'Akses terbuka otomatis setelah terverifikasi']),
+    tone: 'default',
+    sort_order: 99,
+  };
+
+  try {
+    const existing = database.prepare(`
+      SELECT id
+      FROM tryout_packages
+      WHERE tryout_id = ? OR lower(title) IN ('cek payment', 'test')
+      ORDER BY CASE WHEN tryout_id = ? THEN 0 ELSE 1 END, id
+      LIMIT 1
+    `).get(payload.tryout_id, payload.tryout_id);
+
+    if (existing) {
+      database.prepare(`
+        UPDATE tryout_packages
+        SET tryout_id = ?,
+            title = ?,
+            description = ?,
+            price = ?,
+            original_price = ?,
+            badge = ?,
+            duration = ?,
+            questions = ?,
+            features = ?,
+            tone = ?,
+            sort_order = ?
+        WHERE id = ?
+      `).run(
+        payload.tryout_id,
+        payload.title,
+        payload.description,
+        payload.price,
+        payload.original_price,
+        payload.badge,
+        payload.duration,
+        payload.questions,
+        payload.features,
+        payload.tone,
+        payload.sort_order,
+        existing.id
+      );
+      return;
+    }
+
+    database.prepare(`
+      INSERT INTO tryout_packages (
+        tryout_id, title, description, price, original_price, badge,
+        duration, questions, features, tone, sort_order
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      payload.tryout_id,
+      payload.title,
+      payload.description,
+      payload.price,
+      payload.original_price,
+      payload.badge,
+      payload.duration,
+      payload.questions,
+      payload.features,
+      payload.tone,
+      payload.sort_order
+    );
+  } catch (error) {
+    console.warn('[tryout-packages] failed to ensure Cek Payment package:', error.message);
+  }
+}
+
+function ensurePaymentTestTryoutQuestions(database) {
+  const tryoutId = 'cek-payment-tryout';
+  try {
+    const existing = Number(database.prepare(
+      'SELECT COUNT(*) AS count FROM tryout_questions WHERE tryout_id = ?'
+    ).get(tryoutId).count) || 0;
+    if (existing >= 5) return;
+
+    const sourceProblems = database.prepare(`
+      SELECT question_text, question_display, answer_display, acceptable_answers,
+             difficulty, question_type, mc_options
+      FROM problems
+      WHERE TRIM(COALESCE(NULLIF(question_display, ''), question_text, '')) <> ''
+      ORDER BY sort_order, id
+      LIMIT ?
+    `).all(5 - existing);
+    if (!sourceProblems.length) return;
+
+    const insertQuestion = database.prepare(`
+      INSERT INTO tryout_questions (
+        tryout_id, question_text, question_display, answer_display, acceptable_answers,
+        difficulty, question_type, mc_options, sort_order, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+    `);
+
+    const appendQuestions = database.transaction(() => {
+      sourceProblems.forEach((problem, index) => {
+        insertQuestion.run(
+          tryoutId,
+          problem.question_text || '',
+          problem.question_display || problem.question_text || '',
+          problem.answer_display || '',
+          problem.acceptable_answers || '[]',
+          problem.difficulty || 'Easy',
+          problem.question_type || 'mc',
+          problem.mc_options || '[]',
+          existing + index + 1
+        );
+      });
+    });
+    appendQuestions();
+  } catch (error) {
+    console.warn('[tryout-packages] failed to ensure Cek Payment questions:', error.message);
   }
 }
 

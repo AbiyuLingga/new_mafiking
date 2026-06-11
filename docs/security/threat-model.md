@@ -22,13 +22,14 @@
 | Registered Mafiking user | Semi-trusted | Owns a local SQLite row synced from Clerk (`lib/clerk-user-sync.js`). Must complete onboarding (`src/onboarding.jsx`) before protected features. |
 | Local admin | Trusted | Local-only fallback for dev (`isLocalAdminMode`). Production admins are Clerk users with `role = 'admin'` in the `users` table. |
 | Clerk (third party) | Trusted infra | Identity provider. Webhooks are svix-signed. Bearer tokens are verified by `@clerk/express`. |
-| Duitku (third party) | Trusted infra for payment redirects | MD5-signs callbacks. Mafiking redirects users out and back. No card data ever touches Mafiking servers. |
+| QRIS/local payment rails | Trusted payment evidence source | Mafiking generates QRIS/manual orders locally, reconciles by webhook/admin/mutation evidence, and tracks status by `merchantOrderId`. No card data touches Mafiking servers. |
+| Duitku (third party) | Trusted infra for legacy/fallback payment redirects | MD5-signs callbacks. Mafiking can redirect users out and back in legacy/fallback mode. No card data ever touches Mafiking servers. |
 | Gemini / Gemma (Google AI) | Trusted infra for prompts | Image OCR, canvas evaluation, profile summary prose. Inputs may be untrusted (see threats below). |
 | DeepSeek (third party) | Trusted infra for question import | Admin-only tool (`routes/admin-import.js`). Not in the user request path. |
 | Local SQLite (`db/database.sqlite`) | Trusted storage | Single process, WAL mode. Not exposed to the network. |
 
 Trust boundaries: **browser → app**, **app → DB**, **app → Clerk**, **app →
-Duitku**, **app → Gemini / DeepSeek**. Every cross-boundary hop is a
+QRIS reconciliation/webhooks**, **app → Duitku fallback**, **app → Gemini / DeepSeek**. Every cross-boundary hop is a
 candidate threat source.
 
 ## Top STRIDE threats (initial, ordered by risk)
@@ -43,12 +44,9 @@ candidate threat source.
    commit `1092c92`. *Follow-up:* nonce migration tracked in `posture.md`.
 
 2. **Tampering — payment callback spoofing** *(Mitigated)*
-   An attacker could try to forge a Duitku callback to grant paid access
+   An attacker could try to forge a QRIS reconciliation event or Duitku callback to grant paid access
    without paying.
-   *Control:* Duitku callback is MD5-signed against `merchantCode + amount +
-   merchantOrderId + API_KEY`; the handler returns 401 on signature mismatch.
-   CSRF exempt. *Verification:* `routes/payment.js` covered by Phase 1
-   contract tests.
+   *Control:* QRIS reconciliation webhooks use HMAC/timestamp checks where configured; Duitku callback is MD5-signed against `merchantCode + amount + merchantOrderId + API_KEY`; status updates are idempotent and keyed by `merchantOrderId`. CSRF exempt only for server-to-server endpoints. *Verification:* `routes/payment.js` and payment contract/reconciler tests.
 
 3. **Repudiation — admin actions without an audit trail** *(Partial)*
    Admin resets, role changes, and content edits need a tamper-evident log
@@ -89,10 +87,8 @@ candidate threat source.
    LLM inventory (`docs/security/llm.md`); F-10, F-11, F-12 tracked.
 
 8. **Spoofing — webhook replay** *(Mitigated)*
-   An attacker who captures a valid Clerk or Duitku webhook could replay it.
-   *Control:* svix timestamp window for Clerk; Duitku's `merchantOrderId`
-   uniqueness on the Mafiking side. *Verification:* Phase 1.7 SSRF /
-   replay review.
+   An attacker who captures a valid Clerk, QRIS reconciliation, or Duitku webhook could replay it.
+   *Control:* svix timestamp window for Clerk; QRIS reconciliation signatures/timestamps where configured; `merchantOrderId` uniqueness on the Mafiking side for payment updates. *Verification:* Phase 1.7 SSRF / replay review plus payment contract/reconciler tests.
 
 9. **Edge DoS / brute force on the Nevacloud VPS** *(Mitigated)*
    Nevacloud does not provide managed DDoS; the only edge is nginx +

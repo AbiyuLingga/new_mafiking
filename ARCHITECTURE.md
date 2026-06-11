@@ -133,7 +133,7 @@ The frontend is not module-based. Components are defined in browser global scope
 | `src/misi.jsx` | Daily mission screen. |
 | `src/tryout.jsx` | Paket / paid tryout package screen; `Semua Paket` and `Paket Saya` share the same `PackageCard` layout. |
 | `src/leaderboard.jsx` | Peringkat page with isolated-scroll leaderboard and `Semua` / `Top Mingguan` views. |
-| `src/payment.jsx` | Payment package selection and status polling. |
+| `src/payment.jsx` | Checkout popup plus QRIS/manual popup rendering and status polling. |
 | `src/admin.jsx` | Admin page/modal shell, subject/Try Out content CRUD, import tab, users tab, and monitoring tab shell. |
 | `src/styles.css` | Local custom CSS and appended feature styles. |
 | `tweaks-panel.jsx` | Tweaks panel and persisted tweak state. |
@@ -179,7 +179,15 @@ Route objects are also used for auth redirects, payment context, and Belajar sec
 
 `src/app.jsx` stores `practice` as `practiceContext` and passes it into `Practice`. It also stores the selected Belajar section so `Coba Gratis` can land directly on the free Try Out tab.
 
-The global `Nav` is intentionally not rendered while `route === "practice"` or `route === "lobby"`. The practice route owns its own session bar and canvas toolbar, and the public landing owns its own marketing header.
+The global `Nav` is intentionally not rendered while `route === "practice"`, `route === "lobby"`, or while `route === "payment"` has a `merchantOrderId` query. The practice route owns its own session bar and canvas toolbar, the public landing owns its own marketing header, and payment status owns a modal-style popup that must not be pushed under the app shell nav.
+
+Payment status URLs preserve their order query:
+
+```text
+/payment?merchantOrderId=MFK-...
+```
+
+`appStateToPath()` must keep that query when syncing route state to browser history; otherwise the app cannot reopen the order status popup. Normal package purchase should not navigate to `/payment`; `src/app.jsx` intercepts `{ route: "payment", payment: ... }` and renders `PaymentCheckoutModal` over the current page.
 
 ### Public Landing And Access Gates
 
@@ -394,12 +402,14 @@ The backend dashboard endpoint is present at `GET /api/admin/dashboard-data`. Th
 
 #### `routes/payment.js`
 
-Duitku sandbox integration:
+QRIS-first payment integration with legacy Duitku fallback:
 
-- Create invoice.
-- Check transaction status.
-- Verify callback signature.
-- Update `payments` table.
+- `POST /api/payment/create` creates a QRIS/manual/Duitku payment depending on `PAYMENT_PROVIDER`.
+- `POST /api/payment/pending` reopens an unexpired pending QRIS/manual order for the same user and package before the frontend creates a new order.
+- QRIS/manual responses are rendered in-app by `src/payment.jsx` as a popup portal, then polled by `GET /api/payment/status/:merchantOrderId`.
+- Duitku responses may still redirect to `paymentUrl` in legacy/fallback mode.
+- `POST /api/payment/callback` verifies Duitku callback signatures.
+- QRIS reconciliation webhooks and admin payment actions update the `payments` table through the reconciler helpers.
 
 The base URL is currently sandbox:
 

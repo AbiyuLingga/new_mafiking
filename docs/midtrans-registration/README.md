@@ -12,4 +12,4 @@ Folder ini berisi dokumen pendukung untuk menjawab permintaan Midtrans:
 
 ## Catatan Akurasi
 
-Dokumen ini menjelaskan alur bisnis dan pembayaran Mafiking untuk kebutuhan review merchant. Kode aplikasi saat ini memiliki payment flow berbasis payment gateway dan akan disesuaikan ke Midtrans setelah akun produksi aktif. Hindari menulis bahwa transaksi Midtrans sudah live sebelum konfigurasi production Midtrans benar-benar aktif.
+Dokumen ini menjelaskan alur bisnis dan pembayaran Mafiking untuk kebutuhan review merchant. Runtime saat ini memakai QRIS lokal/in-app sebagai provider utama, dengan kode gateway legacy/fallback masih tersedia. Jika dokumen ini dipakai untuk submission Midtrans, sesuaikan narasi agar jelas bahwa Midtrans adalah target konfigurasi setelah akun produksi aktif. Hindari menulis bahwa transaksi Midtrans sudah live sebelum konfigurasi production Midtrans benar-benar aktif.

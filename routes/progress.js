@@ -250,7 +250,12 @@ router.get('/stats', isAuthenticated, (req, res) => {
     });
 });
 
-// GET /api/progress/leaderboard — semua user (bukan admin) diurutkan berdasarkan XP
+const NON_GUEST_LEADERBOARD_SQL = `
+    AND COALESCE(username, '') NOT LIKE 'Tamu%'
+    AND COALESCE(display_name, '') NOT LIKE 'Tamu%'
+`;
+
+// GET /api/progress/leaderboard — semua user terdaftar (bukan admin/tamu) diurutkan berdasarkan XP
 router.get('/leaderboard', isAuthenticated, (req, res) => {
     const db = req.app.locals.db;
     const currentUserId = req.session.userId;
@@ -259,6 +264,7 @@ router.get('/leaderboard', isAuthenticated, (req, res) => {
         `SELECT id, display_name, fakultas, xp, level, badge_tier, streak_days
          FROM users
          WHERE role != 'admin'
+           ${NON_GUEST_LEADERBOARD_SQL}
          ORDER BY xp DESC`
     ).all();
 
@@ -298,6 +304,8 @@ router.get('/leaderboard/weekly', isAuthenticated, (req, res) => {
          FROM users u
          LEFT JOIN user_progress up ON up.user_id = u.id AND up.solved_at >= ?
          WHERE u.role != 'admin'
+           AND COALESCE(u.username, '') NOT LIKE 'Tamu%'
+           AND COALESCE(u.display_name, '') NOT LIKE 'Tamu%'
          GROUP BY u.id
          HAVING weekly_xp > 0
          ORDER BY weekly_xp DESC`
@@ -566,7 +574,10 @@ router.get('/leaderboard/tryout', isAuthenticated, (req, res) => {
             u.fakultas
         FROM tryout_attempts ta
         JOIN users u ON u.id = ta.user_id
-        WHERE ta.tryout_id = ? AND u.role != 'admin'
+        WHERE ta.tryout_id = ?
+          AND u.role != 'admin'
+          AND COALESCE(u.username, '') NOT LIKE 'Tamu%'
+          AND COALESCE(u.display_name, '') NOT LIKE 'Tamu%'
         ORDER BY ta.score DESC, ta.correct_count DESC, ta.duration_seconds ASC, ta.completed_at ASC, ta.id ASC
     `).all(tryoutId);
 

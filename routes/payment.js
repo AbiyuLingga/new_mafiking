@@ -36,6 +36,7 @@ const MANUAL_SUFFIX_MIN = 1;
 const MANUAL_SUFFIX_MAX = 399;
 
 const SUBSCRIPTION_PACKAGES = {
+    'cek-payment': { label: 'Cek Payment', price: 500 },
     trial: { label: 'Trial 7 Hari', price: 29000 },
     bulanan: { label: 'Bulanan', price: 99000 },
     semester: { label: 'Semester', price: 249000 },
@@ -259,6 +260,27 @@ function paymentStatusPayload(payment, status) {
     };
 }
 
+function findReusablePendingPayment({ db, userId, item, now = new Date() }) {
+    if (!db || !userId || !item) return null;
+    const nowSql = now.toISOString().slice(0, 19).replace('T', ' ');
+    const payment = db.prepare(`
+        SELECT *
+        FROM payments
+        WHERE user_id = ?
+          AND product_details = ?
+          AND status = 'PENDING'
+          AND (expires_at IS NULL OR expires_at > ?)
+          AND (
+              COALESCE(qris_image_data_url, '') != ''
+              OR COALESCE(qris_dynamic_string, '') != ''
+              OR reference LIKE 'MANUAL-%'
+          )
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+    `).get(userId, item.productDetails, nowSql);
+    return payment || null;
+}
+
 function paymentGatewayState(env = process.env) {
     const provider = normalizePaymentProvider(env);
     const mockMode = isMockPaymentEnabled(env);
@@ -292,6 +314,9 @@ function paymentGatewayState(env = process.env) {
         manualAdminWhatsapp: qris.config.adminWhatsapp,
         qrisWebhookEnabled: qris.config.webhookEnabled,
         guestCheckoutEnabled: isLocalGuestCheckoutEnabled(env),
+        autoVerifyEnabled: ['1', 'true', 'yes', 'on'].includes(
+            String(env.MUTATION_COLLECTOR_ENABLED || '').toLowerCase()
+        ),
         message,
     };
 }
@@ -497,6 +522,35 @@ router.get('/config', (_req, res) => {
     res.json(paymentGatewayState());
 });
 
+// POST /api/payment/pending
+router.post('/pending', async (req, res) => {
+    const db = req.app.locals.db;
+    const userId = req.session.userId;
+    if (!canCreatePayment({ db, userId })) {
+        return res.status(401).json({ error: 'Login diperlukan sebelum membeli paket' });
+    }
+
+    let item;
+    try {
+        item = resolvePaymentItem({ body: req.body, db, enforceTryoutPackagesEnabled: true });
+    } catch (err) {
+        return res.status(err.statusCode || 400).json({ error: err.message });
+    }
+
+    try {
+        const payment = findReusablePendingPayment({ db, userId, item });
+        if (!payment) return res.json({ payment: null });
+        expirePaymentIfNeeded(db, payment.merchant_order_id);
+        const freshPayment = db.prepare('SELECT * FROM payments WHERE merchant_order_id = ? AND user_id = ?')
+            .get(payment.merchant_order_id, userId);
+        if (!freshPayment || freshPayment.status !== 'PENDING') return res.json({ payment: null });
+        return res.json({ payment: paymentStatusPayload(freshPayment, freshPayment.status) });
+    } catch (err) {
+        console.error('Failed to find pending payment:', err);
+        return res.status(500).json({ error: 'Gagal mengecek pembayaran pending.' });
+    }
+});
+
 // POST /api/payment/create
 router.post('/create', paymentLimiter, async (req, res) => {
     const db = req.app.locals.db;
@@ -685,8 +739,12 @@ router.get('/active-packages', async (req, res) => {
 
     try {
         const payments = db.prepare(`
-            SELECT product_details FROM payments
-            WHERE user_id = ? AND status = 'SUCCESS'
+            SELECT
+                p.product_details,
+                tp.tryout_id
+            FROM payments p
+            LEFT JOIN tryout_packages tp ON tp.title = p.product_details
+            WHERE p.user_id = ? AND p.status = 'SUCCESS'
         `).all(userId);
 
         const grants = db.prepare(`
@@ -703,9 +761,29 @@ router.get('/active-packages', async (req, res) => {
             activeSet.add(normalized);
             activeProducts.push(normalized);
         }
-        payments.forEach((payment) => addActiveProduct(payment.product_details));
+        const revoked = new Set();
+        const nonRevokedGrants = [];
         for (const grant of grants) {
-            addActiveProduct(grant.access_value);
+            if (grant.access_type === 'revoked') {
+                revoked.add(grant.access_value);
+                const pkg = db.prepare('SELECT title FROM tryout_packages WHERE tryout_id = ?').get(grant.access_value);
+                if (pkg) revoked.add(pkg.title);
+            } else {
+                nonRevokedGrants.push(grant);
+            }
+        }
+        payments.forEach((payment) => {
+            if (!revoked.has(payment.product_details) && !revoked.has(payment.tryout_id)) {
+                addActiveProduct(payment.product_details);
+                if (payment.tryout_id && !revoked.has(payment.tryout_id)) {
+                    addActiveProduct(payment.tryout_id);
+                }
+            }
+        });
+        for (const grant of nonRevokedGrants) {
+            if (!revoked.has(grant.access_value)) {
+                addActiveProduct(grant.access_value);
+            }
         }
         res.json(activeProducts);
     } catch (err) {
@@ -969,6 +1047,62 @@ router.get('/mock-complete', (req, res) => {
     res.redirect(`/?merchantOrderId=${encodeQuery(merchantOrderId)}`);
 });
 
+// POST /api/payment/toggle-package-access — toggle grant/revoke user access grant (dev utility)
+router.post('/toggle-package-access', (req, res) => {
+    const db = req.app.locals.db;
+    const userId = req.session.userId;
+    if (!userId) return res.status(401).json({ error: 'Belum login' });
+
+    const { tryout_id } = req.body;
+    if (!tryout_id) return res.status(400).json({ error: 'tryout_id required' });
+
+    try {
+        const existingGrant = db.prepare(
+            "SELECT id FROM user_access_grants WHERE user_id = ? AND access_value = ? AND access_type != 'revoked'"
+        ).get(userId, String(tryout_id));
+
+        const existingRevoked = db.prepare(
+            "SELECT id FROM user_access_grants WHERE user_id = ? AND access_value = ? AND access_type = 'revoked'"
+        ).get(userId, String(tryout_id));
+
+        const hasPayment = !!db.prepare(
+            "SELECT id FROM payments WHERE user_id = ? AND status = 'SUCCESS' AND product_details = (SELECT title FROM tryout_packages WHERE tryout_id = ?)"
+        ).get(userId, String(tryout_id));
+
+        if (existingGrant) {
+            db.prepare("DELETE FROM user_access_grants WHERE id = ?").run(existingGrant.id);
+        }
+
+        if (existingRevoked) {
+            db.prepare("DELETE FROM user_access_grants WHERE id = ?").run(existingRevoked.id);
+            if (!hasPayment) {
+                db.prepare(
+                    "INSERT INTO user_access_grants (user_id, access_type, access_value) VALUES (?, 'tryout', ?)"
+                ).run(userId, String(tryout_id));
+            }
+            return res.json({ granted: true });
+        }
+
+        if (existingGrant || hasPayment) {
+            if (hasPayment) {
+                db.prepare(
+                    "INSERT INTO user_access_grants (user_id, access_type, access_value) VALUES (?, 'revoked', ?)"
+                ).run(userId, String(tryout_id));
+            }
+            return res.json({ granted: false });
+        }
+
+        db.prepare(
+            "INSERT INTO user_access_grants (user_id, access_type, access_value) VALUES (?, 'tryout', ?)"
+        ).run(userId, String(tryout_id));
+
+        res.json({ granted: true });
+    } catch (err) {
+        console.error('Failed to toggle package access:', err);
+        res.status(500).json({ error: 'Gagal mengubah akses' });
+    }
+});
+
 router.__test = {
     MANUAL_SUFFIX_MAX,
     MANUAL_SUFFIX_MIN,
@@ -982,6 +1116,7 @@ router.__test = {
     isLocalGuestCheckoutEnabled,
     isRegisteredPaymentUser,
     isMockPaymentEnabled,
+    findReusablePendingPayment,
     normalizePaymentProvider,
     parsePrice,
     qrisConfig,

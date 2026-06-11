@@ -132,7 +132,9 @@ All routes `isAuthenticated`. Body validation lives in
 | Method | Path | Auth | CSRF | BOLA | Notes |
 |---|---|---|---|---|---|
 | GET | `/api/payment/config` | public | n/a | none | `paymentGatewayState`. Cached 30s. |
+| POST | `/api/payment/pending` | registered | ✓ | user-scoped | Reopens only the current user's unexpired `PENDING` QRIS/manual order for the resolved server-side package. |
 | POST | `/api/payment/create` | registered | ✓ | user-scoped | QRIS local, Duitku, or mock. Body: `email`, `name`, package selector. |
+| POST | `/api/payment/toggle-package-access` | session | ✓ | user-scoped | Dev utility. Toggles tryout access grant for the current user by `tryout_id`. |
 | GET | `/api/payment/status/:merchantOrderId` | session | n/a | id-scoped | Filters by `user_id = ? AND merchant_order_id = ?` — explicit ownership check. |
 | GET | `/api/payment/active-packages` | session | n/a | user-scoped | Own data only. |
 | POST | `/api/payment/callback` | clerk-public | exempt | n/a | Duitku MD5-signed. Updates `payments` by `merchant_order_id`. |
@@ -194,6 +196,7 @@ All routes `isAdmin`. Routes that take `:id` operate on catalog content
 | POST | `/api/admin/tryout-packages` | admin | ✓ | admin | |
 | PUT | `/api/admin/tryout-packages/:id` | admin | ✓ | admin | |
 | DELETE | `/api/admin/tryout-packages/:id` | admin | ✓ | admin | |
+| PUT | `/api/admin/tryout-packages/:id/toggle-hidden` | admin | ✓ | admin | Toggles `is_hidden` on tryout package. |
 | GET | `/api/admin/tryout-questions` | admin | n/a | admin | |
 | POST | `/api/admin/tryout-questions` | admin | ✓ | admin | |
 | PUT | `/api/admin/tryout-questions/:id` | admin | ✓ | admin | |

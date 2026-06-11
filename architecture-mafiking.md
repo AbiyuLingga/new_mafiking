@@ -64,6 +64,7 @@ tryout
 admin
 profile
 practice
+payment
 ```
 
 Important route behavior:
@@ -71,8 +72,9 @@ Important route behavior:
 - `/` renders the public landing page for guests and logged-in users.
 - Mafiking logo returns to the public landing page.
 - Landing `Coba Gratis` routes to `Belajar -> Try Out`.
-- Global app nav is hidden on `lobby` and `practice`.
+- Global app nav is hidden on `lobby`, `practice`, and `/payment?merchantOrderId=...`.
 - App nav labels are `Beranda`, `Misi Harian`, and `Paket`; `Beranda` maps to `belajar`, `Paket` maps to `tryout`.
+- Payment package selection uses the app shell, but payment status is a popup overlay rendered through a React portal into `document.body`. `appStateToPath()` must preserve `merchantOrderId` in `/payment?merchantOrderId=...` so deep links and refreshes reopen the order status instead of falling back to package selection.
 - Admin role users see the shield. Turning it on adds an `Admin Panel` nav entry that routes to `admin`.
 - Logout and return-to-landing confirmations are centered modals using the Mafiking yellow/ink theme.
 - Auth supports both local username/password and Clerk Google sign-in. Clerk browser scripts are loaded dynamically from the publishable key, and backend requests include a Clerk Bearer token when signed in.
@@ -238,4 +240,4 @@ Clerk integration adds `users.clerk_id`, `users.email`, and `users.auth_provider
 - Only Integral has real imported question data today.
 - Monitoring quota values are estimates from configured limits, not live Google quota reads.
 - `src/admin.jsx` references `window.AdminMonitoringPanel`, but no separate component script exists in the current tree.
-- Payment uses sandbox Duitku base URL unless deliberately changed.
+- QRIS is the default payment provider. Duitku remains legacy/fallback code and uses the sandbox base URL unless deliberately configured.

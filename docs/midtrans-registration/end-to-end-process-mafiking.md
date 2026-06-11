@@ -70,7 +70,7 @@ Sebelum membayar, customer melihat ringkasan pesanan yang berisi:
 - nama paket;
 - durasi atau jenis akses;
 - total harga dalam Rupiah;
-- informasi bahwa pembayaran akan diproses melalui payment gateway.
+- informasi bahwa pembayaran akan diproses melalui QRIS in-app saat provider QRIS lokal aktif, atau melalui payment gateway jika mode gateway seperti Midtrans sudah dikonfigurasi.
 
 Customer dapat kembali ke halaman paket jika ingin mengganti paket sebelum menekan tombol bayar.
 
@@ -87,11 +87,11 @@ Setelah data checkout lengkap, customer menekan tombol bayar. Sistem Mafiking me
 
 Order ID digunakan untuk melacak status transaksi.
 
-### 7. Customer diarahkan ke halaman pembayaran
+### 7. Customer melihat halaman pembayaran
 
-Setelah transaksi dibuat, customer diarahkan ke halaman payment gateway. Pada integrasi produksi Midtrans, customer akan melihat halaman pembayaran Midtrans atau Snap Checkout sesuai konfigurasi merchant.
+Setelah transaksi dibuat, Mafiking menampilkan instruksi pembayaran. Pada provider QRIS lokal yang sedang aktif, customer melihat popup QRIS di website Mafiking dan URL status seperti `/payment?merchantOrderId=...` tetap menyimpan order ID. Pada integrasi produksi Midtrans, customer akan melihat halaman pembayaran Midtrans atau Snap Checkout sesuai konfigurasi merchant.
 
-Di halaman payment gateway, customer dapat memilih metode pembayaran yang tersedia, misalnya QRIS, virtual account, e-wallet, atau metode lain yang sudah aktif pada akun merchant.
+Di halaman payment gateway, jika mode Midtrans sudah aktif, customer dapat memilih metode pembayaran yang tersedia, misalnya QRIS, virtual account, e-wallet, atau metode lain yang sudah aktif pada akun merchant.
 
 ### 8. Customer menyelesaikan pembayaran
 
@@ -104,9 +104,9 @@ Customer mengikuti instruksi pembayaran yang tampil di halaman payment gateway. 
 
 Jika pembayaran belum selesai, status transaksi tetap pending. Jika pembayaran gagal atau kedaluwarsa, customer dapat mengulang proses pembelian atau menghubungi Mafiking.
 
-### 9. Customer kembali ke website Mafiking
+### 9. Customer melihat status di website Mafiking
 
-Setelah customer menyelesaikan atau meninggalkan proses pembayaran, customer diarahkan kembali ke website Mafiking melalui return/finish URL. Halaman Mafiking menampilkan status pembayaran berdasarkan order ID.
+Untuk QRIS lokal, customer tetap berada di website Mafiking dan dapat mengecek status dari popup pembayaran. Untuk mode gateway seperti Midtrans, setelah customer menyelesaikan atau meninggalkan proses pembayaran, customer diarahkan kembali ke website Mafiking melalui return/finish URL. Halaman Mafiking menampilkan status pembayaran berdasarkan order ID.
 
 Status yang dapat ditampilkan:
 
@@ -156,11 +156,11 @@ Customer buka mafiking.com
 -> mengisi nama dan email
 -> memeriksa ringkasan pesanan
 -> klik bayar
--> sistem membuat order ID dan payment URL
--> customer diarahkan ke payment gateway/Midtrans
--> customer memilih metode pembayaran
+-> sistem membuat order ID dan instruksi pembayaran
+-> QRIS lokal tampil sebagai popup in-app, atau customer diarahkan ke payment gateway/Midtrans jika mode Midtrans aktif
+-> customer membayar sesuai metode yang aktif
 -> customer menyelesaikan pembayaran
--> payment gateway mengirim callback/notifikasi
+-> QRIS reconciliation atau payment gateway mengirim callback/notifikasi
 -> Mafiking memperbarui status transaksi
 -> jika sukses, akses paket aktif otomatis
 -> customer mulai menggunakan Try Out atau fitur belajar

@@ -8,6 +8,7 @@ const {
     canCreatePayment,
     createDuitkuSignature,
     escapeHtml,
+    findReusablePendingPayment,
     MANUAL_SUFFIX_MAX,
     MANUAL_SUFFIX_MIN,
     isMockPaymentEnabled,
@@ -31,6 +32,7 @@ assert.strictEqual(MANUAL_SUFFIX_MAX, 399, 'manual payment unique code must stop
 assert.strictEqual(typeof resolvePaymentItem, 'function', 'resolvePaymentItem must be exported for contract tests');
 assert.strictEqual(typeof isRegisteredPaymentUser, 'function', 'isRegisteredPaymentUser must be exported for contract tests');
 assert.strictEqual(typeof canCreatePayment, 'function', 'canCreatePayment must be exported for contract tests');
+assert.strictEqual(typeof findReusablePendingPayment, 'function', 'findReusablePendingPayment must be exported for contract tests');
 assert.strictEqual(typeof isLocalGuestCheckoutEnabled, 'function', 'isLocalGuestCheckoutEnabled must be exported for contract tests');
 assert.strictEqual(typeof isMockPaymentEnabled, 'function', 'isMockPaymentEnabled must be exported for contract tests');
 assert.strictEqual(typeof verifyMockPaymentToken, 'function', 'verifyMockPaymentToken must be exported for contract tests');
@@ -83,6 +85,21 @@ assert.deepStrictEqual(subscription, {
     itemId: 'bulanan',
     amount: SUBSCRIPTION_PACKAGES.bulanan.price,
     productDetails: SUBSCRIPTION_PACKAGES.bulanan.label,
+});
+
+const testSubscription = resolvePaymentItem({
+    body: {
+        packageId: 'cek-payment',
+        amount: 999999,
+        productDetails: 'Tampered Test Price',
+    },
+});
+
+assert.deepStrictEqual(testSubscription, {
+    type: 'subscription',
+    itemId: 'cek-payment',
+    amount: 500,
+    productDetails: 'Cek Payment',
 });
 
 assert.throws(
@@ -187,6 +204,49 @@ assert.throws(
     () => resolvePaymentItem({ body: { purchaseType: 'tryout', tryoutPackageId: 9 }, db: { prepare: () => ({ get: () => ({ id: 9, title: 'Gratis', price: 'Gratis' }) }) } }),
     /Paket gratis tidak perlu pembayaran/
 );
+
+let pendingLookupArgs = null;
+const reusablePayment = {
+    id: 12,
+    user_id: 2,
+    merchant_order_id: 'MFK-2-123456789',
+    amount: 501,
+    product_details: 'Paket QRIS Lokal Murah',
+    email: 'student@example.com',
+    reference: 'QRIS-MFK-2-123456789',
+    payment_url: '',
+    qr_string: 'QRIS-DYNAMIC',
+    status: 'PENDING',
+    qris_base_amount: 500,
+    qris_suffix: 1,
+    qris_full_amount: 501,
+    qris_dynamic_string: 'QRIS-DYNAMIC',
+    qris_image_data_url: 'data:image/png;base64,abc',
+    expires_at: '2099-01-01 00:00:00',
+};
+const pendingDb = {
+    prepare(sql) {
+        assert.match(sql, /FROM payments/);
+        assert.match(sql, /status = 'PENDING'/);
+        assert.match(sql, /product_details = \?/);
+        return {
+            get(...args) {
+                pendingLookupArgs = args;
+                return reusablePayment;
+            },
+        };
+    },
+};
+assert.strictEqual(
+    findReusablePendingPayment({
+        db: pendingDb,
+        userId: 2,
+        item: { productDetails: 'Paket QRIS Lokal Murah' },
+        now: new Date('2026-06-11T00:00:00Z'),
+    }),
+    reusablePayment
+);
+assert.deepStrictEqual(pendingLookupArgs.slice(0, 2), [2, 'Paket QRIS Lokal Murah']);
 
 const duitkuSecret = 'sandbox-api-key';
 const createStringToSign = 'DXXXX1773728479616';

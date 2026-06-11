@@ -2,7 +2,7 @@
 
 const BLANK_PKG = { tryout_id: '', title: '', description: '', price: 'Gratis', original_price: '', badge: '', duration: '60 mnt', questions: 30, features: '', tone: 'default', sort_order: 0 };
 
-const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context }) => {
+const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context, currentUser }) => {
   const mode = String(context?.mode || "");
   const canEditPackages = Boolean(isAdminMode);
   const [tab, setTab] = useState("beli");
@@ -13,6 +13,7 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context })
   const [editPkg, setEditPkg] = useState(null);
   const [inlineEdit, setInlineEdit] = useState(null);
   const [saving, setSaving] = useState(false);
+  const isDevUser = currentUser?.email === 'abiyulinggaa@gmail.com';
 
   useEffect(() => {
     if (!canEditPackages) {
@@ -91,11 +92,10 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context })
 
   function hasAccess(pkg) {
     if (!pkg) return false;
-    if (isAdmin) return true;
+    if (canEditPackages) return true;
     if (pkg.price === "Gratis") return true;
     if (activePackages.includes(pkg.tryout_id || pkg.tryoutId)) return true;
-    return activePackages.includes(pkg.title) || 
-           activePackages.some(title => ["Trial 7 Hari", "Bulanan", "Semester"].includes(title));
+    return activePackages.includes(pkg.title);
   }
 
   function parseFeatures(f) {
@@ -147,6 +147,18 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context })
       route: "tryout",
       tryout: buildTryoutSessionContextFromPackage(pkg, "tryout-confirm"),
     });
+  }
+
+  async function togglePackageAccess(pkg) {
+    const tryoutId = pkg.tryout_id || pkg.tryoutId;
+    if (!tryoutId) return;
+    try {
+      const data = await MafikingAPI.post('/api/payment/toggle-package-access', { tryout_id: tryoutId });
+      await loadPackages();
+      showToast(data.granted ? 'Akses diberikan' : 'Akses dicabut', 'success');
+    } catch (err) {
+      showToast(err.message || 'Gagal toggle akses', 'error');
+    }
   }
 
   function startInlineEdit(pkg, field, rows) {
@@ -266,7 +278,9 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context })
                     setRoute={setRoute}
                     isAdmin={canEditPackages}
                     isLoggedIn={isLoggedIn}
+                    isDevUser={isDevUser}
                     onStartPackage={startTryoutPackage}
+                    onToggleAccess={togglePackageAccess}
                     adminEdit={{ inlineEdit, saving, startInlineEdit, setInlineEdit, saveInlineEdit }}
                     onDelete={() => deletePkg(pkg.id)}
                   />
@@ -290,7 +304,9 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context })
                     setRoute={setRoute}
                     isAdmin={canEditPackages}
                     isLoggedIn={isLoggedIn}
+                    isDevUser={isDevUser}
                     onStartPackage={startTryoutPackage}
+                    onToggleAccess={togglePackageAccess}
                     adminEdit={{ inlineEdit, saving, startInlineEdit, setInlineEdit, saveInlineEdit }}
                     onDelete={() => deletePkg(pkg.id)}
                   />
@@ -509,7 +525,7 @@ const AdminEditablePackageField = ({ pkg, field, rows, isAdmin, adminEdit, child
 };
 
 // ─── Package card ─────────────────────────────────────────────────────────────
-const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, hasAccess, onStartPackage }) => {
+const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, hasAccess, onStartPackage, isDevUser, onToggleAccess }) => {
   const feature = pkg.tone === "feature";
   const featureList = Array.isArray(pkg.features)
     ? pkg.features
@@ -590,6 +606,18 @@ const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, 
       {isAdmin && (
         <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingTop: 12, borderTop: feature ? '1px solid rgba(255,255,255,0.12)' : '1px solid #e5e7eb' }}>
           <button onClick={onDelete} className="admin-btn-ghost" style={{ fontSize: 12, color: '#ef4444', flex: 1 }} type="button">Hapus</button>
+        </div>
+      )}
+      {isDevUser && (
+        <div style={{ marginTop: 8 }}>
+          <button
+            onClick={() => onToggleAccess(pkg)}
+            className="text-xs px-3 py-1.5 rounded-lg border"
+            style={{ color: hasAccess ? '#ef4444' : '#16a34a', borderColor: hasAccess ? '#fca5a5' : '#86efac' }}
+            type="button"
+          >
+            {hasAccess ? 'Cabut Akses' : 'Beri Akses'}
+          </button>
         </div>
       )}
     </article>

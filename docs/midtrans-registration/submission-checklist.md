@@ -24,9 +24,9 @@ Gunakan checklist ini sebelum mengirim ulang dokumen ke Midtrans.
 - [ ] Customer mengisi nama lengkap dan email aktif di halaman checkout.
 - [ ] Customer melihat ringkasan pesanan dan total harga.
 - [ ] Customer menekan tombol bayar untuk membuat transaksi.
-- [ ] Customer diarahkan ke payment gateway.
-- [ ] Customer kembali ke Mafiking setelah proses pembayaran.
-- [ ] Mafiking menampilkan status pembayaran.
+- [ ] Untuk QRIS lokal saat ini, QR/status pembayaran tampil langsung sebagai popup in-app.
+- [ ] Jika submission memakai Midtrans, customer diarahkan ke payment gateway dan kembali ke Mafiking lewat finish/return URL.
+- [ ] Mafiking menampilkan status pembayaran dengan order ID yang sama.
 - [ ] Akses paket aktif setelah pembayaran sukses.
 
 ## Informasi Bantuan

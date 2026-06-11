@@ -2092,6 +2092,16 @@ const AdminTryoutPackagesPanel = ({ setRoute }) => {
     }
   }
 
+  async function toggleHidden(pkg) {
+    try {
+      await MafikingAPI.put('/api/admin/tryout-packages/' + pkg.id + '/toggle-hidden');
+      showToast(pkg.is_hidden ? 'Paket ditampilkan.' : 'Paket disembunyikan.', 'success');
+      loadPackages();
+    } catch (e) {
+      showToast(e.message || 'Gagal mengubah visibilitas.', 'error');
+    }
+  }
+
   async function togglePackageAccess() {
     if (accessSaving) return;
     const nextEnabled = !accessEnabled;
@@ -2159,6 +2169,7 @@ const AdminTryoutPackagesPanel = ({ setRoute }) => {
                 <button className="admin-btn-ghost" style={{ padding: '4px 9px', fontSize: 12 }} onClick={() => setDetail({ type: 'questions', pkg })} type="button">Soal</button>
                 <button className="admin-btn-ghost" style={{ padding: '4px 9px', fontSize: 12 }} onClick={() => openAdminTryoutPreview(pkg, setRoute)} type="button">Preview</button>
                 <button className="admin-btn-ghost" style={{ padding: '4px 9px', fontSize: 12 }} onClick={() => setDetail({ type: 'results', pkg })} type="button">Hasil</button>
+                <button className="admin-btn-ghost" style={{ padding: '4px 9px', fontSize: 12, color: pkg.is_hidden ? '#16a34a' : '#6b7280' }} onClick={() => toggleHidden(pkg)} type="button" title={pkg.is_hidden ? 'Tampilkan ke user' : 'Sembunyikan dari user'}>{pkg.is_hidden ? 'Tampilkan' : 'Sembunyikan'}</button>
                 <button className="admin-icon-btn" title="Edit" onClick={() => setModal({ target: pkg })} type="button"><AdminIcon.Pencil /></button>
                 <button className="admin-icon-btn admin-icon-btn-danger" title="Hapus" onClick={() => deletePackage(pkg)} type="button"><AdminIcon.Trash /></button>
               </div>

@@ -21,8 +21,7 @@ scanners); VPS Phase 4 applied via `ops/apply-all.sh`; see
   `express-session` for first-time/guest users. Guest users are created on
   demand for any `/api/*` request that lacks a session, except the public
   endpoints listed below.
-- Webhooks: Clerk (svix) and Duitku (MD5 callback signature). Both have raw
-  body parsers in front of signature verification.
+- Webhooks: Clerk (svix), QRIS reconciliation endpoints (HMAC/timestamp where configured), and Duitku legacy callback (MD5 callback signature). Signature-verified routes use raw/body handling appropriate to the provider before trust is granted.
 
 ## Public endpoints (do not require auth, do not require CSRF)
 
@@ -30,6 +29,8 @@ scanners); VPS Phase 4 applied via `ops/apply-all.sh`; see
 - `GET  /api/config/clerk` — returns only the publishable key.
 - `POST /api/webhooks/clerk` — svix signature verified.
 - `POST /api/payment/callback` — Duitku MD5 signature verified.
+- `POST /api/payment/reconcile/webhook` — QRIS reconciliation webhook, HMAC/timestamp verified when `PAYMENT_WEBHOOK_SECRET` is configured.
+- `POST /api/payment/reconcile/mutasiku-webhook` — Mutasiku reconciliation webhook, `X-Webhook-Signature` verified when enabled.
 - `POST /api/csp-report` and `/api/csp-report/` — accepts
   `application/csp-report`, `application/reports+json`, `application/json`,
   32 KB cap, 204 response.
@@ -52,8 +53,7 @@ scanners); VPS Phase 4 applied via `ops/apply-all.sh`; see
 - Token endpoint: `GET /api/csrf-token` returns `{ csrfToken }`. The frontend
   helper `src/backend-api.jsx` fetches this once and attaches
   `X-CSRF-Token` on every state-changing request.
-- Exempt paths (no CSRF check): `/api/payment/callback`, `/api/webhooks/clerk`,
-  `/api/csp-report`, `/api/csp-report/`, `/api/performance/vitals`.
+- Exempt paths (no CSRF check): `/api/payment/callback`, `/api/payment/reconcile/webhook`, `/api/payment/reconcile/mutasiku-webhook`, `/api/webhooks/clerk`, `/api/csp-report`, `/api/csp-report/`, `/api/performance/vitals`.
 - Defense in depth: `lib/request-guard.js` enforces Origin / Referer /
   `Sec-Fetch-Site: same-origin` on state-changing requests, with the same
   exempt path list.
@@ -104,8 +104,9 @@ scanners); VPS Phase 4 applied via `ops/apply-all.sh`; see
 
 - Clerk: raw body (`express.raw({ type: '*/*' })`), svix headers verified with
   `CLERK_WEBHOOK_SIGNING_SECRET`. Missing secret returns 400.
-- Duitku: MD5 signature verified against `merchantCode + amount + merchantOrderId + API_KEY`.
-  Failure returns 401.
+- QRIS reconciliation: HMAC/timestamp verified when the corresponding webhook secret is configured.
+- Duitku fallback: MD5 signature verified against `merchantCode + amount + merchantOrderId + API_KEY`.
+  Signature failure returns 401.
 
 ## Helmet defaults
 

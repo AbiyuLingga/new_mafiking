@@ -850,7 +850,7 @@ function fallbackProfileFromAttempts(attempts) {
     weaknesses,
     recommendedQuestions: weaknesses.length
       ? weaknesses.slice(0, 3).map((tag) => `Latihan ulang topik ${tag} dengan menulis langkah lengkap di canvas.`)
-      : ['Kerjakan 3 soal integral substitusi dengan langkah lengkap.', 'Ulangi satu soal yang salah dan bandingkan dengan pembahasan.', 'Pilih satu soal sedang lalu jelaskan alasan setiap langkah.'],
+      : [],
     overallSummary: attempts.length
       ? `Kamu sudah punya ${attempts.length} hasil koreksi. Fokus berikutnya adalah mengurangi pola salah yang paling sering muncul.`
       : 'Belum ada hasil koreksi untuk diringkas.'
