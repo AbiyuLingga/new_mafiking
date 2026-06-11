@@ -51,6 +51,7 @@ gap analysis, and the CSRF / CORS coverage tests.
 | POST | `/api/payment/callback` | clerk-public | exempt | n/a | Duitku MD5 signature verified. URL-encoded body. |
 | POST | `/api/payment/reconcile/webhook` | public | exempt | n/a | QRIS reconciliation webhook. HMAC SHA-256 signature + timestamp required. |
 | POST | `/api/payment/reconcile/mutasiku-webhook` | public | exempt | n/a | Mutasiku webhook. HMAC SHA-256 `X-Webhook-Signature` over `data` required. |
+| POST | `/api/internal/collector-heartbeat` | internal-secret | exempt | n/a | Self-healing mutation collector heartbeat. Validated by `INTERNAL_API_SECRET` via `x-internal-secret` header. Stores snapshot in `app.locals.collectorHeartbeat`. Defined in `routes/admin-payments.js` but mounted at `/api/internal` in `server.js`. |
 | GET | `/api/csrf-token` | session | n/a | n/a | Issues double-submit token. |
 | GET | `/api/landing-media` | public | n/a | none | Reads from `landing_media` table. Cached 60s. |
 | GET | `/api/missions` | public | n/a | none | Daily missions catalog. `?admin=1` returns drafts only if `canReadMissionDrafts` (admin/local). `hasMissionManualAccess` for free users. |
