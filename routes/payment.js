@@ -673,6 +673,26 @@ router.get('/stream/:merchantOrderId', (req, res) => {
         return res.status(403).end();
     }
 
+    // P2-2 FIX: per-user connection limit. If the user already has
+    // SSE_MAX_CONN_PER_USER open connections, refuse with 429 and let
+    // the frontend fall back to polling.
+    const conn = paymentBroadcaster.registerConnection({
+        userId,
+        merchantOrderId,
+        onPaid: (payload) => {
+            res.write(`event: paid\ndata: ${JSON.stringify(payload)}\n\n`);
+        },
+    });
+    if (!conn.ok) {
+        if (conn.reason === 'too_many_connections') {
+            return res.status(429).json({
+                error: 'Terlalu banyak koneksi SSE. Tutup tab lain atau tunggu.',
+                limit: conn.limit,
+            });
+        }
+        return res.status(500).json({ error: 'SSE registration failed' });
+    }
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
@@ -680,18 +700,24 @@ router.get('/stream/:merchantOrderId', (req, res) => {
 
     res.write(`event: status\ndata: ${JSON.stringify({ status: payment.status })}\n\n`);
 
-    const unsubscribe = paymentBroadcaster.subscribe(merchantOrderId, (payload) => {
-        res.write(`event: paid\ndata: ${JSON.stringify(payload)}\n\n`);
-    });
-
+    // P2-3 FIX: unref heartbeat so SMTP/event-loop blocks don't prevent
+    // graceful shutdown. Also, only emit heartbeat if last write was
+    // successful (don't backpressure on slow clients — let them drop).
     const heartbeat = setInterval(() => {
-        res.write(`: heartbeat\n\n`);
+        try {
+            res.write(`: heartbeat\n\n`);
+        } catch (_) {
+            // Client gone; cleanup will fire on 'close' below.
+        }
     }, 15000);
+    heartbeat.unref?.();
 
-    req.on('close', () => {
-        unsubscribe();
+    const cleanup = () => {
         clearInterval(heartbeat);
-    });
+        paymentBroadcaster.releaseConnection(conn.connectionId);
+    };
+    req.on('close', cleanup);
+    res.on('close', cleanup); // belt-and-suspenders for HTTP/2 or proxies
 });
 
 // GET /api/payment/active-packages

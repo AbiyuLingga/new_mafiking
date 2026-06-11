@@ -67,7 +67,8 @@
     "test:admin-ambiguous-resolver": "node scripts/test-admin-ambiguous-resolver.js",
     "test:feature-flags": "node scripts/test-feature-flags.js",
     "test:confidence-matching": "node scripts/test-confidence-matching.js",
-    "test:self-healing-collector": "node scripts/test-self-healing-collector.js"
+    "test:self-healing-collector": "node scripts/test-self-healing-collector.js",
+    "test:v3-fixes-regression": "node scripts/test-v3-fixes-regression.js"
   },
   "dependencies": {
     "@clerk/express": "^2.1.22",
