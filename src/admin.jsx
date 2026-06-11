@@ -2394,6 +2394,9 @@ const AdminPaymentsPanel = () => {
   const [filter, setFilter] = useAdminState({ status: '', q: '' });
   const [selectedOrder, setSelectedOrder] = useAdminState(null);
   const [auditLog, setAuditLog] = useAdminState([]);
+  // P3-2: state untuk ambiguous queue
+  const [ambiguousItems, setAmbiguousItems] = useAdminState([]);
+  const [resolving, setResolving] = useAdminState({});
 
   const loadPayments = useAdminCallback(async () => {
     setLoading(true);
@@ -2401,20 +2404,71 @@ const AdminPaymentsPanel = () => {
       if (tab === 'pending') {
         const rows = await MafikingAPI.get('/api/admin/payments/pending');
         setPayments(Array.isArray(rows) ? rows : []);
+      } else if (tab === 'ambiguous') {
+        // P3-2: fetch ambiguous + group by mutation_id
+        const rows = await MafikingAPI.get('/api/admin/payments/ambiguous').catch(() => []);
+        if (!Array.isArray(rows) || rows.length === 0) {
+          setAmbiguousItems([]);
+          setPayments([]);
+        } else {
+          // Group by mutation_id, merge scores + orderIds
+          const groups = {};
+          for (const r of rows) {
+            const key = r.mutation_id;
+            if (!groups[key]) {
+              groups[key] = {
+                mutation_id: r.mutation_id,
+                transacted_at: r.transacted_at,
+                amount: r.amount,
+                candidates: [],
+                createdAt: r.created_at,
+              };
+            }
+            groups[key].candidates.push({
+              merchant_order_id: r.merchant_order_id,
+              confidence_score: r.confidence_score,
+            });
+          }
+          setAmbiguousItems(Object.values(groups).sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1)));
+          setPayments([]);
+        }
       } else {
         const qs = new URLSearchParams();
         if (filter.status) qs.set('status', filter.status);
         if (filter.q) qs.set('q', filter.q);
         const rows = await MafikingAPI.get('/api/admin/payments?' + qs.toString());
         setPayments(Array.isArray(rows) ? rows : []);
+        setAmbiguousItems([]);
       }
     } catch (e) {
-      showToast(e.message || 'Gagal memuat pembayaran', 'error');
+      showToast(e.message || 'Gagal memuat data', 'error');
       setPayments([]);
+      setAmbiguousItems([]);
     } finally {
       setLoading(false);
     }
   }, [tab, filter.status, filter.q]);
+
+  useAdminEffect(() => { loadPayments(); }, [loadPayments]);
+
+  // P3-2: resolve ambiguous mutation ke order tertentu
+  async function resolveAmbiguous(mutationId, merchantOrderId, fullAmount) {
+    if (!window.confirm('Paksa cocokkan mutation ' + mutationId + ' ke order ' + merchantOrderId + '?')) return;
+    setResolving((prev) => ({ ...prev, [mutationId]: true }));
+    try {
+      await MafikingAPI.post('/api/admin/payments/ambiguous/' + mutationId + '/resolve', {
+        merchantOrderId,
+        fullAmount: fullAmount || undefined,
+        force: true,
+      });
+      showToast('Resolved: order ' + merchantOrderId + ' ditandai lunas.', 'success');
+      loadPayments();
+    } catch (e) {
+      showToast(e.message || 'Gagal resolve', 'error');
+    } finally {
+      setResolving((prev) => ({ ...prev, [mutationId]: false }));
+    }
+  }
 
   useAdminEffect(() => { loadPayments(); }, [loadPayments]);
 
@@ -2475,6 +2529,14 @@ const AdminPaymentsPanel = () => {
             type="button"
           >
             Pending
+          </button>
+          <button
+            className={'mode-segment-item' + (tab === 'ambiguous' ? ' is-active' : '')}
+            style={tab === 'ambiguous' ? { background: 'var(--ink)', color: 'white' } : {}}
+            onClick={() => setTab('ambiguous')}
+            type="button"
+          >
+            Ambiguous
           </button>
           <button
             className={'mode-segment-item' + (tab === 'all' ? ' is-active' : '')}
@@ -2568,6 +2630,53 @@ const AdminPaymentsPanel = () => {
           <div className="text-center text-sm text-ink/50 py-8">Tidak ada pembayaran.</div>
         ) : null}
       </div>
+
+      {/* P3-2: ambiguous mutation list — grouped by mutation_id */}
+      {tab === 'ambiguous' && !loading && ambiguousItems.length > 0 ? (
+        <div className="admin-step-edit overflow-x-auto">
+          <h3 className="font-display font-bold text-base mb-3">Mutasi Ambiguous ({ambiguousItems.length})</h3>
+          {ambiguousItems.map((group) => (
+            <div key={group.mutation_id} className="border border-ink/10 rounded-xl p-3 mb-3 bg-amber-50/30">
+              <div className="flex flex-wrap items-center gap-3 mb-2 text-sm">
+                <span className="font-mono text-xs text-ink/50">Mutation #{group.mutation_id}</span>
+                <span className="font-bold tnum">{formatAdminRupiah(group.amount)}</span>
+                <span className="text-xs text-ink/50">{group.transacted_at}</span>
+              </div>
+              <div className="grid gap-2">
+                {group.candidates.map((candidate) => {
+                  const scorePct = Math.min(100, Math.round((candidate.confidence_score / 230) * 100));
+                  const badgeColor = candidate.confidence_score >= 180
+                    ? 'bg-green-100 text-green-700 border-green-200'
+                    : candidate.confidence_score >= 100
+                    ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                    : 'bg-red-50 text-red-600 border-red-200';
+                  return (
+                    <div key={candidate.merchant_order_id} className="flex flex-wrap items-center justify-between gap-2 bg-white rounded-lg border border-ink/5 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs">{candidate.merchant_order_id}</span>
+                        <span className={'text-xs font-semibold px-2 py-0.5 rounded-full border ' + badgeColor}>
+                          {candidate.confidence_score}/230 ({scorePct}%)
+                        </span>
+                      </div>
+                      <button
+                        className="admin-btn-primary"
+                        style={{ padding: '3px 10px', fontSize: 11 }}
+                        disabled={resolving[group.mutation_id]}
+                        onClick={() => resolveAmbiguous(group.mutation_id, candidate.merchant_order_id, group.amount)}
+                        type="button"
+                      >
+                        {resolving[group.mutation_id] ? '…' : 'Cocokkan ke order ini'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : tab === 'ambiguous' && !loading ? (
+        <div className="text-center text-sm text-ink/50 py-8">Tidak ada mutasi ambiguous.</div>
+      ) : null}
 
       {selectedOrder && (
         <div className="admin-step-edit">

@@ -178,79 +178,109 @@ const PaymentCheckoutModal = ({ context, currentUser, onClose, setRoute }) => {
 
   useEffect(() => {
     if (!qrData?.merchantOrderId) return undefined;
-    let cancelled = false;
+    const merchantOrderId = qrData.merchantOrderId;
+
+    // P3-1: gunakan AbortController untuk race-free cleanup
+    const abort = new AbortController();
     let pollTimer = null;
     let eventSource = null;
 
     function setStatusSafe(updater) {
-      if (cancelled) return;
+      if (abort.signal.aborted) return;
       setPollingStatus((prev) => {
         const base = prev || { status: "PENDING" };
         return typeof updater === "function" ? updater(base) : { ...base, ...updater };
       });
     }
 
+    // P3-1: jitter 3-7 detik, bukan fixed 5s — hindari thundering herd
+    function jitteredDelay() {
+      return 3000 + Math.floor(Math.random() * 4000);
+    }
+
     function startPollingFallback() {
       if (pollTimer) return;
       const tick = () => {
-        MafikingAPI.get(`/api/payment/status/${qrData.merchantOrderId}`)
+        if (abort.signal.aborted) return;
+        MafikingAPI.get(`/api/payment/status/${merchantOrderId}`)
           .then((res) => {
-            if (cancelled) return;
+            if (abort.signal.aborted) return;
             setStatusSafe(res);
             if (res.status === "PENDING" || res.status === "ERROR") {
-              pollTimer = window.setTimeout(tick, 5000);
+              pollTimer = window.setTimeout(tick, jitteredDelay());
             } else {
               pollTimer = null;
             }
           })
           .catch(() => {
-            if (cancelled) return;
+            if (abort.signal.aborted) return;
             setStatusSafe({ status: "ERROR", error: "Status pembayaran belum terbaca." });
-            pollTimer = window.setTimeout(tick, 5000);
+            pollTimer = window.setTimeout(tick, jitteredDelay());
           });
       };
-      pollTimer = window.setTimeout(tick, 500);
+      // P3-1: offset initial poll dengan jitter juga
+      pollTimer = window.setTimeout(tick, 300 + Math.floor(Math.random() * 300));
     }
 
     function startSSE() {
       try {
-        eventSource = new EventSource(`/api/payment/stream/${qrData.merchantOrderId}`);
+        eventSource = new EventSource(`/api/payment/stream/${merchantOrderId}`);
       } catch (e) {
         startPollingFallback();
         return;
       }
       eventSource.addEventListener("status", (e) => {
-        if (cancelled) return;
-        try {
-          setStatusSafe(JSON.parse(e.data));
-        } catch (_) {}
+        if (abort.signal.aborted) return;
+        try { setStatusSafe(JSON.parse(e.data)); } catch (_) {}
       });
       eventSource.addEventListener("paid", (e) => {
-        if (cancelled) return;
-        try {
-          setStatusSafe(JSON.parse(e.data));
-        } catch (_) {}
+        if (abort.signal.aborted) return;
+        try { setStatusSafe(JSON.parse(e.data)); } catch (_) {}
         if (eventSource) {
           eventSource.close();
           eventSource = null;
         }
       });
+      // P3-1: sisa retry count yang terbatas (max 3), lalu fallback ke polling
+      let sseRetries = 0;
+      const MAX_SSE_RETRIES = 3;
       eventSource.onerror = () => {
-        if (cancelled) return;
+        if (abort.signal.aborted) return;
+        sseRetries += 1;
         if (eventSource) {
           eventSource.close();
           eventSource = null;
         }
-        startPollingFallback();
+        if (sseRetries >= MAX_SSE_RETRIES) {
+          startPollingFallback();
+        }
+        // < MAX_SSE_RETRIES: browser akan reconnect otomatis via EventSource spec
       };
     }
 
     startSSE();
-    // Also start a single initial poll in case SSE first message is delayed
-    startPollingFallback();
+    // P3-1: jangan start fallback jika SSE sukses — tunggu onerror dulu.
+    // Tapi untuk safety tetap ada single-shot initial poll dengan delay pendek
+    // yang akan skip jika status sudah != PENDING.
+    const safetyTimer = window.setTimeout(() => {
+      if (abort.signal.aborted) return;
+      // Hanya poll sekali sebagai safety net — jangan masuk loop
+      MafikingAPI.get(`/api/payment/status/${merchantOrderId}`)
+        .then((res) => {
+          if (abort.signal.aborted || !res) return;
+          if (res.status !== "PENDING") {
+            setStatusSafe(res);
+            if (eventSource) {
+              eventSource.close();
+              eventSource = null;
+            }
+          }
+        })
+        .catch(() => {});
+    }, 2000);
 
     return () => {
-      cancelled = true;
+      abort.abort();
       if (eventSource) {
         eventSource.close();
         eventSource = null;
@@ -259,6 +289,7 @@ const PaymentCheckoutModal = ({ context, currentUser, onClose, setRoute }) => {
         window.clearTimeout(pollTimer);
         pollTimer = null;
       }
+      window.clearTimeout(safetyTimer);
     };
   }, [qrData?.merchantOrderId]);
 
