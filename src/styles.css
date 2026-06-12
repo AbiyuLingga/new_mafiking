@@ -512,19 +512,40 @@ button:focus-visible, a:focus-visible {
 }
 
 .landing-teacher-mobile-scroll {
-  overscroll-behavior-x: contain;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: auto;
-  -webkit-overflow-scrolling: touch;
-  pointer-events: none;
+  overflow: hidden;
   touch-action: none;
   user-select: none;
+  pointer-events: none;
 }
 
 .landing-teacher-mobile-track {
-  animation: none;
-  transform: none;
-  will-change: auto;
+  display: flex;
+  width: max-content;
+  animation: teacher-mobile-scroll 16s linear infinite;
+  will-change: transform;
+}
+
+@keyframes teacher-mobile-scroll {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-33.3333%, 0, 0); }
+}
+
+.landing-teacher-progress {
+  height: 3px;
+  border-radius: 9999px;
+  background: rgba(11, 19, 38, 0.08);
+  overflow: hidden;
+  position: relative;
+}
+
+.landing-teacher-progress__bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 33.333%;
+  background: linear-gradient(90deg, #FFF44F, #fbbf24);
+  border-radius: 9999px;
+  animation: teacher-mobile-scroll 16s linear infinite;
+  will-change: transform;
 }
 
 .invoice-print-sheet {
@@ -7190,6 +7211,14 @@ button:focus-visible, a:focus-visible {
   font-weight: 650;
   line-height: 1.6;
   margin: 0;
+}
+
+.onboarding-step p.onboarding-hint {
+  color: rgba(11, 19, 38, 0.5);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  margin: -2px 0 0;
 }
 
 .onboarding-step label {

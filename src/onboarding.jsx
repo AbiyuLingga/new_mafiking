@@ -23,6 +23,7 @@ const emptyOnboardingDraft = (user) => {
   const rawSubjects = Array.isArray(user?.mapel_prioritas) ? user.mapel_prioritas : [];
   return {
     display_name: currentName,
+    phone_number: user?.phone_number || '',
     semester: user?.semester ? String(user.semester) : '',
     fakultas: user?.fakultas || '',
     jurusan: user?.jurusan || '',
@@ -164,6 +165,7 @@ const ProfileOnboardingModal = ({ user, onComplete, onRequestLogout = null }) =>
     try {
       const updated = await MafikingAPI.post('/api/auth/profile-onboarding', {
         display_name: draft.display_name.trim(),
+        phone_number: draft.phone_number.trim(),
         semester: selectedSemester(),
         fakultas: draft.fakultas,
         jurusan: needsMajorStep() ? draft.jurusan.trim() : '',
@@ -199,7 +201,6 @@ const ProfileOnboardingModal = ({ user, onComplete, onRequestLogout = null }) =>
     <div className="onboarding-step onboarding-step-center">
       <div className="onboarding-kicker">Selesai</div>
       <h2 id="profile-onboarding-title">Terimakasih Telah Mengisi</h2>
-      <p>Profil belajarmu siap dipakai untuk menyesuaikan pengalaman Mafiking.</p>
       <button className="onboarding-primary" disabled={saving} onClick={submitProfile} type="button">
         {saving ? 'Menyimpan...' : 'Selesai'}
       </button>
@@ -244,6 +245,15 @@ const ProfileOnboardingModal = ({ user, onComplete, onRequestLogout = null }) =>
             <h2 id="profile-onboarding-title">Ceritakan sedikit tentang kamu.</h2>
             <label>Nama Lengkap</label>
             <input value={draft.display_name} onChange={(event) => patchDraft({ display_name: event.target.value })} placeholder="Nama lengkap" autoFocus />
+            <label>No WhatsApp</label>
+            <input
+              type="tel"
+              inputMode="tel"
+              value={draft.phone_number}
+              onChange={(event) => patchDraft({ phone_number: event.target.value })}
+              placeholder="cth. 081234567890"
+            />
+            <p className="onboarding-hint">*Opsional, untuk masuk grup komunitas</p>
             <label>Tau Mafiking dari mana?</label>
             <div className="onboarding-select-wrap">
               <select

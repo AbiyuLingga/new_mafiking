@@ -178,118 +178,31 @@ const PaymentCheckoutModal = ({ context, currentUser, onClose, setRoute }) => {
 
   useEffect(() => {
     if (!qrData?.merchantOrderId) return undefined;
-    const merchantOrderId = qrData.merchantOrderId;
+    let cancelled = false;
+    let timer = null;
 
-    // P3-1: gunakan AbortController untuk race-free cleanup
-    const abort = new AbortController();
-    let pollTimer = null;
-    let eventSource = null;
-
-    function setStatusSafe(updater) {
-      if (abort.signal.aborted) return;
-      setPollingStatus((prev) => {
-        const base = prev || { status: "PENDING" };
-        return typeof updater === "function" ? updater(base) : { ...base, ...updater };
-      });
+    function schedule() {
+      timer = window.setTimeout(check, 5000);
     }
 
-    // P3-1: jitter 3-7 detik, bukan fixed 5s — hindari thundering herd
-    function jitteredDelay() {
-      return 3000 + Math.floor(Math.random() * 4000);
-    }
-
-    function startPollingFallback() {
-      if (pollTimer) return;
-      const tick = () => {
-        if (abort.signal.aborted) return;
-        MafikingAPI.get(`/api/payment/status/${merchantOrderId}`)
-          .then((res) => {
-            if (abort.signal.aborted) return;
-            setStatusSafe(res);
-            if (res.status === "PENDING" || res.status === "ERROR") {
-              pollTimer = window.setTimeout(tick, jitteredDelay());
-            } else {
-              pollTimer = null;
-            }
-          })
-          .catch(() => {
-            if (abort.signal.aborted) return;
-            setStatusSafe({ status: "ERROR", error: "Status pembayaran belum terbaca." });
-            pollTimer = window.setTimeout(tick, jitteredDelay());
-          });
-      };
-      // P3-1: offset initial poll dengan jitter juga
-      pollTimer = window.setTimeout(tick, 300 + Math.floor(Math.random() * 300));
-    }
-
-    function startSSE() {
-      try {
-        eventSource = new EventSource(`/api/payment/stream/${merchantOrderId}`);
-      } catch (e) {
-        startPollingFallback();
-        return;
-      }
-      eventSource.addEventListener("status", (e) => {
-        if (abort.signal.aborted) return;
-        try { setStatusSafe(JSON.parse(e.data)); } catch (_) {}
-      });
-      eventSource.addEventListener("paid", (e) => {
-        if (abort.signal.aborted) return;
-        try { setStatusSafe(JSON.parse(e.data)); } catch (_) {}
-        if (eventSource) {
-          eventSource.close();
-          eventSource = null;
-        }
-      });
-      // P3-1: sisa retry count yang terbatas (max 3), lalu fallback ke polling
-      let sseRetries = 0;
-      const MAX_SSE_RETRIES = 3;
-      eventSource.onerror = () => {
-        if (abort.signal.aborted) return;
-        sseRetries += 1;
-        if (eventSource) {
-          eventSource.close();
-          eventSource = null;
-        }
-        if (sseRetries >= MAX_SSE_RETRIES) {
-          startPollingFallback();
-        }
-        // < MAX_SSE_RETRIES: browser akan reconnect otomatis via EventSource spec
-      };
-    }
-
-    startSSE();
-    // P3-1: jangan start fallback jika SSE sukses — tunggu onerror dulu.
-    // Tapi untuk safety tetap ada single-shot initial poll dengan delay pendek
-    // yang akan skip jika status sudah != PENDING.
-    const safetyTimer = window.setTimeout(() => {
-      if (abort.signal.aborted) return;
-      // Hanya poll sekali sebagai safety net — jangan masuk loop
-      MafikingAPI.get(`/api/payment/status/${merchantOrderId}`)
+    function check() {
+      MafikingAPI.get(`/api/payment/status/${qrData.merchantOrderId}`)
         .then((res) => {
-          if (abort.signal.aborted || !res) return;
-          if (res.status !== "PENDING") {
-            setStatusSafe(res);
-            if (eventSource) {
-              eventSource.close();
-              eventSource = null;
-            }
-          }
+          if (cancelled) return;
+          setPollingStatus(res);
+          if (res.status === "PENDING") schedule();
         })
-        .catch(() => {});
-    }, 2000);
+        .catch((err) => {
+          if (cancelled) return;
+          setPollingStatus({ status: "ERROR", error: err.message || "Status pembayaran belum terbaca." });
+          schedule();
+        });
+    }
 
+    check();
     return () => {
-      abort.abort();
-      if (eventSource) {
-        eventSource.close();
-        eventSource = null;
-      }
-      if (pollTimer) {
-        window.clearTimeout(pollTimer);
-        pollTimer = null;
-      }
-      window.clearTimeout(safetyTimer);
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
     };
   }, [qrData?.merchantOrderId]);
 
@@ -665,7 +578,7 @@ const PaymentManualView = ({ payment, countdown, status, adminWhatsapp, onCancel
           </div>
 
           {statusValue === "SUCCESS" ? (
-            <div className="mt-4 rounded-xl bg-green-50 border border-green-200 px-3 py-3 text-center text-sm font-semibold text-green-700">
+            <div className="mt-4 rounded-xl bg-yel/20 border border-yel/60 px-3 py-3 text-center text-sm font-semibold text-ink">
               Pembayaran sudah diverifikasi. Akses sudah aktif.
             </div>
           ) : expired ? (
@@ -708,7 +621,7 @@ const PaymentManualView = ({ payment, countdown, status, adminWhatsapp, onCancel
           </div>
 
           {statusValue === "SUCCESS" ? (
-            <button className="checkout-pay-btn" onClick={() => setRoute(isTryout ? "tryout" : "belajar")} type="button">
+            <button className="checkout-pay-btn" onClick={() => setRoute("belajar")} type="button">
               {isTryout ? "Ke Halaman Tryout" : "Mulai Belajar"} <Icon.Arrow className="w-5 h-5" />
             </button>
           ) : (
@@ -814,7 +727,7 @@ const PaymentQrisView = ({ payment, countdown, status, onCancel, onCheckStatus, 
 
       {statusValue === "SUCCESS" ? (
         <div style={{ margin: "0 16px 16px" }}>
-          <button className="checkout-pay-btn" onClick={() => setRoute(isTryout ? "tryout" : "belajar")} type="button">
+          <button className="checkout-pay-btn" onClick={() => setRoute("belajar")} type="button">
             {isTryout ? "Ke Halaman Tryout" : "Mulai Belajar"} <Icon.Arrow className="w-5 h-5" />
           </button>
         </div>
@@ -893,7 +806,7 @@ const PaymentQrisViewDesktop = ({ payment, countdown, status, onCancel, onCheckS
           </div>
 
           {statusValue === "SUCCESS" ? (
-            <div className="rounded-xl bg-green-50 border border-green-200 px-3 py-3 text-center text-sm font-semibold text-green-700 w-full">
+            <div className="rounded-xl bg-yel/20 border border-yel/60 px-3 py-3 text-center text-sm font-semibold text-ink w-full">
               Pembayaran berhasil. Akses sudah aktif.
             </div>
           ) : expired ? (
@@ -961,7 +874,7 @@ const PaymentQrisViewDesktop = ({ payment, countdown, status, onCancel, onCheckS
           <button
             className="checkout-pay-btn"
             disabled={statusValue !== "SUCCESS" && checkingStatus}
-            onClick={statusValue === "SUCCESS" ? () => setRoute(isTryout ? "tryout" : "belajar") : onCheckStatus}
+            onClick={statusValue === "SUCCESS" ? () => setRoute("belajar") : onCheckStatus}
             type="button"
           >
             {statusValue === "SUCCESS" ? (
@@ -1121,7 +1034,7 @@ const PaymentStatus = ({ merchantOrderId, setRoute }) => {
         <h2 className="font-display font-bold text-2xl mb-2">Pembayaran Berhasil</h2>
         <p className="text-ink/60 text-sm mb-5">Akses sudah aktif untuk pesanan ini.</p>
         <StatusDetail productDetails={productDetails} amount={amount} merchantOrderId={merchantOrderId} />
-        <button className="payment-success-button group mt-6" onClick={() => leaveStatus(isTryout ? "tryout" : "belajar")} type="button">
+        <button className="payment-success-button group mt-6" onClick={() => leaveStatus("belajar")} type="button">
           {isTryout ? "Ke Halaman Tryout" : "Mulai Belajar"} <Icon.Arrow className="h-4 w-4 transition-transform group-hover:translate-x-1" />
         </button>
       </PaymentStatusShell>

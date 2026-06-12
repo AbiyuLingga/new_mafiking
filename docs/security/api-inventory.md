@@ -51,7 +51,6 @@ gap analysis, and the CSRF / CORS coverage tests.
 | POST | `/api/payment/callback` | clerk-public | exempt | n/a | Duitku MD5 signature verified. URL-encoded body. |
 | POST | `/api/payment/reconcile/webhook` | public | exempt | n/a | QRIS reconciliation webhook. HMAC SHA-256 signature + timestamp required. |
 | POST | `/api/payment/reconcile/mutasiku-webhook` | public | exempt | n/a | Mutasiku webhook. HMAC SHA-256 `X-Webhook-Signature` over `data` required. |
-| POST | `/api/internal/collector-heartbeat` | internal-secret | exempt | n/a | Self-healing mutation collector heartbeat. Validated by `INTERNAL_API_SECRET` via `x-internal-secret` header. Stores snapshot in `app.locals.collectorHeartbeat`. Defined in `routes/admin-payments.js` but mounted at `/api/internal` in `server.js`. |
 | GET | `/api/csrf-token` | session | n/a | n/a | Issues double-submit token. |
 | GET | `/api/landing-media` | public | n/a | none | Reads from `landing_media` table. Cached 60s. |
 | GET | `/api/missions` | public | n/a | none | Daily missions catalog. `?admin=1` returns drafts only if `canReadMissionDrafts` (admin/local). `hasMissionManualAccess` for free users. |
@@ -60,6 +59,7 @@ gap analysis, and the CSRF / CORS coverage tests.
 | GET | `/SOP-DEEPSEEK-IMPORT-SOAL.md` | admin | n/a | admin | Static file. 403 unless `req.session.role === 'admin'`. |
 | GET | `/tweaks-panel.jsx` | public | n/a | none | Dev-only tweak panel source. 404 when `canServeLegacySource()` is false (production / built client). |
 | GET | `/syarat-ketentuan.html`, `/terms.html`, `/tnc.html` | public | n/a | none | Static T&C page. |
+| GET | `/auth-popup` | public | n/a | none | Static popup HTML shim served by `routes/auth-popup.js`. Loads Clerk in a popup window, writes pending OAuth to `sessionStorage`, and posts the result back to `window.opener` via `postMessage` on `/sso-callback?popup=1`. No-store. Same-origin target only. |
 
 ### Auth (routes/auth.js)
 
@@ -137,12 +137,13 @@ All routes `isAuthenticated`. Body validation lives in
 | POST | `/api/payment/create` | registered | ✓ | user-scoped | QRIS local, Duitku, or mock. Body: `email`, `name`, package selector. |
 | POST | `/api/payment/toggle-package-access` | session | ✓ | user-scoped | Dev utility. Toggles tryout access grant for the current user by `tryout_id`. |
 | GET | `/api/payment/status/:merchantOrderId` | session | n/a | id-scoped | Filters by `user_id = ? AND merchant_order_id = ?` — explicit ownership check. |
+| GET | `/api/payment/stream/:merchantOrderId` | session | n/a | id-scoped | SSE stream that pushes `event: paid` via `lib/payment-broadcaster`. Filters by `payment.user_id === req.session.userId` (403 otherwise). Per-user connection cap (`SSE_MAX_CONN_PER_USER`, 429 when exceeded). 15s `: heartbeat` keepalive (`.unref()` so SMTP/event-loop blocks don't block shutdown). Gated by `SSE_PAYMENT_PUSH` feature flag — returns 503 when off. |
 | GET | `/api/payment/active-packages` | session | n/a | user-scoped | Own data only. |
 | POST | `/api/payment/callback` | clerk-public | exempt | n/a | Duitku MD5-signed. Updates `payments` by `merchant_order_id`. |
 | POST | `/api/payment/reconcile/webhook` | public | exempt | n/a | QRIS HMAC-signed reconciliation endpoint. Calls idempotent reconciler. |
+| POST | `/api/payment/reconcile/mutasiku-webhook` | public | exempt | n/a | Mutasiku `payment.completed` or `mutations.created` reconciliation endpoint. |
 | POST | `/api/payment/reconcile/mutation-batch` | collector-signed | exempt | n/a | Phase 4 internal collector ingestion. HMAC SHA-256 over `keyId:nonce:timestamp:rawBody`, 5-min clock skew, IP allowlist via `COLLECTOR_IP_ALLOWLIST`. |
 | GET | `/api/payment/invoices` | registered | n/a | user-scoped | Returns up to 100 current-user transactions across all statuses; response excludes buyer email and QR payloads. |
-| GET | `/api/payment/stream/:merchantOrderId` | session | n/a | id-scoped | v3 SSE real-time push. Ownership-checked. Heartbeat 15s. Falls back to 503 when `SSE_PAYMENT_PUSH=false`. |
 | GET | `/api/payment/mock-gateway` | public | n/a | none | Dev-only. |
 | GET | `/api/payment/mock-complete` | public | n/a | none | Dev-only. |
 
@@ -155,14 +156,14 @@ All routes `isAuthenticated` + `isAdmin` and use `adminPaymentLimiter`.
 | GET | `/api/admin/payments/pending` | admin | n/a | admin | Pending QRIS/gateway payments for manual reconciliation. |
 | GET | `/api/admin/payments/` | admin | n/a | admin | Filterable payment list by status/search. |
 | GET | `/api/admin/payments/dashboard` | admin | n/a | admin | Phase 7 dashboard: payment counts, 24h ambiguous/invalid-webhook counts, recent errors, last webhook ingest, collector stats. |
-| GET | `/api/admin/payments/metrics` | admin | n/a | admin | v3: last 24h source breakdown, ambiguous queue depth, collector heartbeat, broadcaster stats. |
-| GET | `/api/admin/payments/ambiguous` | admin | n/a | admin | v3: list unresolved ambiguous mutations. Returns empty array if table missing. Returns 503 when `BULK_ADMIN=false`. |
-| POST | `/api/admin/payments/bulk-mark-paid` | admin | ✓ | admin | v3: bulk mark-paid up to 50 items per call. Stricter 5-min/5-call rate limit per admin. Returns `{ ok, results, errors, summary }`. |
-| POST | `/api/admin/payments/ambiguous/:mutationId/resolve` | admin | ✓ | admin | v3: force-resolve ambiguous mutation to a specific order. Logs as `admin_force` source. |
+| GET | `/api/admin/payments/ambiguous` | admin | n/a | admin | Reads unresolved rows from `payment_ambiguous_queue` (most recent 100). Returns `[]` if the table is missing. Gated by `BULK_ADMIN` feature flag — returns 503 when off. |
+| POST | `/api/admin/payments/ambiguous/:mutationId/resolve` | admin | ✓ | admin | Force-matches an ambiguous mutation to a target `merchantOrderId` by calling `markPaymentPaid(source: 'admin_force')`, then records `resolution='matched'` in `payment_ambiguous_queue`. Body: `merchantOrderId` (required), optional `fullAmount`, `force`, `note`. Gated by `BULK_ADMIN`. |
+| POST | `/api/admin/payments/bulk-mark-paid` | admin | ✓ | admin | Up to 50 items/call. Each item invokes `markPaymentPaid(source: 'admin_bulk')`; per-item errors are collected and the response carries `summary { total, success, failed }`. Stricter `adminBulkMarkPaidLimiter` (5-min/5) in addition to the shared `adminPaymentLimiter`; the bulk limiter is a no-op when `BULK_ADMIN` is off. |
 | POST | `/api/admin/payments/:merchantOrderId/mark-paid` | admin | ✓ | admin | Marks payment `SUCCESS`, releases suffix, grants access, logs audit row. Stricter 5-min/10-action per-admin rate limit; IP allowlist if `ADMIN_IP_ALLOWLIST` is set. |
 | POST | `/api/admin/payments/:merchantOrderId/mark-failed` | admin | ✓ | admin | Marks payment `FAILED`, releases suffix, logs audit row. |
-| POST | `/api/admin/payments/:merchantOrderId/resend-email` | admin | ✓ | admin | v3: re-send success email for already-SUCCESS payments. Logs `email_resent` audit row. |
+| POST | `/api/admin/payments/:merchantOrderId/resend-email` | admin | ✓ | admin | Re-renders the success email via `lib/email-templates.renderPaymentSuccess` and resends it through `lib/mailer`. Only allowed for `status=SUCCESS` payments (409 otherwise). Writes a `payment_reconciliation_log` row with `action='email_resent'`. Returns 503 if the mailer has no `sendMail`/`send`. |
 | GET | `/api/admin/payments/:merchantOrderId/audit-log` | admin | n/a | admin | Reads reconciliation audit log for one order. |
+| GET | `/api/admin/payments/metrics` | admin | n/a | admin | 24h rollups from `payment_reconciliation_log` (auto_paid, manual_paid, bulk_paid, force_paid, webhook_paid, ambiguous_resolved, ambiguous_open, emails_sent, emails_resent) plus the latest `collectorHeartbeat` snapshot and `paymentBroadcaster.getStats()`. Tolerates missing tables by reporting 0. |
 
 ### Admin import (routes/admin-import.js)
 
@@ -226,12 +227,32 @@ All routes `isAdmin`. Routes that take `:id` operate on catalog content
 | POST | `/api/admin/users/:id/role` | admin | ✓ | admin | |
 | DELETE | `/api/admin/users/:id` | admin | ✓ | admin | Refuses to delete the current admin (per AGENTS.md). |
 
+### Internal (routes/internal.js)
+
+Worker-only endpoints. Not consumed by browsers or admins; mounted at
+`/api/internal` in `server.js:483` so the file header explicitly states
+"NOT exposed to browsers or admins". Auth is a shared secret in the
+`x-internal-secret` request header (env `INTERNAL_API_SECRET`). Mounted
+before `csrfProtection` (`server.js:630`) so CSRF is bypassed by mount
+order, not by `CSRF_EXEMPT_PATHS`.
+
+| Method | Path | Auth | CSRF | BOLA | Notes |
+|---|---|---|---|---|---|
+| POST | `/api/internal/collector-heartbeat` | collector-secret | exempt | none | Self-healing mutation collector heartbeat (every 30s). Returns 503 if `INTERNAL_API_SECRET` is unset and 401 on header mismatch. Stores the normalized snapshot in `req.app.locals.collectorHeartbeat` (read by `GET /api/admin/payments/metrics` and `/api/admin/payments/dashboard`). Tolerates missing/empty `breaker` and `totals` blocks. |
+
 ## Cross-cutting observations
 
-- All `POST`/`PUT`/`PATCH`/`DELETE` are mounted after `csrfProtection` in
-  `server.js:411`, so CSRF coverage is uniform.
-- The CSRF exempt list (`lib/csrf-protection.js:4`) is consistent with
-  `lib/request-guard.js` `STATE_CHANGE_EXEMPT_PATHS`.
+- All browser-facing `POST`/`PUT`/`PATCH`/`DELETE` are mounted after
+  `csrfProtection` in `server.js:630`, so CSRF coverage is uniform across
+  the user/admin surface. The `/api/internal/*` mount at
+  `server.js:483` is the only state-changing prefix mounted before
+  `csrfProtection`; it relies on the `x-internal-secret` header for
+  auth and is intended for worker-to-server calls only.
+- The CSRF exempt list (`lib/csrf-protection.js:4`) and
+  `lib/request-guard.js` `STATE_CHANGE_EXEMPT_PATHS` are kept in sync
+  and both name `/api/internal/collector-heartbeat` so the worker
+  heartbeat cannot be silently rejected by a future CSRF layer that
+  moves past the `/api/internal` mount point.
 - BOLA pattern across `progress.js`, `correction.js`, `payment.js`,
   `auth.js` is `WHERE user_id = req.session.userId`. No `users` cross-id
   leak found in the inventory.

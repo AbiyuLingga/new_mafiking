@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Syarat & Ketentuan | Mafiking</title>
   <meta name="description" content="Syarat dan Ketentuan penggunaan layanan Mafiking." />
-  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
   <style>
     :root {
       --ink: #0b1326;
@@ -101,6 +101,30 @@
       margin: 26px 0 0;
       padding: 16px 18px;
     }
+    .toc {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      margin: 0 0 28px;
+      padding: 22px 26px;
+    }
+    .toc h2 {
+      font-size: 18px;
+      margin: 0 0 10px;
+    }
+    .toc ol {
+      column-count: 2;
+      column-gap: 24px;
+      margin: 0;
+      padding-left: 20px;
+    }
+    .toc li { break-inside: avoid; }
+    .toc a {
+      color: #1d4ed8;
+      font-size: 14px;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
     .content {
       display: grid;
       gap: 28px;
@@ -110,6 +134,7 @@
       border: 1px solid var(--line);
       border-radius: 18px;
       padding: 26px;
+      scroll-margin-top: 96px;
     }
     h2 {
       font-size: 24px;
@@ -152,6 +177,7 @@
     @media (max-width: 700px) {
       .nav { align-items: flex-start; flex-direction: column; }
       section { padding: 20px; }
+      .toc ol { column-count: 1; }
       footer .shell { align-items: flex-start; flex-direction: column; }
     }
   </style>
@@ -173,12 +199,13 @@
       <h1>Syarat & Ketentuan Mafiking</h1>
       <p class="intro">
         Dokumen ini mengatur penggunaan situs, aplikasi, materi belajar, fitur latihan,
-        try out, koreksi berbasis AI, pembayaran, dan layanan pendukung Mafiking.
-        Dengan mengakses atau menggunakan Mafiking, pengguna dianggap telah membaca,
-        memahami, dan menyetujui Syarat & Ketentuan ini.
+        try out, koreksi berbasis AI, pembayaran, komunitas, program referral, dan layanan
+        pendukung Mafiking. Dengan mengakses atau menggunakan Mafiking, pengguna dianggap
+        telah membaca, memahami, dan menyetujui Syarat & Ketentuan ini.
       </p>
       <div class="meta">
-        <span>Berlaku sejak: 30 Mei 2026</span>
+        <span>Berlaku sejak: 12 Juni 2026</span>
+        <span>Versi: 2.0</span>
         <span>Pengelola: Mafiking Edukasi Integrasi</span>
         <span>Wilayah layanan utama: Indonesia</span>
       </div>
@@ -189,171 +216,261 @@
       </div>
     </div>
 
+    <nav class="toc" aria-label="Daftar isi">
+      <h2>Daftar Isi</h2>
+      <ol>
+        <li><a href="#definisi">Definisi</a></li>
+        <li><a href="#persetujuan">Persetujuan Penggunaan</a></li>
+        <li><a href="#akun">Akun, Login, dan Keamanan</a></li>
+        <li><a href="#lingkup">Lingkup Layanan</a></li>
+        <li><a href="#ai">Materi Pembelajaran dan Batasan AI</a></li>
+        <li><a href="#pembayaran">Paket, Pembayaran, Promo, dan Refund</a></li>
+        <li><a href="#referral">Program Referral</a></li>
+        <li><a href="#larangan">Penggunaan yang Dilarang</a></li>
+        <li><a href="#ip">Hak Kekayaan Intelektual</a></li>
+        <li><a href="#privasi">Data Pribadi, Privasi, dan Cookies</a></li>
+        <li><a href="#retensi">Retensi Data</a></li>
+        <li><a href="#hapus-akun">Penghapusan dan Penonaktifan Akun</a></li>
+        <li><a href="#pihak-ketiga">Layanan Pihak Ketiga</a></li>
+        <li><a href="#ketersediaan">Ketersediaan, Pemeliharaan, dan Force Majeure</a></li>
+        <li><a href="#tanggung-jawab">Pembatasan Tanggung Jawab dan Ganti Rugi</a></li>
+        <li><a href="#penangguhan">Penangguhan dan Pengakhiran</a></li>
+        <li><a href="#perubahan">Perubahan Syarat & Ketentuan</a></li>
+        <li><a href="#hukum">Hukum yang Berlaku dan Penyelesaian Sengketa</a></li>
+        <li><a href="#umum">Ketentuan Umum</a></li>
+        <li><a href="#kontak">Kontak Resmi</a></li>
+      </ol>
+    </nav>
+
     <div class="content">
-      <section>
+
+      <section id="definisi">
         <h2>1. Definisi</h2>
-        <p>Dalam dokumen ini:</p>
+        <p>Dalam dokumen ini, istilah berikut memiliki arti:</p>
         <ul>
-          <li><strong>"Mafiking"</strong> berarti layanan pembelajaran digital yang dikelola oleh Mafiking Edukasi Integrasi.</li>
-          <li><strong>"Pengguna"</strong> berarti setiap orang yang mengakses, mendaftar, membeli paket, atau menggunakan layanan Mafiking.</li>
+          <li><strong>"Mafiking"</strong> berarti layanan pembelajaran digital yang dikelola oleh Mafiking Edukasi Integrasi, termasuk situs web, aplikasi, dan kanal resmi turunannya.</li>
+          <li><strong>"Pengguna"</strong> berarti setiap orang yang mengakses, mendaftar, membeli paket, atau menggunakan layanan Mafiking dalam bentuk apa pun.</li>
           <li><strong>"Akun"</strong> berarti identitas pengguna yang digunakan untuk masuk dan menyimpan progres belajar.</li>
-          <li><strong>"Login Email"</strong> berarti metode masuk menggunakan email, username, atau identitas akun lain yang dipasangkan dengan password pengguna.</li>
-          <li><strong>"Login Google"</strong> berarti metode masuk menggunakan akun Google atau layanan autentikasi pihak ketiga yang terhubung dengan Google.</li>
-          <li><strong>"Layanan"</strong> berarti seluruh fitur Mafiking, termasuk materi, latihan soal, try out, koreksi jawaban, profil progres, rekomendasi belajar, admin konten, dan layanan pembayaran.</li>
-          <li><strong>"Konten"</strong> berarti teks, gambar, video, soal, pembahasan, laporan, rekomendasi, desain, kode, dan materi lain yang tersedia di Mafiking.</li>
+          <li><strong>"Login Email"</strong> berarti metode masuk menggunakan email, username, atau identitas lokal Mafiking yang dipasangkan dengan password.</li>
+          <li><strong>"Login Google"</strong> berarti metode masuk menggunakan akun Google melalui penyedia autentikasi pihak ketiga.</li>
+          <li><strong>"Login Clerk"</strong> berarti metode masuk melalui Clerk sebagai penyedia autentikasi pihak ketiga, yang dapat mencakup email, nomor telepon, atau penyedia OAuth lain yang didukung Clerk.</li>
+          <li><strong>"Layanan"</strong> berarti seluruh fitur Mafiking, termasuk materi, latihan soal, try out, koreksi jawaban, profil progres, rekomendasi belajar, komunitas, admin konten, dan layanan pembayaran.</li>
+          <li><strong>"Konten"</strong> berarti teks, gambar, video, soal, pembahasan, laporan, rekomendasi, desain, kode, audio, dan materi lain yang tersedia di Mafiking.</li>
+          <li><strong>"Konten Pengguna"</strong> berarti teks, gambar, jawaban, atau materi lain yang dikirimkan, diunggah, atau dihasilkan pengguna saat menggunakan Layanan.</li>
           <li><strong>"Paket Berbayar"</strong> berarti akses try out, fitur premium, atau layanan lain yang memerlukan pembayaran.</li>
+          <li><strong>"Komunitas"</strong> berarti kanal komunikasi Mafiking, termasuk grup WhatsApp, Telegram, atau kanal lain yang dikelola atau diizinkan Mafiking untuk keperluan pendampingan belajar.</li>
+          <li><strong>"Kode Promo"</strong> berarti kode voucher yang memberikan potongan harga, bonus akses, atau manfaat lain sesuai syarat yang berlaku.</li>
         </ul>
       </section>
 
-      <section>
+      <section id="persetujuan">
         <h2>2. Persetujuan Penggunaan</h2>
         <ul>
           <li>Dengan menggunakan Mafiking, pengguna menyetujui seluruh ketentuan dalam dokumen ini.</li>
-          <li>Jika pengguna tidak setuju, pengguna harus berhenti menggunakan layanan.</li>
-          <li>Pengguna yang belum cukup umur atau belum cakap hukum wajib menggunakan layanan dengan izin dan pengawasan orang tua, wali, atau pihak yang bertanggung jawab.</li>
-          <li>Mafiking dapat memperbarui ketentuan ini dari waktu ke waktu. Perubahan berlaku setelah dipublikasikan di situs Mafiking atau diberitahukan melalui kanal yang wajar.</li>
+          <li>Jika pengguna tidak menyetujui sebagian atau seluruh ketentuan, pengguna harus berhenti menggunakan Layanan dan dapat menutup akunnya.</li>
+          <li>Pengguna yang belum cukup umur, belum cakap hukum, atau berada di bawah pengampuan wajib menggunakan Layanan dengan izin dan pengawasan orang tua, wali, atau pihak yang bertanggung jawab secara hukum.</li>
+          <li>Mafiking dapat memperbarui dokumen ini dari waktu ke waktu. Versi terbaru berlaku setelah dipublikasikan di situs Mafiking atau diberitahukan melalui kanal yang wajar.</li>
+          <li>Penggunaan Mafiking setelah perubahan berlaku dianggap sebagai persetujuan terhadap versi terbaru.</li>
         </ul>
       </section>
 
-      <section>
-        <h2>3. Akun dan Keamanan</h2>
+      <section id="akun">
+        <h2>3. Akun, Login, dan Keamanan</h2>
         <ul>
-          <li>Pengguna dapat membuat atau mengakses akun melalui Login Email, Login Google, atau metode masuk lain yang disediakan Mafiking.</li>
+          <li>Pengguna dapat membuat atau mengakses akun melalui Login Email, Login Google, Login Clerk, atau metode masuk lain yang disediakan Mafiking.</li>
           <li>Pengguna bertanggung jawab menjaga kerahasiaan email, username, password, perangkat, sesi login, dan akses akun.</li>
-          <li>Pengguna wajib memberikan informasi yang benar, akurat, dan tidak menyesatkan saat mendaftar atau menggunakan layanan.</li>
+          <li>Pengguna wajib memberikan informasi yang benar, akurat, terkini, dan tidak menyesatkan saat mendaftar atau memperbarui profil.</li>
           <li>Setiap aktivitas yang terjadi melalui akun pengguna dianggap sebagai aktivitas pengguna tersebut, kecuali terbukti terjadi penyalahgunaan di luar kendali pengguna dan telah dilaporkan sesegera mungkin.</li>
-          <li>Mafiking dapat membatasi, menangguhkan, atau menutup akun yang diduga melanggar ketentuan, mengganggu layanan, melakukan kecurangan, atau menyalahgunakan sistem.</li>
+          <li>Mafiking dapat membatasi, menangguhkan, atau menutup akun yang diduga melanggar ketentuan, mengganggu Layanan, melakukan kecurangan, atau menyalahgunakan sistem.</li>
           <li>Jika pengguna menduga akun disalahgunakan, pengguna harus segera menghubungi Mafiking melalui kontak resmi yang tercantum di bagian akhir dokumen ini.</li>
+          <li>Pengguna tidak boleh menjual, menyewakan, mentransfer, atau memberikan akses akun kepada pihak lain, kecuali fitur transfer atau warisan akun secara eksplisit didukung oleh Mafiking.</li>
         </ul>
 
-        <h3>Login Email dan Google</h3>
+        <h3>Login Email</h3>
         <ul>
           <li>Untuk Login Email, pengguna wajib memakai email atau identitas akun yang benar-benar dikuasai pengguna.</li>
-          <li>Password Login Email diproses untuk autentikasi akun. Mafiking tidak meminta pengguna mengirimkan password melalui WhatsApp, Instagram, atau kanal non-resmi lain.</li>
-          <li>Untuk Login Google, pengguna memberi izin kepada Google dan/atau penyedia autentikasi yang digunakan Mafiking untuk mengonfirmasi identitas pengguna kepada Mafiking.</li>
-          <li>Data dari Login Google dapat mencakup email, status verifikasi email, nama atau nama tampilan, foto profil jika tersedia, ID akun dari penyedia autentikasi, dan metadata sesi yang diperlukan untuk keamanan.</li>
-          <li>Mafiking tidak menerima atau menyimpan password akun Google pengguna. Password akun Google tetap dikelola oleh Google.</li>
-          <li>Jika akses ke email atau akun Google hilang, dinonaktifkan, dibatasi, atau dicabut oleh penyedia akun, akses pengguna ke Mafiking dapat ikut terganggu sampai identitas akun dapat diverifikasi.</li>
-          <li>Pengguna bertanggung jawab memastikan email atau akun Google yang dipakai tetap aktif, aman, dan dapat menerima informasi penting terkait akun, pembayaran, atau layanan.</li>
+          <li>Password Login Email disimpan dalam bentuk hash sesuai praktik keamanan yang wajar dan tidak dimaksudkan untuk disimpan sebagai teks asli.</li>
+          <li>Mafiking tidak meminta pengguna mengirimkan password melalui WhatsApp, Instagram, Telegram, atau kanal non-resmi lain.</li>
+        </ul>
+
+        <h3>Login Google dan Login Clerk</h3>
+        <ul>
+          <li>Untuk Login Google atau Login Clerk, pengguna memberi izin kepada penyedia autentikasi untuk mengonfirmasi identitas pengguna kepada Mafiking.</li>
+          <li>Data yang dapat diterima Mafiking dari penyedia autentikasi dapat mencakup email, status verifikasi email, nama atau nama tampilan, foto profil jika tersedia, ID pengguna dari penyedia autentikasi, dan metadata sesi yang diperlukan untuk keamanan.</li>
+          <li>Mafiking tidak menerima atau menyimpan password akun Google atau akun Clerk pengguna. Password tetap dikelola oleh penyedia autentikasi masing-masing.</li>
+          <li>Jika akses ke email, akun Google, atau akun Clerk hilang, dinonaktifkan, dibatasi, atau dicabut oleh penyedia akun, akses pengguna ke Mafiking dapat ikut terganggu sampai identitas akun dapat diverifikasi ulang.</li>
+          <li>Pengguna bertanggung jawab memastikan email, akun Google, atau akun Clerk yang dipakai tetap aktif, aman, dan dapat menerima informasi penting terkait akun, pembayaran, atau Layanan.</li>
           <li>Mafiking dapat meminta verifikasi tambahan sebelum membantu pemulihan akun, perubahan email, penggabungan akun, atau sengketa kepemilikan akun.</li>
         </ul>
       </section>
 
-      <section>
+      <section id="lingkup">
         <h2>4. Lingkup Layanan</h2>
         <p>Mafiking menyediakan layanan pembelajaran yang dapat mencakup:</p>
         <ul>
-          <li>materi Matematika, Fisika, Kimia, dan topik akademik lain;</li>
-          <li>latihan soal pilihan ganda, canvas, dan bentuk latihan lain;</li>
-          <li>try out gratis maupun berbayar;</li>
-          <li>pembahasan, koreksi, dan evaluasi jawaban;</li>
-          <li>profil progres, XP, streak, riwayat latihan, dan rekomendasi materi;</li>
-          <li>konten atau layanan tambahan yang dapat ditambahkan kemudian.</li>
+          <li>materi Matematika, Fisika, Kimia, dan topik akademik lain yang relevan;</li>
+          <li>latihan soal pilihan ganda, isian singkat, canvas, dan bentuk latihan lain;</li>
+          <li>try out gratis maupun berbayar sesuai paket;</li>
+          <li>pembahasan, koreksi, dan evaluasi jawaban termasuk yang dibantu AI;</li>
+          <li>profil progres, XP, level, streak, peringkat, riwayat latihan, dan rekomendasi materi;</li>
+          <li>komunitas, kanal komunikasi, dan program mentoring sesuai paket;</li>
+          <li>fitur tambahan, kontes, atau program musiman yang dapat ditambahkan kemudian.</li>
         </ul>
         <p>
-          Mafiking dapat menambah, mengubah, menunda, atau menghentikan sebagian fitur
+          Mafiking dapat menambah, mengubah, menunda, membatasi, atau menghentikan sebagian fitur
           untuk alasan teknis, operasional, keamanan, perbaikan kualitas, atau kebijakan layanan.
         </p>
       </section>
 
-      <section>
-        <h2>5. Batasan Layanan Pembelajaran dan AI</h2>
+      <section id="ai">
+        <h2>5. Materi Pembelajaran dan Batasan AI</h2>
         <ul>
           <li>Mafiking adalah alat bantu belajar, bukan pengganti tanggung jawab akademik pengguna, guru, dosen, lembaga pendidikan, atau ujian resmi.</li>
-          <li>Hasil koreksi AI, rekomendasi materi, skor latihan, dan pembahasan bersifat bantuan pembelajaran. Hasil tersebut dapat mengandung ketidaktepatan dan perlu diperiksa ulang.</li>
-          <li>Mafiking tidak menjamin nilai akademik, kelulusan, hasil ujian, peringkat, atau capaian tertentu.</li>
+          <li>Hasil koreksi AI, rekomendasi materi, skor latihan, pembahasan otomatis, dan rangkuman profil bersifat bantuan pembelajaran. Hasil tersebut dapat mengandung ketidaktepatan dan perlu diperiksa ulang oleh pengguna.</li>
+          <li>Mafiking tidak menjamin nilai akademik, kelulusan, hasil ujian, peringkat, atau capaian belajar tertentu.</li>
           <li>Pengguna tetap bertanggung jawab atas jawaban, pemahaman, dan keputusan belajar masing-masing.</li>
-          <li>Pengguna dilarang menggunakan Mafiking untuk menyontek, melanggar aturan ujian, menghindari kebijakan akademik, atau tindakan lain yang bertentangan dengan integritas akademik.</li>
+          <li>Pengguna dilarang menggunakan Mafiking untuk menyontek,违反 aturan ujian, menghindari kebijakan akademik, atau tindakan lain yang bertentangan dengan integritas akademik.</li>
+          <li>Karena sifat generatif AI, jawaban yang sama dapat menghasilkan keluaran yang berbeda dari waktu ke waktu. Pengguna sebaiknya memverifikasi jawaban akhir dengan sumber lain yang dapat dipercaya.</li>
         </ul>
       </section>
 
-      <section>
-        <h2>6. Paket, Pembayaran, dan Akses Berbayar</h2>
+      <section id="pembayaran">
+        <h2>6. Paket, Pembayaran, Promo, dan Refund</h2>
         <ul>
           <li>Harga, isi paket, durasi akses, jumlah soal, fitur, dan promo ditampilkan di halaman layanan atau halaman pembayaran.</li>
-          <li>Pembayaran dapat diproses melalui penyedia pembayaran pihak ketiga. Pengguna wajib mengikuti instruksi pembayaran yang ditampilkan.</li>
-          <li>Akses berbayar diberikan setelah pembayaran terkonfirmasi berhasil oleh sistem atau penyedia pembayaran.</li>
-          <li>Mafiking dapat menolak atau membatalkan transaksi yang terindikasi tidak sah, gagal, duplikat, melanggar aturan, atau tidak dapat diverifikasi.</li>
+          <li>Pembayaran dapat diproses melalui penyedia pembayaran pihak ketiga. Pengguna wajib mengikuti instruksi pembayaran yang ditampilkan pada halaman transaksi.</li>
+          <li>Akses berbayar diberikan setelah pembayaran terkonfirmasi berhasil oleh sistem Mafiking atau penyedia pembayaran.</li>
+          <li>Mafiking dapat menolak, menunda, atau membatalkan transaksi yang terindikasi tidak sah, gagal, duplikat, melanggar aturan, tidak dapat diverifikasi, atau berasal dari aktivitas terindikasi penipuan.</li>
           <li>Harga dan promo dapat berubah sewaktu-waktu. Perubahan harga tidak berlaku surut terhadap transaksi yang telah berhasil kecuali dinyatakan lain secara jelas.</li>
         </ul>
 
-        <h3>Pengembalian Dana</h3>
+        <h3>Kode Promo</h3>
         <ul>
-          <li>Pengembalian dana tidak otomatis diberikan untuk kesalahan memilih paket, perubahan pikiran, atau ketidaksesuaian ekspektasi yang telah dijelaskan di halaman layanan.</li>
-          <li>Permintaan pengembalian dana dapat dipertimbangkan jika terjadi pembayaran ganda, paket tidak aktif setelah pembayaran valid, atau gangguan layanan signifikan yang berasal dari Mafiking.</li>
+          <li>Kode Promo dapat diberikan melalui kanal resmi Mafiking dan memiliki masa berlaku, syarat, serta cakupan tertentu.</li>
+          <li>Kode Promo tidak dapat diuangkan, dialihkan, atau digabungkan dengan promo lain kecuali secara eksplisit diizinkan.</li>
+          <li>Mafiking dapat membatalkan penggunaan Kode Promo jika ditemukan penyalahgunaan, kecurangan, atau pelanggaran syarat.</li>
+        </ul>
+
+        <h3>Pengembalian Dana (Refund)</h3>
+        <ul>
+          <li>Pengembalian dana tidak otomatis diberikan untuk kesalahan memilih paket, perubahan pikiran, atau ketidaksesuaian ekspektasi yang telah dijelaskan di halaman Layanan.</li>
+          <li>Permintaan refund dapat dipertimbangkan jika terjadi pembayaran ganda, paket tidak aktif setelah pembayaran valid, atau gangguan Layanan signifikan yang berasal dari Mafiking.</li>
           <li>Pengguna wajib menghubungi Mafiking dengan bukti transaksi, waktu pembayaran, email atau akun terkait, dan kronologi masalah.</li>
-          <li>Keputusan pengembalian dana akan mempertimbangkan bukti transaksi, status penggunaan paket, kebijakan penyedia pembayaran, dan ketentuan hukum yang berlaku.</li>
+          <li>Keputusan refund akan mempertimbangkan bukti transaksi, status penggunaan paket, kebijakan penyedia pembayaran, dan ketentuan hukum yang berlaku.</li>
+          <li>Refund diproses melalui kanal pembayaran asal atau metode lain yang disepakati. Biaya yang mungkin dikenakan oleh penyedia pembayaran dapat menjadi tanggungan pengguna sesuai kebijakan penyedia.</li>
+          <li>Paket yang sudah digunakan secara signifikan dapat membuat pengguna kehilangan hak refund sebagian atau seluruhnya.</li>
         </ul>
       </section>
 
-      <section>
-        <h2>7. Penggunaan yang Dilarang</h2>
+      <section id="referral">
+        <h2>7. Program Referral</h2>
+        <ul>
+          <li>Mafiking dapat menjalankan program referral yang memberikan bonus, diskon, atau manfaat lain kepada pengguna yang berhasil mengajak pengguna baru.</li>
+          <li>Syarat, periode, dan manfaat program referral dapat berubah sewaktu-waktu dan akan diumumkan di kanal resmi.</li>
+          <li>Pengguna dilarang menyalahgunakan program referral melalui pembuatan akun palsu, bot, atau aktivitas otomatis lain.</li>
+          <li>Bonus referral yang belum dicairkan atau belum memenuhi syarat dapat dibatalkan jika ditemukan pelanggaran.</li>
+        </ul>
+      </section>
+
+      <section id="larangan">
+        <h2>8. Penggunaan yang Dilarang</h2>
         <p>Pengguna dilarang melakukan tindakan berikut:</p>
         <ul>
           <li>mengakses, mencoba mengakses, atau merusak sistem, server, database, akun, atau fitur yang tidak diperuntukkan bagi pengguna;</li>
-          <li>melakukan scraping, crawling, otomatisasi, reverse engineering, bypass pembayaran, atau eksploitasi teknis tanpa izin tertulis;</li>
+          <li>melakukan scraping, crawling, otomatisasi, reverse engineering, bypass pembayaran, atau eksploitasi teknis tanpa izin tertulis dari Mafiking;</li>
           <li>mengunggah, mengirim, atau menyimpan konten yang melanggar hukum, mengandung ujaran kebencian, pornografi, ancaman, fitnah, malware, atau materi yang melanggar hak pihak lain;</li>
-          <li>menyalin, menjual ulang, mendistribusikan, atau mempublikasikan konten Mafiking tanpa izin;</li>
-          <li>menggunakan akun orang lain atau memberikan akses akun kepada pihak lain untuk menghindari pembatasan layanan;</li>
-          <li>mengganggu pengalaman belajar pengguna lain atau reputasi Mafiking.</li>
+          <li>menyalin, menjual ulang, mendistribusikan, atau mempublikasikan Konten Mafiking tanpa izin;</li>
+          <li>menggunakan akun orang lain atau memberikan akses akun kepada pihak lain untuk menghindari pembatasan Layanan;</li>
+          <li>mengganggu pengalaman belajar pengguna lain, kenyamanan komunitas, atau reputasi Mafiking;</li>
+          <li>menyalahgunakan Komunitas untuk promosi, spam, phishing, atau aktivitas komersial yang tidak diizinkan;</li>
+          <li>melakukan tindakan yang dapat menipu, memanipulasi, atau mengganggu sistem penilaian, leaderboard, atau reward Mafiking.</li>
         </ul>
       </section>
 
-      <section>
-        <h2>8. Hak Kekayaan Intelektual</h2>
+      <section id="ip">
+        <h2>9. Hak Kekayaan Intelektual</h2>
         <ul>
-          <li>Seluruh merek, logo, tampilan, desain, materi, soal, pembahasan, kode, dan konten Mafiking dilindungi oleh hak kekayaan intelektual yang berlaku.</li>
-          <li>Pengguna memperoleh izin terbatas, non-eksklusif, tidak dapat dialihkan, dan dapat dicabut untuk menggunakan layanan sesuai ketentuan ini.</li>
-          <li>Pengguna tidak memperoleh hak kepemilikan atas konten Mafiking hanya karena mengakses atau membeli paket.</li>
-          <li>Konten yang pengguna unggah, tulis, atau kirimkan ke Mafiking tetap menjadi milik pengguna, tetapi pengguna memberikan izin kepada Mafiking untuk memproses konten tersebut sejauh diperlukan untuk menjalankan layanan, seperti koreksi jawaban, penyimpanan progres, keamanan, dan peningkatan kualitas.</li>
+          <li>Seluruh merek, logo, tampilan, desain, materi, soal, pembahasan, kode, audio, dan Konten Mafiking dilindungi oleh hak kekayaan intelektual yang berlaku.</li>
+          <li>Pengguna memperoleh izin terbatas, non-eksklusif, tidak dapat dialihkan, dan dapat dicabut untuk menggunakan Layanan sesuai ketentuan ini.</li>
+          <li>Pengguna tidak memperoleh hak kepemilikan atas Konten Mafiking hanya karena mengakses atau membeli paket.</li>
+          <li>Konten Pengguna tetap menjadi milik pengguna. Dengan mengirimkan Konten Pengguna ke Mafiking, pengguna memberikan lisensi non-eksklusif, worldwide, tanpa royalti, dan dapat dialihkan kepada Mafiking untuk memproses Konten Pengguna sejauh diperlukan untuk menjalankan Layanan, seperti koreksi jawaban, penyimpanan progres, keamanan, dan peningkatan kualitas.</li>
+          <li>Mafiking dapat menghapus, menyensor, atau menolak Konten Pengguna yang melanggar ketentuan tanpa pemberitahuan sebelumnya.</li>
+          <li>Jika pengguna merasa hak kekayaan intelektualnya dilanggar oleh Konten Mafiking, pengguna dapat menghubungi Mafiking melalui kontak resmi untuk penanganan.</li>
         </ul>
       </section>
 
-      <section>
-        <h2>9. Data Pribadi dan Privasi</h2>
+      <section id="privasi">
+        <h2>10. Data Pribadi, Privasi, dan Cookies</h2>
         <p>
           Mafiking dapat memproses data pengguna untuk membuat akun, autentikasi, menyimpan progres,
           menjalankan pembayaran, menyediakan koreksi dan rekomendasi belajar, menjaga keamanan,
-          menganalisis kualitas layanan, dan memenuhi kewajiban hukum.
+          menganalisis kualitas Layanan, dan memenuhi kewajiban hukum.
         </p>
         <p>Data yang dapat diproses mencakup, antara lain:</p>
         <ul>
-          <li>identitas akun seperti nama tampilan, username, email, metode login, ID pengguna internal, ID pengguna dari penyedia autentikasi, dan foto profil jika tersedia;</li>
-          <li>data autentikasi seperti hash password untuk Login Email, metadata sesi, token atau klaim autentikasi yang diperlukan untuk memverifikasi login, serta catatan keamanan akun;</li>
-          <li>data belajar seperti jawaban, riwayat latihan, skor, progres, dan rekomendasi;</li>
-          <li>data transaksi seperti paket yang dibeli, status pembayaran, email pembelian, dan referensi pembayaran;</li>
-          <li>data teknis seperti cookie sesi, alamat IP, perangkat, log keamanan, dan metadata penggunaan.</li>
+          <li>identitas akun seperti nama tampilan, username, email, nomor WhatsApp, fakultas, jurusan, semester, mapel prioritas, metode login, ID pengguna internal, ID pengguna dari penyedia autentikasi, dan foto profil jika tersedia;</li>
+          <li>data autentikasi seperti hash password untuk Login Email, metadata sesi, token autentikasi, dan catatan keamanan akun;</li>
+          <li>data belajar seperti jawaban, riwayat latihan, skor, progres, rekomendasi, dan konten latihan yang diunggah ke canvas;</li>
+          <li>data transaksi seperti paket yang dibeli, status pembayaran, email pembelian, referensi pembayaran, dan bukti pendukung;</li>
+          <li>data teknis seperti cookie sesi, alamat IP, jenis perangkat, log keamanan, dan metadata penggunaan.</li>
         </ul>
         <p>
-          Untuk Login Email, password disimpan dalam bentuk yang telah di-hash sesuai praktik keamanan
-          yang wajar dan tidak dimaksudkan untuk disimpan sebagai teks asli. Untuk Login Google,
-          Mafiking dapat menerima informasi profil dasar dan bukti sesi yang diperlukan untuk
-          memverifikasi identitas pengguna, tetapi tidak menerima password Google pengguna.
+          Untuk Login Email, password disimpan dalam bentuk hash sesuai praktik keamanan yang wajar.
+          Untuk Login Google atau Login Clerk, Mafiking dapat menerima informasi profil dasar dan
+          bukti sesi yang diperlukan untuk memverifikasi identitas pengguna, tetapi tidak menerima
+          password penyedia autentikasi.
         </p>
         <p>
-          Email pengguna dapat digunakan sebagai identitas akun, tujuan komunikasi layanan,
-          bantuan pemulihan akun, verifikasi transaksi, pengiriman informasi akses, pemberitahuan
-          perubahan penting, dan penanganan keluhan. Mafiking tidak menjual data email atau data
-          login pengguna kepada pihak lain.
+          Email dan nomor WhatsApp pengguna dapat digunakan sebagai identitas akun, tujuan komunikasi
+          Layanan, bantuan pemulihan akun, verifikasi transaksi, pengiriman informasi akses, undangan
+          komunitas sesuai paket, pemberitahuan perubahan penting, dan penanganan keluhan. Mafiking
+          tidak menjual data kontak pengguna kepada pihak lain untuk kepentingan pemasaran.
         </p>
         <p>
-          Jika Mafiking menggunakan informasi yang diterima dari Google, penggunaan dan transfer
-          informasi tersebut dibatasi untuk menjalankan atau meningkatkan fitur Mafiking yang terlihat
-          bagi pengguna, menjaga keamanan, memenuhi kewajiban hukum, dan tujuan lain yang dijelaskan
-          secara wajar dalam dokumen ini.
+          Jika Mafiking menggunakan informasi yang diterima dari Google atau Clerk, penggunaan dan
+          transfer informasi tersebut dibatasi untuk menjalankan atau meningkatkan fitur Mafiking
+          yang terlihat bagi pengguna, menjaga keamanan, memenuhi kewajiban hukum, dan tujuan lain
+          yang dijelaskan secara wajar dalam dokumen ini.
         </p>
         <p>
-          Mafiking berupaya menjaga keamanan data secara wajar. Namun, tidak ada sistem digital
-          yang sepenuhnya bebas risiko. Pengguna wajib turut menjaga keamanan akun dan perangkatnya.
+          Mafiking dapat menggunakan cookie atau teknologi setara untuk menyimpan sesi, mengingat
+          preferensi, dan menjaga keamanan. Pengguna dapat mengatur cookie melalui pengaturan browser,
+          namun fitur tertentu dapat terganggu jika cookie non-esensial dinonaktifkan.
+        </p>
+        <p>
+          Mafiking berupaya menjaga keamanan data secara wajar sesuai praktik keamanan yang lazim.
+          Namun, tidak ada sistem digital yang sepenuhnya bebas risiko. Pengguna wajib turut menjaga
+          keamanan akun dan perangkatnya.
         </p>
         <p>
           Pengguna dapat menghubungi Mafiking untuk menanyakan, memperbarui, atau meminta bantuan
-          terkait data akun sesuai prosedur layanan dan hukum yang berlaku.
+          terkait data akun sesuai prosedur Layanan dan hukum yang berlaku.
         </p>
       </section>
 
-      <section>
-        <h2>10. Layanan Pihak Ketiga</h2>
+      <section id="retensi">
+        <h2>11. Retensi Data</h2>
+        <ul>
+          <li>Data akun dan progres belajar disimpan selama akun aktif dan diperlukan untuk menjalankan Layanan.</li>
+          <li>Data transaksi dan bukti pembayaran dapat disimpan lebih lama untuk memenuhi kewajiban pajak, audit, dan hukum yang berlaku.</li>
+          <li>Data yang pengguna minta untuk dihapus dapat dipertahankan secara terbatas jika terdapat kewajiban hukum, sengketa, atau alasan keamanan yang wajar.</li>
+          <li>Log teknis dan keamanan dapat disimpan dalam bentuk agregat atau anonim untuk tujuan audit dan peningkatan keamanan.</li>
+        </ul>
+      </section>
+
+      <section id="hapus-akun">
+        <h2>12. Penghapusan dan Penonaktifan Akun</h2>
+        <ul>
+          <li>Pengguna dapat meminta penonaktifan atau penghapusan akun melalui kontak resmi Mafiking.</li>
+          <li>Mafiking akan memverifikasi identitas pemilik akun sebelum memproses permintaan.</li>
+          <li>Penghapusan akun dapat menghapus sebagian atau seluruh data pengguna sesuai kebijakan retensi dan hukum yang berlaku.</li>
+          <li>Paket aktif pada akun yang dihapus atau dinonaktifkan dapat hangus sesuai ketentuan paket, kecuali diatur lain secara eksplisit.</li>
+          <li>Mafiking dapat menolak permintaan penghapusan akun sementara jika akun sedang dalaminvestigasi, memiliki tunggakan, atau terkait kewajiban hukum.</li>
+        </ul>
+      </section>
+
+      <section id="pihak-ketiga">
+        <h2>13. Layanan Pihak Ketiga</h2>
         <p>
           Mafiking dapat menggunakan layanan pihak ketiga untuk autentikasi, pembayaran, analitik,
           penyimpanan, komunikasi, atau pemrosesan AI. Penggunaan layanan pihak ketiga dapat tunduk
@@ -361,63 +478,88 @@
         </p>
         <ul>
           <li>Autentikasi dapat menggunakan Google, Clerk, atau penyedia autentikasi lain. Pengguna juga tunduk pada syarat layanan dan kebijakan privasi penyedia autentikasi tersebut.</li>
-          <li>Jika pengguna menggunakan Login Google, proses persetujuan, pembatalan persetujuan, pemilihan akun, dan keamanan akun Google berada dalam sistem Google.</li>
+          <li>Jika pengguna menggunakan Login Google atau Login Clerk, proses persetujuan, pembatalan persetujuan, pemilihan akun, dan keamanan akun berada dalam sistem penyedia.</li>
           <li>Jika penyedia autentikasi mengalami gangguan, mengubah kebijakan, mencabut izin, atau membatasi akun pengguna, login atau akses tertentu di Mafiking dapat ikut terdampak.</li>
           <li>Jika pengguna melakukan pembayaran, informasi tertentu dapat diproses oleh penyedia pembayaran untuk menyelesaikan transaksi.</li>
           <li>Mafiking tidak bertanggung jawab atas gangguan, kesalahan, atau perubahan layanan pihak ketiga di luar kendali Mafiking, sepanjang Mafiking telah mengambil langkah wajar.</li>
         </ul>
       </section>
 
-      <section>
-        <h2>11. Ketersediaan Layanan</h2>
+      <section id="ketersediaan">
+        <h2>14. Ketersediaan, Pemeliharaan, dan Force Majeure</h2>
         <ul>
-          <li>Mafiking berupaya menyediakan layanan secara stabil, tetapi tidak menjamin layanan selalu tersedia tanpa gangguan.</li>
-          <li>Layanan dapat terganggu karena pemeliharaan, pembaruan, gangguan internet, masalah penyedia pihak ketiga, keamanan, force majeure, atau faktor lain di luar kendali wajar Mafiking.</li>
-          <li>Mafiking dapat melakukan perbaikan, pembaruan, atau pembatasan akses sementara tanpa pemberitahuan sebelumnya jika diperlukan untuk keamanan atau stabilitas layanan.</li>
+          <li>Mafiking berupaya menyediakan Layanan secara stabil, tetapi tidak menjamin Layanan selalu tersedia tanpa gangguan.</li>
+          <li>Layanan dapat terganggu karena pemeliharaan, pembaruan, gangguan internet, masalah penyedia pihak ketiga, serangan siber, force majeure, atau faktor lain di luar kendali wajar Mafiking.</li>
+          <li>Mafiking dapat melakukan perbaikan, pembaruan, atau pembatasan akses sementara dengan atau tanpa pemberitahuan sebelumnya jika diperlukan untuk keamanan atau stabilitas Layanan.</li>
+          <li>Force majeure termasuk namun tidak terbatas pada bencana alam, pandemi, pemadaman listrik massal, gangguan telekomunikasi, perubahan regulasi mendadak, perang, kerusuhan, dan serangan siber berskala besar.</li>
+          <li>Dalam hal force majeure, kewajiban Mafiking yang tidak dapat dipenuhi ditangguhkan selama peristiwa tersebut berlangsung.</li>
         </ul>
       </section>
 
-      <section>
-        <h2>12. Pembatasan Tanggung Jawab</h2>
+      <section id="tanggung-jawab">
+        <h2>15. Pembatasan Tanggung Jawab dan Ganti Rugi</h2>
         <ul>
-          <li>Mafiking tidak bertanggung jawab atas kerugian tidak langsung, kehilangan peluang, kehilangan data akibat kelalaian pengguna, kerugian akademik, atau keputusan belajar yang dibuat semata-mata berdasarkan hasil layanan.</li>
+          <li>Mafiking tidak bertanggung jawab atas kerugian tidak langsung, kehilangan peluang, kehilangan data akibat kelalaian pengguna, kerugian akademik, atau keputusan belajar yang dibuat semata-mata berdasarkan hasil Layanan.</li>
           <li>Tanggung jawab Mafiking, jika ada dan sepanjang diwajibkan hukum, dibatasi pada nilai transaksi yang secara langsung terkait dengan masalah yang terbukti terjadi.</li>
           <li>Pembatasan ini tidak mengurangi hak pengguna yang tidak dapat dikesampingkan berdasarkan hukum yang berlaku.</li>
+          <li>Pengguna setuju untuk membebaskan Mafiking dari klaim, kerugian, atau biaya yang timbul akibat pelanggaran pengguna terhadap ketentuan ini, penyalahgunaan Layanan, atau pelanggaran hak pihak lain.</li>
         </ul>
       </section>
 
-      <section>
-        <h2>13. Penangguhan dan Pengakhiran Akses</h2>
-        <p>
-          Mafiking dapat menangguhkan atau mengakhiri akses pengguna jika pengguna melanggar
-          Syarat & Ketentuan, melakukan penyalahgunaan, menimbulkan risiko keamanan, atau
-          menggunakan layanan dengan cara yang merugikan Mafiking atau pihak lain.
-        </p>
-        <p>
-          Pengguna dapat berhenti menggunakan layanan kapan saja. Kewajiban pembayaran yang sudah
-          terjadi, ketentuan kekayaan intelektual, pembatasan tanggung jawab, dan ketentuan lain
-          yang secara wajar tetap berlaku akan tetap berlaku setelah akses dihentikan.
-        </p>
+      <section id="penangguhan">
+        <h2>16. Penangguhan dan Pengakhiran</h2>
+        <ul>
+          <li>Mafiking dapat menangguhkan atau mengakhiri akses pengguna jika pengguna melanggar Syarat & Ketentuan, melakukan penyalahgunaan, menimbulkan risiko keamanan, atau menggunakan Layanan dengan cara yang merugikan Mafiking atau pihak lain.</li>
+          <li>Penangguhan dapat dilakukan sementara sambil menunggu klarifikasi atau secara permanen tergantung tingkat pelanggaran.</li>
+          <li>Pengguna dapat berhenti menggunakan Layanan kapan saja. Kewajiban pembayaran yang sudah terjadi, ketentuan kekayaan intelektual, pembatasan tanggung jawab, dan ketentuan lain yang secara wajar tetap berlaku akan tetap berlaku setelah akses dihentikan.</li>
+        </ul>
       </section>
 
-      <section>
-        <h2>14. Hukum yang Berlaku dan Penyelesaian Sengketa</h2>
+      <section id="perubahan">
+        <h2>17. Perubahan Syarat & Ketentuan</h2>
+        <ul>
+          <li>Mafiking dapat memperbarui Syarat & Ketentuan ini untuk menyesuaikan dengan perubahan fitur, hukum, atau praktik operasional.</li>
+          <li>Versi terbaru diumumkan di halaman ini dengan pembaruan tanggal "Berlaku sejak".</li>
+          <li>Untuk perubahan material, Mafiking berupaya memberikan pemberitahuan melalui kanal yang wajar, termasuk notifikasi di dalam aplikasi atau email.</li>
+          <li>Penggunaan Layanan setelah perubahan berlaku dianggap sebagai persetujuan terhadap versi terbaru. Jika pengguna tidak setuju, pengguna dapat berhenti menggunakan Layanan dan menutup akunnya.</li>
+        </ul>
+      </section>
+
+      <section id="hukum">
+        <h2>18. Hukum yang Berlaku dan Penyelesaian Sengketa</h2>
         <ul>
           <li>Syarat & Ketentuan ini diatur dan ditafsirkan berdasarkan hukum Republik Indonesia.</li>
           <li>Jika terjadi keluhan atau sengketa, pengguna setuju untuk terlebih dahulu menghubungi Mafiking agar penyelesaian dapat diupayakan secara musyawarah.</li>
-          <li>Jika penyelesaian musyawarah tidak tercapai, sengketa dapat diselesaikan melalui mekanisme yang tersedia berdasarkan hukum Indonesia.</li>
+          <li>Jika penyelesaian musyawarah tidak tercapai dalam waktu 30 hari kerja, sengketa dapat diselesaikan melalui mekanisme yang tersedia berdasarkan hukum Indonesia.</li>
+          <li>Pengguna yang berstatus konsumen dapat tetap menggunakan perlindungan hukum konsumen yang tidak dapat dikesampingkan.</li>
         </ul>
       </section>
 
-      <section>
-        <h2>15. Kontak Resmi</h2>
+      <section id="umum">
+        <h2>19. Ketentuan Umum</h2>
+        <ul>
+          <li><strong>Keterpisahan (Severability).</strong> Jika salah satu ketentuan dalam dokumen ini dinyatakan tidak sah atau tidak dapat diterapkan oleh otoritas berwenang, ketentuan lain tetap berlaku penuh.</li>
+          <li><strong>Tidak ada pengesampingan (No Waiver).</strong> Kegagalan Mafiking untuk menegakkan ketentuan tidak dianggap sebagai pengesampingan hak Mafiking untuk menegakkan ketentuan tersebut di kemudian hari.</li>
+          <li><strong>Keseluruhan perjanjian (Entire Agreement).</strong> Syarat & Ketentuan ini, bersama dengan Kebijakan Privasi dan dokumen resmi lain yang dirujuk di dalamnya, merupakan keseluruhan perjanjian antara pengguna dan Mafiking terkait penggunaan Layanan.</li>
+          <li><strong>Pengalihan (Assignment).</strong> Pengguna tidak dapat mengalihkan hak atau kewajiban berdasarkan dokumen ini kepada pihak lain tanpa persetujuan Mafiking. Mafiking dapat mengalihkan hak dan kewajibannya kepada afiliasi, penerus usaha, atau pihak yang mengakuisisi aset Mafiking.</li>
+          <li><strong>Bahasa.</strong> Dokumen ini tersedia dalam bahasa Indonesia. Jika terdapat terjemahan dalam bahasa lain, versi bahasa Indonesia yang berlaku.</li>
+        </ul>
+      </section>
+
+      <section id="kontak">
+        <h2>20. Kontak Resmi</h2>
         <p>
           Untuk pertanyaan, keluhan, bantuan akun, masalah pembayaran, permintaan data,
-          atau laporan penyalahgunaan, pengguna dapat menghubungi Mafiking melalui:
+          pencabutan akun, atau laporan penyalahgunaan, pengguna dapat menghubungi Mafiking melalui:
         </p>
         <p class="contact-list">
           <a href="https://wa.me/6281246049951" target="_blank" rel="noreferrer">WhatsApp: +62 812-4604-9951</a>
           <a href="https://www.instagram.com/mafiking._" target="_blank" rel="noreferrer">Instagram: @mafiking._</a>
+          <a href="mailto:mafikingsolusitpb@gmail.com">Email: mafikingsolusitpb@gmail.com</a>
+        </p>
+        <p>
+          Untuk keamanan, Mafiking hanya merespons permintaan bantuan yang masuk melalui kanal di atas.
+          Mohon tidak mempercayai pihak yang mengaku dari Mafiking di luar kanal resmi ini.
         </p>
         <p>
           Mafiking akan berupaya merespons pesan dalam waktu yang wajar sesuai kapasitas operasional.
