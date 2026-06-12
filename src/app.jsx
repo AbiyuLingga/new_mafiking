@@ -112,6 +112,14 @@ const App = () => {
   const [currentUser, setCurrentUser] = React.useState(null);
   const [isAdmin, setIsAdmin] = React.useState(false);
   const [authMode, setAuthMode] = React.useState(() => initialLocationRef.current.authMode || null);
+  const [publicLanding, setPublicLanding] = React.useState(() => Boolean(initialLocationRef.current.publicLanding));
+
+  // Expose SPA route for browser-side observers (CWV, devtools, etc.) so they
+  // can attribute metrics to the in-app route, not the URL path.
+  if (typeof window !== "undefined") {
+    if (!window.MafikingAppState) window.MafikingAppState = {};
+    window.MafikingAppState.route = initialLocationRef.current.route;
+  }
   const [authRedirect, setAuthRedirect] = React.useState(null);
   const [authBackRoute, setAuthBackRoute] = React.useState(null);
   const [authState, setAuthState] = React.useState(() => initialLocationRef.current.authState || null);
@@ -125,6 +133,23 @@ const App = () => {
   const [activePackages, setActivePackages] = React.useState([]);
   const [confirmAction, setConfirmAction] = React.useState(null);
   const [adminChunkStatus, setAdminChunkStatus] = React.useState(() => window.AdminPage ? "ready" : "idle");
+  // Phase 2.1: lazy-loaded Lobby component. The Vite build emits lobby.jsx
+  // as its own chunk (see vite.config.js `mafikingRouteExportPlugin`); the
+  // Babel-standalone path already loaded lobby.jsx as a classic <script> and
+  // exposed `window.Lobby`, so the fallback `() => window.Lobby` covers it.
+  const [lobbyComp, setLobbyComp] = React.useState(null);
+  // Phase 2.2: same pattern as lobby for every other route. Each route file
+  // is dynamic-imported only when the user navigates to it, so the main entry
+  // stays under 25 KB gz. The Babel-standalone path falls back to
+  // `window[Key]` because each route.jsx sets it at the end of the file.
+  const [belajarComp, setBelajarComp] = React.useState(null);
+  const [misiComp, setMisiComp] = React.useState(null);
+  const [tryoutComp, setTryoutComp] = React.useState(null);
+  const [practiceComp, setPracticeComp] = React.useState(null);
+  const [paymentComp, setPaymentComp] = React.useState(null);
+  const [profileComp, setProfileComp] = React.useState(null);
+  const [leaderboardComp, setLeaderboardComp] = React.useState(null);
+  const [invoicesComp, setInvoicesComp] = React.useState(null);
   const isGuest = currentUser && currentUser.display_name?.startsWith("Tamu_");
   const isLoggedIn = currentUser && !isGuest;
   const isAdminAccount = currentUser?.role === "admin";
@@ -175,6 +200,11 @@ const App = () => {
       if (next.payment) setPaymentContext(next.payment);
       else setPaymentContext(null);
       if (next.section || next.belajarSection) setBelajarSection(next.section || next.belajarSection);
+      if (Object.prototype.hasOwnProperty.call(next, "publicLanding")) {
+        setPublicLanding(Boolean(next.publicLanding));
+      } else if (nextRoute !== "lobby") {
+        setPublicLanding(false);
+      }
       if (next.authMode) {
         const fallbackBackRoute = (authMode && authBackRoute) ? authBackRoute : {
           route,
@@ -209,6 +239,7 @@ const App = () => {
         authMode: next.authMode,
         authRedirect: next.authRedirect,
         authState: next.authState,
+        publicLanding: nextRoute === "lobby" && (Object.prototype.hasOwnProperty.call(next, "publicLanding") ? Boolean(next.publicLanding) : publicLanding),
         authBackRoute: next.authMode
           ? (next.authBackRoute || (isSafeAuthBackRoute((authMode && authBackRoute) ? authBackRoute : {
             route,
@@ -273,9 +304,12 @@ const App = () => {
     window.addEventListener("popstate", handlePopState);
     
     const parsed = parseAppLocation();
-    const initialState = window.history.state || { route: parsed.route, belajarSection: parsed.belajarSection, authMode: parsed.authMode };
+    const initialState = window.history.state || { route: parsed.route, belajarSection: parsed.belajarSection, authMode: parsed.authMode, publicLanding: Boolean(parsed.publicLanding) };
     setBelajarSection(parsed.belajarSection || null);
     setAuthMode(parsed.authMode || null);
+    if (Object.prototype.hasOwnProperty.call(parsed, "publicLanding")) {
+      setPublicLanding(Boolean(parsed.publicLanding));
+    }
     setAuthRedirect(initialState.authRedirect || null);
     setAuthState(initialState.authState || parsed.authState || null);
     const initialAuthBackRoute = initialState.authBackRoute || (parsed.authMode ? readStoredAuthBackRoute() : null);
@@ -286,6 +320,39 @@ const App = () => {
     window.history.replaceState(initialState, "", appStateToPath(initialState));
     
     return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  // Mirror SPA route to a global so background observers (CWV, devtools) can
+  // attribute metrics to the active route, not the URL path.
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.MafikingAppState) window.MafikingAppState = {};
+    window.MafikingAppState.route = route;
+    window.MafikingAppState.belajarSection = belajarSection || null;
+    window.MafikingAppState.authMode = authMode || null;
+    window.MafikingAppState.publicLanding = publicLanding;
+    window.MafikingAppState.isLoggedIn = isLoggedIn;
+  }, [route, belajarSection, authMode, publicLanding, isLoggedIn]);
+
+  // Phase 2.2: idle-time prefetch of likely-next route chunks so the first
+  // click feels instant. `prefetchAdjacentRoutes` is a no-op on Save-Data or
+  // 2G connections, and caps at 2 prefetches per page.
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.MafikingRoutePrefetch && typeof window.MafikingRoutePrefetch.prefetchAdjacentRoutes === "function") {
+      window.MafikingRoutePrefetch.prefetchAdjacentRoutes(route);
+    }
+  }, [route]);
+
+  // Phase 2.2: hover-triggered prefetch. When the user moves the pointer
+  // over any element with `data-route="<x>"`, pre-warm that route's chunk.
+  // This is much more aggressive than idle-time and catches cases like
+  // hover-then-click delays. The `pointerover` listener is attached once.
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.MafikingRoutePrefetch && typeof window.MafikingRoutePrefetch.attachHoverPrefetch === "function") {
+      window.MafikingRoutePrefetch.attachHoverPrefetch();
+    }
   }, []);
 
   React.useEffect(() => {
@@ -475,8 +542,182 @@ const App = () => {
     }
   }, [isAdminAccount, navigate, route]);
 
+  // Phase 2.1: lazy-load the Landing component. The Vite build emits
+  // `src/lobby.jsx` as its own chunk thanks to the dynamic import; the
+  // Babel-standalone path loads lobby.jsx as a classic <script> before
+  // app.jsx (see MAFIKING.html) and exposes `window.Lobby`, so the
+  // `m.Lobby || window.Lobby` fallback covers the legacy runtime.
   React.useEffect(() => {
-    if (isLoggedIn && route === "lobby" && !authMode) {
+    if (route !== "lobby" && route !== "landing") {
+      setLobbyComp(null);
+      return undefined;
+    }
+    if (lobbyComp) return undefined;
+    if (window.Lobby) {
+      setLobbyComp(() => window.Lobby);
+      return undefined;
+    }
+    let cancelled = false;
+    try {
+      const loader = import("./lobby.jsx");
+      if (loader && typeof loader.then === "function") {
+        loader
+          .then((m) => {
+            if (cancelled) return;
+            setLobbyComp(() => (m && m.Lobby) || window.Lobby);
+          })
+          .catch(() => {
+            if (cancelled) return;
+            if (window.Lobby) setLobbyComp(() => window.Lobby);
+          });
+      } else if (window.Lobby) {
+        setLobbyComp(() => window.Lobby);
+      }
+    } catch (_) {
+      if (window.Lobby) setLobbyComp(() => window.Lobby);
+    }
+    return () => { cancelled = true; };
+  }, [lobbyComp, route]);
+
+  // Phase 2.2: lazy-load every other route on first visit. Each route file
+  // is dynamic-imported as its own Vite chunk. The Babel-standalone path
+  // already loaded every src/*.jsx as a classic <script> and exposed
+  // `window.<Name>`, so the fallback covers the legacy runtime.
+  React.useEffect(() => {
+    if (route !== "belajar" || belajarComp) return undefined;
+    if (window.Belajar) { setBelajarComp(() => window.Belajar); return undefined; }
+    let cancelled = false;
+    try {
+      const p = import("./belajar.jsx");
+      if (p && typeof p.then === "function") {
+        p.then((m) => {
+          if (cancelled) return;
+          setBelajarComp(() => (m && m.Belajar) || window.Belajar);
+        }).catch(() => { if (!cancelled && window.Belajar) setBelajarComp(() => window.Belajar); });
+      } else if (window.Belajar) setBelajarComp(() => window.Belajar);
+    } catch (_) { if (window.Belajar) setBelajarComp(() => window.Belajar); }
+    return () => { cancelled = true; };
+  }, [belajarComp, route]);
+
+  React.useEffect(() => {
+    if (route !== "misi" || misiComp) return undefined;
+    if (window.Misi) { setMisiComp(() => window.Misi); return undefined; }
+    let cancelled = false;
+    try {
+      const p = import("./misi.jsx");
+      if (p && typeof p.then === "function") {
+        p.then((m) => {
+          if (cancelled) return;
+          setMisiComp(() => (m && m.Misi) || window.Misi);
+        }).catch(() => { if (!cancelled && window.Misi) setMisiComp(() => window.Misi); });
+      } else if (window.Misi) setMisiComp(() => window.Misi);
+    } catch (_) { if (window.Misi) setMisiComp(() => window.Misi); }
+    return () => { cancelled = true; };
+  }, [misiComp, route]);
+
+  React.useEffect(() => {
+    if (route !== "tryout" || tryoutComp) return undefined;
+    if (window.Tryout) { setTryoutComp(() => window.Tryout); return undefined; }
+    let cancelled = false;
+    try {
+      const p = import("./tryout.jsx");
+      if (p && typeof p.then === "function") {
+        p.then((m) => {
+          if (cancelled) return;
+          setTryoutComp(() => (m && m.Tryout) || window.Tryout);
+        }).catch(() => { if (!cancelled && window.Tryout) setTryoutComp(() => window.Tryout); });
+      } else if (window.Tryout) setTryoutComp(() => window.Tryout);
+    } catch (_) { if (window.Tryout) setTryoutComp(() => window.Tryout); }
+    return () => { cancelled = true; };
+  }, [tryoutComp, route]);
+
+  React.useEffect(() => {
+    if (route !== "practice" || practiceComp) return undefined;
+    if (window.Practice) { setPracticeComp(() => window.Practice); return undefined; }
+    let cancelled = false;
+    try {
+      const p = import("./practice.jsx");
+      if (p && typeof p.then === "function") {
+        p.then((m) => {
+          if (cancelled) return;
+          setPracticeComp(() => (m && m.Practice) || window.Practice);
+        }).catch(() => { if (!cancelled && window.Practice) setPracticeComp(() => window.Practice); });
+      } else if (window.Practice) setPracticeComp(() => window.Practice);
+    } catch (_) { if (window.Practice) setPracticeComp(() => window.Practice); }
+    return () => { cancelled = true; };
+  }, [practiceComp, route]);
+
+  React.useEffect(() => {
+    if (route !== "payment" || paymentComp) return undefined;
+    if (window.Payment) { setPaymentComp(() => window.Payment); return undefined; }
+    let cancelled = false;
+    try {
+      const p = import("./payment.jsx");
+      if (p && typeof p.then === "function") {
+        p.then((m) => {
+          if (cancelled) return;
+          setPaymentComp(() => (m && m.Payment) || window.Payment);
+        }).catch(() => { if (!cancelled && window.Payment) setPaymentComp(() => window.Payment); });
+      } else if (window.Payment) setPaymentComp(() => window.Payment);
+    } catch (_) { if (window.Payment) setPaymentComp(() => window.Payment); }
+    return () => { cancelled = true; };
+  }, [paymentComp, route]);
+
+  React.useEffect(() => {
+    if (route !== "profile" || profileComp) return undefined;
+    if (window.Profile) { setProfileComp(() => window.Profile); return undefined; }
+    let cancelled = false;
+    try {
+      const p = import("./profile.jsx");
+      if (p && typeof p.then === "function") {
+        p.then((m) => {
+          if (cancelled) return;
+          setProfileComp(() => (m && m.Profile) || window.Profile);
+        }).catch(() => { if (!cancelled && window.Profile) setProfileComp(() => window.Profile); });
+      } else if (window.Profile) setProfileComp(() => window.Profile);
+    } catch (_) { if (window.Profile) setProfileComp(() => window.Profile); }
+    return () => { cancelled = true; };
+  }, [profileComp, route]);
+
+  React.useEffect(() => {
+    if (route !== "leaderboard" || leaderboardComp) return undefined;
+    if (window.Leaderboard) { setLeaderboardComp(() => window.Leaderboard); return undefined; }
+    let cancelled = false;
+    try {
+      const p = import("./leaderboard.jsx");
+      if (p && typeof p.then === "function") {
+        p.then((m) => {
+          if (cancelled) return;
+          setLeaderboardComp(() => (m && m.Leaderboard) || window.Leaderboard);
+        }).catch(() => { if (!cancelled && window.Leaderboard) setLeaderboardComp(() => window.Leaderboard); });
+      } else if (window.Leaderboard) setLeaderboardComp(() => window.Leaderboard);
+    } catch (_) { if (window.Leaderboard) setLeaderboardComp(() => window.Leaderboard); }
+    return () => { cancelled = true; };
+  }, [leaderboardComp, route]);
+
+  React.useEffect(() => {
+    if (route !== "invoices" || invoicesComp) return undefined;
+    if (window.Invoices) { setInvoicesComp(() => window.Invoices); return undefined; }
+    let cancelled = false;
+    try {
+      const p = import("./invoices.jsx");
+      if (p && typeof p.then === "function") {
+        p.then((m) => {
+          if (cancelled) return;
+          setInvoicesComp(() => (m && m.Invoices) || window.Invoices);
+        }).catch(() => { if (!cancelled && window.Invoices) setInvoicesComp(() => window.Invoices); });
+      } else if (window.Invoices) setInvoicesComp(() => window.Invoices);
+    } catch (_) { if (window.Invoices) setInvoicesComp(() => window.Invoices); }
+    return () => { cancelled = true; };
+  }, [invoicesComp, route]);
+
+  React.useEffect(() => {
+    // Auto-redirect logged-in users from default landing to /belajar. Skip the
+    // redirect when the visitor explicitly opened /landing, so marketing can
+    // still be reached from a deep link (e.g. pricing comparison page).
+    const onLanding = typeof window !== "undefined"
+      && normalizeAppPath(window.location.pathname) === "/landing";
+    if (isLoggedIn && route === "lobby" && !authMode && !onLanding) {
       navigate("belajar");
     }
   }, [authMode, isLoggedIn, navigate, route]);
@@ -595,34 +836,34 @@ const App = () => {
           data-screen-label={routeLabel(route)}
           className={route === "practice" || route === "lobby" || isTryoutFullscreenRoute ? "" : "app-route-transition"}
         >
-          {route === "lobby" && <Lobby setRoute={navigate} tweaks={tweaks} currentUser={currentUser} isAdmin={canEditInlineAsAdmin} showTryoutLink={canSeeTryoutPage} authMode={authMode} authRedirect={authRedirect} authBackRoute={authBackRoute} authState={authState} onAuthSuccess={handleAuthSuccess} pendingClerkUser={pendingClerkUser} />}
-          {showBelajarPage && <Belajar setRoute={navigate} tweaks={tweaks} isAdmin={canEditInlineAsAdmin} isLoggedIn={isLoggedIn} currentUser={currentUser} authReady={authReady} hasPremiumAccess={hasPremiumAccess} initialSection={belajarSection} onSectionChange={setBelajarSection} />}
+          {(route === "lobby" || route === "landing") && (lobbyComp || (typeof window !== "undefined" && window.Lobby)) && React.createElement(lobbyComp || window.Lobby, { setRoute: navigate, tweaks: tweaks, currentUser, isAdmin: canEditInlineAsAdmin, showTryoutLink: canSeeTryoutPage, authMode, authRedirect, authBackRoute, authState, onAuthSuccess: handleAuthSuccess, pendingClerkUser })}
+          {showBelajarPage && (belajarComp || window.Belajar) && React.createElement(belajarComp || window.Belajar, { setRoute: navigate, tweaks: tweaks, isAdmin: canEditInlineAsAdmin, isLoggedIn, currentUser, authReady, hasPremiumAccess, initialSection: belajarSection, onSectionChange: setBelajarSection })}
           {route === "misi" && (
             <ScreenErrorBoundary>
               {hasPremiumAccess
-                ? <Misi setRoute={navigate} tweaks={tweaks} isAdmin={isAdmin} />
+                ? React.createElement(misiComp || window.Misi, { setRoute: navigate, tweaks: tweaks, isAdmin })
                 : <AccessGate setRoute={navigate} title="Akses Paket" message="Beli paket untuk mendapat akses ke misi harian dan latihan terarah setiap hari" variant="misi" showFreeTryout={false} hideKicker />}
             </ScreenErrorBoundary>
           )}
-          {showTryoutPage && <Tryout setRoute={navigate} tweaks={tweaks} isAdmin={canEditInlineAsAdmin} isAdminMode={isAdmin} isLoggedIn={isLoggedIn} context={tryoutContext} currentUser={currentUser} />}
-          {route === "leaderboard" && window.Leaderboard && React.createElement(window.Leaderboard)}
+          {showTryoutPage && (tryoutComp || window.Tryout) && React.createElement(tryoutComp || window.Tryout, { setRoute: navigate, tweaks: tweaks, isAdmin: canEditInlineAsAdmin, isAdminMode: isAdmin, isLoggedIn, context: tryoutContext, currentUser })}
+          {route === "leaderboard" && (leaderboardComp || window.Leaderboard) && React.createElement(leaderboardComp || window.Leaderboard)}
           {route === "admin" && isAdminAccount && isAdmin && (
             window.AdminPage
               ? React.createElement(window.AdminPage, { setRoute: navigate })
               : <AdminChunkFallback status={adminChunkStatus} />
           )}
           {route === "profile" && (isLoggedIn
-            ? <Profile setRoute={navigate} isAdmin={canEditInlineAsAdmin} onRequestLanding={confirmLandingReturn} onRequestLogout={confirmLogout} />
+            ? React.createElement(profileComp || window.Profile, { setRoute: navigate, isAdmin: canEditInlineAsAdmin, onRequestLanding: confirmLandingReturn, onRequestLogout: confirmLogout })
             : <LoginRedirect setRoute={navigate} />
           )}
           {route === "invoices" && (isLoggedIn
-            ? <Invoices setRoute={navigate} />
+            ? React.createElement(invoicesComp || window.Invoices, { setRoute: navigate })
             : <LoginRedirect setRoute={navigate} redirectRoute="invoices" />
           )}
-          {route === "payment" && <Payment setRoute={navigate} currentUser={currentUser} context={paymentContext} />}
+          {route === "payment" && (paymentComp || window.Payment) && React.createElement(paymentComp || window.Payment, { setRoute: navigate, currentUser, context: paymentContext })}
           {route === "practice" && (
             <ScreenErrorBoundary>
-              <Practice setRoute={navigate} context={practiceContext} isAdmin={canEditInlineAsAdmin} isLoggedIn={isLoggedIn} isAuthenticated={Boolean(currentUser)} hasPremiumAccess={hasPremiumAccess} />
+              {React.createElement(practiceComp || window.Practice, { setRoute: navigate, context: practiceContext, isAdmin: canEditInlineAsAdmin, isLoggedIn, isAuthenticated: Boolean(currentUser), hasPremiumAccess })}
             </ScreenErrorBoundary>
           )}
         </div>
@@ -927,6 +1168,10 @@ function normalizeAppPath(pathname) {
   return String(pathname || "/").replace(/\/+$/, "") || "/";
 }
 
+function isPublicLandingFromUrl() {
+  return normalizeAppPath(window.location.pathname) === "/landing";
+}
+
 function parseAppLocation() {
   const legacyHash = window.location.hash.replace(/^#\/?/, "");
   if (legacyHash.startsWith("verify-email")) {
@@ -938,6 +1183,7 @@ function parseAppLocation() {
 
   const path = normalizeAppPath(window.location.pathname);
   if (path === "/" || path === "/index.html" || path === "/MAFIKING.html") return { route: "lobby" };
+  if (path === "/landing") return { route: "lobby", publicLanding: true };
   if (path === "/login" || path === "/masuk") return { route: "lobby", authMode: "login" };
   if (path === "/signup" || path === "/daftar") return { route: "lobby", authMode: "signup" };
   if (path === "/verify-email") {
@@ -966,7 +1212,7 @@ function appStateToPath(state) {
   if (state?.authMode === "verify-email") return "/signup";
   if (state?.authMode === "login") return "/login";
   if (state?.authMode === "signup") return "/signup";
-  if (route === "lobby") return "/";
+  if (route === "lobby") return state?.publicLanding ? "/landing" : "/";
   if (route === "belajar") {
     const section = String(state?.belajarSection || state?.section || "").trim().toLowerCase();
     return section === "try out" || section === "tryout" ? "/belajar/tryout" : "/belajar";

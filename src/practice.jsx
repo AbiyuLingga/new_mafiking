@@ -41,6 +41,14 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   const [showResultModal, setShowResultModal] = useState(false);
   const [canvasProcess, setCanvasProcess] = useState(null);
   const [canvasProcessSlow, setCanvasProcessSlow] = useState(false);
+
+  // Phase 1.3: Lazy-load KaTeX the first time the Practice page mounts so the
+  // marketing/belajar routes do not pay the cost of math CSS+JS.
+  React.useEffect(() => {
+    if (window.MafikingMathLoader && typeof window.MafikingMathLoader.loadKatex === "function") {
+      window.MafikingMathLoader.loadKatex();
+    }
+  }, []);
   const [focusMode, setFocusMode] = useState(false);
   const [showCanvasIntro, setShowCanvasIntro] = useState(() => shouldShowCanvasIntro(context));
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(() => {
@@ -2599,6 +2607,12 @@ function renderEquationHTML(value) {
 }
 
 function Eq({ value }) {
+  // Trigger re-render once KaTeX is available so previously rendered
+  // placeholder text upgrades into formatted math. The custom event is
+  // dispatched by src/math-loader.js after KaTeX is fully loaded.
+  const katexReady = (window.MafikingMathLoader && window.MafikingMathLoader.useKatexReady)
+    ? window.MafikingMathLoader.useKatexReady()
+    : true;
   return React.createElement("span", {
     className: "eq-katex",
     dangerouslySetInnerHTML: { __html: renderMafikingMathHTML(value || "") }

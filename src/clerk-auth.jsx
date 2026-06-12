@@ -189,7 +189,35 @@ const MafikingClerk = (() => {
     }
   }
 
+  function popupResultStorage() {
+    try {
+      return window.localStorage;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function persistPopupResult(payload) {
+    const storage = popupResultStorage();
+    if (!storage) return;
+    try {
+      storage.setItem(POPUP_RESULT_STORAGE_KEY, JSON.stringify({
+        at: Date.now(),
+        payload,
+      }));
+    } catch (_) {}
+  }
+
+  function clearPopupResultStorage() {
+    const storage = popupResultStorage();
+    if (!storage) return;
+    try {
+      storage.removeItem(POPUP_RESULT_STORAGE_KEY);
+    } catch (_) {}
+  }
+
   function postPopupResult(payload) {
+    persistPopupResult(payload);
     try {
       if (window.opener && !window.opener.closed) {
         window.opener.postMessage(
@@ -328,16 +356,18 @@ const MafikingClerk = (() => {
   }
 
   function readPopupResultFromStorage() {
+    const storage = popupResultStorage();
+    if (!storage) return null;
     try {
-      const raw = window.sessionStorage.getItem(POPUP_RESULT_STORAGE_KEY);
+      const raw = storage.getItem(POPUP_RESULT_STORAGE_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       const age = Date.now() - Number(parsed.at || 0);
       if (age > POPUP_RESULT_TTL_MS) {
-        window.sessionStorage.removeItem(POPUP_RESULT_STORAGE_KEY);
+        storage.removeItem(POPUP_RESULT_STORAGE_KEY);
         return null;
       }
-      window.sessionStorage.removeItem(POPUP_RESULT_STORAGE_KEY);
+      storage.removeItem(POPUP_RESULT_STORAGE_KEY);
       return parsed.payload || null;
     } catch (_) {
       return null;
@@ -367,9 +397,11 @@ const MafikingClerk = (() => {
         reject(new Error("Popup login Google diblokir oleh browser."));
         return;
       }
+      clearPopupResultStorage();
 
       const origin = window.location.origin;
       let settled = false;
+      let closedRecoveryStarted = false;
       const cleanup = () => {
         window.removeEventListener("message", onMessage);
         if (intervalId) window.clearInterval(intervalId);
@@ -396,11 +428,61 @@ const MafikingClerk = (() => {
         if (stored) settle(stored);
       };
 
+      const readRegisteredServerUser = async () => {
+        try {
+          const response = await fetch("/api/auth/me", {
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+          });
+          if (!response.ok) return null;
+          const user = await response.json().catch(() => null);
+          if (!user || String(user.display_name || "").startsWith("Tamu_")) return null;
+          return user;
+        } catch (_) {
+          return null;
+        }
+      };
+
+      const recoverClosedPopupSession = async () => {
+        if (closedRecoveryStarted || settled) return;
+        closedRecoveryStarted = true;
+        const startedAt = Date.now();
+        while (!settled && Date.now() - startedAt < 10000) {
+          const stored = readPopupResultFromStorage();
+          if (stored) {
+            settle(stored);
+            return;
+          }
+
+          let user = await readRegisteredServerUser();
+          if (!user) {
+            try {
+              const clerk = await load();
+              if (clerk.isSignedIn && clerk.session) user = await syncSession();
+            } catch (_) {}
+          }
+
+          if (user) {
+            settle({
+              ok: true,
+              result: {
+                user,
+                redirect,
+                mode: mode === "signup" ? "signup" : "login",
+              },
+            });
+            return;
+          }
+          await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
+        }
+        settle({ ok: false, error: "Login Google berhasil, tetapi sesi Mafiking belum tersinkron. Silakan coba lagi." });
+      };
+
       const intervalId = window.setInterval(() => {
         if (!popup || popup.closed) {
           const stored = readPopupResultFromStorage();
           if (stored) { settle(stored); return; }
-          settle({ ok: false, error: "Popup login Google ditutup sebelum selesai." });
+          recoverClosedPopupSession();
         }
       }, 800);
       const storageIntervalId = window.setInterval(checkStorage, 400);

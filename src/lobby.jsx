@@ -1563,12 +1563,25 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
                   <div className="absolute inset-x-0 sm:inset-x-2 bottom-4 sm:bottom-10 top-10 sm:top-20 z-10 flex flex-col overflow-hidden rounded-[1.5rem] sm:rounded-[2.5rem] bg-white shadow-sm">
                     <div className="flex h-10 sm:h-14 items-center gap-1.5 sm:gap-2 border-b border-slate-100 bg-slate-50/50 px-3 sm:px-6"><div className="h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-slate-200" /><div className="h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-slate-200" /><div className="h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-slate-200" /></div>
                     <div className="relative flex-grow overflow-hidden bg-slate-50">
-                      <img
-                        alt="Preview landing page Mafiking"
-                        className="h-full w-full object-cover"
-                        loading="eager"
-                        src="/assets/landing_mentors_20260607.png"
-                      />
+                      <picture>
+                        <source
+                          type="image/avif"
+                          srcSet="/assets/landing_mentors_20260607-mobile.avif 640w, /assets/landing_mentors_20260607-tablet.avif 960w, /assets/landing_mentors_20260607-desktop.avif 1280w"
+                          sizes="(max-width: 768px) 640px, (max-width: 1280px) 50vw, 1280px"
+                        />
+                        <source
+                          type="image/webp"
+                          srcSet="/assets/landing_mentors_20260607-mobile.webp 640w, /assets/landing_mentors_20260607-tablet.webp 960w, /assets/landing_mentors_20260607-desktop.webp 1280w"
+                          sizes="(max-width: 768px) 640px, (max-width: 1280px) 50vw, 1280px"
+                        />
+                        <img
+                          alt="Preview landing page Mafiking"
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                          src="/assets/landing_mentors_20260607.png"
+                        />
+                      </picture>
                     </div>
                   </div>
                 </div>

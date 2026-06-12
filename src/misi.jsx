@@ -144,6 +144,7 @@ const Misi = ({ setRoute, tweaks, isAdmin }) => {
 
   return (
     <div className="app-page-bg app-page-bg--misi min-h-[calc(100vh-72px)]">
+      <MisiKaTeXBoot />
       <section>
         <div className="max-w-6xl mx-auto px-6 md:px-8 pt-12 pb-10">
           <div>
@@ -420,6 +421,17 @@ const MissionQuestionText = ({ question, className }) => {
     );
   }
   return <span className={`mission-question-text${className ? ` ${className}` : ''}`}>{question}</span>;
+};
+
+// Phase 1.3: Lazy KaTeX load when Misi is opened. Misi can show math questions
+// so the same deferral applies.
+const MisiKaTeXBoot = () => {
+  React.useEffect(() => {
+    if (window.MafikingMathLoader && typeof window.MafikingMathLoader.loadKatex === "function") {
+      window.MafikingMathLoader.loadKatex();
+    }
+  }, []);
+  return null;
 };
 
 const MissionQuestionMedia = ({ mission }) => {

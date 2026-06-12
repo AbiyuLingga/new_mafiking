@@ -133,6 +133,15 @@ const MafikingAPI = {
 };
 
 async function clerkAuthHeaders() {
+  // Phase 1.4 perf guard: Clerk SDK + UI ships from Clerk's CDN. Calling
+  // getToken() forces the SDK to load even for public/guest API calls. Skip
+  // the load unless the SPA confirms a registered (logged-in, non-guest)
+  // user is making the call. Server-side auth still works through the
+  // express-session cookie regardless.
+  const appState = (typeof window !== "undefined" && window.MafikingAppState) || null;
+  if (appState && appState.isLoggedIn === false) {
+    return {};
+  }
   if (!window.MafikingClerk || typeof window.MafikingClerk.getToken !== "function") return {};
   const token = await window.MafikingClerk.getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};

@@ -8,9 +8,11 @@ const adminOutputPath = path.join(projectRoot, 'src', 'generated-admin.jsx');
 const legacyAppScripts = [
   'tweaks-panel.jsx',
   'src/clerk-auth.jsx',
+  'src/math-loader.js',
   'src/backend-api.jsx',
   'src/shared.jsx',
   'src/onboarding.jsx',
+  'src/route-prefetch.js',
   'src/lobby.jsx',
   'src/belajar.jsx',
   'src/profile.jsx',

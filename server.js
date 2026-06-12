@@ -37,12 +37,16 @@ try {
 const app = express();
 const webhookRoutes = require('./routes/webhooks');
 const { isLocalAdminMode } = require('./middleware/admin');
+const { isRegisteredUser } = require('./middleware/auth');
 const {
   createPerformanceStore,
   normalizeClientErrorPayload,
   normalizeVitalsPayload,
+  persistVitalsToDb,
+  purgeExpiredVitals,
   setPublicApiCache,
   shouldLogRequestTiming,
+  summarizeVitalsFromDb,
 } = require('./lib/performance');
 const { createRequestGuard } = require('./lib/request-guard');
 const { helmetCspOptions } = require('./lib/csp');
@@ -679,6 +683,11 @@ app.post('/api/performance/vitals', performanceLimiter, (req, res) => {
       userId: req.session?.userId || null,
     });
   }
+  try {
+    persistVitalsToDb(req.app.locals.db, normalized.metrics);
+  } catch (err) {
+    console.warn('[vitals-db-persist]', err.message);
+  }
   res.status(204).end();
 });
 
@@ -700,8 +709,29 @@ app.get('/api/performance/summary', (req, res) => {
   if (!(req.session?.role === 'admin' || isLocalAdminMode(req))) {
     return res.status(403).json({ error: 'Akses admin diperlukan' });
   }
-  res.json(req.app.locals.performanceStore?.summary() || { requestsCount: 0, vitalsCount: 0 });
+  const baseSummary = req.app.locals.performanceStore?.summary() || { requestsCount: 0, vitalsCount: 0 };
+  const sinceMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const dbP75 = {
+    LCP: summarizeVitalsFromDb(req.app.locals.db, { metric: 'LCP', sinceMs }),
+    INP: summarizeVitalsFromDb(req.app.locals.db, { metric: 'INP', sinceMs }),
+    CLS: summarizeVitalsFromDb(req.app.locals.db, { metric: 'CLS', sinceMs }),
+    FCP: summarizeVitalsFromDb(req.app.locals.db, { metric: 'FCP', sinceMs }),
+    TTFB: summarizeVitalsFromDb(req.app.locals.db, { metric: 'TTFB', sinceMs }),
+  };
+  res.json({ ...baseSummary, fieldP75Last7Days: dbP75 });
 });
+
+// Lightweight periodic purge of expired CWV telemetry (privacy: 30-day retention).
+const vitalsDb = db;
+const vitalsPurgeIntervalMs = 6 * 60 * 60 * 1000;
+setInterval(() => {
+  try {
+    const removed = purgeExpiredVitals(vitalsDb);
+    if (removed > 0) console.log(`[vitals-purge] removed ${removed} expired web_vital_metrics rows`);
+  } catch (err) {
+    console.warn('[vitals-purge]', err.message);
+  }
+}, vitalsPurgeIntervalMs).unref();
 
 app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth/register', registerLimiter);
@@ -1050,9 +1080,22 @@ app.get(['/syarat-ketentuan.html', '/terms.html', '/tnc.html'], (_req, res) => {
   res.sendFile(path.join(__dirname, 'syarat-ketentuan.html'));
 });
 
+// OAuth popup callbacks must keep opener continuity so the parent auth screen
+// can receive the success message and dismiss /login without a false error.
+app.use('/sso-callback', (_req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+});
+
 function sendAppHtml(_req, res) {
   if (hasBuiltClient()) {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    // Phase 3.2: BFCache-friendly cache header. The SPA shell is identical
+    // for all users (auth state lives in cookies / API responses). `no-cache`
+    // forces revalidation but does NOT block back/forward cache the way
+    // `no-store` would, so navigating back to a previously-visited page
+    // restores the shell instantly instead of re-downloading it.
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     return res.sendFile(distIndexPath);
   }
 
@@ -1060,11 +1103,23 @@ function sendAppHtml(_req, res) {
     return res.status(503).type('text/plain; charset=utf-8').send('Production bundle belum tersedia. Jalankan npm run build sebelum start server.');
   }
 
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Cache-Control', 'no-cache, must-revalidate');
   return res.sendFile(legacyAppHtmlPath);
 }
 
-app.get(['/', '/index.html', '/MAFIKING.html'], (_req, res) => {
+app.get(['/', '/index.html', '/MAFIKING.html'], (req, res) => {
+  // Phase 1.5: auth-aware landing boot. Registered (non-guest) users are
+  // bounced straight to /belajar so they skip the marketing route entirely.
+  // Guests and unknown sessions still receive the SPA shell and the client
+  // renders the landing page.
+  if (req.session && req.session.userId && isRegisteredUser(db, req.session.userId)) {
+    return res.redirect(302, '/belajar');
+  }
+  sendAppHtml(req, res);
+});
+app.get('/landing', (_req, res) => {
+  // Explicit marketing deep link. Even logged-in users can open this for
+  // pricing comparison or a re-read of the marketing copy.
   sendAppHtml(_req, res);
 });
 app.get(/^(?!\/api\/).*/, (_req, res) => {

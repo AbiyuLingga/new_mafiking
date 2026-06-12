@@ -491,3 +491,28 @@ CREATE INDEX IF NOT EXISTS idx_ambiguous_unresolved
 
 CREATE INDEX IF NOT EXISTS idx_ambiguous_mutation
     ON payment_ambiguous_queue(mutation_id);
+
+-- Migration 007: web_vital_metrics for field CWV telemetry (Phase 0 perf plan)
+-- Privacy: no PII, no URL query, no user ID. 30-day auto-purge via retention_until.
+-- Indexed by metric+date for p75 aggregation, by path+date for per-route dashboards.
+CREATE TABLE IF NOT EXISTS web_vital_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL,
+    metric TEXT NOT NULL,
+    value REAL NOT NULL,
+    rating TEXT NOT NULL,
+    navigation_type TEXT,
+    device_class TEXT,
+    attribution_json TEXT,
+    captured_at INTEGER NOT NULL,
+    retention_until INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_vital_metric_captured
+    ON web_vital_metrics (metric, captured_at);
+
+CREATE INDEX IF NOT EXISTS idx_vital_path_captured
+    ON web_vital_metrics (path, captured_at);
+
+CREATE INDEX IF NOT EXISTS idx_vital_retention
+    ON web_vital_metrics (retention_until);
