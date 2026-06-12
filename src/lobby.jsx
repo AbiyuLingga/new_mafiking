@@ -310,20 +310,38 @@ const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authSta
     }
   };
 
+  const normalizeRedirectValue = (value) => {
+    if (value == null) return null;
+    if (typeof value === 'object') return value;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      if (trimmed[0] === '{' || trimmed[0] === '[') {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === 'object') return parsed;
+        } catch (_) {}
+      }
+      return trimmed;
+    }
+    return null;
+  };
+
   const handleClerkAuth = async () => {
     setClerkLoading(true);
     setError('');
     try {
-      if (!window.MafikingClerk || typeof window.MafikingClerk.openAuth !== 'function') {
+      if (!window.MafikingClerk || typeof window.MafikingClerk.openGooglePopup !== 'function') {
         throw new Error('Login Google belum siap dimuat.');
       }
-      const user = await window.MafikingClerk.openAuth(isSignup ? 'signup' : 'login', {
-        provider: 'google',
+      const result = await window.MafikingClerk.openGooglePopup(isSignup ? 'signup' : 'login', {
         redirect,
       });
-      if (!user) return;
-      if (typeof onSuccess === 'function') onSuccess(user, redirect);
-      else setRoute(redirect || { route: "belajar", section: "Try Out" });
+      const user = result && result.user ? result.user : null;
+      if (!user) throw new Error('Login Google belum selesai.');
+      const resolvedRedirect = normalizeRedirectValue(result.redirect) || normalizeRedirectValue(redirect);
+      if (typeof onSuccess === 'function') onSuccess(user, resolvedRedirect);
+      else setRoute(resolvedRedirect || { route: "belajar", section: "Try Out" });
     } catch (err) {
       setError(err.message || 'Login Google gagal.');
     } finally {
@@ -767,26 +785,33 @@ const LandingLegacy = ({ setRoute, tweaks, isAdmin = false, currentUser = null, 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6 md:px-10">
-          <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className="flex items-center" type="button">
-            <Logo size={34} />
-          </button>
-          <nav className="hidden items-center gap-8 text-sm font-semibold text-slate-500 md:flex">
-            {["belajar", "fitur", "testimoni"].map((id) => (
-              <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })} className="hover:text-slate-950" type="button">
-                {id === "fitur" ? "Fitur" : id === "testimoni" ? "Testimoni" : "Belajar"}
+        <div className="mx-auto max-w-7xl px-6 md:px-10">
+          <div className="flex h-16 items-center justify-between gap-3 md:h-20">
+            <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className="flex items-center" type="button">
+              <Logo size={34} />
+            </button>
+            <nav className="hidden items-center gap-8 text-sm font-semibold text-slate-500 md:flex">
+              {["belajar", "fitur", "testimoni"].map((id) => (
+                <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })} className="hover:text-slate-950" type="button">
+                  {id === "fitur" ? "Fitur" : id === "testimoni" ? "Testimoni" : "Belajar"}
+                </button>
+              ))}
+            </nav>
+            <div className="hidden items-center gap-3 md:flex">
+              <button onClick={startFree} className="btn-ink !py-2.5 !px-5 text-sm" type="button">
+                Coba Gratis <Icon.Arrow className="w-3.5 h-3.5" />
               </button>
-            ))}
-          </nav>
-          <div className="flex items-center gap-3">
-            <button onClick={startFree} className="btn-ink !py-2.5 !px-5 text-sm" type="button">
+            </div>
+          </div>
+          <div className="pb-3 md:hidden">
+            <button onClick={startFree} className="btn-ink w-full justify-center !py-3 text-sm" type="button">
               Coba Gratis <Icon.Arrow className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       </header>
 
-      <main id="beranda" className="pt-20">
+      <main id="beranda" className="pt-32 md:pt-20">
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 pointer-events-none opacity-[0.55]" style={{
             backgroundImage: "radial-gradient(circle at 20% 20%, rgba(255,244,79,.35), transparent 28%), radial-gradient(circle at 80% 10%, rgba(59,130,246,.12), transparent 30%)"
@@ -818,8 +843,8 @@ const LandingLegacy = ({ setRoute, tweaks, isAdmin = false, currentUser = null, 
               </div>
               <div className="mt-9 grid max-w-2xl grid-cols-2 gap-4 text-sm text-slate-500 md:grid-cols-4">
                 {[
-                  ["100+", "Pengguna Aktif"],
-                  ["20+", "Soal Latihan"],
+                  ["250+", "Pengguna Aktif"],
+                  ["100+", "Soal Latihan"],
                   ["98%", "lebih terarah"],
                   ["24/7", "akses belajar"],
                 ].map(([value, label]) => (
@@ -1174,9 +1199,6 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
   const [isTeacherMobileMode, setIsTeacherMobileMode] = React.useState(() => window.matchMedia("(max-width: 639px)").matches);
   const demoVideoRef = React.useRef(null);
   const demoVideoFrameRef = React.useRef(null);
-  const teacherScrollRef = React.useRef(null);
-  const teacherAutoScrollPausedRef = React.useRef(false);
-  const teacherLoopWidthRef = React.useRef(0);
   const soundEnabledRef = React.useRef(true);
   const landingMediaEditEnabled = Boolean(isAdmin);
   const authRedirect = { route: "belajar", section: "Try Out" };
@@ -1377,67 +1399,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
     }
   };
 
-  const recenterTeacherScroll = React.useCallback(() => {
-    const track = teacherScrollRef.current;
-    if (!track) return;
-    const loopWidth = teacherLoopWidthRef.current || (track.scrollWidth / 3);
-    if (!loopWidth) return;
-    const left = track.scrollLeft;
-    if (left < loopWidth * 0.5) {
-      track.scrollLeft = left + loopWidth;
-    } else if (left > loopWidth * 1.5) {
-      track.scrollLeft = left - loopWidth;
-    }
-  }, []);
-
-  React.useEffect(() => {
-    const track = teacherScrollRef.current;
-    if (!isTeacherMobileMode || !track) return undefined;
-
-    let rafId = 0;
-    let resizeRafId = 0;
-    let cancelled = false;
-
-    const setInitialPosition = () => {
-      const loopWidth = track.scrollWidth / 3;
-      if (!loopWidth || cancelled) return;
-      teacherLoopWidthRef.current = loopWidth;
-      track.scrollLeft = loopWidth;
-    };
-
-    const frame = () => {
-      if (cancelled) return;
-      const loopWidth = teacherLoopWidthRef.current || (track.scrollWidth / 3);
-      if (loopWidth) {
-        teacherLoopWidthRef.current = loopWidth;
-        if (!teacherAutoScrollPausedRef.current) {
-          track.scrollLeft += 0.45;
-        }
-        if (track.scrollLeft < loopWidth * 0.5) {
-          track.scrollLeft += loopWidth;
-        } else if (track.scrollLeft > loopWidth * 1.5) {
-          track.scrollLeft -= loopWidth;
-        }
-      }
-      rafId = window.requestAnimationFrame(frame);
-    };
-
-    const scheduleInitialPosition = () => {
-      window.cancelAnimationFrame(resizeRafId);
-      resizeRafId = window.requestAnimationFrame(setInitialPosition);
-    };
-
-    scheduleInitialPosition();
-    rafId = window.requestAnimationFrame(frame);
-    window.addEventListener("resize", scheduleInitialPosition);
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener("resize", scheduleInitialPosition);
-      window.cancelAnimationFrame(rafId);
-      window.cancelAnimationFrame(resizeRafId);
-    };
-  }, [isTeacherMobileMode]);
+  const recenterTeacherScroll = React.useCallback(() => {}, []);
 
   const subjectCards = [
     { title: "Matematika", desc: "Kalkulus, aljabar, deret tak terhingga - dari fungsi limit hingga uji konvergensi.", IconC: Icon.Integral, section: "Matematika" },
@@ -1570,7 +1532,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
       </nav>
 
       <main className="relative z-10 pb-8 sm:pb-16 pt-10 sm:pt-12">
-        <section id="beranda" className="relative mx-auto w-full max-w-[1800px] scroll-mt-32 overflow-hidden px-4 pt-4 sm:px-6 sm:pt-8 md:px-12 md:pt-12 lg:px-20 lg:pb-20 lg:pt-24">
+        <section id="beranda" className="relative mx-auto w-full max-w-[1800px] scroll-mt-32 overflow-hidden px-4 pt-20 sm:px-6 sm:pt-8 md:px-12 md:pt-12 lg:px-20 lg:pb-20 lg:pt-24">
           <LandingFade className="relative z-10">
             <div className="grid items-center gap-6 sm:gap-12 lg:grid-cols-2 lg:gap-8">
               <div className="landing-hero-copy relative z-10 w-full min-w-0">
@@ -1632,7 +1594,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
           <LandingFade delay={80} className="relative z-10">
             <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 md:px-12 lg:px-20">
               <div className="grid grid-cols-2 gap-4 sm:gap-8 md:grid-cols-4 md:gap-4 md:divide-x md:divide-slate-100">
-                {[["100+", "Pengguna Aktif"], ["20+", "Soal Latihan"], ["98%", "Rating"], ["24/7", "Belajar Kapan Saja"]].map(([value, label]) => (
+                {[["250+", "Pengguna Aktif"], ["100+", "Soal Latihan"], ["98%", "Rating"], ["24/7", "Belajar Kapan Saja"]].map(([value, label]) => (
                   <div key={label} className="px-2 sm:px-4 text-left md:text-center"><div className="mb-1 sm:mb-2 text-xl sm:text-3xl font-extrabold text-slate-900 md:text-4xl">{value}</div><div className="text-xs sm:text-sm font-medium text-slate-500">{label}</div></div>
                 ))}
               </div>
@@ -1664,7 +1626,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
                 <button key={item.title} onClick={() => setRoute({ route: "belajar", section: item.section })} className="group flex sm:min-w-0 sm:shrink h-full flex-col rounded-2xl sm:rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-8 text-left transition-all hover:border-slate-300 hover:shadow-2xl hover:shadow-slate-200/50" type="button">
                   <div className="mb-3 sm:mb-4 flex items-start justify-between"><div className="flex h-10 w-10 sm:h-14 sm:w-14 items-center justify-center rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50 text-slate-900"><item.IconC className="h-5 w-5 sm:h-6 sm:w-6" /></div></div>
                   <h3 className="mb-2 sm:mb-4 text-xl sm:text-3xl font-extrabold text-slate-900">{item.title}</h3>
-                  <p className="flex-grow text-sm sm:text-base font-medium leading-relaxed text-slate-600">{item.desc}</p>
+                  <p className="flex-grow text-center text-sm sm:text-base font-medium leading-relaxed text-slate-600">{item.desc}</p>
                 </button>
               ))}
             </div>
@@ -1798,36 +1760,32 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
                   Pengajar Mafiking
                 </h2>
               </div>
-              <div
-                ref={teacherScrollRef}
-                className="landing-teacher-mobile-scroll hide-scrollbar landing-teacher-mask relative -mx-4 overflow-x-auto overflow-y-hidden sm:-mx-6 md:-mx-12 lg:hidden"
-                onScroll={recenterTeacherScroll}
-              >
-                <div className="landing-teacher-track landing-teacher-mobile-track flex w-max gap-4 px-4 sm:gap-6 sm:px-6 md:px-12 lg:gap-8 lg:px-20">
+              <div className="landing-teacher-mobile-scroll hide-scrollbar landing-teacher-mask relative -mx-4 sm:-mx-6 md:-mx-12 lg:hidden">
+                <div className="landing-teacher-track landing-teacher-mobile-track gap-3 px-3 sm:gap-5 sm:px-5 md:px-10 lg:gap-8 lg:px-20">
                   {teacherLoopProfiles.map((teacher, index) => (
-                    <article key={`${teacher.name}-${index}`} className="landing-card-motion landing-teacher-card flex min-h-[520px] w-[82vw] shrink-0 flex-col rounded-2xl border border-slate-200 bg-white/92 px-6 py-8 text-center shadow-sm transition-shadow hover:border-slate-300 hover:shadow-xl hover:shadow-slate-200/70 sm:w-[min(86vw,420px)] sm:rounded-[1.75rem] sm:px-8 sm:py-9 lg:w-[430px]">
-                      <div className="mx-auto flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-[6px] border-[#FBF8F1] bg-[#0B1326] shadow-inner ring-1 ring-slate-200">
+                    <article key={`${teacher.name}-${index}`} className="landing-card-motion landing-teacher-card flex min-h-[400px] w-[64vw] shrink-0 flex-col rounded-2xl border border-slate-200 bg-white/92 px-5 py-6 text-center shadow-sm transition-shadow hover:border-slate-300 hover:shadow-xl hover:shadow-slate-200/70 sm:w-[min(60vw,300px)] sm:rounded-[1.75rem] sm:px-6 sm:py-7 lg:w-[430px]">
+                      <div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-[5px] border-[#FBF8F1] bg-[#0B1326] shadow-inner ring-1 ring-slate-200">
                         {teacher.photo ? (
                           <img src={teacher.photo} alt={teacher.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                         ) : (
-                          <span className="text-3xl font-black text-[#FFF44F]">{teacher.initial}</span>
+                          <span className="text-2xl font-black text-[#FFF44F]">{teacher.initial}</span>
                         )}
                       </div>
-                      <h3 className="mx-auto mt-8 max-w-sm text-xl font-extrabold leading-tight text-slate-900 sm:text-2xl">
+                      <h3 className="mx-auto mt-5 max-w-sm text-base font-extrabold leading-tight text-slate-900 sm:text-lg">
                         {teacher.name}
                       </h3>
-                      <p className="mt-2 text-sm font-bold text-slate-500 sm:text-base">{teacher.major}</p>
-                      <div className="mx-auto mt-4 h-1 w-12 rounded-full bg-[#FFF44F] shadow-sm shadow-yellow-200" />
-                      <div className="mt-7 text-left">
-                        <div className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">Prestasi</div>
-                        <ol className="grid gap-3">
+                      <p className="mt-1 text-xs font-bold text-slate-500 sm:text-sm">{teacher.major}</p>
+                      <div className="mx-auto mt-3 h-1 w-10 rounded-full bg-[#FFF44F] shadow-sm shadow-yellow-200" />
+                      <div className="mt-5 text-left">
+                        <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Prestasi</div>
+                        <ol className="grid gap-2">
                         {teacher.awards.map((award, awardIndex) => {
                           return (
-                            <li key={`${award.text}-${awardIndex}`} className={`flex min-h-[70px] items-center gap-4 rounded-xl border px-4 py-3 ${awardToneClasses[award.tone] || awardToneClasses.slate}`}>
-                              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-white shadow-sm ${awardIconClasses[award.tone] || awardIconClasses.slate}`}>
-                                <span className="text-xs font-black">{awardIndex + 1}</span>
+                            <li key={`${award.text}-${awardIndex}`} className={`flex min-h-[52px] items-center gap-3 rounded-xl border px-3 py-2 ${awardToneClasses[award.tone] || awardToneClasses.slate}`}>
+                              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-white shadow-sm ${awardIconClasses[award.tone] || awardIconClasses.slate}`}>
+                                <span className="text-[10px] font-black">{awardIndex + 1}</span>
                               </span>
-                              <span className="text-sm font-extrabold leading-snug">{award.text}</span>
+                              <span className="text-xs font-extrabold leading-snug">{award.text}</span>
                             </li>
                           );
                         })}
@@ -1837,6 +1795,14 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
                   ))}
                 </div>
                 <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-10 w-10 bg-gradient-to-l from-[#FBF8F1] to-transparent sm:w-16" />
+              </div>
+              <div className="mt-4 flex items-center justify-center gap-3 lg:hidden">
+                <div className="landing-teacher-progress w-40 sm:w-56" aria-hidden="true">
+                  <div className="landing-teacher-progress__bar" />
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Auto-scroll
+                </span>
               </div>
               <div className="hidden lg:block landing-teacher-mask relative -mx-4 overflow-hidden sm:-mx-6 md:-mx-12 lg:-mx-20">
                 <div className="landing-teacher-track flex w-max gap-4 px-4 sm:gap-6 sm:px-6 md:px-12 lg:gap-8 lg:px-20">
@@ -2354,7 +2320,7 @@ const HeroMarquee = ({ setRoute }) => (
       <div className="flex items-center py-4 overflow-x-auto hide-scrollbar">
         <div className="flex gap-10 px-8 shrink-0">
           {[
-            ["100+", "User Aktif"],
+            ["250+", "User Aktif"],
             ["98%", "Kepuasan"],
             ["15.000+", "Soal selesai"],
             ["3×", "Lebih cepat paham"],
@@ -2626,7 +2592,7 @@ const Mapel = ({ setRoute }) => {
                   <M.icon className="w-5 h-5" />
                 </div>
                 <h3 className="font-display font-bold text-2xl mb-2">{it.mapel}</h3>
-                <p className="text-ink/65 text-sm leading-relaxed flex-1">{it.desc}</p>
+                <p className="text-center text-ink/65 text-sm leading-relaxed flex-1">{it.desc}</p>
                 <div className="flex items-center justify-between mt-6 pt-4 border-t hairline">
                   <span className="text-xs font-mono text-ink/50">{it.chapters} bab</span>
                   <Icon.Arrow className="w-4 h-4 transition-transform group-hover:translate-x-1" />

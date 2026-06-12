@@ -939,6 +939,7 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/admin/payments', require('./routes/admin-payments'));
 app.use('/api/payment', require('./routes/payment'));
 app.use('/api/correction', require('./routes/correction'));
+app.use(require('./routes/auth-popup'));
 
 function hasBuiltClient() {
   return fs.existsSync(distIndexPath);
