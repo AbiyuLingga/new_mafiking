@@ -240,6 +240,74 @@ Rules:
 - Profile recommendations are catalog-backed and deterministic. Preserve `recommendedItems`, `recommendedQuestions`, and `skillNeedScores` in `/api/correction/profile-summary`; Gemma writes summary prose but must not choose follow-up question refs at runtime. Keep the larger local recommendation window separate from the smaller AI prompt window.
 - Clerk CLI writes `.env.local`; do not read, print, or commit secret env files. `.env.local` and `env` are ignored.
 
+## Performance & Quality Invariants (mobile perf plan, applied 2026-06-12)
+
+These invariants prevent mobile performance regressions and ensure image / KaTeX / Clerk / auth / route-splitting quality is preserved. Measured baseline 2026-06-12 (Lighthouse 76/77, LCP 5,16s/5,22s, transfer 7,43MB landing / 750KB `/belajar`, JS ~175KB gzip). Post-Phase-1 bundle: 171 KB initial JS gzip. **Post-Phase-2: 24.24 KB initial JS gzip** (main entry + vendor-react) — 86% reduction vs baseline.
+
+### Image Optimization
+- Hero images (above-fold, LCP candidates): AVIF q=70, WebP q=85.
+- Default images: AVIF q=65, WebP q=80.
+- Below-fold images: AVIF q=60, WebP q=75.
+- All landing images served via `<picture>` with AVIF + WebP + JPEG/PNG fallback chain.
+- All landing images served with 3 responsive size variants (mobile 640w, tablet 960w, desktop 1280w).
+- LCP image must have `loading="lazy"` + `decoding="async"` if CSS genuinely hides it; otherwise `loading="eager"` + `fetchpriority="high"`.
+- New images must pass per-asset visual review in `docs/perf/image-quality-review.md` before commit (S1).
+- Responsive variants are committed to `assets/` and copied to `dist/assets/` by the `mafiking-responsive-images` Vite plugin.
+
+### Route Splitting (Phase 2)
+- **Vite path**: `src/main.jsx` statically imports only the shell (`shared.jsx`, `backend-api.jsx`, `math-loader.js`, `onboarding.jsx`, `clerk-auth.jsx`, `app.jsx`). Each route (`lobby` / `belajar` / `practice` / `misi` / `tryout` / `leaderboard` / `payment` / `profile` / `invoices`) is dynamic-imported as its own chunk.
+- **Babel-standalone path** (`MAFIKING.html`): each route.jsx is loaded as a classic `<script>` and exposes `window.<Name>` at the end. The same `app.jsx` works because the lazy load falls back to `window.<Name>` when the dynamic import is not available.
+- **`vite.config.js` `mafikingRouteExportPlugin`** appends `export { X };` to every route file (skipping `generated-*` and files that already export) so Vite sees them as proper ESM modules. Do NOT remove this plugin — the dynamic imports will fail without it.
+- **Adding a new route**: (1) create `src/<name>.jsx`, (2) append `window.<Name> = <Name>;` at the end, (3) add it to the route regex in `vite.config.js` if not already matched, (4) add `<name>Comp` state + dynamic-import `useEffect` in `src/app.jsx`, (5) replace direct JSX with `React.createElement(<name>Comp || window.<Name>, props)`.
+- **Removing a route**: just delete the file and its `useState`/`useEffect` in `src/app.jsx`. The plugin's regex matches by name so it auto-skips.
+- **Adding a non-route component to a route**: do NOT add it to `src/main.jsx` (it would defeat the split). If the new component is shared, put it in `src/shared.jsx`; if route-specific, put it next to the route file and dynamic-import it from there.
+- Per-asset quality — no universal q value. Faces need q=65-70; illustrations can drop to q=50-55.
+- Responsive variants are committed to `assets/` and copied to `dist/assets/` by the `mafiking-responsive-images` Vite plugin. Do not remove the variants when removing the source PNG — the `<picture>` element still references them.
+
+### Lazy Resource Loading
+- KaTeX CSS+JS: lazy-loaded on first math component (`src/math-loader.js`). NOT eager in MAFIKING.html/index.html/dist/index.html. The `useKatexReady()` hook fires `mafiking:katex-ready` when the load resolves; `Eq` and `MissionQuestionText` re-render on that event.
+- Clerk SDK+UI: lazy-loaded on first auth action (login click, OAuth callback, getToken for auth endpoint). NOT auto-loaded for guest public API calls. `clerkAuthHeaders()` in `src/backend-api.jsx` short-circuits when `window.MafikingAppState.isLoggedIn === false`.
+- Mentor image and landing image: `<picture>` with `loading="lazy"` + responsive srcSet. The PNG fallback stays so legacy browsers and Safari < 16 still render.
+
+### Performance Budgets (CI gate)
+- Bundle initial: ≤175KB gzip after Phase 1, ≤120KB gzip after Phase 2 incremental splitting. **Current: 24.24 KB gz** (main entry + vendor-react) — well under budget.
+- LCP element: ≤100KB transferred for mobile viewport (mentor image AVIF 640w = 33KB passes).
+- Total page weight (landing): ≤1.2MB.
+- Main thread TBT: ≤100ms median.
+- Lighthouse Performance mobile: ≥90 (when CI is wired in).
+- Lighthouse Accessibility: ≥95.
+
+### Core Web Vitals Targets (field p75)
+- LCP < 2.5s on 4G mobile
+- INP < 200ms
+- CLS < 0.1 (target: < 0.05)
+- FCP < 1.8s
+
+### RUM Data Collection
+- Table `web_vital_metrics` (db/schema.sql) captures field p75 metrics with `navigationType` and `deviceClass`.
+- 30-day retention via `retention_until` column + `purgeExpiredVitals()` called every 6 hours.
+- No PII, no URL query, no user ID.
+- `lib/performance.js` exports `persistVitalsToDb`, `purgeExpiredVitals`, `summarizeVitalsFromDb`.
+- `/api/performance/summary` (admin) exposes `fieldP75Last7Days` per metric.
+- INP is calculated via `processingEnd - processingStart` from the `event-timing` API (not `max(event.duration)`).
+
+### Routing Contract
+- Guest membuka `/` → SPA shell, renders lobby (landing).
+- Logged-in (registered, non-guest) membuka `/` → server 302 redirects to `/belajar`. No landing chunk downloaded.
+- `/landing` → always renders lobby, even for logged-in users (deep link for pricing comparison / marketing re-read).
+- `window.MafikingAppState.route` mirrors the SPA route for browser-side observers (CWV attribution).
+
+### Network-Aware Behavior (progressive only, NEVER blocker)
+- `navigator.connection.saveData` → OPTIONAL enhancement, not a feature gate.
+- `navigator.deviceMemory < 2` → hint, not trigger to disable pages.
+- `prefers-reduced-motion: reduce` → respect (existing).
+
+### Rejected (do NOT reintroduce)
+- ❌ Service Worker (assets already immutable-cached, SW adds lifecycle risk without clear need).
+- ❌ `sessionStorage` currentUser/role/access cache (stale auth UI risk, no cross-tab sync).
+- ❌ Universal image q value (per-asset review instead).
+- ❌ Full ES-module migration (separate RFC, not in scope here).
+
 ## Documentation Rules
 
 When changing architecture, data flow, commands, or setup:

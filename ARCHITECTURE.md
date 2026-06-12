@@ -23,11 +23,11 @@ Browser
   v
 Express server.js
   |
-  | serves MAFIKING.html and static assets
+  | serves dist/index.html when built, otherwise legacy fallback
   v
-MAFIKING.html
+Vite-built shell
   |
-  | loads Tailwind CDN, React UMD, Babel, src/*.jsx scripts
+  | src/main.jsx exposes React globals and bootstraps legacy-global modules
   v
 Static React app in browser
   |
@@ -66,11 +66,25 @@ Responsibilities:
 - Create guest users for API requests without a session.
 - Mount API routes.
 - Serve static assets and JSX.
-- Serve `MAFIKING.html` for app routes.
+- Serve `dist/index.html` for app routes when the built client exists.
+- Serve `MAFIKING.html` only as a non-production fallback when no built client is available.
 
 ### Frontend Entry
 
-File:
+Built path:
+
+```text
+index.html -> src/main.jsx -> dist/index.html
+```
+
+Responsibilities:
+
+- Load fonts and `src/main.jsx` as the Vite module entry.
+- Load React 18 UMD and expose `window.React` / `window.ReactDOM` for existing global-style JSX files.
+- Load shell dependencies in legacy order before `src/app.jsx`.
+- Keep route files out of the main chunk; `src/app.jsx` dynamic-imports route chunks.
+
+Legacy fallback file:
 
 ```text
 MAFIKING.html
@@ -89,12 +103,15 @@ Script load order matters:
 ```text
 tweaks-panel.jsx
 src/clerk-auth.jsx
+src/math-loader.js
 src/backend-api.jsx
 src/shared.jsx
 src/onboarding.jsx
+src/route-prefetch.js
 src/lobby.jsx
 src/belajar.jsx
 src/profile.jsx
+src/invoices.jsx
 src/toolbar.jsx
 src/drawing-canvas.jsx
 src/answer-board.jsx
@@ -501,8 +518,8 @@ There is no versioned migration directory yet.
 
 ```text
 GET /
-  -> server.js sends MAFIKING.html
-  -> browser loads CSS/CDN scripts/static JSX
+  -> server.js sends dist/index.html if built, or MAFIKING.html fallback in non-production
+  -> built path runs src/main.jsx compatibility bootstrap; fallback path loads CSS/CDN scripts/static JSX
   -> src/app.jsx renders App
 ```
 
@@ -651,15 +668,15 @@ The Try Out import updates package metadata and replaces questions only for Try 
 
 - `npm start`: real app server.
 - `npm run dev`: real app server with watch mode.
-- `npm run build`: Vite build check for `index.html`.
+- `npm run build`: emits the built client that `server.js` serves when `dist/index.html` exists.
 - `npm run check`: Node syntax checks plus focused admin-import and recommendation-engine tests.
 
-Important: `npm run build` does not prove that `MAFIKING.html` bundled a production SPA. The real runtime still executes static JSX through Babel in the browser.
+Important: `npm run build` validates the built Vite path, but it does not validate the legacy `MAFIKING.html` fallback. When debugging runtime issues, first confirm whether `server.js` is serving `dist/index.html` or `MAFIKING.html`.
 
 ## Known Limitations
 
-- The active frontend is not bundled for production.
-- React CDN runtime is React 18, while package dependencies include React 19.
+- The active frontend has two supported delivery paths: built Vite shell when `dist/` exists and legacy static-Babel fallback for non-production without `dist/`.
+- Both delivery paths use React 18 UMD globals; the Vite build compiles JSX in classic mode so existing global-style modules keep the same runtime contract.
 - There is no automated unit/integration test suite yet.
 - There is no versioned database migration system yet.
 - Static Belajar chapter cards outnumber imported backend question data.

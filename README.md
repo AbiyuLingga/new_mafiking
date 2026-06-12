@@ -2,7 +2,7 @@
 
 `new_mafiking` is a local Mafiking web app that keeps the copied MAFIKING UI intact while adding a working Express + SQLite backend for question practice, canvas answer correction, profile reports, progress, admin data management, and payment hooks.
 
-The active browser entry point is `MAFIKING.html`, served by `server.js`. The frontend is intentionally loaded as static JSX through React UMD + Babel in the browser, so do not treat this project as a normal bundled Vite SPA unless that architecture is intentionally changed.
+The active browser entry point is served by `server.js`. When `dist/index.html` exists, the server serves the Vite-built shell; otherwise, non-production falls back to `MAFIKING.html` and static JSX through React UMD + Babel. The source `src/*.jsx` files still rely on browser globals and load order, so route/components should keep the current global contract unless the frontend architecture is intentionally migrated.
 
 ## Current Status
 
@@ -86,6 +86,7 @@ Create `.env` from `.env.example`.
 | `DUITKU_CALLBACK_URL` | Required for deployed payments | Payment callback URL. |
 | `DUITKU_RETURN_URL` | Required for deployed payments | Browser return URL after payment. |
 | `PAYMENT_PROVIDER` | Optional | `qris` by default; use `duitku` for legacy gateway or `both` for QRIS-first fallback. |
+| `PAYMENT_LOCAL_GUEST_CHECKOUT` | Optional | Non-production helper for QRIS/manual/mock checkout without a registered user. Production always disables it; set `false` during local security/payment debugging. |
 | `QRIS_STATIC_STRING` | Required when `PAYMENT_PROVIDER=qris` | Static QRIS merchant payload scanned from the owner QRIS. |
 | `QRIS_EXPIRY_MINUTES` | Optional | Pending QR expiry window, default `20`. |
 | `QRIS_ADMIN_WHATSAPP` | Optional | WhatsApp number shown on QRIS fallback confirmation. |
@@ -111,8 +112,10 @@ GEMMA_PROFILE_MODEL=gemma-4-31b-it
 | --- | --- |
 | `npm start` | Start the Express server. |
 | `PORT=3001 npm start` | Start on port 3001, useful when port 3000 is occupied. |
+| `PORT=3001 MUTATION_COLLECTOR_ENABLED=false PAYMENT_LOCAL_GUEST_CHECKOUT=false MAIL_DRY_RUN=true npm start` | Debug-safe local server: no collector side effects, stricter checkout gating, and dry-run mail. |
 | `npm run dev` | Start Express with `node --watch`. |
-| `npm run build` | Run Vite build against `index.html`. This is a build check, not the active runtime path. |
+| `npm run build` | Build the Vite shell into `dist/`; when `dist/index.html` exists, `server.js` serves this shell. |
+| `npm run perf:audit` | Run the local Lighthouse wrapper. Pass URL/output path explicitly for targeted audits. |
 | `npm run check` | Run Node syntax checks plus focused admin-import and recommendation-engine tests. |
 | `npm run test:admin-import` | Run focused tests for admin file-import validation helpers. |
 | `npm run test:recommendations` | Run focused tests for skill mapping, need-score formula, Purcell-inspired parsing, and recommendation difficulty gating. |
@@ -225,8 +228,8 @@ The import script refuses to replace question tables when user progress or corre
 
 ```text
 .
-|-- MAFIKING.html              # Active HTML shell served by Express
-|-- index.html                 # Vite build mirror/check target
+|-- MAFIKING.html              # Legacy fallback shell for non-production without dist/
+|-- index.html                 # Vite HTML entry used by npm run build
 |-- server.js                  # Express app, SQLite boot, middleware, static serving
 |-- db/
 |   |-- schema.sql             # SQLite schema
@@ -293,9 +296,9 @@ The import script refuses to replace question tables when user progress or corre
 ### App Load
 
 1. Browser opens `/`.
-2. `server.js` sends `MAFIKING.html`.
-3. The HTML loads Tailwind CDN, React UMD, Babel standalone, then JSX files from `src/` in order.
-4. `src/app.jsx` mounts the in-browser React app into `#root`.
+2. `server.js` sends `dist/index.html` when the built client exists, or `MAFIKING.html` as a non-production fallback.
+3. In the built path, `src/main.jsx` exposes `window.React` / `window.ReactDOM` and loads the global shell modules in legacy order before `src/app.jsx` mounts.
+4. In the fallback path, `MAFIKING.html` loads Tailwind CDN, React UMD, Babel standalone, then JSX files from `src/` in order.
 
 ### Lobby / Home
 
@@ -468,7 +471,7 @@ owner), F-10 / F-11 / F-12 LLM-side follow-ups.
 ## Development Notes
 
 - Preserve the copied UI unless a task explicitly asks for UI changes.
-- Do not convert `src/*.jsx` to module imports. Files rely on globals and load order from `MAFIKING.html`.
+- Do not convert route/component `src/*.jsx` files to normal module-import architecture casually. The built path uses `src/main.jsx` as a compatibility bootstrap, while the source files still rely on globals and legacy load order.
 - **Do not use IIFE `(function(){...})()`** in `src/*.jsx` files — variables inside are scoped and invisible to other scripts. Define components at top level.
 - Clerk auth is integrated through a static-Babel bridge in `src/clerk-auth.jsx`, not `@clerk/react` components. The CLI may install `@clerk/react`, but the live `MAFIKING.html` runtime uses Clerk's browser scripts dynamically.
 - `src/app.jsx` owns route state, tweaks defaults, and `isAdmin` toggle.
@@ -520,8 +523,8 @@ Browser checks:
 
 ## Known Gotchas
 
-- Active runtime is Express serving `MAFIKING.html`, not the `dist/` bundle.
-- The HTML loads React 18 UMD from CDN, while `package.json` includes React 19 for local tooling. Do not assume package React is what the browser runtime uses.
+- Active runtime is Express serving `dist/index.html` when it exists, with `MAFIKING.html` as the non-production fallback.
+- Both delivery paths use React 18 UMD globals before the legacy-style JSX modules run; the built path loads them from `src/main.jsx` before bootstrapping route modules. Check which shell the server is serving before debugging frontend runtime issues.
 - Clerk secret values live in ignored env files. Do not print or commit `.env`, `.env.local`, or `env`.
 - Auto-guest sessions create users for API requests. Guest names start with `Tamu_`.
 - Only Integral question data is currently imported. Static chapter cards for other subjects are placeholders.
