@@ -1,0 +1,53 @@
+{
+  "generatedAt": "2026-06-12T03:32:15.488Z",
+  "assets": [
+    {
+      "name": "landing_mentors_20260607",
+      "status": "processed",
+      "variants": [
+        {
+          "size": "mobile",
+          "width": 640,
+          "webpBytes": 37126,
+          "avifBytes": 33676
+        },
+        {
+          "size": "tablet",
+          "width": 960,
+          "webpBytes": 65466,
+          "avifBytes": 59624
+        },
+        {
+          "size": "desktop",
+          "width": 1280,
+          "webpBytes": 98690,
+          "avifBytes": 90843
+        }
+      ]
+    },
+    {
+      "name": "landing_page",
+      "status": "processed",
+      "variants": [
+        {
+          "size": "mobile",
+          "width": 640,
+          "webpBytes": 22992,
+          "avifBytes": 20827
+        },
+        {
+          "size": "tablet",
+          "width": 960,
+          "webpBytes": 39848,
+          "avifBytes": 36507
+        },
+        {
+          "size": "desktop",
+          "width": 1280,
+          "webpBytes": 57692,
+          "avifBytes": 53649
+        }
+      ]
+    }
+  ]
+}
