@@ -120,15 +120,6 @@
       "sort_order": 3
     },
     {
-      "id": 8,
-      "chapter_id": 1,
-      "slug": "test-debug",
-      "title": "Test Debug",
-      "icon": "",
-      "description": "test",
-      "sort_order": 0
-    },
-    {
       "id": 1101,
       "chapter_id": 1001,
       "slug": "matematika-free",

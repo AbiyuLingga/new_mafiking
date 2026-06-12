@@ -367,6 +367,21 @@ try {
   `);
 } catch (_) {}
 
+try {
+  db.prepare(`
+    DELETE FROM subtopics
+    WHERE slug = ?
+      AND title = ?
+      AND NOT EXISTS (
+        SELECT 1
+        FROM problems
+        WHERE problems.subtopic_id = subtopics.id
+      )
+  `).run('test-debug', 'Test Debug');
+} catch (error) {
+  console.warn('[startup-cleanup] failed to remove empty debug subtopic:', error.message);
+}
+
 db.exec(`
 CREATE TABLE IF NOT EXISTS correction_attempts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1078,6 +1093,12 @@ app.get('/tweaks-panel.jsx', (_req, res) => {
 });
 app.get(['/syarat-ketentuan.html', '/terms.html', '/tnc.html'], (_req, res) => {
   res.sendFile(path.join(__dirname, 'syarat-ketentuan.html'));
+});
+app.get('/robots.txt', (_req, res) => {
+  res
+    .type('text/plain; charset=utf-8')
+    .setHeader('Cache-Control', `public, max-age=${oneDaySeconds}, stale-while-revalidate=${oneDaySeconds}`);
+  res.send('User-agent: *\nAllow: /\n');
 });
 
 // OAuth popup callbacks must keep opener continuity so the parent auth screen

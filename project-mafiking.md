@@ -45,9 +45,12 @@ Historical WSL path used by older notes:
 | `belajar` | `Belajar` | Free Try Out plus subject cards. |
 | `misi` | `Misi` | Access-gated daily mission screen. |
 | `tryout` | `Tryout` | Package / paid tryout screen; nav label is `Paket`. |
+| `leaderboard` | `Leaderboard` | Peringkat page; nav label is `Peringkat`. |
 | `admin` | `AdminPanel` | Dedicated admin page when admin mode is enabled. |
 | `profile` | `Profile` | Stats, attempts, AI/local recommendations. |
 | `practice` | `Practice` | Multiple-choice and canvas modes. |
+| `payment` | `PaymentCheckoutModal` + QRIS/manual popup | Checkout popup rendered over current page. |
+| `invoices` | `Invoices` | Payment history with printable invoice view. |
 
 ## Admin Mode
 
@@ -69,26 +72,35 @@ Pengguna
 Users & Token Monitoring
 ```
 
-Important caveat: `src/admin.jsx` currently references `window.AdminMonitoringPanel`, but there is no `src/admin-monitoring.jsx` file in the repository. Backend dashboard data exists at `/api/admin/dashboard-data`; the richer monitoring UI needs to live in `src/admin.jsx` or be restored as a script before claiming it is loaded.
+Important caveat: `src/admin-monitoring.jsx` exists and is loaded before `src/admin.jsx` in `MAFIKING.html`. It exports `window.AdminMonitoringPanel` for the monitoring tab.
 
 ## Frontend Files
 
 | File | Purpose |
 | --- | --- |
 | `src/app.jsx` | Route state, admin shield state, confirmation modals, root render. |
-| `src/shared.jsx` | Nav, icons, toasts, shared UI helpers. |
-| `src/backend-api.jsx` | Same-origin API helper. |
+| `src/shared.jsx` | Nav, icons, toasts, shared UI helpers, `SlidingSegmented`. |
+| `src/backend-api.jsx` | Same-origin API helper, `clerkAuthHeaders()`. |
 | `src/clerk-auth.jsx` | Clerk browser bridge for static Babel runtime. |
+| `src/math-loader.js` | KaTeX lazy-loading, `useKatexReady()` hook. |
+| `src/onboarding.jsx` | Mandatory profile completion modal for non-admin users. |
+| `src/route-prefetch.js` | Route prefetching for faster navigation. |
 | `src/lobby.jsx` | Landing page, auth shell, inline admin media editor. |
 | `src/belajar.jsx` | Try Out/Matematika/Fisika/Kimia selector and chapter cards. |
 | `src/practice.jsx` | Practice source mapping, multiple-choice/canvas modes, result handling. |
 | `src/profile.jsx` | Profile stats and recommendations. |
 | `src/misi.jsx` | Daily missions. |
 | `src/tryout.jsx` | Paket / package page. |
+| `src/leaderboard.jsx` | Peringkat page with isolated-scroll leaderboard. |
+| `src/invoices.jsx` | Payment history page with printable invoice view. |
 | `src/payment.jsx` | Payment selection, QRIS/manual popup rendering, and status polling. |
 | `src/admin.jsx` | Admin content, landing media, users, import, and tab shell. |
+| `src/admin-monitoring.jsx` | Monitoring dashboard loaded before `admin.jsx`. |
+| `src/performance-vitals.js` | Core Web Vitals collection and RUM data. |
+| `src/main.jsx` | Vite entry — React globals + legacy-global bootstrap. |
 | `src/styles.css` | Design tokens, landing motion, admin styles, confirmation modal support. |
-| `MAFIKING.html` | Active HTML shell and script load order. |
+| `MAFIKING.html` | Legacy HTML shell and script load order. |
+| `index.html` | Vite entry — fonts, `main.jsx` module. |
 
 ## Backend And Data
 

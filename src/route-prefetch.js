@@ -50,6 +50,7 @@ function scheduleIdle(cb) {
 
 function prefetchRoute(specifier) {
   if (prefetched.has(specifier)) return;
+  if (/\.jsx(?:$|\?)/.test(String(specifier || ""))) return;
   prefetched.add(specifier);
   try {
     const loader = import(/* @vite-ignore */ specifier);

@@ -14,6 +14,9 @@ gap analysis, and the CSRF / CORS coverage tests.
   - `public` — no auth required.
   - `session` — `req.session.userId` (auto-guest for `/api/*`).
   - `registered` — `requireRegisteredUser` (rejects auto-guests).
+  - `registered/local-dev-guest` — production requires `registered`; non-production
+    may allow auto-guest checkout only when `PAYMENT_LOCAL_GUEST_CHECKOUT`
+    is enabled. Set it to `false` for stricter local security debugging.
   - `admin` — `isAdmin` middleware.
   - `clerk-public` — public, but the data is per-Clerk-user and verified
     when applicable (webhooks, payment callback).
@@ -60,6 +63,9 @@ gap analysis, and the CSRF / CORS coverage tests.
 | GET | `/tweaks-panel.jsx` | public | n/a | none | Dev-only tweak panel source. 404 when `canServeLegacySource()` is false (production / built client). |
 | GET | `/syarat-ketentuan.html`, `/terms.html`, `/tnc.html` | public | n/a | none | Static T&C page. |
 | GET | `/auth-popup` | public | n/a | none | Static popup HTML shim served by `routes/auth-popup.js`. Loads Clerk in a popup window, writes pending OAuth to `sessionStorage`, and posts the result back to `window.opener` via `postMessage` on `/sso-callback?popup=1`. No-store. Same-origin target only. |
+| GET | `/robots.txt` | public | n/a | none | Static crawler policy. Plain text, allows indexing. |
+| GET | `/`, `/index.html`, `/MAFIKING.html` | session | n/a | none | SPA shell. Registered (non-guest) sessions are 302-redirected to `/belajar`. Otherwise serves `dist/index.html` (or `MAFIKING.html` when no client bundle exists). |
+| GET | `/landing` | public | n/a | none | SPA shell explicit marketing deep link. Bypasses the auth-aware redirect so logged-in users can still open the marketing page. |
 
 ### Auth (routes/auth.js)
 
@@ -133,8 +139,8 @@ All routes `isAuthenticated`. Body validation lives in
 | Method | Path | Auth | CSRF | BOLA | Notes |
 |---|---|---|---|---|---|
 | GET | `/api/payment/config` | public | n/a | none | `paymentGatewayState`. Cached 30s. |
-| POST | `/api/payment/pending` | registered | ✓ | user-scoped | Reopens only the current user's unexpired `PENDING` QRIS/manual order for the resolved server-side package. |
-| POST | `/api/payment/create` | registered | ✓ | user-scoped | QRIS local, Duitku, or mock. Body: `email`, `name`, package selector. |
+| POST | `/api/payment/pending` | registered/local-dev-guest | ✓ | user-scoped | Reopens only the current user's unexpired `PENDING` QRIS/manual order for the resolved server-side package. Production rejects auto-guests; local debugging should set `PAYMENT_LOCAL_GUEST_CHECKOUT=false` when testing auth gates. |
+| POST | `/api/payment/create` | registered/local-dev-guest | ✓ | user-scoped | QRIS local, Duitku, or mock. Body: `email`, `name`, package selector. Production rejects auto-guests; local debugging should set `PAYMENT_LOCAL_GUEST_CHECKOUT=false` when testing auth gates. |
 | POST | `/api/payment/toggle-package-access` | session | ✓ | user-scoped | Dev utility. Toggles tryout access grant for the current user by `tryout_id`. |
 | GET | `/api/payment/status/:merchantOrderId` | session | n/a | id-scoped | Filters by `user_id = ? AND merchant_order_id = ?` — explicit ownership check. |
 | GET | `/api/payment/stream/:merchantOrderId` | session | n/a | id-scoped | SSE stream that pushes `event: paid` via `lib/payment-broadcaster`. Filters by `payment.user_id === req.session.userId` (403 otherwise). Per-user connection cap (`SSE_MAX_CONN_PER_USER`, 429 when exceeded). 15s `: heartbeat` keepalive (`.unref()` so SMTP/event-loop blocks don't block shutdown). Gated by `SSE_PAYMENT_PUSH` feature flag — returns 503 when off. |

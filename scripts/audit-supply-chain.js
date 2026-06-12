@@ -41,7 +41,7 @@ const RISK_REGISTER = [
     {
         name: 'axios',
         reason: 'HTTP client; surface used for Duitku + Mutasiku network calls.',
-        mitigation: 'Pinned via caret; used inside network-restricted collector.',
+        mitigation: 'Pinned exact version; used inside network-restricted collector.',
     },
 ];
 

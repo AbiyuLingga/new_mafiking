@@ -46,6 +46,17 @@ async function ensureReactRuntime() {
   if (!window.React || !window.ReactDOM || typeof window.ReactDOM.createRoot !== 'function') {
     throw new Error('React runtime tidak tersedia.');
   }
+
+  Object.assign(window, {
+    forwardRef: window.React.forwardRef,
+    useCallback: window.React.useCallback,
+    useEffect: window.React.useEffect,
+    useImperativeHandle: window.React.useImperativeHandle,
+    useLayoutEffect: window.React.useLayoutEffect,
+    useMemo: window.React.useMemo,
+    useRef: window.React.useRef,
+    useState: window.React.useState,
+  });
 }
 
 async function bootstrap() {

@@ -118,7 +118,6 @@ const App = () => {
   // can attribute metrics to the in-app route, not the URL path.
   if (typeof window !== "undefined") {
     if (!window.MafikingAppState) window.MafikingAppState = {};
-    window.MafikingAppState.route = initialLocationRef.current.route;
   }
   const [authRedirect, setAuthRedirect] = React.useState(null);
   const [authBackRoute, setAuthBackRoute] = React.useState(null);

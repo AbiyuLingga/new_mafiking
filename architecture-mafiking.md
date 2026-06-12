@@ -146,7 +146,7 @@ Current implementation notes:
 - Subject options use chapter/subtopic/problem CRUD.
 - `Landing Page` manages promo image, feature images, and demo video media slots.
 - `Pengguna` manages users and roles.
-- `Users & Token Monitoring` has backend data available at `/api/admin/dashboard-data`; the current tree does not include a separate `src/admin-monitoring.jsx`, so any richer monitoring UI must be implemented or restored before documenting it as loaded.
+- `Users & Token Monitoring` has backend data at `/api/admin/dashboard-data`. `src/admin-monitoring.jsx` exports `window.AdminMonitoringPanel` and is loaded before `src/admin.jsx` in `MAFIKING.html`.
 
 ## Backend Routes
 
@@ -235,9 +235,8 @@ Clerk integration adds `users.clerk_id`, `users.email`, and `users.auth_provider
 
 ## Known Constraints
 
-- Browser runtime still uses Babel in the browser and CDN UMD scripts.
-- `dist/` is not the deployed runtime.
+- Browser runtime still uses Babel in the browser and CDN UMD scripts (legacy fallback path).
+- Vite built path (`dist/index.html`) is the production runtime when `dist/` exists.
 - Only Integral has real imported question data today.
 - Monitoring quota values are estimates from configured limits, not live Google quota reads.
-- `src/admin.jsx` references `window.AdminMonitoringPanel`, but no separate component script exists in the current tree.
 - QRIS is the default payment provider. Duitku remains legacy/fallback code and uses the sandbox base URL unless deliberately configured.

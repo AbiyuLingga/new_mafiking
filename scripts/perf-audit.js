@@ -23,12 +23,6 @@ const SCORE_THRESHOLDS = {
   seo: 0.95,
 };
 
-function scoreClass(score) {
-  if (score >= 0.9) return 'PASS';
-  if (score >= 0.5) return 'WARN';
-  return 'FAIL';
-}
-
 function numericScore(category) {
   return category && typeof category.score === 'number' ? category.score : null;
 }
@@ -157,10 +151,10 @@ async function main() {
       continue;
     }
     const score = Math.round(scoreValue * 100);
-    const cls = scoreClass(scoreValue);
-    const marker = cls === 'PASS' ? 'OK' : cls === 'WARN' ? '??' : 'XX';
+    const passed = scoreValue >= threshold;
+    const marker = passed ? 'OK' : 'XX';
     console.log(`  ${key.padEnd(18)}  ${String(score).padStart(3)}  ${marker}  (>= ${Math.round(threshold * 100)})`);
-    if (cls === 'FAIL') failed = true;
+    if (!passed) failed = true;
   }
 
   const audits = result.lhr.audits || {};

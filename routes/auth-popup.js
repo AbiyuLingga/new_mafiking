@@ -59,7 +59,7 @@ const POPUP_HTML = `<!DOCTYPE html>
 
       function deliverFailure(message) {
         try {
-          sessionStorage.setItem(POPUP_RESULT_KEY, JSON.stringify({
+          localStorage.setItem(POPUP_RESULT_KEY, JSON.stringify({
             at: Date.now(),
             payload: { ok: false, error: message || 'Login Google gagal.' }
           }));
