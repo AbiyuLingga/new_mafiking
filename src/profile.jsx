@@ -767,7 +767,23 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null, onRequestS
                             </div>
                           )}
                           <button
-                            onClick={() => setRoute("belajar")}
+                            onClick={() => {
+                              if (!att.problemId) {
+                                setRoute("belajar");
+                                return;
+                              }
+                              setRoute({
+                                route: "practice",
+                                practice: {
+                                  title: "Latihan Ulang Canvas",
+                                  mapel: "Matematika",
+                                  initialMode: "canvas",
+                                  initialProblemId: att.problemId,
+                                  retryProblemOnly: true,
+                                  disableCanvasIntro: true,
+                                },
+                              });
+                            }}
                             className="btn-ghost !py-1.5 !px-3 text-xs"
                           >
                             Latihan Lagi
@@ -788,30 +804,30 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null, onRequestS
       </section>
 
       {(typeof onRequestLogout === "function" || typeof onRequestSwitchAccount === "function") && (
-        <div className="fixed inset-x-0 bottom-0 z-40 pointer-events-none px-4 pb-4 md:px-6 md:pb-6">
-          <div className="mx-auto flex max-w-6xl items-end justify-between gap-4">
+        <section className="pb-10 pt-2">
+          <div className="mx-auto flex max-w-6xl flex-col-reverse gap-3 px-6 sm:flex-row sm:items-center sm:justify-between md:px-8">
             {typeof onRequestSwitchAccount === "function" && (
               <button
                 onClick={onRequestSwitchAccount}
-                className="pointer-events-auto inline-flex items-center gap-2 rounded-full border hairline bg-white/95 px-4 py-3 text-sm font-bold text-ink shadow-lg shadow-ink/10 backdrop-blur transition hover:bg-white"
+                className="inline-flex min-w-0 items-center justify-center gap-2 rounded-full border hairline bg-white px-4 py-3 text-sm font-bold text-ink shadow-sm transition hover:bg-white/80 sm:justify-start"
                 type="button"
               >
-                <Icon.SwitchAccount className="w-4 h-4" />
-                Switch account
+                <Icon.SwitchAccount className="h-4 w-4 shrink-0" />
+                <span className="truncate">Switch account</span>
               </button>
             )}
             {typeof onRequestLogout === "function" && (
               <button
                 onClick={onRequestLogout}
-                className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-ink px-4 py-3 text-sm font-bold text-white shadow-lg shadow-ink/20 transition hover:bg-ink/90"
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-ink px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-ink/90"
                 type="button"
               >
                 Logout
-                <Icon.LogOut className="w-4 h-4" />
+                <Icon.LogOut className="h-4 w-4" />
               </button>
             )}
           </div>
-        </div>
+        </section>
       )}
 
       {editOpen && user && (

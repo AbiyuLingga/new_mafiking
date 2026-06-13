@@ -84,7 +84,7 @@ const Leaderboard = () => {
       ? "Total Poin (XP)"
       : "Poin (XP) Minggu Ini";
   const podiumRows = [rows[1], rows[0], rows[2]].filter(Boolean);
-  const mobilePodiumRows = rows.slice(0, 3);
+  const mobilePodiumRows = [rows[1], rows[0], rows[2]].filter(Boolean);
   const showEmptyTryoutPodium = isTryoutTab && !loading && !error && rows.length === 0;
   const podiumSlots = showEmptyTryoutPodium
     ? [

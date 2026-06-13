@@ -28,6 +28,7 @@ const { buildDirectives, frontendApiFromPublishableKey, helmetCspOptions, resolv
   assert.ok(asText.includes('https://cdn.tailwindcss.com'), 'tailwind CDN present');
   assert.ok(asText.includes('https://fonts.googleapis.com'), 'google fonts css present');
   assert.ok(asText.includes('https://fonts.gstatic.com'), 'google fonts files present');
+  assert.ok(asText.includes('https://clerk-telemetry.com'), 'observed Clerk telemetry endpoint present');
   assert.ok(asText.includes("'unsafe-inline'"), "'unsafe-inline' present (Tailwind + Babel runtime)");
   assert.equal(directives.objectSrc[0], "'none'", 'object-src none');
   assert.equal(directives.frameAncestors[0], "'none'", 'frame-ancestors none');

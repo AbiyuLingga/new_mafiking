@@ -15,13 +15,21 @@ function slugifyPracticePath(value, fallback = "latihan") {
   return slug || fallback;
 }
 
-function buildPracticeQuestionPath(context, problemNumber) {
+function practiceModePathSegment(mode) {
+  return mode === "canvas" ? "canvas" : "pilgan";
+}
+
+function buildPracticeQuestionPath(context, problemNumber, mode = "choice", problemId = null) {
   if (context?.isMissionPractice || !context) return "";
   const mapelSlug = slugifyPracticePath(context.mapelSlug || context.mapel || "matematika", "matematika");
   const chapterSlug = slugifyPracticePath(context.chapterSlug || context.title || context.id, "latihan");
+  const modeSegment = practiceModePathSegment(mode);
+  if (context.retryProblemOnly && problemId) {
+    return `/belajar/practice/${encodeURIComponent(mapelSlug)}/${encodeURIComponent(chapterSlug)}/${modeSegment}/problem-${encodeURIComponent(problemId)}`;
+  }
   const questionNumber = Number(problemNumber || 0);
   const suffix = Number.isInteger(questionNumber) && questionNumber > 0 ? `/soal-${questionNumber}` : "";
-  return `/belajar/practice/${encodeURIComponent(mapelSlug)}/${encodeURIComponent(chapterSlug)}${suffix}`;
+  return `/belajar/practice/${encodeURIComponent(mapelSlug)}/${encodeURIComponent(chapterSlug)}/${modeSegment}${suffix}`;
 }
 
 function areCanvasDependenciesReady() {
@@ -151,7 +159,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
 
   useEffect(() => {
     loadPractice();
-  }, [context?.id, context?.mapel, context?.chapterSlug, context?.initialProblemNumber, context?.missionLesson, context?.activeDailyMissionDay, context?.activeDailyMissionId, hasPremiumAccess, isAdmin]);
+  }, [context?.id, context?.mapel, context?.chapterSlug, context?.initialProblemId, context?.initialProblemNumber, context?.retryProblemOnly, context?.missionLesson, context?.activeDailyMissionDay, context?.activeDailyMissionId, hasPremiumAccess, isAdmin]);
 
   useEffect(() => {
     if (mode !== "canvas" || canvasDepsReady) return undefined;
@@ -172,14 +180,15 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   useEffect(() => {
     if (isMissionPractice || !session?.problems?.length) return;
     const activeProblemNumber = problemIndex + 1;
-    const nextPath = buildPracticeQuestionPath(context, activeProblemNumber);
+    const activeProblemId = session.problems[problemIndex]?.id || context?.initialProblemId || null;
+    const nextPath = buildPracticeQuestionPath(context, activeProblemNumber, mode, activeProblemId);
     if (!nextPath || window.location.pathname === nextPath) return;
     window.history.replaceState(
-      { route: "practice", practice: { ...(context || {}), activeProblemNumber } },
+      { route: "practice", practice: { ...(context || {}), activeProblemNumber, initialMode: mode, initialProblemId: activeProblemId } },
       "",
       nextPath
     );
-  }, [context?.id, context?.mapel, context?.chapterSlug, context?.title, isMissionPractice, problemIndex, session?.problems?.length]);
+  }, [context?.id, context?.initialProblemId, context?.mapel, context?.chapterSlug, context?.retryProblemOnly, context?.title, isMissionPractice, mode, problemIndex, session?.problems?.length]);
 
   useEffect(() => {
     const limit = Number(context?.timeLimitSeconds || 0);
@@ -244,6 +253,22 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
       // Admin preview: inline questions bypass API
       if (context?.problems && Array.isArray(context.problems) && context.problems.length > 0) {
         setSession({ problems: context.problems, subtopic: { title: context.title || "Preview", id: 0 } });
+        const requestedIndex = context?.initialProblemId
+          ? context.problems.findIndex((item) => String(item.id) === String(context.initialProblemId))
+          : -1;
+        setProblemIndex(requestedIndex >= 0 ? requestedIndex : 0);
+        setAttemptsByProblem({});
+        return;
+      }
+      if (context?.retryProblemOnly && context?.initialProblemId) {
+        const retryProblem = await MafikingAPI.get(`/api/quiz/problems/${encodeURIComponent(context.initialProblemId)}`);
+        setSession({
+          problems: [retryProblem],
+          subtopic: {
+            id: retryProblem.subtopic_id || "retry-problem",
+            title: context.title || "Latihan Ulang",
+          },
+        });
         setProblemIndex(0);
         setAttemptsByProblem({});
         return;
@@ -269,8 +294,9 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
       }
       const data = await loadQuestionSource(questionSource);
       const nextProblems = data?.problems || [];
-      const activeIndex = options.activeProblemId
-        ? nextProblems.findIndex((item) => String(item.id) === String(options.activeProblemId) || Number(item.id) === Number(options.activeProblemId))
+      const requestedProblemId = options.activeProblemId || context?.initialProblemId;
+      const activeIndex = requestedProblemId
+        ? nextProblems.findIndex((item) => String(item.id) === String(requestedProblemId) || Number(item.id) === Number(requestedProblemId))
         : -1;
       const activeDailyMissionId = context?.activeDailyMissionId;
       const activeDailyMissionDay = Number(context?.activeDailyMissionDay || 0);

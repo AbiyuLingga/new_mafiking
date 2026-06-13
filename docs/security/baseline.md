@@ -64,7 +64,7 @@ scanners); VPS Phase 4 applied via `ops/apply-all.sh`; see
   (or `CSP_REPORT_ONLY=0`). The 7-day report-only observation window is
   enforced by code review; do not flip without product + admin sign-off.
 - `frame-ancestors 'none'` (clickjacking) and `object-src 'none'` (legacy
-  plugin abuse) are always enforced, even in report-only.
+  plugin abuse) become blocking controls when CSP enforcement is enabled.
 - Allowlist: no broad `https:` token. Third-party origins are listed
   explicitly:
   - `script-src 'self' 'unsafe-inline' cdn.jsdelivr.net unpkg.com
@@ -73,7 +73,8 @@ scanners); VPS Phase 4 applied via `ops/apply-all.sh`; see
     cdn.tailwindcss.com`
   - `img-src 'self' data: images.unsplash.com + ClerkFrontendApi`
   - `font-src 'self' fonts.gstatic.com cdn.jsdelivr.net`
-  - `connect-src 'self' unpkg.com cdn.jsdelivr.net + ClerkFrontendApi`
+  - `connect-src 'self' unpkg.com cdn.jsdelivr.net clerk-telemetry.com +
+    ClerkFrontendApi`
   - `frame-src 'self' + ClerkFrontendApi`
   - `worker-src 'self' blob:`
   - `base-uri 'self'`, `form-action 'self'`
@@ -83,6 +84,8 @@ scanners); VPS Phase 4 applied via `ops/apply-all.sh`; see
 - Report endpoint: `reportingEndpoints: { csp: '/api/csp-report' }` and a
   matching `report-uri` / `report-to` directive. Reports are written to
   `logs/csp-reports.log` as NDJSON.
+- `Permissions-Policy` is app-owned and denies unused high-risk browser
+  capabilities. Clipboard write remains available because payment flows use it.
 
 ## Audit log (lib/audit-log.js)
 
@@ -139,7 +142,7 @@ appear in both the syntax-check list and the test runner.
 
 ## How to operate the security knobs
 
-- **Flip CSP to enforcing**: set `CSP_ENFORCE=1` (or unset `CSP_REPORT_ONLY`)
+- **Flip CSP to enforcing**: set `CSP_ENFORCE=1` (or set `CSP_REPORT_ONLY=0`)
   in the env. The header switches from
   `Content-Security-Policy-Report-Only` to `Content-Security-Policy`. A clean
   7-day report window in `logs/csp-reports.log` is a prerequisite.
@@ -178,11 +181,13 @@ applied with `ops/apply-all.sh`. Verified state as of 2026-06-03:
 - `ssl_protocols TLSv1.2 TLSv1.3;` in `/etc/nginx/nginx.conf`; TLS 1.0/1.1
   rejected; `ssl_session_cache shared:SSL:10m;` + `ssl_session_timeout 1d;`
   + `ssl_session_tickets off;` set inline.
-- `ops/nginx-hardened.conf` shipped to `/etc/nginx/sites-available/new_mafiking`:
-  HSTS preload 2y via
-  `add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;`,
-  plus `X-Frame-Options DENY`, `X-Content-Type-Options nosniff`,
-  `Referrer-Policy strict-origin-when-cross-origin`, `Permissions-Policy`.
+- `ops/nginx-hardened.conf` shipped to `/etc/nginx/sites-available/new_mafiking`.
+  nginx owns HSTS (`max-age=31536000; includeSubDomains`); preload remains
+  deferred until every subdomain is audited. The app owns CSP,
+  `Permissions-Policy`, COOP/CORP, `X-Frame-Options`, nosniff, and
+  `Referrer-Policy` to avoid duplicate or conflicting headers.
+- Normal deploys preserve an already-installed hardened nginx site and verify
+  the public security-header contract after the app health check.
 - Per-route `limit_req_zone`s: `mafiking_login` 15r/m, `mafiking_register`
   4r/m, `mafiking_correction` 20r/m, `mafiking_payment` 8r/m,
   `mafiking_perf` 120r/m.

@@ -74,6 +74,7 @@ const {
 } = require('./lib/app-settings');
 const auditLog = require('./lib/audit-log');
 const { getProfileMediaDir } = require('./lib/profile-media');
+const { securityHeaders } = require('./lib/security-headers');
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 const sessionMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
@@ -597,6 +598,7 @@ if (MUTATION_COLLECTOR_ENABLED) {
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
+app.use(securityHeaders);
 app.use(helmet({
   contentSecurityPolicy: helmetCspOptions(),
   crossOriginEmbedderPolicy: false,

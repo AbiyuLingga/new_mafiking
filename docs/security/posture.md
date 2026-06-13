@@ -33,7 +33,7 @@
 | Check | Command | Expected | Actual |
 |---|---|---|---|
 | TLS 1.0/1.1 disabled | `nmap --script ssl-enum-ciphers -p 443 mafiking.com` | only TLS 1.2, 1.3 | TLS 1.2, 1.3 only (nginx.conf `ssl_protocols`) |
-| HSTS preload present | `curl -I https://mafiking.com \| grep -i strict-transport` | `max-age=63072000; includeSubDomains; preload` | `max-age=63072000; includeSubDomains; preload` (nginx-hardened.conf) |
+| HSTS present | `curl -I https://mafiking.com \| grep -i strict-transport` | `max-age=31536000; includeSubDomains` | Preload deferred until every subdomain is audited |
 | ModSecurity engine | `grep SecRuleEngine /etc/modsecurity/modsecurity.conf` | `On` | Deferred — see `ops/modsecurity/STATUS.md` |
 | fail2ban active | `fail2ban-client status` | 4 jails running | sshd, nginx-botsearch, nginx-http-flood, mafiking-auth |
 | UFW default policy | `ufw status verbose` | `deny (incoming)` | `deny (incoming)`; 22/80/443 open, 3000 denied |

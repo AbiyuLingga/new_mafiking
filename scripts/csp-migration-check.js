@@ -4,8 +4,9 @@
 //
 // This script:
 // 1. Inspects current CSP config
-// 2. Lists inline scripts/styles that would be blocked under enforcement
-// 3. Provides a checklist for safe migration
+// 2. Inspects the production Vite shell used by the deployed app
+// 3. Reports the legacy development shell separately
+// 4. Provides a checklist for safe migration
 //
 // Usage:
 //   node scripts/csp-migration-check.js
@@ -16,12 +17,27 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 
-const MAFIKING_HTML = fs.readFileSync(path.join(ROOT, 'MAFIKING.html'), 'utf-8');
-const inlineScripts = (MAFIKING_HTML.match(/<script[^>]*>/g) || []).length;
-const inlineStyles = (MAFIKING_HTML.match(/<style[^>]*>/g) || []).length;
-const babelScripts = (MAFIKING_HTML.match(/type=["']text\/babel["']/g) || []).length;
-const cdnScripts = (MAFIKING_HTML.match(/https?:\/\/[^"' ]+\.js/g) || []);
-const cdnStyles = (MAFIKING_HTML.match(/https?:\/\/[^"' ]+\.css/g) || []);
+function readIfPresent(filePath) {
+  return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : '';
+}
+
+function inventoryHtml(html) {
+  const scriptTags = html.match(/<script\b[^>]*>/gi) || [];
+  const styleTags = html.match(/<style\b[^>]*>/gi) || [];
+  const externalUrls = html.match(/https?:\/\/[^"' <>)]+/g) || [];
+  return {
+    inlineScripts: scriptTags.filter((tag) => !/\bsrc\s*=/i.test(tag)).length,
+    inlineStyles: styleTags.length,
+    babelScripts: scriptTags.filter((tag) => /type=["']text\/babel["']/i.test(tag)).length,
+    externalOrigins: [...new Set(externalUrls.map((value) => new URL(value).origin))].sort(),
+  };
+}
+
+const productionPath = path.join(ROOT, 'dist', 'index.html');
+const legacyPath = path.join(ROOT, 'MAFIKING.html');
+const productionHtml = readIfPresent(productionPath);
+const production = inventoryHtml(productionHtml);
+const legacy = inventoryHtml(readIfPresent(legacyPath));
 
 console.log('=== CSP Migration Check ===\n');
 console.log('Current state:');
@@ -29,13 +45,15 @@ console.log(`  CSP_REPORT_ONLY: ${process.env.CSP_REPORT_ONLY ?? '<unset>'}`);
 console.log(`  CSP_ENFORCE: ${process.env.CSP_ENFORCE ?? '<unset>'}`);
 console.log(`  isReportOnly: ${isReportOnly()}`);
 
-console.log('\nMAFIKING.html inventory:');
-console.log(`  Inline <script>: ${inlineScripts} (Babel: ${babelScripts})`);
-console.log(`  Inline <style>: ${inlineStyles}`);
-console.log(`  External scripts: ${cdnScripts.length}`);
-cdnScripts.forEach((s) => console.log(`    - ${s}`));
-console.log(`  External stylesheets: ${cdnStyles.length}`);
-cdnStyles.forEach((s) => console.log(`    - ${s}`));
+console.log('\nProduction dist/index.html inventory:');
+console.log(`  Present: ${productionHtml ? 'yes' : 'no (run npm run build first)'}`);
+console.log(`  Inline <script>: ${production.inlineScripts}`);
+console.log(`  Inline <style>: ${production.inlineStyles}`);
+console.log(`  External origins: ${production.externalOrigins.join(', ') || '<none>'}`);
+
+console.log('\nLegacy MAFIKING.html inventory (development fallback only):');
+console.log(`  Inline <script>: ${legacy.inlineScripts} (Babel: ${legacy.babelScripts})`);
+console.log(`  Inline <style>: ${legacy.inlineStyles}`);
 
 const directives = buildDirectives();
 console.log('\nCurrent CSP directives:');
@@ -45,21 +63,20 @@ for (const [k, v] of Object.entries(directives)) {
 
 console.log('\n=== Migration checklist ===');
 const blockers = [];
-if (babelScripts > 0) blockers.push('Babel inline scripts need nonce or hash migration');
-if (inlineStyles > 0) blockers.push('Inline <style> blocks need hashing or external CSS migration');
-if (cdnScripts.some((s) => !directives.scriptSrc.includes(s.split('/')[2]))) {
-    blockers.push('Some CDN scripts are not in CSP allowlist');
-}
-if (cdnStyles.some((s) => !directives.styleSrc.includes(s.split('/')[2]))) {
-    blockers.push('Some CDN stylesheets are not in CSP allowlist');
-}
+if (!productionHtml) blockers.push('Production build is missing; run npm run build');
+if (production.inlineScripts > 0) blockers.push('Production inline scripts need nonce or hash migration');
+if (production.inlineStyles > 0) blockers.push('Production inline style blocks need hashing or external CSS migration');
+const allowedOrigins = new Set(Object.values(directives).flat().filter((value) => /^https:\/\//.test(value)));
+const missingOrigins = production.externalOrigins.filter((origin) => !allowedOrigins.has(origin));
+if (missingOrigins.length > 0) blockers.push(`Production external origins missing from CSP: ${missingOrigins.join(', ')}`);
 
 if (blockers.length > 0) {
     console.log('  ! Migration blockers:');
     for (const b of blockers) console.log(`    - ${b}`);
-    console.log('\n  Recommendation: keep CSP_REPORT_ONLY=true; fix blockers first.');
+    console.log('\n  Recommendation: keep CSP report-only; fix production blockers first.');
 } else {
-    console.log('  ok No blockers detected. CSP_ENFORCE=1 can be set safely.');
+    console.log('  ok No static production blockers detected.');
+    console.log('  Review at least 7 days of CSP reports and critical flows before CSP_ENFORCE=1.');
 }
 
 console.log('\nTo enforce:');

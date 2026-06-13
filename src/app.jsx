@@ -1367,13 +1367,27 @@ function parseAppLocation() {
       },
     };
   }
-  const chapterPracticeMatch = path.match(/^\/belajar\/practice\/([a-z0-9-]+)\/([a-z0-9-]+)(?:\/soal-(\d+))?$/);
+  const retryPracticeMatch = path.match(/^\/belajar\/practice\/([a-z0-9-]+)\/([a-z0-9-]+)\/(canvas|pilgan)\/problem-(\d+)$/);
+  if (retryPracticeMatch) {
+    return {
+      route: "practice",
+      practice: {
+        ...findPracticeChapterFromPath(retryPracticeMatch[1], retryPracticeMatch[2]),
+        initialMode: retryPracticeMatch[3] === "canvas" ? "canvas" : "choice",
+        initialProblemId: Number(retryPracticeMatch[4]),
+        retryProblemOnly: true,
+        disableCanvasIntro: retryPracticeMatch[3] === "canvas",
+      },
+    };
+  }
+  const chapterPracticeMatch = path.match(/^\/belajar\/practice\/([a-z0-9-]+)\/([a-z0-9-]+)(?:\/(canvas|pilgan))?(?:\/soal-(\d+))?$/);
   if (chapterPracticeMatch) {
-    const questionNumber = Number(chapterPracticeMatch[3] || 0);
+    const questionNumber = Number(chapterPracticeMatch[4] || 0);
     return {
       route: "practice",
       practice: {
         ...findPracticeChapterFromPath(chapterPracticeMatch[1], chapterPracticeMatch[2]),
+        initialMode: chapterPracticeMatch[3] === "canvas" ? "canvas" : "choice",
         initialProblemNumber: Number.isInteger(questionNumber) && questionNumber > 0 ? questionNumber : null,
       },
     };
@@ -1410,9 +1424,13 @@ function appStateToPath(state) {
     }
     const mapelSlug = slugifyAppPath(practice.mapelSlug || practice.mapel || "matematika", "matematika");
     const chapterSlug = slugifyAppPath(practice.chapterSlug || practice.title || practice.id, "latihan");
+    const modeSegment = practice.initialMode === "canvas" ? "canvas" : "pilgan";
+    if (practice.retryProblemOnly && practice.initialProblemId) {
+      return `/belajar/practice/${encodeURIComponent(mapelSlug)}/${encodeURIComponent(chapterSlug)}/${modeSegment}/problem-${encodeURIComponent(practice.initialProblemId)}`;
+    }
     const questionNumber = Number(practice.activeProblemNumber || practice.initialProblemNumber || 0);
     const suffix = Number.isInteger(questionNumber) && questionNumber > 0 ? `/soal-${questionNumber}` : "";
-    return `/belajar/practice/${encodeURIComponent(mapelSlug)}/${encodeURIComponent(chapterSlug)}${suffix}`;
+    return `/belajar/practice/${encodeURIComponent(mapelSlug)}/${encodeURIComponent(chapterSlug)}/${modeSegment}${suffix}`;
   }
   if (route === "leaderboard") return "/peringkat";
   if (route === "profile") return "/profil";

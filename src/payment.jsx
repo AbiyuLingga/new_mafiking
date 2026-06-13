@@ -314,41 +314,35 @@ const PaymentCheckoutModal = ({ context, currentUser, onAccessChanged, onClose, 
           status={pollingStatus}
         />
       ) : (
-        <>
-          <PaymentQrisView
-            countdown={countdown}
-            checkingStatus={checkingStatus}
-            onCancel={closePaymentStatus}
-            onCheckStatus={refreshPaymentStatus}
-            payment={qrData}
-            setRoute={setRoute}
-            status={pollingStatus}
-          />
-          <PaymentQrisViewDesktop
-            countdown={countdown}
-            checkingStatus={checkingStatus}
-            onCancel={closePaymentStatus}
-            onCheckStatus={refreshPaymentStatus}
-            payment={qrData}
-            setRoute={setRoute}
-            status={pollingStatus}
-          />
-        </>
+        <PaymentQrisViewDesktop
+          countdown={countdown}
+          checkingStatus={checkingStatus}
+          onCancel={closePaymentStatus}
+          onCheckStatus={refreshPaymentStatus}
+          payment={qrData}
+          setRoute={setRoute}
+          status={pollingStatus}
+        />
       )
     );
   }
 
   if (checkingPending) {
     return renderPaymentOverlay(
-      <div className="checkout-modal-backdrop">
-        <div className="checkout-modal" style={{ maxWidth: 420 }} role="dialog" aria-modal="true">
+      <div className="checkout-modal-backdrop" onClick={onClose}>
+        <div className="checkout-modal" onClick={(event) => event.stopPropagation()} style={{ maxWidth: 420 }} role="dialog" aria-modal="true">
           <div className="checkout-modal-main" style={{ width: "100%" }}>
-            <div className="flex items-center gap-3">
-              <Icon.Clock className="w-6 h-6 text-ink" />
-              <div>
-                <h2 className="font-display font-bold text-2xl tracking-[-0.02em]">Mengecek QRIS</h2>
-                <p className="text-sm text-ink/50">Sebentar, kami cek apakah pesanan lama masih aktif.</p>
+            <div className="checkout-modal-heading !mb-0">
+              <div className="flex items-center gap-3">
+                <Icon.Clock className="w-6 h-6 text-ink" />
+                <div>
+                  <h2 className="font-display font-bold text-2xl tracking-[-0.02em]">Mengecek QRIS</h2>
+                  <p className="text-sm text-ink/50">Sebentar, kami cek apakah pesanan lama masih aktif.</p>
+                </div>
               </div>
+              <button aria-label="Tutup checkout" className="checkout-modal-close" onClick={onClose} type="button">
+                <Icon.X className="w-5 h-5" />
+              </button>
             </div>
           </div>
         </div>
@@ -410,12 +404,22 @@ const CheckoutModal = ({ config, error, onClose, onPay, phoneNumber, product, lo
     <div className="checkout-modal-backdrop" onClick={onClose}>
       <div className="checkout-modal" onClick={(e) => e.stopPropagation()}>
         <div className="checkout-modal-main">
-          <div className="flex items-center gap-3 mb-6">
-            <Icon.Wallet className="w-6 h-6 text-ink" />
-            <div>
-              <h2 className="font-display font-bold text-2xl tracking-[-0.02em]">Checkout</h2>
-              <p className="text-sm text-ink/50">Selesaikan pembayaran Anda</p>
+          <div className="checkout-modal-heading">
+            <div className="flex items-center gap-3">
+              <Icon.Wallet className="w-6 h-6 text-ink" />
+              <div>
+                <h2 className="font-display font-bold text-2xl tracking-[-0.02em]">Checkout</h2>
+                <p className="text-sm text-ink/50">Selesaikan pembayaran Anda</p>
+              </div>
             </div>
+            <button
+              aria-label="Tutup checkout"
+              className="checkout-modal-close checkout-modal-close-mobile"
+              onClick={onClose}
+              type="button"
+            >
+              <Icon.X className="w-5 h-5" />
+            </button>
           </div>
 
           <div className="checkout-product-card">
@@ -468,7 +472,7 @@ const CheckoutModal = ({ config, error, onClose, onPay, phoneNumber, product, lo
         <div className="checkout-modal-sidebar">
           <div className="checkout-modal-sidebar-header">
             <h3>Ringkasan Pembayaran</h3>
-            <button className="checkout-modal-close" onClick={onClose} type="button">
+            <button aria-label="Tutup checkout" className="checkout-modal-close" onClick={onClose} type="button">
               <Icon.X className="w-5 h-5" />
             </button>
           </div>
@@ -836,9 +840,8 @@ const PaymentQrisViewDesktop = ({ payment, countdown, status, onCancel, onCheckS
   }
 
   return (
-    <div className="hidden md:block">
-    <div className="checkout-modal-backdrop" onClick={onCancel}>
-      <div className="checkout-modal qris-desktop-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="checkout-modal-backdrop qris-modal-backdrop" onClick={onCancel}>
+      <div className="checkout-modal qris-desktop-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Pembayaran QRIS">
         <div className="checkout-modal-main">
           <div className="qris-desktop-header">
             <div className="flex items-center gap-3">
@@ -848,7 +851,7 @@ const PaymentQrisViewDesktop = ({ payment, countdown, status, onCancel, onCheckS
                 <p>Selesaikan pembayaran dengan nominal yang tertera.</p>
               </div>
             </div>
-            <button className="checkout-modal-close" onClick={onCancel} type="button">
+            <button aria-label="Tutup pembayaran QRIS" className="checkout-modal-close" onClick={onCancel} type="button">
               <Icon.X className="w-5 h-5" />
             </button>
           </div>
@@ -943,7 +946,6 @@ const PaymentQrisViewDesktop = ({ payment, countdown, status, onCancel, onCheckS
           <div className="checkout-secure-note">Pembayaran aman melalui QRIS</div>
         </div>
       </div>
-    </div>
     </div>
   );
 };
@@ -1057,26 +1059,15 @@ const PaymentStatus = ({ merchantOrderId, setRoute, onAccessChanged }) => {
     }
     if (payment.qrImageDataUrl) {
       return renderPaymentOverlay(
-        <>
-          <PaymentQrisView
-            countdown={countdown}
-            checkingStatus={checkingStatus}
-            onCancel={() => leaveStatus(isTryout ? "tryout" : "belajar")}
-            onCheckStatus={refreshVisibleStatus}
-            payment={payment}
-            setRoute={setRoute}
-            status={payment}
-          />
-          <PaymentQrisViewDesktop
-            countdown={countdown}
-            checkingStatus={checkingStatus}
-            onCancel={() => leaveStatus(isTryout ? "tryout" : "belajar")}
-            onCheckStatus={refreshVisibleStatus}
-            payment={payment}
-            setRoute={setRoute}
-            status={payment}
-          />
-        </>
+        <PaymentQrisViewDesktop
+          countdown={countdown}
+          checkingStatus={checkingStatus}
+          onCancel={() => leaveStatus(isTryout ? "tryout" : "belajar")}
+          onCheckStatus={refreshVisibleStatus}
+          payment={payment}
+          setRoute={setRoute}
+          status={payment}
+        />
       );
     }
     return (

@@ -333,7 +333,14 @@ else
   echo "Perubahan konten langsung di server dipertahankan."
 fi
 
-if [ -f /etc/letsencrypt/live/mafiking.com/fullchain.pem ] && [ -f /etc/letsencrypt/live/mafiking.com/privkey.pem ]; then
+NGINX_SITE="/etc/nginx/sites-available/$APP_NAME"
+PRESERVE_HARDENED_NGINX=0
+if [ -f "$NGINX_SITE" ] && grep -q '^# ops/nginx-hardened.conf' "$NGINX_SITE"; then
+  PRESERVE_HARDENED_NGINX=1
+  echo "Konfigurasi nginx hardened aktif; deploy mempertahankannya."
+fi
+
+if [ "$PRESERVE_HARDENED_NGINX" != "1" ] && [ -f /etc/letsencrypt/live/mafiking.com/fullchain.pem ] && [ -f /etc/letsencrypt/live/mafiking.com/privkey.pem ]; then
   $SUDO tee "/etc/nginx/sites-available/$APP_NAME" >/dev/null <<EOF
 server {
     listen 443 ssl;
@@ -345,6 +352,9 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/mafiking.com/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # HSTS is edge-owned. Other security headers are emitted by the app.
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
     location /.well-known/acme-challenge/ {
         root /var/www/html;
@@ -375,7 +385,7 @@ server {
     }
 }
 EOF
-else
+elif [ "$PRESERVE_HARDENED_NGINX" != "1" ]; then
   $SUDO tee "/etc/nginx/sites-available/$APP_NAME" >/dev/null <<EOF
 server {
     listen 80;
@@ -474,6 +484,28 @@ fi
 
 cat "$HEALTH_FILE"
 echo ""
+
+if [ -f /etc/letsencrypt/live/mafiking.com/fullchain.pem ]; then
+  HEADER_FILE="/tmp/$APP_NAME-security-headers.txt"
+  curl -ksSI --resolve mafiking.com:443:127.0.0.1 https://mafiking.com/login >"$HEADER_FILE"
+
+  require_public_header() {
+    local pattern="$1"
+    local label="$2"
+    if ! grep -Eiq "$pattern" "$HEADER_FILE"; then
+      echo "Header publik wajib tidak ditemukan: $label"
+      cat "$HEADER_FILE"
+      exit 1
+    fi
+  }
+
+  require_public_header '^strict-transport-security:' 'Strict-Transport-Security'
+  require_public_header '^permissions-policy:' 'Permissions-Policy'
+  require_public_header '^cross-origin-opener-policy:' 'Cross-Origin-Opener-Policy'
+  require_public_header '^x-content-type-options:[[:space:]]*nosniff' 'X-Content-Type-Options'
+  require_public_header '^content-security-policy(-report-only)?:' 'Content-Security-Policy'
+  echo "Kontrak header publik terverifikasi."
+fi
 ENDSSH
 
 echo ""
