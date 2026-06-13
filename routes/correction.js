@@ -910,19 +910,70 @@ function loadRecentCorrectionAttempts(db, userId, limit) {
 function compactAttemptsForProfile(attempts, limit = attempts.length) {
   return (Array.isArray(attempts) ? attempts : []).slice(0, limit).map((attempt, index) => {
     const evaluation = attempt.evaluation || {};
+    const wrongIssues = Array.isArray(evaluation.wrongSteps)
+      ? evaluation.wrongSteps.map((step) => String(step.issue || step.issuePlain || step.issueLatex || '')).filter(Boolean)
+      : [];
+    const baseWeaknessTags = normalizeLearningTags(attempt.weaknessTags || evaluation.weaknessTags);
+    const baseStrengthTags = normalizeLearningTags(attempt.strengthTags || evaluation.strengthTags);
+    const questionText = String(attempt.questionText || '');
+    const score = clampScore(attempt.score ?? evaluation.score);
+    const isCorrect = normalizeBoolean(attempt.isCorrect ?? evaluation.isCorrect);
     return {
       nomor: index + 1,
       completedAt: attempt.completedAt || attempt.createdAt || attempt.submittedAt || '',
-      questionText: String(attempt.questionText || ''),
-      score: clampScore(attempt.score ?? evaluation.score),
-      isCorrect: normalizeBoolean(attempt.isCorrect ?? evaluation.isCorrect),
-      strengthTags: normalizeLearningTags(attempt.strengthTags || evaluation.strengthTags),
-      weaknessTags: normalizeLearningTags(attempt.weaknessTags || evaluation.weaknessTags),
-      wrongIssues: Array.isArray(evaluation.wrongSteps)
-        ? evaluation.wrongSteps.map((step) => String(step.issue || '')).filter(Boolean)
-        : []
+      questionText,
+      score,
+      isCorrect,
+      strengthTags: baseStrengthTags.length ? baseStrengthTags : inferProfileStrengthTags({ isCorrect, questionText, score }),
+      weaknessTags: baseWeaknessTags.length ? baseWeaknessTags : inferProfileWeaknessTags({ feedback: attempt.feedback, isCorrect, questionText, score, wrongIssues }),
+      wrongIssues
     };
   });
+}
+
+function inferProfileTagsFromText(text) {
+  const haystack = String(text || '').toLowerCase();
+  const tags = [];
+  if (/integral|\\int|∫|substitusi|anti[\s-]?turunan|dfrac|frac/.test(haystack)) tags.push('Integral');
+  if (/turunan|derivative|diferensial|dy\/dx|dy dx/.test(haystack)) tags.push('Diferensial');
+  if (/limit|lim\\b|\\lim/.test(haystack)) tags.push('Limit');
+  if (/sin|cos|tan|trigonometri|trig/.test(haystack)) tags.push('Trigonometri');
+  if (/aljabar|persamaan|variabel|pangkat|koefisien|konstanta/.test(haystack)) tags.push('Aljabar');
+  return normalizeLearningTags(tags);
+}
+
+function inferProfileWeaknessTags({ feedback = '', isCorrect = false, questionText = '', score = 0, wrongIssues = [] } = {}) {
+  if (isCorrect && score >= 80) return [];
+  const text = [questionText, feedback, ...(wrongIssues || [])].join(' ');
+  const tags = inferProfileTagsFromText(text);
+  if (/tidak memberikan jawaban|belum menjawab|jawaban kosong|tidak ada jawaban|menyalin soal/i.test(text)) {
+    tags.unshift('Menulis langkah penyelesaian');
+  }
+  if (/gambar|canvas|tulisan|terbaca/i.test(text)) {
+    tags.unshift('Kejelasan jawaban canvas');
+  }
+  return limitProfileSummaryTags({ weaknesses: tags }).weaknesses || [];
+}
+
+function inferProfileStrengthTags({ isCorrect = false, questionText = '', score = 0 } = {}) {
+  if (!isCorrect && score < 80) return [];
+  return inferProfileTagsFromText(questionText);
+}
+
+function compactMultipleChoiceEvidenceForProfile(multipleChoiceEvidence, limit = PROFILE_RECOMMENDATION_ATTEMPT_LIMIT) {
+  const rows = Array.isArray(multipleChoiceEvidence?.recentWrong) ? multipleChoiceEvidence.recentWrong : [];
+  return rows.slice(0, limit).map((row, index) => ({
+    nomor: index + 1,
+    completedAt: row.completedAt || '',
+    questionText: row.questionDisplay || '',
+    score: 0,
+    isCorrect: false,
+    strengthTags: [],
+    weaknessTags: normalizeLearningTags([row.subtopic, row.difficulty].filter(Boolean)).length
+      ? normalizeLearningTags([row.subtopic, row.difficulty].filter(Boolean))
+      : inferProfileWeaknessTags({ isCorrect: false, questionText: row.questionDisplay, score: 0 }),
+    wrongIssues: [`Pilihan kamu: ${row.selectedAnswer || '-'}. Jawaban benar: ${row.correctAnswer || '-'}.`]
+  }));
 }
 
 function chooseProfileAttemptSource(dbAttempts, requestAttempts) {
@@ -1496,19 +1547,28 @@ router.post('/profile-summary', isAuthenticated, async (req, res) => {
       });
     }
 
-    const recommendationAttempts = compactAttemptsForProfile(attempts, PROFILE_RECOMMENDATION_ATTEMPT_LIMIT);
+    const correctionRecommendationAttempts = compactAttemptsForProfile(attempts, PROFILE_RECOMMENDATION_ATTEMPT_LIMIT);
+    const multipleChoiceRecommendationAttempts = compactMultipleChoiceEvidenceForProfile(multipleChoiceEvidence, PROFILE_RECOMMENDATION_ATTEMPT_LIMIT);
+    const recommendationAttempts = [
+      ...correctionRecommendationAttempts,
+      ...multipleChoiceRecommendationAttempts,
+    ].slice(0, PROFILE_RECOMMENDATION_ATTEMPT_LIMIT);
     const aiAttempts = compactAttemptsForProfile(attempts, PROFILE_AI_ATTEMPT_LIMIT);
     const deterministicSummary = buildDeterministicProfileSummary(recommendationAttempts);
     const forceRefresh = Boolean(req.body?.forceRefresh);
     const refreshState = getProfileAiRefreshState(db, user, now);
 
     if (!forceRefresh && refreshState.cachedSummary) {
+      const cachedBase = mergeProfileSummaries(
+        normalizeProfileSummary(refreshState.cachedSummary, ''),
+        deterministicSummary
+      );
       const cachedSummary = enrichProfileSummaryRecommendations(
         db,
         req.session.userId,
         attempts,
         multipleChoiceEvidence,
-        refreshState.cachedSummary,
+        cachedBase,
         masteryContext
       );
       return res.json({

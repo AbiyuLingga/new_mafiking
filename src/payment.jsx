@@ -100,7 +100,7 @@ function renderPaymentOverlay(children) {
   return children;
 }
 
-const Payment = ({ setRoute, currentUser, context }) => {
+const Payment = ({ setRoute, currentUser, context, onAccessChanged }) => {
   const { useEffect } = React;
   const params = new URLSearchParams(window.location.search);
   const merchantOrderId = params.get("merchantOrderId");
@@ -110,14 +110,14 @@ const Payment = ({ setRoute, currentUser, context }) => {
   }, [merchantOrderId, setRoute]);
 
   if (merchantOrderId) {
-    return <PaymentStatus merchantOrderId={merchantOrderId} setRoute={setRoute} />;
+    return <PaymentStatus merchantOrderId={merchantOrderId} setRoute={setRoute} onAccessChanged={onAccessChanged} />;
   }
 
   return null;
 };
 
-const PaymentCheckoutModal = ({ context, currentUser, onClose, setRoute }) => {
-  const { useEffect, useMemo, useState } = React;
+const PaymentCheckoutModal = ({ context, currentUser, onAccessChanged, onClose, setRoute }) => {
+  const { useEffect, useMemo, useRef, useState } = React;
   const [loading, setLoading] = useState(false);
   const [gatewayConfig, setGatewayConfig] = useState(null);
   const [errors, setErrors] = useState({});
@@ -129,8 +129,15 @@ const PaymentCheckoutModal = ({ context, currentUser, onClose, setRoute }) => {
   const [checkingPending, setCheckingPending] = useState(true);
   const [name] = useState(() => initialPaymentName(currentUser));
   const [email] = useState(() => initialPaymentEmail(currentUser));
+  const accessRefreshDoneRef = useRef(false);
   const product = useMemo(() => paymentProductFromContext(context), [context]);
   const gatewayReady = gatewayConfig ? Boolean(gatewayConfig.active) : false;
+
+  function notifyAccessChangedOnce() {
+    if (accessRefreshDoneRef.current) return;
+    accessRefreshDoneRef.current = true;
+    if (typeof onAccessChanged === "function") onAccessChanged();
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -190,6 +197,7 @@ const PaymentCheckoutModal = ({ context, currentUser, onClose, setRoute }) => {
         .then((res) => {
           if (cancelled) return;
           setPollingStatus(res);
+          if (res.status === "SUCCESS") notifyAccessChangedOnce();
           if (res.status === "PENDING") schedule();
         })
         .catch((err) => {
@@ -253,6 +261,7 @@ const PaymentCheckoutModal = ({ context, currentUser, onClose, setRoute }) => {
       setPollingStatus(res);
       setQrData((current) => ({ ...(current || {}), ...res }));
       if (res.expiresAt) setCountdown(remainingPaymentSeconds(res.expiresAt));
+      if (res.status === "SUCCESS") notifyAccessChangedOnce();
     } catch (err) {
       setPollingStatus((current) => ({
         ...(current || {}),
@@ -578,7 +587,7 @@ const PaymentManualView = ({ payment, countdown, status, adminWhatsapp, onCancel
           </div>
 
           {statusValue === "SUCCESS" ? (
-            <div className="mt-4 rounded-xl bg-yel/20 border border-yel/60 px-3 py-3 text-center text-sm font-semibold text-ink">
+            <div className="mt-4 rounded-xl bg-green-500 px-3 py-3 text-center text-sm font-semibold text-white">
               Pembayaran sudah diverifikasi. Akses sudah aktif.
             </div>
           ) : expired ? (
@@ -592,8 +601,8 @@ const PaymentManualView = ({ payment, countdown, status, adminWhatsapp, onCancel
           ) : (
             <div className="mt-4 flex items-center justify-center gap-2 text-sm">
               <Icon.Clock className="w-4 h-4 text-ink/50" />
-              <span className="text-ink/70">
-                Konfirmasi dalam <strong className="tnum">{formatCountdown(countdown)}</strong>
+              <span className="text-red-600">
+                Konfirmasi dalam <strong className="tnum text-red-600">{formatCountdown(countdown)}</strong>
               </span>
             </div>
           )}
@@ -742,9 +751,9 @@ const PaymentQrisView = ({ payment, countdown, status, onCancel, onCheckStatus, 
           Pembayaran gagal atau dibatalkan.
         </div>
       ) : (
-        <div style={{ margin: "0 16px 16px" }} className="flex items-center justify-center gap-2 text-sm text-ink/60">
-          <Icon.Clock className="w-4 h-4 text-ink/50" />
-          <span>Bayar dalam <strong className="tnum">{formatCountdown(countdown)}</strong></span>
+        <div style={{ margin: "0 16px 16px" }} className="flex items-center justify-center gap-2 text-sm text-red-600">
+          <Icon.Clock className="w-4 h-4 text-red-600" />
+          <span>Bayar dalam <strong className="tnum text-red-600">{formatCountdown(countdown)}</strong></span>
         </div>
       )}
     </div>
@@ -806,7 +815,7 @@ const PaymentQrisViewDesktop = ({ payment, countdown, status, onCancel, onCheckS
           </div>
 
           {statusValue === "SUCCESS" ? (
-            <div className="rounded-xl bg-yel/20 border border-yel/60 px-3 py-3 text-center text-sm font-semibold text-ink w-full">
+            <div className="rounded-xl bg-green-500 px-3 py-3 text-center text-sm font-semibold text-white w-full">
               Pembayaran berhasil. Akses sudah aktif.
             </div>
           ) : expired ? (
@@ -818,9 +827,9 @@ const PaymentQrisViewDesktop = ({ payment, countdown, status, onCancel, onCheckS
               Pembayaran gagal atau dibatalkan.
             </div>
           ) : (
-            <div className="flex items-center justify-center gap-2 text-sm text-ink/60">
-              <Icon.Clock className="w-4 h-4 text-ink/50" />
-              <span>Bayar dalam <strong className="tnum">{formatCountdown(countdown)}</strong></span>
+            <div className="flex items-center justify-center gap-2 text-sm text-red-600">
+              <Icon.Clock className="w-4 h-4 text-red-600" />
+              <span>Bayar dalam <strong className="tnum text-red-600">{formatCountdown(countdown)}</strong></span>
             </div>
           )}
 
@@ -895,14 +904,21 @@ const PaymentQrisViewDesktop = ({ payment, countdown, status, onCancel, onCheckS
   );
 };
 
-const PaymentStatus = ({ merchantOrderId, setRoute }) => {
-  const { useState, useEffect } = React;
+const PaymentStatus = ({ merchantOrderId, setRoute, onAccessChanged }) => {
+  const { useState, useEffect, useRef } = React;
   const [status, setStatus] = useState("pending");
   const [attempts, setAttempts] = useState(0);
   const [payment, setPayment] = useState({ merchantOrderId });
   const [errorMessage, setErrorMessage] = useState("");
   const [countdown, setCountdown] = useState(0);
   const [checkingStatus, setCheckingStatus] = useState(false);
+  const accessRefreshDoneRef = useRef(false);
+
+  function notifyAccessChangedOnce() {
+    if (accessRefreshDoneRef.current) return;
+    accessRefreshDoneRef.current = true;
+    if (typeof onAccessChanged === "function") onAccessChanged();
+  }
 
   function leaveStatus(nextRoute) {
     window.history.replaceState(null, "", window.location.pathname);
@@ -916,7 +932,10 @@ const PaymentStatus = ({ merchantOrderId, setRoute }) => {
       const res = await MafikingAPI.get(`/api/payment/status/${merchantOrderId}`);
       setPayment(res);
       if (res.expiresAt) setCountdown(remainingPaymentSeconds(res.expiresAt));
-      if (res.status === "SUCCESS") setStatus("success");
+      if (res.status === "SUCCESS") {
+        setStatus("success");
+        notifyAccessChangedOnce();
+      }
       else if (res.status === "PENDING") setStatus("pending");
       else setStatus("failed");
     } catch (err) {
@@ -940,6 +959,7 @@ const PaymentStatus = ({ merchantOrderId, setRoute }) => {
           if (res.expiresAt) setCountdown(remainingPaymentSeconds(res.expiresAt));
           if (res.status === "SUCCESS") {
             setStatus("success");
+            notifyAccessChangedOnce();
           } else if (res.status === "PENDING") {
             nextAttempts += 1;
             setAttempts(nextAttempts);

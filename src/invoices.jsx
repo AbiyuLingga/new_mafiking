@@ -243,3 +243,5 @@ const PrintableInvoice = ({ invoice }) => {
   );
 };
 
+window.Invoices = Invoices;
+

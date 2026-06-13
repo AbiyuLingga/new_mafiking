@@ -121,6 +121,15 @@ Important caveat: `src/admin-monitoring.jsx` exists and is loaded before `src/ad
 - Profile narrative provider: Gemma via `routes/correction.js`.
 - Contract: `/api/correction/profile-summary` preserves deterministic `recommendedItems`, `recommendedQuestions`, and `skillNeedScores`.
 
+## Performance (2026-06-12)
+
+- **Bundle:** 24.24 KB initial JS gzip (main + vendor-react) — 86% reduction from 175KB baseline.
+- **Route splitting:** Vite dynamic imports for each route chunk via `src/app.jsx`.
+- **Image optimization:** AVIF/WebP with responsive variants in `assets/`.
+- **Lazy loading:** KaTeX CSS+JS (`src/math-loader.js`), Clerk SDK (`src/clerk-auth.jsx`), mentor/landing images.
+- **Core Web Vitals targets:** LCP < 2.5s, INP < 200ms, CLS < 0.1, FCP < 1.8s.
+- **Lighthouse mobile:** ≥90 (baseline was 76/77).
+
 ## Current Validation
 
 Standard check:

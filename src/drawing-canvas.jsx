@@ -1401,5 +1401,5 @@ const { forwardRef: __dcForwardRef, useCallback: __dcUseCallback, useEffect: __d
     );
   });
 
-  window.DrawingCanvas = DrawingCanvas;
+  window.DrawingCanvas = window.DrawingCanvas || DrawingCanvas;
 })();

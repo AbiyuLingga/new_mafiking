@@ -93,6 +93,8 @@ const Leaderboard = () => {
       ]
     : podiumRows;
   const showPodium = !loading && !error && podiumSlots.length > 0;
+  const selfRow = rows.find((user) => user.isMe) || null;
+  const tableRows = selfRow ? rows.filter((user) => !user.isMe) : rows;
   const podiumGridClass = showEmptyTryoutPodium
     ? "md:grid-cols-3"
     : podiumRows.length === 1
@@ -248,6 +250,43 @@ const Leaderboard = () => {
           </div>
 
           <div key={activeTab} className="custom-scrollbar leaderboard-list-transition min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto overscroll-contain">
+            {selfRow && (
+              <div className="sticky top-0 z-10 border-b border-amber-200 bg-amber-50/95 px-4 py-3 backdrop-blur sm:px-6">
+                <div className="mb-2 text-[10px] font-black uppercase tracking-[0.28em] text-amber-600">
+                  Peringkat Dirimu
+                </div>
+                <div className="grid grid-cols-[64px_1fr_128px] items-center gap-3 rounded-xl border border-amber-200 bg-white px-4 py-4 shadow-sm sm:grid-cols-[80px_1fr_180px]">
+                  <div className="font-black tabular-nums text-amber-700">
+                    {selfRow.rank < 10 ? `0${selfRow.rank}` : selfRow.rank}
+                  </div>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink text-sm font-black text-white ring-2 ring-amber-300">
+                      {selfRow.initials}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-black text-ink sm:text-base">{selfRow.display_name}</div>
+                      {selfRow.fakultas && (
+                        <div className="text-[11px] font-bold uppercase tracking-widest text-slate-500">{selfRow.fakultas}</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 text-right">
+                    <div className="text-sm font-black text-ink sm:text-base">{renderPrimaryMetric(selfRow, true)}</div>
+                    <div className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500">
+                      {isTryoutTab ? (
+                        <React.Fragment>
+                          <Icon.Clock className="h-3 w-3" /> {formatLeaderboardDuration(selfRow.duration_seconds)}
+                        </React.Fragment>
+                      ) : (
+                        <React.Fragment>
+                          <Icon.Flame className="h-3 w-3" /> {formatNumber(selfRow.streak_days)} hari
+                        </React.Fragment>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {loading && (
               <div className="space-y-3 p-5">
                 {[1, 2, 3, 4, 5].map((item) => <Skeleton key={item} className="h-16 rounded-xl" />)}
@@ -270,7 +309,7 @@ const Leaderboard = () => {
               </div>
             )}
 
-            {!loading && !error && rows.map((user) => (
+            {!loading && !error && tableRows.map((user) => (
               <div
                 key={`${activeTab}-${user.rank}-${user.id}`}
                 className={`grid grid-cols-[64px_1fr_128px] items-center gap-3 px-4 py-4 transition-colors hover:bg-slate-50 sm:grid-cols-[80px_1fr_180px] sm:px-6 ${

@@ -1,6 +1,14 @@
 // MAFIKING Tryout — minimalist
 
-const BLANK_PKG = { tryout_id: '', title: '', description: '', price: 'Gratis', original_price: '', badge: '', duration: '60 mnt', questions: 30, features: '', tone: 'default', sort_order: 0 };
+const PACKAGE_ACCESS_OPTIONS = [
+  { id: "tryout-access", label: "Try Out paket" },
+  { id: "daily-missions", label: "Misi Harian" },
+  { id: "special-practice", label: "Latihan Soal Khusus" },
+];
+
+const DEFAULT_PACKAGE_ACCESS_FEATURES = ["tryout-access", "daily-missions", "special-practice"];
+
+const BLANK_PKG = { tryout_id: '', title: '', description: '', price: 'Gratis', original_price: '', badge: '', duration: '60 mnt', questions: 30, features: '', access_features: DEFAULT_PACKAGE_ACCESS_FEATURES, tone: 'default', sort_order: 0 };
 
 const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context, currentUser }) => {
   const mode = String(context?.mode || "");
@@ -80,7 +88,7 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context, c
       }
 
       const data = await MafikingAPI.get('/api/tryout-packages');
-      setPackages(data.map(p => ({ ...p, features: parseFeatures(p.features) })));
+      setPackages(data.map(p => ({ ...p, features: parseFeatures(p.features), access_features: parsePackageAccessFeatures(p.access_features) })));
       
       const activeData = await MafikingAPI.get('/api/payment/active-packages');
       setActivePackages(activeData || []);
@@ -101,6 +109,21 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context, c
   function parseFeatures(f) {
     if (Array.isArray(f)) return f.join('\n');
     try { const arr = JSON.parse(f); return Array.isArray(arr) ? arr.join('\n') : (f || ''); } catch (_) { return f || ''; }
+  }
+
+  function parsePackageAccessFeatures(value, options) {
+    const useDefault = !options || options.useDefault !== false;
+    let raw = value;
+    if (typeof raw === 'string') {
+      try { raw = JSON.parse(raw); } catch (_) { raw = raw.split(/[\n,]/); }
+    }
+    const selected = Array.isArray(raw)
+      ? raw.map(item => String(item || '').trim()).filter(item => PACKAGE_ACCESS_OPTIONS.some(option => option.id === item))
+      : [];
+    const unique = [...new Set(selected)];
+    if (unique.length || !useDefault) return unique;
+    if (value == null || String(value).trim() === '') return DEFAULT_PACKAGE_ACCESS_FEATURES;
+    return [];
   }
 
   async function savePkg(e) {
@@ -136,6 +159,7 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context, c
       duration: source.duration,
       questions: source.questions,
       features: featureText.split('\n').map(s => s.trim()).filter(Boolean),
+      access_features: parsePackageAccessFeatures(source.access_features, { useDefault: false }),
       tone: source.tone,
       sort_order: source.sort_order,
       tryout_id: source.tryout_id || source.tryoutId || '',
@@ -1709,6 +1733,32 @@ const TryoutEditModal = ({ pkg, saving, onChange, onSave, onClose }) => (
         <label style={{ fontSize: 12 }}>Fitur (satu per baris)
           <textarea className="admin-inline-input" rows={4} value={pkg.features} onChange={e => onChange({ features: e.target.value })} style={{ resize: 'vertical' }} placeholder="Fitur 1&#10;Fitur 2&#10;Fitur 3" />
         </label>
+        <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 700 }}>Aktifkan saat dibeli</div>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {PACKAGE_ACCESS_OPTIONS.map(option => {
+              const selected = Array.isArray(pkg.access_features) ? pkg.access_features : DEFAULT_PACKAGE_ACCESS_FEATURES;
+              const checked = selected.includes(option.id);
+              return (
+                <label key={option.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#0b1326' }}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={e => {
+                      const current = Array.isArray(pkg.access_features) ? pkg.access_features : DEFAULT_PACKAGE_ACCESS_FEATURES;
+                      onChange({
+                        access_features: e.target.checked
+                          ? [...new Set([...current, option.id])]
+                          : current.filter(id => id !== option.id)
+                      });
+                    }}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
         <div className="canvas-intro-actions" style={{ marginTop: 4 }}>
           <button type="submit" disabled={saving} className="canvas-intro-primary">{saving ? 'Menyimpan…' : 'Simpan'}</button>
           <button type="button" onClick={onClose} className="canvas-intro-secondary">Batal</button>

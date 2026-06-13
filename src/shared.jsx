@@ -292,7 +292,7 @@ const SlidingSegmented = ({ options, value, onChange, className = "" }) => {
   );
 };
 
-const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn = false, isAdminMode = false, showTryoutLink = true, onLogoClick, onAdminPanelOpen }) => {
+const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn = false, isAdminMode = false, showTryoutLink = true, onLogoClick, onAdminPanelOpen, logoDisabled = false }) => {
   const [scrolled, setScrolled] = useState(false);
   const [progressStats, setProgressStats] = useState(null);
   const navRef = useRef(null);
@@ -456,14 +456,22 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
     <>
     <header className={`sticky top-0 z-40 transition-all ${headerCls}`}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8 flex items-center justify-between h-14 sm:h-[72px]">
-        <button onClick={() => {
+        <button
+          onClick={() => {
+            if (logoDisabled) return;
           if (typeof onLogoClick === 'function') {
             onLogoClick();
             return;
           }
           if (typeof window.__mafikingShowLanding === 'function') window.__mafikingShowLanding();
           else goHome();
-        }} className="flex items-center">
+        }}
+          className={`flex items-center ${logoDisabled ? "cursor-not-allowed opacity-70" : ""}`}
+          type="button"
+          disabled={logoDisabled}
+          aria-disabled={logoDisabled}
+          title={logoDisabled ? "Logo nonaktif untuk akun yang sudah login" : undefined}
+        >
           <Logo size={28} inverted={isInk} />
         </button>
         <nav ref={navRef} className="relative hidden md:flex items-center gap-1">
@@ -536,7 +544,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
               Masuk
             </button>
           )}
-          {gamified && (
+          {gamified && isLoggedIn && (
             <button aria-label="Buka profil" onClick={() => setRoute("profile")} type="button" className={`w-9 h-9 inline-flex items-center justify-center rounded-full border hairline ${isInk ? "text-white hover:bg-white/10" : "hover:bg-ink/5"}`}>
               <Icon.User className="w-4 h-4" />
             </button>

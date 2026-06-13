@@ -190,5 +190,5 @@
     );
   });
 
-  window.AnswerBoard = AnswerBoard;
+  window.AnswerBoard = window.AnswerBoard || AnswerBoard;
 })();

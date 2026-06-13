@@ -35,6 +35,25 @@ const getInitialBelajarMapel = () => {
   return "Try Out";
 };
 
+function slugifyBelajarPath(value) {
+  const slug = String(value || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "latihan";
+}
+
+function buildChapterPracticeContext(chapter, mapel) {
+  return {
+    ...chapter,
+    mapel,
+    chapterSlug: slugifyBelajarPath(chapter?.title || chapter?.id),
+    mapelSlug: slugifyBelajarPath(mapel),
+  };
+}
+
 function getTwoWordDisplayName(user) {
   const name = String(user?.display_name || user?.username || "").trim();
   if (!name || name.startsWith("Tamu_")) return "";
@@ -46,6 +65,7 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
   const [semester, setSemester] = useState(1);
   const [dbInit, setDbInit] = useState(null);
   const [dbInitLoading, setDbInitLoading] = useState(true);
+  const [missionCountsByMapel, setMissionCountsByMapel] = useState({});
 
   const cardStyle = tweaks.chapterCard || "list";
   const selectorStyle = tweaks.mapelSelector || "pills";
@@ -73,6 +93,30 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
 
   useEffect(() => { loadDbChapters(); }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!hasPremiumAccess && !isAdmin) {
+      setMissionCountsByMapel({});
+      return () => { cancelled = true; };
+    }
+    MafikingAPI.get(`/api/missions${isAdmin ? '?admin=1' : ''}`)
+      .then((missions) => {
+        if (cancelled) return;
+        const counts = {};
+        (Array.isArray(missions) ? missions : []).forEach((mission) => {
+          const status = mission?.effective_status || mission?.status || 'locked';
+          const missionMapel = normalizeBelajarSection(mission?.mapel);
+          if (!missionMapel || missionMapel === "Try Out" || status === 'locked' || !String(mission?.question || '').trim()) return;
+          counts[missionMapel] = (counts[missionMapel] || 0) + 1;
+        });
+        setMissionCountsByMapel(counts);
+      })
+      .catch(() => {
+        if (!cancelled) setMissionCountsByMapel({});
+      });
+    return () => { cancelled = true; };
+  }, [hasPremiumAccess, isAdmin]);
+
   const problemCounts = (dbInit && dbInit.problemCounts) || {};
   const rawDbChapters = dbInit ? (dbInit.chapters || []).map((c, idx) => ({
     id: c.id,
@@ -96,7 +140,16 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
   const dbSemesterChapters = dbMapelChapters.filter(c => c.semester === semester);
   const staticSemesterChapters = staticMapelChapters.filter(c => c.semester === semester);
   const allMapelChapters = useDb ? dbMapelChapters : staticMapelChapters;
-  const chapters = useDb ? dbSemesterChapters : staticSemesterChapters;
+  const baseChapters = useDb ? dbSemesterChapters : staticSemesterChapters;
+  const premiumMissionCount = (hasPremiumAccess || isAdmin) ? Number(missionCountsByMapel[mapel] || 0) : 0;
+  const chapters = premiumMissionCount > 0
+    ? baseChapters.map((chapter) => ({
+        ...chapter,
+        dailyMissionCount: premiumMissionCount,
+        includeDailyMissions: true,
+        total: Number(chapter.total || 0) + premiumMissionCount,
+      }))
+    : baseChapters;
   const isTryOutSection = mapel === "Try Out";
   const greetingName = isLoggedIn ? getTwoWordDisplayName(currentUser) : "";
   const showChapterLoading = !isTryOutSection && dbInitLoading;
@@ -230,6 +283,7 @@ const TryOutBelajarPanel = ({ setRoute, isLoggedIn, isAdmin = false }) => {
   }, []);
 
   const hasPremiumAccess = isAdmin
+    || activePackages.includes("tryout-access")
     || activePackages.includes(premiumPackage.title)
     || activePackages.includes(premiumPackage.tryout_id)
     || activePackages.some((title) => ["Trial 7 Hari", "Bulanan", "Semester"].includes(title));
@@ -627,7 +681,7 @@ const ChaptersNumbered = ({ chapters, setRoute, mapel, hasPremiumAccess = false 
       return (
         <button
           key={c.id}
-          onClick={() => setRoute({ route: "practice", practice: { ...c, mapel } })}
+          onClick={() => setRoute({ route: "practice", practice: buildChapterPracticeContext(c, mapel) })}
           className={`group text-left flex gap-5 md:gap-8 py-7 -mx-2 px-2 rounded-xl transition-all hover:bg-ink/[0.018] ${i > 0 ? "border-t hairline" : ""}`}
         >
           <div className="font-display font-bold text-5xl md:text-7xl tnum text-ink/10 shrink-0 w-16 md:w-24 text-right leading-none mt-1">
@@ -680,7 +734,7 @@ const ChaptersSoft = ({ chapters, setRoute, mapel, hasPremiumAccess = false }) =
       return (
         <button
           key={c.id}
-          onClick={() => setRoute({ route: "practice", practice: { ...c, mapel } })}
+          onClick={() => setRoute({ route: "practice", practice: buildChapterPracticeContext(c, mapel) })}
           className={`text-left card-premium card-premium-subject-art ${toneClass} ${artClass} p-4 sm:p-6 group flex flex-col justify-between transition-all`}
         >
           {/* Ambient Glows */}
@@ -771,7 +825,7 @@ const ChaptersMagazine = ({ chapters, setRoute, mapel, hasPremiumAccess = false 
       return (
         <button
           key={c.id}
-          onClick={() => setRoute({ route: "practice", practice: { ...c, mapel } })}
+          onClick={() => setRoute({ route: "practice", practice: buildChapterPracticeContext(c, mapel) })}
           className={`shrink-0 text-left flex flex-col group hover:-translate-y-1 transition-all
             ${isHero ? "w-[340px] md:w-[420px] bg-ink text-white rounded-[var(--card-radius)] p-6 md:p-8" : "w-[260px] md:w-[300px] card pad-d"}`}
         >

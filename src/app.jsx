@@ -104,7 +104,7 @@ const App = () => {
   const [route, setRoute] = React.useState(() => {
     return initialLocationRef.current.route;
   });
-  const [practiceContext, setPracticeContext] = React.useState(null);
+  const [practiceContext, setPracticeContext] = React.useState(() => initialLocationRef.current.practice || null);
   const [paymentContext, setPaymentContext] = React.useState(null);
   const [checkoutPaymentContext, setCheckoutPaymentContext] = React.useState(null);
   const [tryoutContext, setTryoutContext] = React.useState(null);
@@ -152,9 +152,17 @@ const App = () => {
   const isGuest = currentUser && currentUser.display_name?.startsWith("Tamu_");
   const isLoggedIn = currentUser && !isGuest;
   const isAdminAccount = currentUser?.role === "admin";
-  const canSeeTryoutPage = isAdminAccount;
+  const canSeeTryoutPage = true;
   const canEditInlineAsAdmin = isAdmin || isAdminAccount;
-  const hasPremiumAccess = isAdminAccount || activePackages.length > 0;
+  const activePackageSet = React.useMemo(() => new Set(Array.isArray(activePackages) ? activePackages.map(item => String(item || '').trim()).filter(Boolean) : []), [activePackages]);
+  const hasMissionAccess = isAdminAccount
+    || activePackageSet.has("daily-missions")
+    || activePackageSet.has("misi-harian")
+    || activePackageSet.size > 0;
+  const hasPremiumAccess = isAdminAccount
+    || activePackageSet.has("special-practice")
+    || activePackageSet.has("latihan-khusus")
+    || activePackageSet.size > 0;
 
   const refreshCurrentUser = React.useCallback(async () => {
     const user = await MafikingAPI.get("/api/auth/me");
@@ -296,6 +304,7 @@ const App = () => {
       } else {
         const parsed = parseAppLocation();
         setRoute(parsed.route);
+        setPracticeContext(parsed.practice || null);
         setBelajarSection(parsed.belajarSection || null);
         setCheckoutPaymentContext(null);
       }
@@ -303,7 +312,13 @@ const App = () => {
     window.addEventListener("popstate", handlePopState);
     
     const parsed = parseAppLocation();
-    const initialState = window.history.state || { route: parsed.route, belajarSection: parsed.belajarSection, authMode: parsed.authMode, publicLanding: Boolean(parsed.publicLanding) };
+    const initialState = window.history.state || {
+      route: parsed.route,
+      practice: parsed.practice,
+      belajarSection: parsed.belajarSection,
+      authMode: parsed.authMode,
+      publicLanding: Boolean(parsed.publicLanding),
+    };
     setBelajarSection(parsed.belajarSection || null);
     setAuthMode(parsed.authMode || null);
     if (Object.prototype.hasOwnProperty.call(parsed, "publicLanding")) {
@@ -647,7 +662,7 @@ const App = () => {
   }, [practiceComp, route]);
 
   React.useEffect(() => {
-    if (route !== "payment" || paymentComp) return undefined;
+    if ((route !== "payment" && !checkoutPaymentContext) || paymentComp) return undefined;
     if (window.Payment) { setPaymentComp(() => window.Payment); return undefined; }
     let cancelled = false;
     try {
@@ -660,7 +675,7 @@ const App = () => {
       } else if (window.Payment) setPaymentComp(() => window.Payment);
     } catch (_) { if (window.Payment) setPaymentComp(() => window.Payment); }
     return () => { cancelled = true; };
-  }, [paymentComp, route]);
+  }, [checkoutPaymentContext, paymentComp, route]);
 
   React.useEffect(() => {
     if (route !== "profile" || profileComp) return undefined;
@@ -722,10 +737,10 @@ const App = () => {
   }, [authMode, isLoggedIn, navigate, route]);
 
   React.useEffect(() => {
-    if (route === "tryout" && !canSeeTryoutPage) {
+    if (route === "practice" && !practiceContext) {
       navigate({ route: "belajar" });
     }
-  }, [canSeeTryoutPage, navigate, route]);
+  }, [navigate, practiceContext, route]);
 
   React.useEffect(() => {
     if (route !== "admin" || !isAdminAccount || !isAdmin || window.AdminPage) return undefined;
@@ -747,6 +762,7 @@ const App = () => {
   const handleLogoClick = React.useCallback(() => {
     confirmLandingReturn();
   }, [confirmLandingReturn]);
+  const isLogoDisabled = isLoggedIn;
 
   // Density to <html>
   React.useEffect(() => {
@@ -824,6 +840,7 @@ const App = () => {
           isLoggedIn={isLoggedIn}
           isAdminMode={isAdmin}
           showTryoutLink={canSeeTryoutPage}
+          logoDisabled={isLogoDisabled}
           onLogoClick={handleLogoClick}
           onAdminPanelOpen={() => navigate("admin")}
         />
@@ -837,9 +854,9 @@ const App = () => {
         >
           {(route === "lobby" || route === "landing") && (lobbyComp || (typeof window !== "undefined" && window.Lobby)) && React.createElement(lobbyComp || window.Lobby, { setRoute: navigate, tweaks: tweaks, currentUser, isAdmin: canEditInlineAsAdmin, showTryoutLink: canSeeTryoutPage, authMode, authRedirect, authBackRoute, authState, onAuthSuccess: handleAuthSuccess, pendingClerkUser })}
           {showBelajarPage && (belajarComp || window.Belajar) && React.createElement(belajarComp || window.Belajar, { setRoute: navigate, tweaks: tweaks, isAdmin: canEditInlineAsAdmin, isLoggedIn, currentUser, authReady, hasPremiumAccess, initialSection: belajarSection, onSectionChange: setBelajarSection })}
-          {route === "misi" && (
+          {route === "misi" && (misiComp || window.Misi) && (
             <ScreenErrorBoundary>
-              {hasPremiumAccess
+              {hasMissionAccess
                 ? React.createElement(misiComp || window.Misi, { setRoute: navigate, tweaks: tweaks, isAdmin })
                 : <AccessGate setRoute={navigate} title="Akses Paket" message="Beli paket untuk mendapat akses ke misi harian dan latihan terarah setiap hari" variant="misi" showFreeTryout={false} hideKicker />}
             </ScreenErrorBoundary>
@@ -851,18 +868,22 @@ const App = () => {
               ? React.createElement(window.AdminPage, { setRoute: navigate })
               : <AdminChunkFallback status={adminChunkStatus} />
           )}
-          {route === "profile" && (isLoggedIn
+          {route === "profile" && (profileComp || window.Profile) && (isLoggedIn
             ? React.createElement(profileComp || window.Profile, { setRoute: navigate, isAdmin: canEditInlineAsAdmin, onRequestLanding: confirmLandingReturn, onRequestLogout: confirmLogout })
-            : <LoginRedirect setRoute={navigate} />
+            : authReady
+              ? <LoginRedirect setRoute={navigate} />
+              : null
           )}
-          {route === "invoices" && (isLoggedIn
+          {route === "invoices" && (invoicesComp || window.Invoices) && (isLoggedIn
             ? React.createElement(invoicesComp || window.Invoices, { setRoute: navigate })
             : <LoginRedirect setRoute={navigate} redirectRoute="invoices" />
           )}
-          {route === "payment" && (paymentComp || window.Payment) && React.createElement(paymentComp || window.Payment, { setRoute: navigate, currentUser, context: paymentContext })}
-          {route === "practice" && (
+          {route === "payment" && (paymentComp || window.Payment) && React.createElement(paymentComp || window.Payment, { setRoute: navigate, currentUser, context: paymentContext, onAccessChanged: refreshCurrentUser })}
+          {route === "practice" && (practiceComp || window.Practice) && (
             <ScreenErrorBoundary>
-              {React.createElement(practiceComp || window.Practice, { setRoute: navigate, context: practiceContext, isAdmin: canEditInlineAsAdmin, isLoggedIn, isAuthenticated: Boolean(currentUser), hasPremiumAccess })}
+              {practiceContext?.isMissionPractice && !hasPremiumAccess
+                ? (authReady ? <AccessGate setRoute={navigate} title="Akses Paket" message="Beli paket untuk membuka latihan soal premium dari Misi Harian." variant="misi" showFreeTryout={false} hideKicker /> : null)
+                : React.createElement(practiceComp || window.Practice, { setRoute: navigate, context: practiceContext, isAdmin: canEditInlineAsAdmin, isLoggedIn, isAuthenticated: Boolean(currentUser), hasPremiumAccess })}
             </ScreenErrorBoundary>
           )}
         </div>
@@ -874,6 +895,7 @@ const App = () => {
         context: checkoutPaymentContext,
         currentUser,
         setRoute: navigate,
+        onAccessChanged: refreshCurrentUser,
         onClose: () => setCheckoutPaymentContext(null),
       })}
 
@@ -1167,6 +1189,53 @@ function normalizeAppPath(pathname) {
   return String(pathname || "/").replace(/\/+$/, "") || "/";
 }
 
+function slugifyAppPath(value, fallback = "latihan") {
+  const slug = String(value || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || fallback;
+}
+
+function titleFromAppSlug(slug) {
+  return String(slug || "")
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "Latihan";
+}
+
+function mapelFromAppSlug(slug) {
+  const normalized = slugifyAppPath(slug, "matematika").replace(/-free$/, "");
+  if (normalized === "fisika") return "Fisika";
+  if (normalized === "kimia") return "Kimia";
+  return "Matematika";
+}
+
+function defaultPracticeChapterSlugForMapel(mapel) {
+  const normalized = mapelFromAppSlug(mapel);
+  if (normalized === "Fisika") return "kinematika";
+  if (normalized === "Kimia") return "struktur-atom";
+  return "integral";
+}
+
+function findPracticeChapterFromPath(mapelSlug, chapterSlug) {
+  const mapel = mapelFromAppSlug(mapelSlug);
+  const slug = slugifyAppPath(chapterSlug);
+  const chapters = (window.chapterData && window.chapterData[mapel]) || [];
+  const chapter = chapters.find((item) => slugifyAppPath(item.title || item.id) === slug);
+  return {
+    ...(chapter || {}),
+    chapterSlug: slug,
+    id: chapter?.id || slug,
+    mapel,
+    mapelSlug: slugifyAppPath(mapel, "matematika"),
+    title: chapter?.title || titleFromAppSlug(slug),
+  };
+}
+
 function isPublicLandingFromUrl() {
   return normalizeAppPath(window.location.pathname) === "/landing";
 }
@@ -1178,6 +1247,7 @@ function parseAppLocation() {
     const params = new URLSearchParams(queryString);
     return { route: "lobby", authMode: "verify-email-token", authState: { token: params.get("token") || "" } };
   }
+  if (legacyHash === "practice") return { route: "belajar" };
   if (APP_ROUTE_NAMES.includes(legacyHash)) return { route: legacyHash };
 
   const path = normalizeAppPath(window.location.pathname);
@@ -1191,7 +1261,33 @@ function parseAppLocation() {
   }
   if (path === "/belajar") return { route: "belajar" };
   if (path === "/belajar/tryout") return { route: "belajar", belajarSection: "Try Out" };
-  if (path === "/belajar/practice" || path === "/practice") return { route: "practice" };
+  const missionPracticeMatch = path.match(/^\/belajar\/practice\/([a-z0-9-]+)\/(latsol-\d+)$/);
+  if (missionPracticeMatch) {
+    const dayMatch = missionPracticeMatch[2].match(/^latsol-(\d+)$/);
+    const mapel = mapelFromAppSlug(missionPracticeMatch[1]);
+    return {
+      route: "practice",
+      practice: {
+        ...findPracticeChapterFromPath(missionPracticeMatch[1], defaultPracticeChapterSlugForMapel(mapel)),
+        activeDailyMissionDay: dayMatch ? Number(dayMatch[1]) : null,
+        includeDailyMissions: true,
+        initialMode: "canvas",
+        disableCanvasIntro: true,
+      },
+    };
+  }
+  const chapterPracticeMatch = path.match(/^\/belajar\/practice\/([a-z0-9-]+)\/([a-z0-9-]+)(?:\/soal-(\d+))?$/);
+  if (chapterPracticeMatch) {
+    const questionNumber = Number(chapterPracticeMatch[3] || 0);
+    return {
+      route: "practice",
+      practice: {
+        ...findPracticeChapterFromPath(chapterPracticeMatch[1], chapterPracticeMatch[2]),
+        initialProblemNumber: Number.isInteger(questionNumber) && questionNumber > 0 ? questionNumber : null,
+      },
+    };
+  }
+  if (path === "/belajar/practice" || path === "/practice") return { route: "belajar" };
   if (path === "/misi") return { route: "misi" };
   if (path === "/tryout") return { route: "tryout" };
   if (path === "/peringkat" || path === "/leaderboard") return { route: "leaderboard" };
@@ -1216,7 +1312,17 @@ function appStateToPath(state) {
     const section = String(state?.belajarSection || state?.section || "").trim().toLowerCase();
     return section === "try out" || section === "tryout" ? "/belajar/tryout" : "/belajar";
   }
-  if (route === "practice") return "/belajar/practice";
+  if (route === "practice") {
+    const practice = state?.practice || {};
+    if (practice.isMissionPractice && practice.missionPracticeTrack && practice.missionLesson) {
+      return `/belajar/practice/${encodeURIComponent(practice.missionPracticeTrack)}/${encodeURIComponent(practice.missionLesson)}`;
+    }
+    const mapelSlug = slugifyAppPath(practice.mapelSlug || practice.mapel || "matematika", "matematika");
+    const chapterSlug = slugifyAppPath(practice.chapterSlug || practice.title || practice.id, "latihan");
+    const questionNumber = Number(practice.activeProblemNumber || practice.initialProblemNumber || 0);
+    const suffix = Number.isInteger(questionNumber) && questionNumber > 0 ? `/soal-${questionNumber}` : "";
+    return `/belajar/practice/${encodeURIComponent(mapelSlug)}/${encodeURIComponent(chapterSlug)}${suffix}`;
+  }
   if (route === "leaderboard") return "/peringkat";
   if (route === "profile") return "/profil";
   if (route === "invoices") return "/invoices";

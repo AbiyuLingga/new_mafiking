@@ -5,6 +5,39 @@ const CANVAS_INTRO_LAST_SHOWN_KEY = "mafiking:canvasIntroLastShownAt";
 const CANVAS_INTRO_COOLDOWN_MS = 15 * 60 * 1000;
 const CANVAS_INTRO_PLAYBACK_RATE = 1.25;
 
+function slugifyPracticePath(value, fallback = "latihan") {
+  const slug = String(value || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || fallback;
+}
+
+function buildPracticeQuestionPath(context, problemNumber) {
+  if (context?.isMissionPractice || !context) return "";
+  const mapelSlug = slugifyPracticePath(context.mapelSlug || context.mapel || "matematika", "matematika");
+  const chapterSlug = slugifyPracticePath(context.chapterSlug || context.title || context.id, "latihan");
+  const questionNumber = Number(problemNumber || 0);
+  const suffix = Number.isInteger(questionNumber) && questionNumber > 0 ? `/soal-${questionNumber}` : "";
+  return `/belajar/practice/${encodeURIComponent(mapelSlug)}/${encodeURIComponent(chapterSlug)}${suffix}`;
+}
+
+function areCanvasDependenciesReady() {
+  return Boolean(window.AnswerBoard && window.DrawingCanvas && window.CanvasToolbar);
+}
+
+async function ensureCanvasDependencies() {
+  if (areCanvasDependenciesReady()) return true;
+  await Promise.all([
+    window.CanvasToolbar ? Promise.resolve() : import("./toolbar.jsx"),
+    window.DrawingCanvas ? Promise.resolve() : import("./drawing-canvas.jsx"),
+    window.AnswerBoard ? Promise.resolve() : import("./answer-board.jsx"),
+  ]);
+  return areCanvasDependenciesReady();
+}
+
 function shouldShowCanvasIntro(context) {
   if (context?.disableCanvasIntro) return false;
   if (typeof window === "undefined" || !window.localStorage) return true;
@@ -41,6 +74,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   const [showResultModal, setShowResultModal] = useState(false);
   const [canvasProcess, setCanvasProcess] = useState(null);
   const [canvasProcessSlow, setCanvasProcessSlow] = useState(false);
+  const [canvasDepsReady, setCanvasDepsReady] = useState(() => areCanvasDependenciesReady());
 
   // Phase 1.3: Lazy-load KaTeX the first time the Practice page mounts so the
   // marketing/belajar routes do not pay the cost of math CSS+JS.
@@ -58,6 +92,8 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   const timeExpiredNoticeRef = useRef(false);
   const isTimedTryout = Number(context?.timeLimitSeconds || 0) > 0;
   const timeExpired = isTimedTryout && timeLeftSeconds === 0;
+  const isMissionPractice = Boolean(context?.isMissionPractice);
+  const canAdminEditProblems = isAdmin && !isMissionPractice;
 
   function dismissCanvasIntro() { setShowCanvasIntro(false); }
   function requiresLogin() {
@@ -106,7 +142,35 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
 
   useEffect(() => {
     loadPractice();
-  }, [context?.id, context?.mapel]);
+  }, [context?.id, context?.mapel, context?.chapterSlug, context?.initialProblemNumber, context?.missionLesson, context?.activeDailyMissionDay, context?.activeDailyMissionId, hasPremiumAccess, isAdmin]);
+
+  useEffect(() => {
+    if (mode !== "canvas" || canvasDepsReady) return undefined;
+    let cancelled = false;
+    ensureCanvasDependencies()
+      .then((ready) => {
+        if (!cancelled) {
+          setCanvasDepsReady(ready);
+          if (!ready) setError("Canvas belum siap dimuat. Coba lagi.");
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message || "Canvas belum siap dimuat. Coba lagi.");
+      });
+    return () => { cancelled = true; };
+  }, [canvasDepsReady, mode]);
+
+  useEffect(() => {
+    if (isMissionPractice || !session?.problems?.length) return;
+    const activeProblemNumber = problemIndex + 1;
+    const nextPath = buildPracticeQuestionPath(context, activeProblemNumber);
+    if (!nextPath || window.location.pathname === nextPath) return;
+    window.history.replaceState(
+      { route: "practice", practice: { ...(context || {}), activeProblemNumber } },
+      "",
+      nextPath
+    );
+  }, [context?.id, context?.mapel, context?.chapterSlug, context?.title, isMissionPractice, problemIndex, session?.problems?.length]);
 
   useEffect(() => {
     const limit = Number(context?.timeLimitSeconds || 0);
@@ -156,6 +220,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   const isQuestionLocked = (index) => !isAdmin && !hasPremiumAccess && index >= FREE_LIMIT;
   const showLockedProblem = isQuestionLocked(problemIndex);
   const problem = session?.problems?.[problemIndex];
+  const isDailyMissionProblem = Boolean(problem?.is_daily_mission || problem?.mission_id);
   const totalProblems = session?.problems?.length || 0;
   const activeAttempt = problem ? attemptsByProblem[problem.id] : null;
   const availableChapters = getPracticeChapters(context);
@@ -172,8 +237,23 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
         setAttemptsByProblem({});
         return;
       }
+      if (context?.isMissionPractice && context?.missionPracticeTrack && context?.missionLesson) {
+        const data = await MafikingAPI.get(`/api/missions/practice/${encodeURIComponent(context.missionPracticeTrack)}/${encodeURIComponent(context.missionLesson)}`);
+        const nextProblems = data?.problems || [];
+        const activeProblemId = data?.activeProblemId;
+        const activeIndex = activeProblemId
+          ? nextProblems.findIndex((item) => String(item.id) === String(activeProblemId))
+          : -1;
+        setSession({ problems: nextProblems, subtopic: data?.subtopic || { id: "daily-missions", title: "Misi Harian" } });
+        setProblemIndex(activeIndex >= 0 ? activeIndex : Math.max(0, nextProblems.length - 1));
+        setAttemptsByProblem({});
+        return;
+      }
       const init = await MafikingAPI.get("/api/quiz/init");
-      const questionSource = chooseQuestionSource(init, context);
+      const effectiveContext = context?.mapel && !context?.isMissionPractice && !context?.isTryoutSession
+        ? { ...context, includeDailyMissions: true }
+        : context;
+      const questionSource = chooseQuestionSource(init, effectiveContext);
       if (!questionSource) {
         setSession({ problems: [], subtopic: { title: context?.title || "Latihan" } });
         setProblemIndex(0);
@@ -182,13 +262,24 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
       const data = await loadQuestionSource(questionSource);
       const nextProblems = data?.problems || [];
       const activeIndex = options.activeProblemId
-        ? nextProblems.findIndex((item) => Number(item.id) === Number(options.activeProblemId))
+        ? nextProblems.findIndex((item) => String(item.id) === String(options.activeProblemId) || Number(item.id) === Number(options.activeProblemId))
         : -1;
+      const activeDailyMissionId = context?.activeDailyMissionId;
+      const activeDailyMissionDay = Number(context?.activeDailyMissionDay || 0);
+      const activeDailyMissionIndex = activeDailyMissionId || activeDailyMissionDay > 0
+        ? nextProblems.findIndex((item) => (
+            (activeDailyMissionId && String(item.mission_id || '') === String(activeDailyMissionId))
+            || (activeDailyMissionDay > 0 && Number(item.mission_day || 0) === activeDailyMissionDay)
+          ))
+        : -1;
+      const initialProblemIndex = Number(context?.initialProblemNumber || 0) > 0
+        ? Number(context.initialProblemNumber) - 1
+        : null;
       const fallbackIndex = Number.isInteger(options.fallbackIndex)
         ? Math.min(Math.max(options.fallbackIndex, 0), Math.max(nextProblems.length - 1, 0))
-        : 0;
+        : Math.min(Math.max(initialProblemIndex ?? 0, 0), Math.max(nextProblems.length - 1, 0));
       setSession(data);
-      setProblemIndex(activeIndex >= 0 ? activeIndex : fallbackIndex);
+      setProblemIndex(activeIndex >= 0 ? activeIndex : activeDailyMissionIndex >= 0 ? activeDailyMissionIndex : fallbackIndex);
       setAttemptsByProblem({});
     } catch (caught) {
       setError(caught.message);
@@ -250,8 +341,15 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     setAttemptsByProblem((prev) => ({ ...prev, [problem.id]: attempt }));
     setError("");
 
-    if (isCorrect) showToast(context?.isPreview ? "Jawaban benar! (Mode preview)" : "+10 XP · Jawaban benar!", "success", 2500);
-    if (!context?.isPreview) {
+    if (isCorrect) {
+      const successMessage = context?.isPreview
+        ? "Jawaban benar! (Mode preview)"
+        : (isMissionPractice || isDailyMissionProblem)
+          ? "Jawaban benar!"
+          : "+10 XP · Jawaban benar!";
+      showToast(successMessage, "success", 2500);
+    }
+    if (!context?.isPreview && !isMissionPractice && !isDailyMissionProblem) {
       MafikingAPI.post("/api/progress/submit", {
         correct: isCorrect,
         correctAnswer,
@@ -269,16 +367,19 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   }
 
   function buildCanvasEvaluationPayload(meta) {
-    return {
+    const payload = {
       expectedAnswer: problem.answer_display,
       imageBase64: meta.imageBase64,
       imageDimension: meta.imageDimension || 550,
       mimeType: meta.imageMimeType || getDataUrlMimeType(meta.imageBase64) || "image/jpeg",
-      problemId: problem.id,
-      questionId: problem.id,
       questionText: problem.question_display || problem.question_text,
       topicTags: [session?.subtopic?.title].filter(Boolean),
     };
+    if (!isMissionPractice && !isDailyMissionProblem) {
+      payload.problemId = problem.id;
+      payload.questionId = problem.id;
+    }
+    return payload;
   }
 
   async function requestCanvasEvaluation(meta, options = {}) {
@@ -308,7 +409,8 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     setBoardDirty(false);
     setShowResultModal(true);
     const isCorrect = Boolean(evaluationResponse.evaluation?.isCorrect);
-    if (isCorrect) showToast("Jawaban benar! Progress tersimpan.", "success");
+    if (isCorrect) showToast((isMissionPractice || isDailyMissionProblem) ? "Jawaban benar!" : "Jawaban benar! Progress tersimpan.", "success");
+    if (isMissionPractice || isDailyMissionProblem) return;
     MafikingAPI.post("/api/progress/submit", {
       correct: isCorrect,
       hintsUsed: 0,
@@ -400,7 +502,16 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     setBoardDirty(false);
     setShowResultModal(false);
     setFocusMode(false);
-    setRoute({ route: "practice", practice: { ...chapter, mapel: chapter.mapel || context?.mapel || "Matematika" } });
+    const nextMapel = chapter.mapel || context?.mapel || "Matematika";
+    setRoute({
+      route: "practice",
+      practice: {
+        ...chapter,
+        chapterSlug: slugifyPracticePath(chapter.title || chapter.id),
+        mapel: nextMapel,
+        mapelSlug: slugifyPracticePath(nextMapel, "matematika"),
+      },
+    });
   }
 
   if (loading) {
@@ -512,6 +623,19 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     );
   }
 
+  if (mode === "canvas" && !canvasDepsReady) {
+    return (
+      <div className="mafiking-practice mafiking-canvas-practice">
+        <section className="mafiking-canvas-card" aria-label="Memuat canvas" aria-busy="true">
+          <Skeleton className="h-5 w-36 mb-4" />
+          <Skeleton className="h-4 w-full mb-2" />
+          <Skeleton className="h-4 w-3/4 mb-6" />
+          <Skeleton className="h-64 w-full" />
+        </section>
+      </div>
+    );
+  }
+
   if (mode === "canvas") {
     return (
       <CanvasView
@@ -522,7 +646,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
         canvasProcessSlow={canvasProcessSlow}
         error={error}
         focusMode={focusMode}
-        isAdmin={isAdmin}
+        isAdmin={canAdminEditProblems}
         onBackToChoice={() => switchMode("choice")}
         onSwitchMode={switchMode}
         onBoardDirtyChange={setBoardDirty}
@@ -560,7 +684,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
       <ChoiceView
         attempt={activeAttempt}
         error={error}
-        isAdmin={isAdmin}
+        isAdmin={canAdminEditProblems}
         onBack={() => setRoute(context?.backRoute || "belajar")}
         onChoiceSelect={setSelectedChoiceIndex}
         onHintToggle={() => {
@@ -1998,6 +2122,25 @@ function getCurrentChapter(context, session, availableChapters) {
 }
 
 async function loadQuestionSource(questionSource) {
+  const withDailyMissionProblems = async (data) => {
+    if (!questionSource.includeDailyMissions) return data;
+    const missionData = await MafikingAPI.get(`/api/missions/premium-practice/${encodeURIComponent(questionSource.mapelSlug || "matematika")}`).catch(() => null);
+    const missionProblems = Array.isArray(missionData?.problems) ? missionData.problems : [];
+    if (!missionProblems.length) return data;
+    return {
+      ...data,
+      problems: [...(data?.problems || []), ...missionProblems],
+    };
+  };
+
+  if (questionSource.type === "daily-missions") {
+    const data = await MafikingAPI.get(`/api/missions/premium-practice/${encodeURIComponent(questionSource.mapelSlug || "matematika")}`);
+    return {
+      problems: data?.problems || [],
+      subtopic: { ...(data?.subtopic || { id: `daily-missions-${questionSource.mapelSlug || "matematika"}` }), title: questionSource.title || data?.subtopic?.title || "Latihan" },
+    };
+  }
+
   if (questionSource.type === "public-easy") {
     const subtopicSessions = await Promise.all(
       questionSource.subtopics.map((s) => MafikingAPI.get(`/api/quiz/subtopics/${s.id}/full`).catch(() => null))
@@ -2006,10 +2149,10 @@ async function loadQuestionSource(questionSource) {
       .filter(Boolean)
       .flatMap((data) => data.problems.map((p) => ({ ...p, sourceSubtopic: data.subtopic })));
     const easyProblems = filterProblemsByDifficulty(problems, "Easy", { strict: true });
-    return {
+    return withDailyMissionProblems({
       problems: limitProblems(easyProblems, questionSource.limit || 1),
       subtopic: { id: "public-easy-canvas", title: questionSource.title || "Latihan Canvas Mudah" },
-    };
+    });
   }
 
   if (questionSource.type === "subtopic") {
@@ -2021,10 +2164,10 @@ async function loadQuestionSource(questionSource) {
       ),
       questionSource.limit
     );
-    return {
+    return withDailyMissionProblems({
       ...data,
       problems,
-    };
+    });
   }
   const subtopicSessions = await Promise.all(
     questionSource.subtopics.map((s) => MafikingAPI.get(`/api/quiz/subtopics/${s.id}/full`))
@@ -2032,10 +2175,10 @@ async function loadQuestionSource(questionSource) {
   const problems = subtopicSessions.flatMap((data) =>
     data.problems.map((p) => ({ ...p, sourceSubtopic: data.subtopic }))
   );
-  return {
+  return withDailyMissionProblems({
     problems: limitProblems(filterProblemsByDifficulty(problems, questionSource.difficulty), questionSource.limit),
     subtopic: { id: questionSource.chapter.id, title: questionSource.title },
-  };
+  });
 }
 
 function chooseQuestionSource(init, context) {
@@ -2043,12 +2186,34 @@ function chooseQuestionSource(init, context) {
   const problemCounts = init?.problemCounts || {};
   const allSubtopics = chapters.flatMap((c) => c.subtopics || []);
   const withProblems = allSubtopics.filter((s) => Number(problemCounts[s.id] || 0) > 0);
-  if (!withProblems.length) return null;
+  const mapel = normalizeText(context?.mapel);
+  const mapelSlug = slugifyPracticePath(context?.mapelSlug || context?.mapel || "matematika", "matematika");
+  const includeDailyMissions = Boolean(context?.includeDailyMissions);
+  const dailyMissionSource = () => ({
+    includeDailyMissions: false,
+    mapelSlug,
+    title: context?.title || "Latihan",
+    type: "daily-missions",
+  });
+  const withDailyMissionSource = (source) => ({
+    ...source,
+    includeDailyMissions,
+    mapelSlug,
+  });
+  const limit = Number(context?.problemLimit || 0);
+  const difficulty = context?.difficulty || "";
+  if (!withProblems.length) {
+    if (includeDailyMissions) return dailyMissionSource();
+    return null;
+  }
   if (!context) return { subtopic: withProblems[0], type: "subtopic" };
-
-  const mapel = normalizeText(context.mapel);
-  const limit = Number(context.problemLimit || 0);
-  const difficulty = context.difficulty || "";
+  if (context?.isMissionBank) {
+    return {
+      mapelSlug,
+      title: context.title || "Latihan",
+      type: "daily-missions",
+    };
+  }
   if (context.publicEasyCanvas) {
     const subtopics = mapel
       ? chapters
@@ -2057,12 +2222,12 @@ function chooseQuestionSource(init, context) {
           .filter((subtopic) => Number(problemCounts[subtopic.id] || 0) > 0)
       : withProblems;
     if (!subtopics.length) return null;
-    return {
+    return withDailyMissionSource({
       limit: limit || 1,
       subtopics,
       title: context.title || "Latihan Canvas Mudah",
       type: "public-easy",
-    };
+    });
   }
 
   if (context.tryoutMode === "math") {
@@ -2071,21 +2236,24 @@ function chooseQuestionSource(init, context) {
       .flatMap((chapter) => chapter.subtopics || [])
       .filter((subtopic) => Number(problemCounts[subtopic.id] || 0) > 0);
     if (!subtopics.length) return null;
-    return {
+    return withDailyMissionSource({
       chapter: { id: context.id || "tryout-math", title: context.title || "Try Out Matematika" },
       limit: Number(context.problemLimit || 15),
       subtopics,
       title: context.title || "Try Out Matematika",
       type: "chapter",
-    };
+    });
   }
 
   const title = normalizeText(context.title);
-  if (title.includes("teknik integrasi")) {
+  if (title.includes("teknik integrasi") || title === "integral" || title.includes("integral")) {
     const integralChapter = chapters.find((c) => normalizeText(c.title).includes("integral"));
     const subtopics = (integralChapter?.subtopics || []).filter((s) => Number(problemCounts[s.id] || 0) > 0);
-    if (!integralChapter || !subtopics.length) return null;
-    return { chapter: integralChapter, difficulty, limit, subtopics, title: context.title, type: "chapter" };
+    if (!integralChapter || !subtopics.length) {
+      if (includeDailyMissions) return dailyMissionSource();
+      return null;
+    }
+    return withDailyMissionSource({ chapter: integralChapter, difficulty, limit, subtopics, title: context.title, type: "chapter" });
   }
 
   const searchTerms = [context.title, ...(context.topics || [])]
@@ -2102,8 +2270,9 @@ function chooseQuestionSource(init, context) {
     const haystack = normalizeText(`${s.title} ${s.slug} ${s.description || ""}`);
     return searchTerms.some((t) => haystack.includes(t) || t.includes(haystack));
   });
-  if (matched) return { difficulty, limit, subtopic: matched, type: "subtopic" };
-  if (mapel && searchableSubtopics.length) return { difficulty, limit, subtopic: searchableSubtopics[0], type: "subtopic" };
+  if (matched) return withDailyMissionSource({ difficulty, limit, subtopic: matched, type: "subtopic" });
+  if (mapel && searchableSubtopics.length) return withDailyMissionSource({ difficulty, limit, subtopic: searchableSubtopics[0], type: "subtopic" });
+  if (includeDailyMissions) return dailyMissionSource();
   return null;
 }
 

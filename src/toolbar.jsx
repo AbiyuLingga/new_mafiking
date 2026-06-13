@@ -399,5 +399,5 @@
     );
   }
 
-  window.CanvasToolbar = Toolbar;
+  window.CanvasToolbar = window.CanvasToolbar || Toolbar;
 })();

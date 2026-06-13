@@ -25,6 +25,147 @@ function missionReleaseLabel(mission) {
   return mission?.release_date || mission?.short_label || mission?.date_label || 'tanggal rilis';
 }
 
+function getLatestActiveMission(timeline) {
+  return [...(timeline || [])]
+    .filter((mission) => getMissionDisplayStatus(mission) === 'active')
+    .sort((a, b) => Number(b.day || 0) - Number(a.day || 0))[0] || null;
+}
+
+function parseMissionJsonArray(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
+  try {
+    const parsed = JSON.parse(String(value || '[]'));
+    return Array.isArray(parsed) ? parsed.map((item) => String(item || '').trim()).filter(Boolean) : [];
+  } catch (_) {
+    return String(value || '').split('\n').map((item) => item.trim()).filter(Boolean);
+  }
+}
+
+function slugifyMissionTrack(value) {
+  const slug = String(value || 'matematika')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `${slug || 'matematika'}-free`;
+}
+
+function slugifyMissionPath(value, fallback = 'latihan') {
+  const slug = String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || fallback;
+}
+
+function normalizeMissionMapel(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if (text === 'fisika') return 'Fisika';
+  if (text === 'kimia') return 'Kimia';
+  return 'Matematika';
+}
+
+function getStaticMissionPremiumChapter(mapel) {
+  const safeMapel = normalizeMissionMapel(mapel);
+  const chapters = window.chapterData?.[safeMapel] || [];
+  const preferred = safeMapel === 'Matematika'
+    ? chapters.find((chapter) => slugifyMissionPath(chapter.title) === 'teknik-integrasi')
+    : chapters[0];
+  const chapter = preferred || chapters[0] || {};
+  const fallbackTitle = safeMapel === 'Fisika'
+    ? 'Kinematika'
+    : safeMapel === 'Kimia'
+      ? 'Struktur Atom'
+      : 'Teknik Integrasi';
+  const title = chapter.title || fallbackTitle;
+  return {
+    ...chapter,
+    chapterSlug: slugifyMissionPath(title),
+    id: chapter.id || slugifyMissionPath(title),
+    mapel: safeMapel,
+    mapelSlug: slugifyMissionPath(safeMapel, 'matematika'),
+    title,
+  };
+}
+
+function getDbMissionPremiumChapter(init, mapel) {
+  const safeMapel = normalizeMissionMapel(mapel);
+  const problemCounts = init?.problemCounts || {};
+  const chapters = (init?.chapters || [])
+    .filter((chapter) => normalizeMissionMapel(chapter.mapel || 'Matematika') === safeMapel)
+    .map((chapter, index) => {
+      const total = (chapter.subtopics || []).reduce((sum, subtopic) => sum + Number(problemCounts[subtopic.id] || 0), 0);
+      return {
+        ...chapter,
+        num: chapter.sort_order || index + 1,
+        total,
+      };
+    })
+    .filter((chapter) => Number(chapter.total || 0) > 0);
+  if (!chapters.length) return null;
+  const preferred = safeMapel === 'Matematika'
+    ? chapters.find((chapter) => slugifyMissionPath(chapter.title) === 'integral') || chapters.find((chapter) => slugifyMissionPath(chapter.title).includes('integral'))
+    : chapters[0];
+  const chapter = preferred || chapters[0];
+  return {
+    ...chapter,
+    chapterSlug: slugifyMissionPath(chapter.title || chapter.id),
+    id: chapter.id || slugifyMissionPath(chapter.title),
+    mapel: safeMapel,
+    mapelSlug: slugifyMissionPath(safeMapel, 'matematika'),
+    title: chapter.title || 'Latihan Premium',
+  };
+}
+
+async function getMissionPremiumChapter(mapel) {
+  try {
+    const init = await MafikingAPI.get('/api/quiz/init');
+    return getDbMissionPremiumChapter(init, mapel) || getStaticMissionPremiumChapter(mapel);
+  } catch (_) {
+    return getStaticMissionPremiumChapter(mapel);
+  }
+}
+
+function missionToPracticeProblem(mission) {
+  const choices = parseMissionJsonArray(mission.mc_options);
+  const answers = parseMissionJsonArray(mission.acceptable_answers);
+  const answer = answers[0] || '';
+  return {
+    id: `mission-${mission.id || mission.day}`,
+    mission_id: mission.id,
+    question_text: mission.question || '',
+    question_display: mission.question || '',
+    answer_display: answer,
+    acceptable_answers: answers,
+    difficulty: 'Easy',
+    image_url: mission.image_url || '',
+    image_alt: mission.image_alt || '',
+    mc_options: choices,
+    question_type: choices.length ? 'mc' : (mission.question_type || 'open'),
+    sourceSubtopic: { id: 'daily-missions', title: 'Misi Harian' },
+  };
+}
+
+async function openMissionPractice(timeline, mission, setRoute) {
+  const selectedDay = Number(mission?.day || 0);
+  const chapter = await getMissionPremiumChapter(mission?.mapel);
+  setRoute({
+    route: 'practice',
+    practice: {
+      ...chapter,
+      activeDailyMissionDay: selectedDay || null,
+      activeDailyMissionId: mission?.id || null,
+      includeDailyMissions: true,
+      initialMode: 'canvas',
+      disableCanvasIntro: true,
+      topics: [...(chapter.topics || []), 'Misi Harian'],
+    },
+  });
+}
+
 const Misi = ({ setRoute, tweaks, isAdmin }) => {
   const variant = tweaks.missionCard || "mafiking1";
   const [timeline, setTimeline] = useState([]);
@@ -412,9 +553,13 @@ const AdminMissionControls = ({ mission, adminEdit, compact }) => {
 };
 
 const MissionQuestionText = ({ question, className }) => {
+  const katexReady = (window.MafikingMathLoader && window.MafikingMathLoader.useKatexReady)
+    ? window.MafikingMathLoader.useKatexReady()
+    : true;
   if (typeof renderMafikingMathHTML === 'function') {
     return (
       <span
+        data-katex-ready={katexReady ? '1' : '0'}
         className={`mission-question-text eq-katex${className ? ` ${className}` : ''}`}
         dangerouslySetInnerHTML={{ __html: renderMafikingMathHTML(question || '') }}
       />
@@ -447,15 +592,20 @@ const MissionQuestionMedia = ({ mission }) => {
 // ─── VARIANT · MAFIKING-LATIHAN_1 ─────────────────────────────────────────────
 const MissionMafikingLatihan = ({ timeline, setRoute, isAdmin, adminEdit, onDelete }) => {
   const [focusedDay, setFocusedDay] = useState(
-    timeline.find((m) => getMissionDisplayStatus(m) === "active")?.day || (timeline[0]?.day || 1)
+    getLatestActiveMission(timeline)?.day || (timeline[0]?.day || 1)
   );
   const scrollRef = useRef(null);
   const activeRef = useRef(null);
   const marqueeTimeline = timeline.length > 1 ? [...timeline, ...timeline] : timeline;
 
   useEffect(() => {
+    const latest = getLatestActiveMission(timeline);
+    if (latest) setFocusedDay(latest.day);
+  }, [timeline]);
+
+  useEffect(() => {
     activeRef.current?.scrollIntoView({ behavior: "instant", inline: "center", block: "nearest" });
-  }, []);
+  }, [focusedDay]);
 
   const getLoopPoint = React.useCallback((container) => {
     if (!container || timeline.length < 2) return Math.max(0, container.scrollWidth - container.clientWidth);
@@ -525,7 +675,7 @@ const MissionMafikingLatihan = ({ timeline, setRoute, isAdmin, adminEdit, onDele
             <article
               key={`${mission.id || mission.day}-${index}`}
               data-day={mission.day}
-              ref={isPrimaryCopy && isActive ? activeRef : null}
+              ref={isPrimaryCopy && mission.day === focusedDay ? activeRef : null}
               className={`shrink-0 flex flex-col justify-between border transition-all duration-300 relative overflow-hidden w-[300px] md:w-[400px] min-h-[380px] rounded-[2rem] p-6 md:p-8 ${isFocused ? "transform scale-100 shadow-2xl z-10 opacity-100" : "transform scale-90 opacity-60 hover:opacity-80 shadow-sm"} ${isActive ? "border-amber-300 bg-gradient-to-br from-amber-50 to-white" : isCompleted ? "bg-emerald-50/30 border-emerald-100" : "bg-gray-50 border-gray-200"}`}
             >
               {isActive && <div className="absolute top-0 right-0 w-64 h-64 bg-amber-200 blur-[80px] rounded-full opacity-40 pointer-events-none" />}
@@ -580,11 +730,11 @@ const MissionMafikingLatihan = ({ timeline, setRoute, isAdmin, adminEdit, onDele
                 {isActive && isFocused && (
                   <div className="flex items-center justify-between w-full mt-2 gap-4">
                     <span className="bg-white px-3 py-2 rounded-lg border shadow-sm text-sm font-bold text-gray-800 flex items-center gap-1.5 border-gray-200 shrink-0"><Icon.Bolt className="w-4 h-4 text-amber-500" /> +{mission.xp} XP</span>
-                    <button onClick={() => setRoute("belajar")} className="flex-1 flex items-center justify-center gap-2 bg-ink text-white px-5 py-3 rounded-xl font-bold hover:bg-gray-800 transition-all shadow-md group border border-gray-700 whitespace-nowrap">Kerjakan<Icon.Arrow className="w-4 h-4 transition-transform group-hover:translate-x-1" /></button>
+                    <button onClick={() => openMissionPractice(timeline, mission, setRoute)} className="flex-1 flex items-center justify-center gap-2 bg-ink text-white px-5 py-3 rounded-xl font-bold hover:bg-gray-800 transition-all shadow-md group border border-gray-700 whitespace-nowrap">Kerjakan<Icon.Arrow className="w-4 h-4 transition-transform group-hover:translate-x-1" /></button>
                   </div>
                 )}
                 {isActive && !isFocused && (
-                  <div className="w-full mt-2"><button onClick={() => setRoute("belajar")} className="w-full flex items-center justify-center gap-2 bg-ink text-white px-4 py-2 rounded-xl font-bold hover:bg-gray-800 transition-all shadow-md">Kerjakan</button></div>
+                  <div className="w-full mt-2"><button onClick={() => openMissionPractice(timeline, mission, setRoute)} className="w-full flex items-center justify-center gap-2 bg-ink text-white px-4 py-2 rounded-xl font-bold hover:bg-gray-800 transition-all shadow-md">Kerjakan</button></div>
                 )}
                 {isAdmin && <AdminMissionButtons mission={mission} onDelete={onDelete} />}
               </div>
@@ -636,7 +786,7 @@ const MissionTimeline = ({ timeline, setRoute, isAdmin, adminEdit, onDelete }) =
                 </AdminEditableMissionField>
               )}
               {isLocked && <p className="text-xs text-ink/55">Terbuka pada {missionReleaseLabel(m)}.</p>}
-              {isActive && <button onClick={() => setRoute("belajar")} className="btn-ink mt-4 !py-2.5 !px-5 text-sm">Kerjakan <Icon.Arrow /></button>}
+              {isActive && <button onClick={() => openMissionPractice(timeline, m, setRoute)} className="btn-ink mt-4 !py-2.5 !px-5 text-sm">Kerjakan <Icon.Arrow /></button>}
               {isDone && <div className="mt-2.5 text-xs font-semibold text-emerald-700 flex items-center gap-1"><Icon.CheckCircle className="w-3.5 h-3.5" /> Selesai</div>}
               {isAdmin && <AdminMissionButtons mission={m} onDelete={onDelete} />}
             </div>
@@ -670,7 +820,7 @@ const MissionKanban = ({ timeline, setRoute, isAdmin, adminEdit, onDelete }) => 
               <div className="font-display font-bold text-lg leading-tight mb-2">{m.target}</div>
             </AdminEditableMissionField>
             {isAdmin && <AdminMissionControls mission={m} adminEdit={adminEdit} compact />}
-            {accent === "active" && <button onClick={() => setRoute("belajar")} className="btn-ink w-full justify-center !py-2 text-xs">Kerjakan <Icon.Arrow className="w-3.5 h-3.5" /></button>}
+            {accent === "active" && <button onClick={() => openMissionPractice(timeline, m, setRoute)} className="btn-ink w-full justify-center !py-2 text-xs">Kerjakan <Icon.Arrow className="w-3.5 h-3.5" /></button>}
             {accent === "done" && <div className="text-xs text-emerald-700 font-semibold flex items-center gap-1"><Icon.Check className="w-3.5 h-3.5" /> +{m.xp} XP</div>}
             {accent === "locked" && <div className="text-xs text-ink/35 flex items-center gap-1"><Icon.Lock className="w-3 h-3" /> Terbuka {missionReleaseLabel(m)}</div>}
             {isAdmin && <AdminMissionButtons mission={m} onDelete={onDelete} />}
@@ -722,7 +872,7 @@ const MissionCompact = ({ timeline, setRoute, isAdmin, adminEdit, onDelete }) =>
             </div>
             <div className="col-span-1 text-right text-xs font-mono text-ink/45">+{m.xp}</div>
             <div className="col-span-1 flex justify-end gap-1 items-center">
-              {isActive && <button onClick={() => setRoute("belajar")} className="text-xs font-semibold inline-flex items-center gap-1 hover:gap-1.5 transition-all whitespace-nowrap">Mulai <Icon.Arrow className="w-3 h-3" /></button>}
+              {isActive && <button onClick={() => openMissionPractice(timeline, m, setRoute)} className="text-xs font-semibold inline-flex items-center gap-1 hover:gap-1.5 transition-all whitespace-nowrap">Mulai <Icon.Arrow className="w-3 h-3" /></button>}
               {isDone && <Icon.CheckCircle className="w-4 h-4 text-emerald-500" />}
               {isAdmin && (
                 <>

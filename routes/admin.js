@@ -8,11 +8,12 @@ const {
     normalizeSettingBoolean,
     setTryoutPackagesEnabled,
 } = require('../lib/app-settings');
+const { normalizePackageAccessFeatures } = require('../lib/package-entitlements');
 const router = express.Router();
 
 router.use(isAuthenticated, isAdmin);
 
-const ACCESS_TYPES = new Set(['tryout', 'mission', 'subscription', 'package', 'manual']);
+const ACCESS_TYPES = new Set(['tryout', 'mission', 'practice', 'subscription', 'package', 'manual']);
 const USER_ROLES = new Set(['admin', 'user']);
 const DEFAULT_ADMIN_RESET_PASSWORD = '123456';
 const SAFE_MEDIA_PATH_RE = /^\/(?:assets|tryout-media)\/[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$/;
@@ -341,13 +342,14 @@ router.get('/tryout-packages', (req, res) => {
 router.post('/tryout-packages', (req, res) => {
     try {
         const db = req.app.locals.db;
-        const { tryout_id, title, description, price, original_price, badge, duration, questions, features, tone, sort_order } = req.body;
+        const { tryout_id, title, description, price, original_price, badge, duration, questions, features, access_features, tone, sort_order } = req.body;
         const tryoutId = normalizeTryoutId(tryout_id, title || 'tryout');
         if (!tryoutId) return res.status(400).json({ error: 'ID Try Out tidak valid.' });
         const featuresJson = typeof features === 'string' ? features : JSON.stringify(Array.isArray(features) ? features : []);
+        const accessFeaturesJson = JSON.stringify(normalizePackageAccessFeatures(access_features, { useDefault: false }));
         const result = db.prepare(
-            'INSERT INTO tryout_packages (tryout_id, title, description, price, original_price, badge, duration, questions, features, tone, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
-        ).run(tryoutId, xss(title||''), xss(description||''), xss(price||'Gratis'), original_price ? xss(original_price) : null, xss(badge||''), xss(duration||''), Number(questions)||0, featuresJson, tone||'default', Number(sort_order)||0);
+            'INSERT INTO tryout_packages (tryout_id, title, description, price, original_price, badge, duration, questions, features, access_features, tone, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+        ).run(tryoutId, xss(title||''), xss(description||''), xss(price||'Gratis'), original_price ? xss(original_price) : null, xss(badge||''), xss(duration||''), Number(questions)||0, featuresJson, accessFeaturesJson, tone||'default', Number(sort_order)||0);
         res.json({ ok: true, id: result.lastInsertRowid });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -355,15 +357,16 @@ router.post('/tryout-packages', (req, res) => {
 router.put('/tryout-packages/:id', (req, res) => {
     try {
         const db = req.app.locals.db;
-        const { tryout_id, title, description, price, original_price, badge, duration, questions, features, tone, sort_order } = req.body;
+        const { tryout_id, title, description, price, original_price, badge, duration, questions, features, access_features, tone, sort_order } = req.body;
         const current = db.prepare('SELECT id, tryout_id, title FROM tryout_packages WHERE id = ?').get(req.params.id);
         if (!current) return res.status(404).json({ error: 'Paket Try Out tidak ditemukan.' });
         const tryoutId = normalizeTryoutId(tryout_id || current.tryout_id, title || current.title || `tryout-${current.id}`);
         if (!tryoutId) return res.status(400).json({ error: 'ID Try Out tidak valid.' });
         const featuresJson = typeof features === 'string' ? features : JSON.stringify(Array.isArray(features) ? features : []);
+        const accessFeaturesJson = JSON.stringify(normalizePackageAccessFeatures(access_features, { useDefault: false }));
         db.prepare(
-            'UPDATE tryout_packages SET tryout_id=?, title=?, description=?, price=?, original_price=?, badge=?, duration=?, questions=?, features=?, tone=?, sort_order=? WHERE id=?'
-        ).run(tryoutId, xss(title||''), xss(description||''), xss(price||'Gratis'), original_price ? xss(original_price) : null, xss(badge||''), xss(duration||''), Number(questions)||0, featuresJson, tone||'default', Number(sort_order)||0, req.params.id);
+            'UPDATE tryout_packages SET tryout_id=?, title=?, description=?, price=?, original_price=?, badge=?, duration=?, questions=?, features=?, access_features=?, tone=?, sort_order=? WHERE id=?'
+        ).run(tryoutId, xss(title||''), xss(description||''), xss(price||'Gratis'), original_price ? xss(original_price) : null, xss(badge||''), xss(duration||''), Number(questions)||0, featuresJson, accessFeaturesJson, tone||'default', Number(sort_order)||0, req.params.id);
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });

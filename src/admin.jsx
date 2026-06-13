@@ -1288,6 +1288,12 @@ const AdminAiImportPanel = ({ subtopics, selectedSubtopic, onSelectSubtopic, onI
 // ─── Users table ──────────────────────────────────────────────────────────────
 const AdminTryoutPackageModal = ({ pkg, onDone, onClose }) => {
   const isEdit = Boolean(pkg && pkg.id);
+  const accessOptions = [
+    { id: 'tryout-access', label: 'Try Out paket' },
+    { id: 'daily-missions', label: 'Misi Harian' },
+    { id: 'special-practice', label: 'Latihan Soal Khusus' },
+  ];
+  const defaultAccessFeatures = ['tryout-access', 'daily-missions', 'special-practice'];
   function parseFeatures(value) {
     if (Array.isArray(value)) return value.join('\n');
     try {
@@ -1296,6 +1302,23 @@ const AdminTryoutPackageModal = ({ pkg, onDone, onClose }) => {
     } catch (e) {
       return String(value || '');
     }
+  }
+  function parseAccessFeatures(value) {
+    let raw = value;
+    if (typeof raw === 'string') {
+      try {
+        raw = JSON.parse(raw || '[]');
+      } catch (e) {
+        raw = raw.split(/[\n,]/);
+      }
+    }
+    const selected = Array.isArray(raw)
+      ? raw.map((item) => String(item || '').trim()).filter((item) => accessOptions.some((option) => option.id === item))
+      : [];
+    const unique = [...new Set(selected)];
+    if (unique.length) return unique;
+    if (value == null || String(value).trim() === '') return defaultAccessFeatures;
+    return [];
   }
   const [form, setForm] = useAdminState({
     tryout_id: (pkg && pkg.tryout_id) || '',
@@ -1307,6 +1330,7 @@ const AdminTryoutPackageModal = ({ pkg, onDone, onClose }) => {
     duration: (pkg && pkg.duration) || '',
     questions: (pkg && pkg.questions) || 0,
     features: parseFeatures(pkg && pkg.features),
+    access_features: parseAccessFeatures(pkg && pkg.access_features),
     tone: (pkg && pkg.tone) || 'default',
     sort_order: (pkg && pkg.sort_order != null) ? pkg.sort_order : 0,
   });
@@ -1321,6 +1345,7 @@ const AdminTryoutPackageModal = ({ pkg, onDone, onClose }) => {
       await MafikingAPI[isEdit ? 'put' : 'post'](url, {
         ...form,
         features: String(form.features || '').split('\n').map((item) => item.trim()).filter(Boolean),
+        access_features: Array.isArray(form.access_features) ? form.access_features : [],
         questions: Number(form.questions) || 0,
         sort_order: Number(form.sort_order) || 0,
         tryout_id: String(form.tryout_id || '').trim(),
@@ -1374,6 +1399,32 @@ const AdminTryoutPackageModal = ({ pkg, onDone, onClose }) => {
       </AdminField>
       <AdminField label="Fitur paket (satu per baris)">
         <AdminTextarea rows={5} value={form.features} onChange={(e) => setForm({ ...form, features: e.target.value })} placeholder="Hasil keluar instan" />
+      </AdminField>
+      <AdminField label="Aktifkan saat dibeli">
+        <div className="flex flex-col gap-2">
+          {accessOptions.map((option) => {
+            const selected = Array.isArray(form.access_features) ? form.access_features : [];
+            const checked = selected.includes(option.id);
+            return (
+              <label key={option.id} className="inline-flex items-center gap-2 text-sm font-bold text-ink/75">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) => {
+                    const current = Array.isArray(form.access_features) ? form.access_features : [];
+                    setForm({
+                      ...form,
+                      access_features: e.target.checked
+                        ? [...new Set([...current, option.id])]
+                        : current.filter((id) => id !== option.id),
+                    });
+                  }}
+                />
+                <span>{option.label}</span>
+              </label>
+            );
+          })}
+        </div>
       </AdminField>
       <div className="admin-form-actions">
         <button className="admin-btn-ghost" onClick={onClose} type="button">Batal</button>
@@ -2187,6 +2238,7 @@ const AdminTryoutPackagesPanel = ({ setRoute }) => {
 const ADMIN_USER_QUICK_ACCESS = [
   { key: 'tryout-premium', label: 'Try Out Premium', access_type: 'tryout', access_value: 'tryout-premium-tpb-prep' },
   { key: 'daily-missions', label: 'Misi Harian', access_type: 'mission', access_value: 'daily-missions' },
+  { key: 'special-practice', label: 'Latihan Soal Khusus', access_type: 'practice', access_value: 'special-practice' },
 ];
 
 function hasAdminUserAccessGrant(user, access) {

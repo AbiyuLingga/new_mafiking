@@ -9,6 +9,15 @@ const Database = require('better-sqlite3');
 const dotenv = require('dotenv');
 const bcrypt = require('bcrypt');
 
+// --- One-shot backup mode (npm run backup:now) ---
+if (process.argv.includes('--backup-now')) {
+  const dbPath = path.join(__dirname, 'db', 'database.sqlite');
+  const db = new Database(dbPath);
+  db.pragma('journal_mode = WAL');
+  const { runBackupNow } = require('./lib/auto-backup');
+  runBackupNow(db).then(() => { db.close(); process.exit(0); }).catch(() => { db.close(); process.exit(1); });
+}
+
 function loadEnvFile(fileName) {
   const envResult = dotenv.config({ path: path.join(__dirname, fileName), quiet: true });
   if (envResult.parsed) {
@@ -54,6 +63,11 @@ const { createCsrfProtection } = require('./lib/csrf-protection');
 const { SQLiteSessionStore } = require('./lib/sqlite-session-store');
 const { createCanaryMiddleware } = require('./lib/canary');
 const { startExpirySweeper } = require('./lib/payment-expiry-sweeper');
+const { startAutoBackup } = require('./lib/auto-backup');
+const {
+  DEFAULT_PACKAGE_ACCESS_FEATURES,
+  packageAccessGrantSpecs,
+} = require('./lib/package-entitlements');
 const {
   areTryoutPackagesEnabled,
   ensureDefaultAppSettings,
@@ -165,6 +179,7 @@ for (const migration of [
   "ALTER TABLE ai_token_usage ADD COLUMN tokens_used INTEGER DEFAULT 0",
   "ALTER TABLE ai_token_usage ADD COLUMN created_at DATETIME",
   "ALTER TABLE tryout_packages ADD COLUMN tryout_id TEXT DEFAULT ''",
+  "ALTER TABLE tryout_packages ADD COLUMN access_features TEXT DEFAULT '[]'",
   "ALTER TABLE payments ADD COLUMN qris_base_amount INTEGER",
   "ALTER TABLE payments ADD COLUMN qris_suffix INTEGER",
   "ALTER TABLE payments ADD COLUMN qris_full_amount INTEGER",
@@ -287,6 +302,7 @@ for (const migration of [
   `CREATE INDEX IF NOT EXISTS idx_tryout_sessions_user_tryout
     ON tryout_sessions (user_id, tryout_id, submitted_at, started_at DESC)`,
   "ALTER TABLE tryout_packages ADD COLUMN is_hidden INTEGER DEFAULT 0",
+  "ALTER TABLE tryout_packages ADD COLUMN access_features TEXT DEFAULT '[]'",
   "ALTER TABLE user_access_grants ADD COLUMN payment_merchant_order_id TEXT",
   "ALTER TABLE user_access_grants ADD COLUMN revoked INTEGER DEFAULT NULL",
   "CREATE TABLE IF NOT EXISTS payment_rate_limits (id INTEGER PRIMARY KEY AUTOINCREMENT, rate_hash TEXT NOT NULL, window_start INTEGER NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
@@ -298,6 +314,24 @@ for (const migration of [
     // Column already exists.
   }
 }
+
+try {
+  const backfillKey = 'package_access_features_backfilled_v1';
+  const alreadyBackfilled = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(backfillKey);
+  if (!alreadyBackfilled) {
+    db.prepare(`
+      UPDATE tryout_packages
+      SET access_features = ?
+      WHERE access_features IS NULL
+         OR TRIM(access_features) = ''
+         OR TRIM(access_features) = '[]'
+    `).run(JSON.stringify(DEFAULT_PACKAGE_ACCESS_FEATURES));
+    db.prepare(`
+      INSERT OR REPLACE INTO app_settings (key, value, updated_at)
+      VALUES (?, '1', CURRENT_TIMESTAMP)
+    `).run(backfillKey);
+  }
+} catch (_) {}
 
 try {
   db.exec(`
@@ -455,6 +489,7 @@ CREATE TABLE IF NOT EXISTS tryout_packages (
   duration TEXT DEFAULT '60 mnt',
   questions INTEGER DEFAULT 30,
   features TEXT DEFAULT '[]',
+  access_features TEXT DEFAULT '[]',
   tone TEXT DEFAULT 'default',
   sort_order INTEGER DEFAULT 0
 )`);
@@ -473,11 +508,12 @@ if (db.prepare('SELECT COUNT(*) as n FROM daily_missions').get().n === 0) {
 
 // Seed default tryout packages if table is empty
 if (db.prepare('SELECT COUNT(*) as n FROM tryout_packages').get().n === 0) {
-  const ins = db.prepare('INSERT INTO tryout_packages (tryout_id, title, description, price, original_price, badge, duration, questions, features, tone, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
+  const ins = db.prepare('INSERT INTO tryout_packages (tryout_id, title, description, price, original_price, badge, duration, questions, features, access_features, tone, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+  const defaultAccess = JSON.stringify(DEFAULT_PACKAGE_ACCESS_FEATURES);
   [
-    ['tryout-bundling-semester-1','Tryout Bundling: Semester 1','Evaluasi lengkap Matematika, Fisika, dan Kimia untuk persiapan UAS.','Rp 50.000',null,'Populer','180 mnt',90,JSON.stringify(['3 Mata pelajaran dasar','Sistem CBT seperti UAS','Analisis butir soal AI','Pembahasan video eksklusif']),'default',1],
-    ['tryout-premium-tpb-prep','Tryout Premium: The Trinity TPB','Simulasi pre-test TPB ITB berisi Matematika, Fisika, dan Kimia.','Rp 100.000','Rp 150.000','Terlengkap','90 mnt',30,JSON.stringify(['30 soal campuran TPB','Urutan soal dan opsi diacak','Hasil keluar instan','Pembahasan step-by-step']),'feature',2],
-    ['tryout-gratis-bab-1-2','Tryout Gratis: Bab 1-2','Coba sistem CBT kami secara gratis untuk Kalkulus Dasar.','Gratis',null,'Promo','30 mnt',15,JSON.stringify(['1 mata pelajaran','Hasil keluar instan','Pembahasan teks dasar']),'default',3],
+    ['tryout-bundling-semester-1','Tryout Bundling: Semester 1','Evaluasi lengkap Matematika, Fisika, dan Kimia untuk persiapan UAS.','Rp 50.000',null,'Populer','180 mnt',90,JSON.stringify(['3 Mata pelajaran dasar','Sistem CBT seperti UAS','Analisis butir soal AI','Pembahasan video eksklusif']),defaultAccess,'default',1],
+    ['tryout-premium-tpb-prep','Tryout Premium: The Trinity TPB','Simulasi pre-test TPB ITB berisi Matematika, Fisika, dan Kimia.','Rp 100.000','Rp 150.000','Terlengkap','90 mnt',30,JSON.stringify(['30 soal campuran TPB','Urutan soal dan opsi diacak','Hasil keluar instan','Pembahasan step-by-step']),defaultAccess,'feature',2],
+    ['tryout-gratis-bab-1-2','Tryout Gratis: Bab 1-2','Coba sistem CBT kami secara gratis untuk Kalkulus Dasar.','Gratis',null,'Promo','30 mnt',15,JSON.stringify(['1 mata pelajaran','Hasil keluar instan','Pembahasan teks dasar']),JSON.stringify(['tryout-access']),'default',3],
   ].forEach(r => ins.run(...r));
 }
 
@@ -493,6 +529,7 @@ app.locals.db = db;
 app.locals.performanceStore = createPerformanceStore();
 app.locals.collectorHeartbeat = null;
 startExpirySweeper(db, Number(process.env.PAYMENT_EXPIRY_SWEEP_INTERVAL_MS) || 60000);
+startAutoBackup(db);
 
 // --- Internal heartbeat endpoint for the self-healing collector ---
 // Always mounted (even when the in-process collector is OFF) so an
@@ -863,6 +900,10 @@ function effectiveMissionStatus(row, released) {
   return 'locked';
 }
 
+function getMissionDisplayStatusServer(row) {
+  return row?.effective_status || row?.status || 'locked';
+}
+
 function canReadMissionDrafts(req) {
   if (req.session && req.session.role === 'admin') return true;
   return isLocalAdminMode(req);
@@ -877,11 +918,26 @@ function hasMissionManualAccess(database, userId) {
       WHERE user_id = ?
         AND (
           (access_type = 'mission' AND access_value IN ('daily-missions', 'misi-harian'))
+          OR (access_type = 'practice' AND access_value IN ('special-practice', 'latihan-khusus'))
           OR (access_type = 'manual' AND access_value IN ('daily-missions', 'misi-harian'))
         )
       LIMIT 1
     `).get(userId);
-    return Boolean(row);
+    if (row) return true;
+    const payments = database.prepare(`
+      SELECT p.product_details, tp.tryout_id, tp.access_features
+      FROM payments p
+      LEFT JOIN tryout_packages tp ON tp.title = p.product_details
+      WHERE p.user_id = ? AND p.status = 'SUCCESS'
+    `).all(userId);
+    return payments.some((payment) => packageAccessGrantSpecs({
+      title: payment.product_details,
+      tryout_id: payment.tryout_id,
+      access_features: payment.access_features,
+    }).some((grant) => (
+      (grant.accessType === 'mission' && ['daily-missions', 'misi-harian'].includes(grant.accessValue))
+      || (grant.accessType === 'practice' && ['special-practice', 'latihan-khusus'].includes(grant.accessValue))
+    )));
   } catch (_) {
     return false;
   }
@@ -891,15 +947,80 @@ function canReadLockedTryoutPackages(req) {
   return Boolean((req.session && req.session.role === 'admin') || isLocalAdminMode(req));
 }
 
+function slugifyDailyMissionTrack(value) {
+  const slug = String(value || 'matematika')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `${slug || 'matematika'}-free`;
+}
+
+function parseDailyMissionLesson(value) {
+  const match = String(value || '').trim().toLowerCase().match(/^latsol-(\d+)$/);
+  if (!match) return null;
+  const day = Number(match[1]);
+  return Number.isInteger(day) && day > 0 ? day : null;
+}
+
+function parseJsonArray(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
+  try {
+    const parsed = JSON.parse(String(value || '[]'));
+    return Array.isArray(parsed) ? parsed.map((item) => String(item || '').trim()).filter(Boolean) : [];
+  } catch (_) {
+    return String(value || '').split('\n').map((item) => item.trim()).filter(Boolean);
+  }
+}
+
+function missionRowToPracticeProblem(row) {
+  const choices = parseJsonArray(row.mc_options);
+  const answers = parseJsonArray(row.acceptable_answers);
+  const answer = answers[0] || '';
+  return {
+    id: `mission-${row.id || row.day}`,
+    is_daily_mission: true,
+    mission_id: row.id,
+    mission_day: row.day,
+    mapel: row.mapel || '',
+    title: row.target || 'Misi Harian',
+    question_text: row.question || '',
+    question_display: row.question || '',
+    answer_display: answer,
+    acceptable_answers: answers,
+    difficulty: 'Easy',
+    image_url: row.image_url || '',
+    image_alt: row.image_alt || '',
+    mc_options: choices,
+    question_type: choices.length ? 'mc' : (row.question_type || 'open'),
+    sourceSubtopic: { id: 'daily-missions', title: 'Misi Harian' },
+  };
+}
+
+function releasedMissionPracticeRows({ canSeeDrafts = false, hasManualAccess = false } = {}) {
+  return db.prepare('SELECT * FROM daily_missions ORDER BY day, sort_order, id').all()
+    .map((row) => serializeMissionForViewer(row, { canSeeDrafts, hasManualAccess }))
+    .filter((row) => row.is_released && getMissionDisplayStatusServer(row) !== 'locked')
+    .filter((row) => String(row.question || '').trim());
+}
+
 function serializeMissionForViewer(row, { canSeeDrafts = false, hasManualAccess = false } = {}) {
   const released = isReleasedMission(row);
   const effectiveStatus = effectiveMissionStatus(row, released);
-  if (canSeeDrafts || hasManualAccess) {
+  if (canSeeDrafts) {
     return {
       ...row,
-      status: hasManualAccess && row.status !== 'completed' ? 'active' : row.status,
-      effective_status: hasManualAccess && row.status !== 'completed' ? 'active' : effectiveStatus,
-      is_released: hasManualAccess || released,
+      effective_status: effectiveStatus,
+      is_released: released,
+    };
+  }
+  if (hasManualAccess && (released || row.status === 'completed')) {
+    return {
+      ...row,
+      status: effectiveStatus,
+      effective_status: effectiveStatus,
+      is_released: true,
     };
   }
   if (released || row.status === 'completed') {
@@ -935,6 +1056,64 @@ app.get('/api/missions', (req, res) => {
     const hasManualAccess = !canSeeDrafts && hasMissionManualAccess(db, req.session && req.session.userId);
     const rows = db.prepare('SELECT * FROM daily_missions ORDER BY sort_order, day').all();
     res.json(rows.map((row) => serializeMissionForViewer(row, { canSeeDrafts, hasManualAccess })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/missions/premium-practice/:mapel', (req, res) => {
+  try {
+    const canSeeDrafts = canReadMissionDrafts(req);
+    const hasManualAccess = hasMissionManualAccess(db, req.session && req.session.userId);
+    if (!canSeeDrafts && !hasManualAccess) {
+      return res.status(403).json({ error: 'Akses paket diperlukan untuk latihan premium harian.' });
+    }
+
+    const mapelSlug = String(req.params.mapel || '').trim().toLowerCase();
+    const rows = releasedMissionPracticeRows({ canSeeDrafts, hasManualAccess })
+      .filter((row) => slugifyDailyMissionTrack(row.mapel).replace(/-free$/, '') === mapelSlug);
+    const problems = rows.map(missionRowToPracticeProblem);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({
+      problems,
+      subtopic: { id: `daily-missions-${mapelSlug || 'matematika'}`, title: 'Latihan Premium Harian' },
+      title: 'Latihan Premium Harian',
+      total: problems.length,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/missions/practice/:track/:lesson', (req, res) => {
+  try {
+    const canSeeDrafts = canReadMissionDrafts(req);
+    const hasManualAccess = hasMissionManualAccess(db, req.session && req.session.userId);
+    if (!canSeeDrafts && !hasManualAccess) {
+      return res.status(403).json({ error: 'Akses paket diperlukan untuk latihan misi harian.' });
+    }
+
+    const selectedDay = parseDailyMissionLesson(req.params.lesson);
+    if (!selectedDay) return res.status(404).json({ error: 'Latihan misi tidak ditemukan.' });
+
+    const track = String(req.params.track || '').trim().toLowerCase();
+    const releasedRows = releasedMissionPracticeRows({ canSeeDrafts, hasManualAccess })
+      .filter((row) => slugifyDailyMissionTrack(row.mapel) === track);
+
+    const selected = releasedRows.find((row) => Number(row.day || 0) === selectedDay);
+    if (!selected) return res.status(404).json({ error: 'Soal misi belum terbuka.' });
+
+    const problem = missionRowToPracticeProblem(selected);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({
+      activeMissionDay: selectedDay,
+      activeProblemId: problem.id,
+      availableLessons: releasedRows.map((row) => ({
+        day: Number(row.day || 0),
+        lesson: `latsol-${Number(row.day || 0)}`,
+        path: `/belajar/practice/${track}/latsol-${Number(row.day || 0)}`,
+      })),
+      problems: [problem],
+      subtopic: { id: 'daily-missions', title: 'Misi Harian' },
+      title: selected.target || 'Misi Harian',
+      track,
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1159,21 +1338,30 @@ app.listen(PORT, '0.0.0.0', () => {
 });
 
 function ensureFixedAdminUser(database) {
-  const username = '123';
-  const passwordHash = bcrypt.hashSync('135', 10);
-  const existing = database.prepare('SELECT id FROM users WHERE username = ?').get(username);
-  if (existing) {
+  const adminSeeds = [
+    { username: '123', password: '135', displayName: 'Admin 123' },
+    { username: '456', password: '246', displayName: 'Admin 456' },
+    { username: 'admin@mafiking.com', password: '135', displayName: 'Admin Mafiking' },
+  ];
+
+  const upsertAdmin = ({ username, password, displayName }) => {
+    const passwordHash = bcrypt.hashSync(password, 10);
+    const existing = database.prepare('SELECT id FROM users WHERE username = ?').get(username);
+    if (existing) {
+      database.prepare(
+        "UPDATE users SET password_hash = ?, role = 'admin' WHERE id = ?"
+      ).run(passwordHash, existing.id);
+      database.prepare(
+        "UPDATE users SET email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP) WHERE id = ?"
+      ).run(existing.id);
+      return;
+    }
     database.prepare(
-      "UPDATE users SET password_hash = ?, role = 'admin' WHERE id = ?"
-    ).run(passwordHash, existing.id);
-    database.prepare(
-      "UPDATE users SET email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP) WHERE id = ?"
-    ).run(existing.id);
-    return;
-  }
-  database.prepare(
-    "INSERT INTO users (username, password_hash, display_name, role, email_verified_at) VALUES (?, ?, 'Admin 123', 'admin', CURRENT_TIMESTAMP)"
-  ).run(username, passwordHash);
+      "INSERT INTO users (username, password_hash, display_name, role, email_verified_at) VALUES (?, ?, ?, 'admin', CURRENT_TIMESTAMP)"
+    ).run(username, passwordHash, displayName);
+  };
+
+  adminSeeds.forEach(upsertAdmin);
 }
 
 function slugifyTryoutId(value, fallback) {
@@ -1221,6 +1409,7 @@ function ensurePaymentTestTryoutPackage(database) {
     duration: '10 mnt',
     questions: 5,
     features: JSON.stringify(['Cek QRIS payment', 'Akses terbuka otomatis setelah terverifikasi']),
+    access_features: JSON.stringify(DEFAULT_PACKAGE_ACCESS_FEATURES),
     tone: 'default',
     sort_order: 99,
   };
@@ -1246,6 +1435,7 @@ function ensurePaymentTestTryoutPackage(database) {
             duration = ?,
             questions = ?,
             features = ?,
+            access_features = ?,
             tone = ?,
             sort_order = ?
         WHERE id = ?
@@ -1259,6 +1449,7 @@ function ensurePaymentTestTryoutPackage(database) {
         payload.duration,
         payload.questions,
         payload.features,
+        payload.access_features,
         payload.tone,
         payload.sort_order,
         existing.id
@@ -1269,8 +1460,8 @@ function ensurePaymentTestTryoutPackage(database) {
     database.prepare(`
       INSERT INTO tryout_packages (
         tryout_id, title, description, price, original_price, badge,
-        duration, questions, features, tone, sort_order
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        duration, questions, features, access_features, tone, sort_order
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       payload.tryout_id,
       payload.title,
@@ -1281,6 +1472,7 @@ function ensurePaymentTestTryoutPackage(database) {
       payload.duration,
       payload.questions,
       payload.features,
+      payload.access_features,
       payload.tone,
       payload.sort_order
     );

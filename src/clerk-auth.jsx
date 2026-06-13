@@ -141,7 +141,7 @@ const MafikingClerk = (() => {
         Authorization: `Bearer ${token}`,
       },
     });
-    return parseApiResponse(response);
+    return window.parseApiResponse(response);
   }
 
   function readPendingOAuth() {

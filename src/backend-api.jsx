@@ -200,3 +200,4 @@ function parseSseEvent(chunk) {
 }
 
 window.MafikingAPI = MafikingAPI;
+window.parseApiResponse = parseApiResponse;

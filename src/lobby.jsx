@@ -844,7 +844,7 @@ const LandingLegacy = ({ setRoute, tweaks, isAdmin = false, currentUser = null, 
               <div className="mt-9 grid max-w-2xl grid-cols-2 gap-4 text-sm text-slate-500 md:grid-cols-4">
                 {[
                   ["250+", "Pengguna Aktif"],
-                  ["100+", "Soal Latihan"],
+                  ["120+", "Soal Latihan"],
                   ["98%", "lebih terarah"],
                   ["24/7", "akses belajar"],
                 ].map(([value, label]) => (
@@ -1207,6 +1207,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
     try { window.sessionStorage.setItem("mafiking:tryout-pop", "1"); } catch (_) {}
     setRoute({ route: "belajar", section: "Try Out" });
   };
+  const isRegisteredUser = currentUser && !currentUser.display_name?.startsWith("Tamu_");
   const buyLandingPackage = (pkg) => {
     if (isLandingPackageFree(pkg)) {
       startFree();
@@ -1217,6 +1218,14 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
       return;
     }
     const paymentRoute = { route: "payment", payment: { type: "tryout", package: pkg } };
+    if (!isRegisteredUser) {
+      setRoute({
+        route: "lobby",
+        authMode: "login",
+        authRedirect: paymentRoute,
+      });
+      return;
+    }
     setRoute(paymentRoute);
   };
   const scrollToId = (id) => {
@@ -1301,6 +1310,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
       video.load();
       video.dataset.sourceKey = sourceKey;
     }
+    video.playbackRate = 2.5;
 
     let cleanedUp = false;
     let isVideoVisible = false;
@@ -1312,6 +1322,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
       video.muted = true;
       soundEnabledRef.current = false;
       setSoundEnabled(false);
+      video.playbackRate = 2.5;
       try {
         await video.play();
       } catch (_) {}
@@ -1321,6 +1332,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
       if (cleanedUp || !isVideoVisible) return;
       video.muted = !soundEnabledRef.current;
       video.volume = 1;
+      video.playbackRate = 2.5;
       try {
         await video.play();
         setSoundEnabled(!video.muted);
@@ -1335,6 +1347,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
       setSoundEnabled(true);
       video.muted = false;
       video.volume = 1;
+      video.playbackRate = 2.5;
       try {
         if (isVideoVisible) await video.play();
       } catch (_) {
@@ -1356,6 +1369,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
     video.pause();
     video.muted = !soundEnabledRef.current;
     video.volume = 1;
+    video.playbackRate = 2.5;
 
     const frame = demoVideoFrameRef.current || video;
     if (typeof IntersectionObserver === "function") {
@@ -1402,17 +1416,17 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
   const recenterTeacherScroll = React.useCallback(() => {}, []);
 
   const subjectCards = [
-    { title: "Matematika", desc: "Kalkulus, aljabar, deret tak terhingga - dari fungsi limit hingga uji konvergensi.", IconC: Icon.Integral, section: "Matematika" },
-    { title: "Fisika", desc: "Mekanika, termodinamika, listrik magnet - sesuai kaedah dahulu, namun kemaritiman.", IconC: Icon.Atom, section: "Fisika" },
-    { title: "Kimia", desc: "Wujud zat, stoikiometri - dari model Bohr hingga setara redoks.", IconC: Icon.Flask, section: "Kimia" },
+    { title: "Matematika", IconC: Icon.Integral, section: "Matematika" },
+    { title: "Fisika", IconC: Icon.Atom, section: "Fisika" },
+    { title: "Kimia", IconC: Icon.Flask, section: "Kimia" },
   ];
   const teacherProfiles = [
     {
-      name: "D.A.",
+      name: "Dakita Arfa",
       initial: "DA",
       major: "Teknik Mesin",
       awards: [
-        { text: "Juara Olimpiade Fisika", tone: "brand" },
+        { text: "Juara Olimpiade Internasional Fisika", tone: "brand" },
         { text: "IP 3.8+", tone: "amber" },
         { text: "Nilai UTS & UAS Fisika 1A 100", tone: "slate" },
       ],
@@ -1425,17 +1439,16 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
         { text: "Juara Olimpiade Fisika", tone: "brand" },
         { text: "IP 3.9+", tone: "amber" },
         { text: "Tutor Sebaya Fisika 1A", tone: "slate" },
-        { text: "IP 3.9+", tone: "blue" },
       ],
     },
     {
-      name: "J.H.",
+      name: "Jordan Hervianto.",
       initial: "JH",
       major: "Teknik Metalurgi",
       awards: [
         { text: "IP 4.0", tone: "brand" },
         { text: "2+ tahun mengajar", tone: "amber" },
-        { text: "Rata-rata 99.4 UTS MaFiKi 1A", tone: "slate" },
+        { text: "Nilai 99.4 MaFiKi", tone: "slate" },
       ],
     },
     {
@@ -1445,8 +1458,8 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
       awards: [
         { text: "IP 3.8+", tone: "brand" },
         { text: "2+ tahun Mengajar", tone: "amber" },
-        { text: "Nilai UTS Matematika 1A 96.5", tone: "slate" },
-        { text: "Nilai UAS Fisika 1A 99", tone: "blue" },
+        { text: "Nilai UTS Matematika 96.5", tone: "slate" },
+        { text: "Nilai UAS Fisika 99", tone: "blue" },
       ],
     },
     {
@@ -1455,18 +1468,21 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
       major: "Teknik Kimia",
       awards: [
         { text: "IP 3.7", tone: "brand" },
-        { text: "Indeks A Kimia 1A", tone: "amber" },
+        { text: "Indeks A Kimia", tone: "amber" },
         { text: "1+ tahun Mengajar", tone: "slate" },
       ],
     },
   ];
   const testimonials = [
-    ["Dulu paling takut sama Kalkulus karena nggak ngerti konsep dasar limit. Di sini semua jadi visual dan terhubung. UTS dapet A.", "Budi R.", "STEI 23", "B"],
-    ["Biasanya bimbel lain tutornya beneran cuma nyuruh hapal rumus nggak jelas. Latihannya terstruktur parah, serasa main game.", "Sarah M.", "FTMD 22", "S"],
-    ["Fitur tracker progresnya ngebantu banget buat maintain konsistensi. Lihat streak harian langsung terpacu buat buka modul.", "Rizky D.", "FITB 23", "R"],
-    ["Try out gratisnya bikin aku tahu bagian mana yang harus dikejar dulu. Pembahasannya enak karena langsung nyambung ke latihan.", "Alya N.", "FMIPA 24", "A"],
-    ["Canvas koreksinya kerasa beda. Salah hitung kecil langsung kelihatan, jadi nggak cuma tahu jawaban akhir benar atau salah.", "Dimas F.", "FTSL 23", "D"],
-    ["Belajarnya jadi lebih rapi. Aku bisa fokus ke Matematika dulu, terus pindah Fisika tanpa bingung mulai dari bab mana.", "Nadya K.", "SITH-R 24", "N"],
+    ["Jujur baru pertama ikut dan aku langsung ngerti sama penjelasannya. Tutornya keren-keren dan websitenya juga membantu aku belajar. Sukses selalu MAFIKING!", "Aya", "FTTM 25", "A"],
+    ["Keren, tutornya berkualitas. Dari orang sampai mentornya mantab", "Rafi", "FTTM 25", "R"],
+    ["KEREN ANEETTT HUWUW >\\\< aku jadi paham materi materi yang aku lupa kyaaa >\\\< seru juga belajar sama my tomodachi", "Alfiqi", "FTMD 25", "A"],
+    ["Jujur jelas banget dan mudah dimengerti, tapi mungkin tulisan di papannya bisa diperbesar dan diperjelas", "Ragam", "FTMD 25", "R"],
+    ["Jujur nyesel ga ikut dari awal! ngajarnya jelas pake bangettt. Harus lanjut plss MY SAVIOURS", "Marafen", "FTMD 25", "M"],
+    ["Tutornya jangan ganteng ganteng dongg aku gak fokus belajarnya :(", "-", "-", "-"],
+    ["Seru banget tutornya sangat friendly. materinya gampang dimengerti. We love MAFIKING", "-", "-", "-"],
+    ["Terimakasih mafiking. jujur sangat membantu memahami materi. tutor juga sangat GACOR debest lah. Buat juga untuk UAS MAT 2D yakk wkwkwkkwkw", "-", "-", "-"],
+    ["Tutornya gacor gacor dan helpful banget :D (sayang otak sayanya aja yang gak nyampe)", "-", "-", "-"],
   ];
   const landingOffers = buildLandingOffers(tryoutPackages);
   const teacherLoopProfiles = [...teacherProfiles, ...teacherProfiles, ...teacherProfiles];
@@ -1514,8 +1530,8 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
                 Coba Gratis <Icon.Arrow className="w-4 h-4" />
               </button>
             </div>
-            <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center text-slate-900 md:hidden" type="button" aria-label={menuOpen ? "Tutup menu" : "Buka menu"} aria-expanded={menuOpen}>
-              {menuOpen ? <Icon.X className="w-6 h-6" /> : <Icon.Menu className="w-6 h-6" />}
+            <button onClick={startFree} className="btn-ink !py-2 !px-4 text-sm md:hidden" type="button">
+              Coba Gratis <Icon.Arrow className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -1636,17 +1652,16 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
             </div>
             <div className="landing-mapel-carousel flex flex-col gap-4 sm:grid sm:grid-cols-3 sm:gap-6 hide-scrollbar lg:grid-cols-3">
               {subjectCards.map((item) => (
-                <button key={item.title} onClick={() => setRoute({ route: "belajar", section: item.section })} className="group flex sm:min-w-0 sm:shrink h-full flex-col rounded-2xl sm:rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-8 text-left transition-all hover:border-slate-300 hover:shadow-2xl hover:shadow-slate-200/50" type="button">
-                  <div className="mb-3 sm:mb-4 flex items-start justify-between"><div className="flex h-10 w-10 sm:h-14 sm:w-14 items-center justify-center rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50 text-slate-900"><item.IconC className="h-5 w-5 sm:h-6 sm:w-6" /></div></div>
+                <button key={item.title} onClick={() => setRoute({ route: "belajar", section: item.section })} className="group flex sm:min-w-0 sm:shrink h-full flex-col items-center rounded-2xl sm:rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-8 text-center transition-all hover:border-slate-300 hover:shadow-2xl hover:shadow-slate-200/50" type="button">
+                  <div className="mb-3 sm:mb-4 flex items-center justify-center"><div className="flex h-10 w-10 sm:h-14 sm:w-14 items-center justify-center rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50 text-slate-900"><item.IconC className="h-5 w-5 sm:h-6 sm:w-6" /></div></div>
                   <h3 className="mb-2 sm:mb-4 text-xl sm:text-3xl font-extrabold text-slate-900">{item.title}</h3>
-                  <p className="flex-grow text-center text-sm sm:text-base font-medium leading-relaxed text-slate-600">{item.desc}</p>
                 </button>
               ))}
             </div>
           </LandingFade>
         </section>
 
-        <section id="paket" className="relative hidden overflow-hidden bg-[#0B1326] py-12 text-white sm:py-20 lg:py-24">
+        <section id="paket" className="relative overflow-hidden bg-[#0B1326] py-12 text-white sm:py-20 lg:py-24">
           <div className="pointer-events-none absolute inset-0 z-0 opacity-20" aria-hidden="true">
             <div
               className="absolute inset-0"
@@ -1665,7 +1680,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
                 </div>
                 <h2 className="text-3xl font-extrabold tracking-tight sm:text-5xl">Penawaran Spesial</h2>
                 <p className="mx-auto mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-300 sm:text-lg">
-                  Pilih tryout sesuai kebutuhan belajarmu. Harga final dalam Rupiah terlihat sebelum kamu lanjut ke checkout dan pembayaran.
+                  Pilih tryout sesuai kebutuhan belajarmu.
                 </p>
               </div>
 
@@ -1929,7 +1944,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
 
         <section id="testimoni" className="relative mx-auto w-full max-w-[1800px] scroll-mt-24 overflow-hidden px-4 py-10 sm:px-6 sm:py-24 md:px-12 lg:px-20 lg:py-32">
           <LandingFade delay={190}>
-            <h2 className="mb-6 sm:mb-16 text-2xl sm:text-4xl font-extrabold leading-[1.1] tracking-tight text-slate-900 md:text-5xl lg:mb-24 lg:text-center lg:text-7xl">Mahasiswa yang sudah <br className="hidden lg:block" /> <span className="font-serif font-medium italic text-slate-500">berlangganan.</span></h2>
+            <h2 className="mb-6 sm:mb-16 text-2xl sm:text-4xl font-extrabold leading-[1.1] tracking-tight text-slate-900 md:text-5xl lg:mb-24 lg:text-center lg:text-7xl">Apa kata mereka yang ikut<br className="hidden lg:block" /> <span className="font-serif font-medium italic text-slate-500">SiapUTS semester 2?</span></h2>
             <div className="landing-testimonial-mask relative -mx-4 sm:-mx-6 md:-mx-12 lg:-mx-20 overflow-hidden">
               <div className="landing-testimonial-track flex w-max gap-4 sm:gap-6 px-4 sm:px-6 md:px-12 lg:gap-8 lg:px-20">
                 {[...testimonials, ...testimonials].map(([quote, name, meta, initial], index) => (
@@ -1961,7 +1976,6 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
         <LandingFade delay={210} className="relative z-10">
           <div className="mx-auto flex w-full max-w-[1400px] flex-col items-center px-4 sm:px-6 text-center md:px-12 lg:px-20">
             <h2 className="mb-4 sm:mb-8 text-2xl sm:text-4xl font-extrabold leading-[1.1] tracking-tight text-white md:text-5xl lg:text-7xl">Siap Mengamankan <br className="hidden md:block" /> <span className="text-[#FFF44F]">Nilai A Pertamamu?</span></h2>
-            <p className="mx-auto mb-6 sm:mb-12 max-w-2xl text-sm sm:text-lg font-medium text-slate-400 lg:text-xl">Jangan tunggu sampai tertinggal materi. Bangun fondasi akademik terkuatmu hari ini juga.</p>
             <button onClick={startFree} className="mb-6 sm:mb-8 flex items-center justify-center gap-2 rounded-full bg-[#FFF44F] px-6 py-3 sm:px-8 sm:py-4 text-sm sm:text-lg font-bold text-slate-900 transition-all hover:bg-[#FFF44F]/90 active:scale-95" type="button">Coba Gratis <Icon.Arrow className="ml-1 h-4 w-4 sm:h-5 sm:w-5" /></button>
             <div className="mb-6 sm:mb-10 mt-8 sm:mt-16 h-px w-full bg-slate-800/80" />
             <div className="grid w-full items-center gap-8 text-sm font-medium text-slate-500 lg:grid-cols-[1fr_auto_1fr]">

@@ -23,6 +23,7 @@ const {
 const { collectorIpAllowlist } = require('../lib/ip-allowlist');
 const paymentBroadcaster = require('../lib/payment-broadcaster');
 const { isEnabled: isFeatureEnabled } = require('../lib/feature-flags');
+const { packageAccessGrantSpecs } = require('../lib/package-entitlements');
 const router = express.Router();
 
 const SSE_PAYMENT_PUSH_ENABLED = isFeatureEnabled('SSE_PAYMENT_PUSH');
@@ -101,7 +102,7 @@ function isLocalGuestCheckoutEnabled(env = process.env) {
     if (env.NODE_ENV === 'production') return false;
     if (isFalseyEnv(env.PAYMENT_LOCAL_GUEST_CHECKOUT)) return false;
     if (isTruthyEnv(env.PAYMENT_LOCAL_GUEST_CHECKOUT)) return true;
-    return ['manual', 'qris'].includes(normalizePaymentProvider(env)) || isMockPaymentEnabled(env);
+    return false;
 }
 
 function mockTokenSecret() {
@@ -730,7 +731,8 @@ router.get('/active-packages', async (req, res) => {
         const payments = db.prepare(`
             SELECT
                 p.product_details,
-                tp.tryout_id
+                tp.tryout_id,
+                tp.access_features
             FROM payments p
             LEFT JOIN tryout_packages tp ON tp.title = p.product_details
             WHERE p.user_id = ? AND p.status = 'SUCCESS'
@@ -763,10 +765,23 @@ router.get('/active-packages', async (req, res) => {
         }
         payments.forEach((payment) => {
             if (!revoked.has(payment.product_details) && !revoked.has(payment.tryout_id)) {
-                addActiveProduct(payment.product_details);
-                if (payment.tryout_id && !revoked.has(payment.tryout_id)) {
-                    addActiveProduct(payment.tryout_id);
+                const grantSpecs = packageAccessGrantSpecs({
+                    title: payment.product_details,
+                    tryout_id: payment.tryout_id,
+                    access_features: payment.access_features,
+                });
+                const hasTryoutAccess = grantSpecs.some((grant) => grant.accessType === 'tryout');
+                const isTryoutPackage = Boolean(payment.tryout_id || payment.access_features != null);
+                if (!isTryoutPackage || hasTryoutAccess) {
+                    addActiveProduct(payment.product_details);
+                    if (payment.tryout_id && !revoked.has(payment.tryout_id)) {
+                        addActiveProduct(payment.tryout_id);
+                    }
                 }
+                grantSpecs.forEach((grant) => {
+                    if (grant.featureId && !revoked.has(grant.featureId)) addActiveProduct(grant.featureId);
+                    if (!revoked.has(grant.accessValue)) addActiveProduct(grant.accessValue);
+                });
             }
         });
         for (const grant of nonRevokedGrants) {

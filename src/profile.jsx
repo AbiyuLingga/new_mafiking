@@ -11,11 +11,21 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
   const [summary, setSummary] = useState(null);
   const [aiRefresh, setAiRefresh] = useState(null);
 
+  const katexReady = (window.MafikingMathLoader && typeof window.MafikingMathLoader.useKatexReady === "function")
+    ? window.MafikingMathLoader.useKatexReady()
+    : false;
+
   const loadProfile = async (forceRefresh = false) => {
     try {
       setLoading(true);
       setSummaryLoading(false);
       setError("");
+
+      // Trigger KaTeX lazy load so question text and correction history
+      // render with proper math formatting instead of raw LaTeX.
+      if (window.MafikingMathLoader && typeof window.MafikingMathLoader.loadKatex === "function") {
+        window.MafikingMathLoader.loadKatex();
+      }
 
       // Jalankan 3 request independen secara paralel
       const [me, progress, correctionAttempts] = await Promise.all([
@@ -54,13 +64,22 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
     loadProfile(false);
   }, []);
 
+  const localWeaknesses = limitLearningTags([
+    ...collectTags(attempts, "weaknessTags"),
+    ...collectInferredLearningTags(attempts, "weakness"),
+  ]);
+  const localStrengths = limitLearningTags([
+    ...collectTags(attempts, "strengthTags"),
+    ...collectInferredLearningTags(attempts, "strength"),
+  ]);
+
   const weaknesses = limitLearningTags(summary?.weaknesses?.length
     ? summary.weaknesses.map(formatLearningLabel)
-    : collectTags(attempts, "weaknessTags"));
+    : localWeaknesses);
 
   const strengths = limitLearningTags(summary?.strengths?.length
     ? summary.strengths.map(formatLearningLabel)
-    : collectTags(attempts, "strengthTags"));
+    : localStrengths);
 
   const hasCorrectionHistory = attempts.length > 0;
   const hasSummaryEvidence = hasCorrectionHistory || Boolean(summary);
@@ -101,35 +120,8 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
       storyProblem: false,
       targetSkill: "",
     }));
-  const adminPreviewRecommendationRows = [
-    {
-      ref: "",
-      questionDisplay: "Tentukan dy/dx dari x² + y² = 25.",
-      questionText: "Tentukan dy/dx dari x² + y² = 25.",
-      answerDisplay: "dy/dx = -x/y",
-      mapel: "Matematika",
-      difficulty: "Medium",
-      purcellReference: "Turunan Implisit",
-      reason: "",
-      storyProblem: false,
-      targetSkill: "Turunan Implisit",
-    },
-    {
-      ref: "",
-      questionDisplay: "Hitung ∫ x eˣ dx.",
-      questionText: "Hitung integral x e^x dx.",
-      answerDisplay: "x eˣ - eˣ + C",
-      mapel: "Matematika",
-      difficulty: "Medium",
-      purcellReference: "Integrasi Parsial",
-      reason: "",
-      storyProblem: false,
-      targetSkill: "Integrasi Parsial",
-    },
-  ];
-  const recommendationRows = dataRecommendationRows.length
-    ? dataRecommendationRows
-    : (isAdmin ? adminPreviewRecommendationRows : []);
+  const recommendationRows = dataRecommendationRows;
+  const overallSummaryText = summary?.overallSummary || buildLocalOverallSummary(attempts, stats);
 
   function formatRecommendationEvidenceTitle(item) {
     const parts = [];
@@ -235,7 +227,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
   }, []);
 
   return (
-    <div className="app-page-bg app-page-bg--profil min-h-screen w-full max-w-full overflow-x-hidden">
+    <div className="app-page-bg app-page-bg--profil min-h-screen w-full max-w-full overflow-x-hidden" data-katex-ready={katexReady ? "1" : "0"}>
       <section className="pt-12 pb-6">
         <div className="max-w-6xl mx-auto px-6 md:px-8">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b hairline pb-6">
@@ -473,7 +465,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                     </div>
                   ) : (
                     <p className="text-white/80 text-sm md:text-base mt-3 leading-relaxed max-w-3xl whitespace-pre-wrap">
-                      {summary?.overallSummary || "AI sedang mengumpulkan data latihan Anda. Kerjakan latihan di canvas untuk evaluasi kesalahan lebih mendalam."}
+                      {overallSummaryText}
                     </p>
                   )}
                 </div>
@@ -716,6 +708,7 @@ function collectTags(attempts, key) {
   attempts.forEach((attempt) => {
     (attempt[key] || attempt.evaluation?.[key] || []).forEach((tag) => {
       const label = formatLearningLabel(tag);
+      if (!label) return;
       counts.set(label, (counts.get(label) || 0) + 1);
     });
   });
@@ -725,8 +718,46 @@ function collectTags(attempts, key) {
     .slice(0, 5);
 }
 
+function collectInferredLearningTags(attempts, mode = "weakness") {
+  const counts = new Map();
+  (Array.isArray(attempts) ? attempts : []).forEach((attempt) => {
+    const score = Number(attempt?.score ?? attempt?.evaluation?.score ?? 0);
+    const isCorrect = Boolean(attempt?.isCorrect ?? attempt?.evaluation?.isCorrect);
+    if (mode === "strength" && (!isCorrect || score < 80)) return;
+    if (mode === "weakness" && isCorrect && score >= 80) return;
+    const issues = getCorrectionIssuePoints(attempt);
+    const text = [
+      attempt?.questionText,
+      attempt?.feedback,
+      attempt?.evaluation?.fullFeedback,
+      attempt?.evaluation?.fullFeedbackPlain,
+      ...issues,
+    ].filter(Boolean).join(" ");
+    inferLearningLabelsFromText(text, mode).forEach((label) => {
+      if (!label) return;
+      counts.set(label, (counts.get(label) || 0) + 1);
+    });
+  });
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([label]) => label)
+    .slice(0, 5);
+}
+
 function limitLearningTags(tags) {
   return Array.from(new Set(Array.isArray(tags) ? tags.filter(Boolean) : [])).slice(0, 5);
+}
+
+function buildLocalOverallSummary(attempts, stats) {
+  const rows = Array.isArray(attempts) ? attempts : [];
+  if (!rows.length) {
+    return "AI sedang mengumpulkan data latihan Anda. Kerjakan latihan di canvas untuk evaluasi kesalahan lebih mendalam.";
+  }
+  const wrong = rows.filter((attempt) => !attempt.isCorrect || Number(attempt.score || 0) < 80).length;
+  const averageScore = Math.round(rows.reduce((sum, attempt) => sum + Number(attempt.score || 0), 0) / Math.max(rows.length, 1));
+  const focus = collectInferredLearningTags(rows, "weakness")[0] || collectTags(rows, "weaknessTags")[0] || "langkah penyelesaian";
+  const xpText = stats?.xp ? ` XP saat ini ${stats.xp}.` : "";
+  return `Kamu sudah punya ${rows.length} history koreksi canvas dengan rata-rata skor ${averageScore}/100. ${wrong} pengerjaan masih perlu perbaikan; fokus berikutnya adalah ${focus}.${xpText}`;
 }
 
 function CorrectionIssueSummary({ attempt }) {
@@ -819,6 +850,34 @@ function formatLearningLabel(label) {
     'u substitution': 'Melakukan substitusi u',
   };
   return labels[key] || text;
+}
+
+function inferLearningLabelsFromText(value, mode = "weakness") {
+  const text = String(value || '').toLowerCase();
+  const labels = [];
+  if (/tidak memberikan jawaban|belum menjawab|jawaban kosong|tidak ada jawaban|menyalin soal/.test(text)) {
+    labels.push("Menulis langkah penyelesaian");
+  }
+  if (/gambar|canvas|tulisan|terbaca/.test(text)) {
+    labels.push("Kejelasan jawaban canvas");
+  }
+  if (/integral|\\int|∫|substitusi|anti[\s-]?turunan|dfrac|frac/.test(text)) {
+    labels.push("Integral");
+  }
+  if (/turunan|derivative|diferensial|dy\/dx|dy dx/.test(text)) {
+    labels.push("Diferensial");
+  }
+  if (/limit|\\lim/.test(text)) {
+    labels.push("Limit");
+  }
+  if (/sin|cos|tan|trigonometri|trig/.test(text)) {
+    labels.push("Trigonometri");
+  }
+  if (/aljabar|persamaan|variabel|pangkat|koefisien|konstanta/.test(text)) {
+    labels.push("Aljabar");
+  }
+  if (!labels.length && mode === "weakness") labels.push("Ketelitian langkah");
+  return limitLearningTags(labels.map(formatLearningLabel));
 }
 
 window.Profile = Profile;

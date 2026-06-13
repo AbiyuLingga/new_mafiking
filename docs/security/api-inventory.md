@@ -57,6 +57,8 @@ gap analysis, and the CSRF / CORS coverage tests.
 | GET | `/api/csrf-token` | session | n/a | n/a | Issues double-submit token. |
 | GET | `/api/landing-media` | public | n/a | none | Reads from `landing_media` table. Cached 60s. |
 | GET | `/api/missions` | public | n/a | none | Daily missions catalog. `?admin=1` returns drafts only if `canReadMissionDrafts` (admin/local). `hasMissionManualAccess` for free users. |
+| GET | `/api/missions/premium-practice/:mapel` | session | n/a | user-scoped | Premium daily-mission practice bank by subject. Validates mission/practice package access and returns released mission problems for the requested mapel. |
+| GET | `/api/missions/practice/:track/:lesson` | session | n/a | user-scoped | Daily mission practice page for premium users/admin only. Validates package mission/practice access, then returns the single released mission problem for `latsol-N`. |
 | GET | `/api/tryout-packages` | public | n/a | none | Public read of `tryout_packages` only when package access is enabled; locked user response is `[]` with private no-store. Exempt from auto-guest. |
 | GET | `/api/tryout-packages/access` | public | n/a | none | Returns package access state for the viewer. Private no-store. Exempt from auto-guest. |
 | GET | `/SOP-DEEPSEEK-IMPORT-SOAL.md` | admin | n/a | admin | Static file. 403 unless `req.session.role === 'admin'`. |

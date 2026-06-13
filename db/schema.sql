@@ -252,6 +252,7 @@ CREATE TABLE IF NOT EXISTS tryout_packages (
     duration TEXT DEFAULT '60 mnt',
     questions INTEGER DEFAULT 30,
     features TEXT DEFAULT '[]',
+    access_features TEXT DEFAULT '[]',
     tone TEXT DEFAULT 'default',
     sort_order INTEGER DEFAULT 0,
     is_hidden INTEGER DEFAULT 0

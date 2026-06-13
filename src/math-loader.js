@@ -118,6 +118,81 @@ function useKatexReady() {
 
 const MafikingMathLoader = { loadKatex, useKatexReady, KATEX_CSS_URL, KATEX_JS_URL };
 
+// Minimal LaTeX renderer that uses KaTeX (if already loaded) and falls back to
+// safe HTML escape. Exposed on `window` so non-route pages (profile, lobby,
+// leaderboard) that may render question/correction text don't have to depend
+// on the lazy `practice.jsx` chunk for `renderMafikingMathHTML`. The full
+// LaTeX-to-Unicode conversion pipeline still lives in practice.jsx — this is
+// the minimum needed to keep KaTeX rendering available on every page.
+function escapeMathText(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+function renderKatexBody(body, displayMode) {
+  return window.katex.renderToString(String(body || ''), { throwOnError: false, displayMode: Boolean(displayMode) });
+}
+
+function stripMathDelimiters(token) {
+  const text = String(token || '');
+  let match;
+  if ((match = text.match(/^\$\$([\s\S]+)\$\$$/))) return { body: match[1], displayMode: true };
+  if ((match = text.match(/^\$([\s\S]+)\$$/))) return { body: match[1], displayMode: false };
+  if ((match = text.match(/^\\\[([\s\S]+)\\\]$/))) return { body: match[1], displayMode: true };
+  if ((match = text.match(/^\\\(([\s\S]+)\\\)$/))) return { body: match[1], displayMode: false };
+  return null;
+}
+
+function hasStandaloneLatexSyntax(value) {
+  return /\\[a-zA-Z]+|[\^_{}]|[∫√ΣΠ∞≤≥≠≈]/.test(String(value || ''));
+}
+
+function renderMixedMathHTML(raw) {
+  const segmentPattern = /(\$\$[\s\S]+?\$\$|\$[^$\n]+\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\))/g;
+  let lastIndex = 0;
+  let rendered = '';
+  let found = false;
+  String(raw || '').replace(segmentPattern, (token, _full, offset) => {
+    found = true;
+    rendered += escapeMathText(raw.slice(lastIndex, offset)).replace(/\n/g, '<br>');
+    const stripped = stripMathDelimiters(token);
+    try {
+      rendered += stripped ? renderKatexBody(stripped.body, stripped.displayMode) : escapeMathText(token);
+    } catch (_) {
+      rendered += escapeMathText(token);
+    }
+    lastIndex = offset + token.length;
+    return token;
+  });
+  if (!found) return null;
+  rendered += escapeMathText(String(raw || '').slice(lastIndex)).replace(/\n/g, '<br>');
+  return rendered;
+}
+
+function renderMafikingMathHTML(value) {
+  const raw = String(value == null ? "" : value);
+  if (!raw) return "";
+  if (typeof window !== "undefined" && window.katex && typeof window.katex.renderToString === "function") {
+    try {
+      const mixed = renderMixedMathHTML(raw);
+      if (mixed != null) return mixed;
+      // Strip common math delimiters so KaTeX receives raw LaTeX, not the
+      // surrounding `$...$` / `$$...$$` / `\(...\)` / `\[...\]` markers.
+      const trimmed = raw.trim();
+      const stripped = stripMathDelimiters(trimmed);
+      if (!stripped && /[A-Za-z]{2,}/.test(trimmed) && /\s/.test(trimmed) && !hasStandaloneLatexSyntax(trimmed)) {
+        return escapeMathText(raw).replace(/\n/g, '<br>');
+      }
+      return renderKatexBody(stripped ? stripped.body : trimmed, stripped?.displayMode);
+    } catch (_) {
+      // Fall through to escape.
+    }
+  }
+  return escapeMathText(raw);
+}
+
 if (typeof window !== "undefined") {
   window.MafikingMathLoader = MafikingMathLoader;
+  window.renderMafikingMathHTML = renderMafikingMathHTML;
 }

@@ -1,6 +1,10 @@
 const assert = require('assert');
 const crypto = require('crypto');
 const paymentRouter = require('../routes/payment');
+const {
+    normalizePackageAccessFeatures,
+    packageAccessGrantSpecs,
+} = require('../lib/package-entitlements');
 
 const {
     buildMockPaymentUrl,
@@ -39,6 +43,30 @@ assert.strictEqual(typeof qrisConfig, 'function', 'qrisConfig must be exported f
 assert.strictEqual(typeof qrisReadiness, 'function', 'qrisReadiness must be exported for contract tests');
 assert.strictEqual(typeof verifyWebhookSignature, 'function', 'verifyWebhookSignature must be exported for contract tests');
 
+assert.deepStrictEqual(
+    normalizePackageAccessFeatures(''),
+    ['tryout-access', 'daily-missions', 'special-practice'],
+    'missing package entitlement config should preserve legacy full access'
+);
+assert.deepStrictEqual(
+    normalizePackageAccessFeatures('[]'),
+    [],
+    'explicit empty package entitlement config should stay empty'
+);
+assert.deepStrictEqual(
+    packageAccessGrantSpecs({
+        title: 'Paket A',
+        tryout_id: 'tryout-a',
+        access_features: '["tryout-access","daily-missions","special-practice"]',
+    }),
+    [
+        { featureId: 'tryout-access', accessType: 'tryout', accessValue: 'tryout-a' },
+        { featureId: 'daily-missions', accessType: 'mission', accessValue: 'daily-missions' },
+        { featureId: 'special-practice', accessType: 'practice', accessValue: 'special-practice' },
+    ],
+    'package entitlements must map to durable access grants'
+);
+
 const userDb = {
     prepare(sql) {
         assert.match(sql, /FROM users/);
@@ -57,10 +85,12 @@ assert.strictEqual(isRegisteredPaymentUser({ db: userDb, userId: 1 }), false);
 assert.strictEqual(isRegisteredPaymentUser({ db: userDb, userId: 2 }), true);
 assert.strictEqual(isRegisteredPaymentUser({ db: userDb, userId: 3 }), false);
 assert.strictEqual(isRegisteredPaymentUser({ db: userDb, userId: 4 }), true);
-assert.strictEqual(isLocalGuestCheckoutEnabled({ NODE_ENV: 'development', PAYMENT_PROVIDER: 'qris' }), true);
+assert.strictEqual(isLocalGuestCheckoutEnabled({ NODE_ENV: 'development', PAYMENT_PROVIDER: 'qris' }), false);
+assert.strictEqual(isLocalGuestCheckoutEnabled({ NODE_ENV: 'development', PAYMENT_PROVIDER: 'qris', PAYMENT_LOCAL_GUEST_CHECKOUT: 'true' }), true);
 assert.strictEqual(isLocalGuestCheckoutEnabled({ NODE_ENV: 'production', PAYMENT_PROVIDER: 'qris' }), false);
 assert.strictEqual(isLocalGuestCheckoutEnabled({ NODE_ENV: 'development', PAYMENT_PROVIDER: 'qris', PAYMENT_LOCAL_GUEST_CHECKOUT: 'false' }), false);
-assert.strictEqual(canCreatePayment({ db: userDb, userId: 1, env: { NODE_ENV: 'development', PAYMENT_PROVIDER: 'qris' } }), true);
+assert.strictEqual(canCreatePayment({ db: userDb, userId: 1, env: { NODE_ENV: 'development', PAYMENT_PROVIDER: 'qris' } }), false);
+assert.strictEqual(canCreatePayment({ db: userDb, userId: 1, env: { NODE_ENV: 'development', PAYMENT_PROVIDER: 'qris', PAYMENT_LOCAL_GUEST_CHECKOUT: 'true' } }), true);
 assert.strictEqual(canCreatePayment({ db: userDb, userId: 1, env: { NODE_ENV: 'production', PAYMENT_PROVIDER: 'qris' } }), false);
 assert.strictEqual(canCreatePayment({ db: userDb, userId: 2, env: { NODE_ENV: 'production', PAYMENT_PROVIDER: 'qris' } }), true);
 assert.strictEqual(canCreatePayment({ db: userDb, userId: 4, env: { NODE_ENV: 'production', PAYMENT_PROVIDER: 'qris' } }), true);
