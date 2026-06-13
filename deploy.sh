@@ -140,9 +140,23 @@ echo "Server siap: node $(node -v), npm $(npm -v), pm2 $(pm2 -v)"
 ENDSSH
 
 echo ""
+echo "[3/6] Membuat snapshot media profil server..."
+REMOTE_AVATAR_COUNT_BEFORE="$(
+  ssh "$SSH_TARGET" "REMOTE_DIR='$REMOTE_DIR' bash -s" <<'ENDSSH'
+set -euo pipefail
+mkdir -p "$REMOTE_DIR/profile-media/avatars" /var/backups/mafiking
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+tar -C "$REMOTE_DIR" -czf "/var/backups/mafiking/profile-media-pre-deploy-$stamp.tar.gz" profile-media
+find "$REMOTE_DIR/profile-media/avatars" -maxdepth 1 -type f | wc -l
+ENDSSH
+)"
+echo "Avatar sebelum deploy: $REMOTE_AVATAR_COUNT_BEFORE"
+
+echo ""
 echo "[3/6] Mengirim file aplikasi..."
 rsync -az --delete --human-readable --info=progress2,stats2 \
   --filter "P dist/assets/***" \
+  --filter "P profile-media/***" \
   --exclude ".git" \
   --exclude ".agents" \
   --exclude ".codex" \
@@ -159,6 +173,15 @@ rsync -az --delete --human-readable --info=progress2,stats2 \
   --exclude "db/*.sqlite-wal" \
   --exclude "db/*.backup-*" \
   ./ "$SSH_TARGET:$REMOTE_DIR/"
+
+REMOTE_AVATAR_COUNT_AFTER="$(
+  ssh "$SSH_TARGET" "find '$REMOTE_DIR/profile-media/avatars' -maxdepth 1 -type f | wc -l"
+)"
+echo "Avatar setelah deploy: $REMOTE_AVATAR_COUNT_AFTER"
+if [ "$REMOTE_AVATAR_COUNT_AFTER" -lt "$REMOTE_AVATAR_COUNT_BEFORE" ]; then
+  echo "FATAL: jumlah avatar berkurang saat deploy. Snapshot tersimpan di /var/backups/mafiking."
+  exit 1
+fi
 
 if [ -f "$LOCAL_DB" ]; then
   if [ "${DEPLOY_DB:-0}" = "1" ] || ssh "$SSH_TARGET" "test ! -f '$REMOTE_DB'"; then
@@ -238,6 +261,12 @@ fi
 cd "$REMOTE_DIR"
 if [ "$APP_RUN_USER" != "root" ] && id "$APP_RUN_USER" >/dev/null 2>&1; then
   $SUDO chown -R "$APP_RUN_USER:$APP_RUN_USER" "$REMOTE_DIR"
+fi
+
+if [ -f ops/backup.sh ]; then
+  $SUDO mkdir -p /opt/mafiking-ops
+  $SUDO install -m 700 ops/backup.sh /opt/mafiking-ops/backup.sh
+  echo "Skrip backup operasional diperbarui."
 fi
 
 run_app() {

@@ -1,36 +1,48 @@
-// Idle-time route prefetch.
+// Adaptive route loading for the Vite and Babel-standalone runtimes.
 //
-// After Phase 2 split, each route is its own Vite chunk. The chunk is only
-// fetched the first time the user navigates to the route, which can cause a
-// 50-200ms delay on first click. To hide that latency we pre-warm likely-
-// next routes during browser idle time.
-//
-// Rules from `docs/plans/2026-06-12-002-…` §5 Phase 2:
-//   - Only on `requestIdleCallback`.
-//   - Only when `navigator.connection.saveData !== true`.
-//   - Only when the user has shown clear intent (e.g. scroll, focus, hover).
-//   - Cap at 2 prefetches per page to avoid network contention.
-//
-// Babel-standalone path: dynamic `import()` may be unavailable on classic
-// scripts. We wrap it in try/catch and silently bail.
-const ROUTE_PREFETCHES = {
-  lobby: ["./belajar.jsx", "./misi.jsx"],
-  landing: ["./belajar.jsx"],
-  belajar: ["./practice.jsx", "./misi.jsx"],
-  misi: ["./practice.jsx"],
-  tryout: ["./payment.jsx"],
-  practice: ["./belajar.jsx"],
-  payment: ["./profile.jsx"],
-  profile: ["./invoices.jsx"],
-  invoices: ["./profile.jsx"],
-  leaderboard: ["./belajar.jsx"],
-  admin: ["./belajar.jsx"],
+// Vite needs explicit import expressions so it can keep each page in a
+// separate chunk. The legacy runtime has already loaded every route as a
+// classic script, so loadRoute resolves from window.* without importing JSX.
+const ROUTE_LOADERS = {
+  lobby: { globalName: "Lobby", load: () => import("./lobby.jsx") },
+  landing: { globalName: "Lobby", load: () => import("./lobby.jsx") },
+  belajar: { globalName: "Belajar", load: () => import("./belajar.jsx") },
+  misi: { globalName: "Misi", load: () => import("./misi.jsx") },
+  tryout: { globalName: "Tryout", load: () => import("./tryout.jsx") },
+  practice: { globalName: "Practice", load: () => import("./practice.jsx") },
+  payment: { globalName: "Payment", load: () => import("./payment.jsx") },
+  profile: { globalName: "Profile", load: () => import("./profile.jsx") },
+  invoices: { globalName: "Invoices", load: () => import("./invoices.jsx") },
+  leaderboard: { globalName: "Leaderboard", load: () => import("./leaderboard.jsx") },
 };
 
-const MAX_PREFETCH_PER_TICK = 2;
-const prefetched = new Set();
+const ROUTE_PREFETCHES = {
+  lobby: ["belajar", "misi", "leaderboard"],
+  landing: ["belajar", "misi", "leaderboard"],
+  belajar: ["misi", "tryout", "leaderboard"],
+  misi: ["belajar", "tryout", "leaderboard"],
+  tryout: ["belajar", "misi", "leaderboard"],
+  leaderboard: ["belajar", "misi", "tryout"],
+  practice: ["belajar"],
+  payment: ["profile"],
+  profile: ["invoices", "belajar"],
+  invoices: ["profile", "belajar"],
+  admin: ["belajar"],
+};
 
-function shouldPrefetch() {
+const MAX_ADJACENT_PREFETCHES = 3;
+const routePromises = new Map();
+const scheduledRoutes = new Set();
+const pendingRouteMarks = new Map();
+
+function existingRouteModule(routeName) {
+  const entry = ROUTE_LOADERS[routeName];
+  if (!entry || typeof window === "undefined") return null;
+  const component = window[entry.globalName];
+  return component ? { [entry.globalName]: component } : null;
+}
+
+function shouldSpeculativelyPrefetch() {
   try {
     const conn = navigator.connection;
     if (conn && conn.saveData) return false;
@@ -48,67 +60,136 @@ function scheduleIdle(cb) {
   window.setTimeout(cb, 1200);
 }
 
-function prefetchRoute(specifier) {
-  if (prefetched.has(specifier)) return;
-  if (/\.jsx(?:$|\?)/.test(String(specifier || ""))) return;
-  prefetched.add(specifier);
+function loadRoute(routeName) {
+  const entry = ROUTE_LOADERS[routeName];
+  if (!entry) return Promise.reject(new Error(`Route tidak dikenal: ${routeName}`));
+
+  const existing = existingRouteModule(routeName);
+  if (existing) return Promise.resolve(existing);
+  if (routePromises.has(routeName)) return routePromises.get(routeName);
+
+  let promise;
   try {
-    const loader = import(/* @vite-ignore */ specifier);
-    if (loader && typeof loader.then === "function") {
-      loader.catch(() => {});
-    }
-  } catch (_) {
-    // Babel-standalone path: dynamic import unavailable on classic scripts.
+    promise = Promise.resolve(entry.load());
+  } catch (error) {
+    promise = Promise.reject(error);
   }
+
+  const cachedPromise = promise
+    .then((module) => module || existingRouteModule(routeName) || {})
+    .catch((error) => {
+      routePromises.delete(routeName);
+      const fallback = existingRouteModule(routeName);
+      if (fallback) return fallback;
+      throw error;
+    });
+  routePromises.set(routeName, cachedPromise);
+  return cachedPromise;
 }
 
-export function prefetchAdjacentRoutes(currentRoute) {
-  if (!shouldPrefetch()) return;
-  const specifiers = ROUTE_PREFETCHES[currentRoute] || [];
-  if (specifiers.length === 0) return;
+function prefetchRoute(routeName, { intent = false } = {}) {
+  if (!intent && !shouldSpeculativelyPrefetch()) return Promise.resolve(null);
+  return loadRoute(routeName).catch(() => null);
+}
+
+function prefetchSequence(routeNames, index = 0) {
+  if (index >= routeNames.length || !shouldSpeculativelyPrefetch()) return;
+  const routeName = routeNames[index];
+  if (scheduledRoutes.has(routeName) || existingRouteModule(routeName) || routePromises.has(routeName)) {
+    prefetchSequence(routeNames, index + 1);
+    return;
+  }
+  scheduledRoutes.add(routeName);
   scheduleIdle(() => {
-    let i = 0;
-    for (const spec of specifiers) {
-      if (i >= MAX_PREFETCH_PER_TICK) break;
-      prefetchRoute(spec);
-      i += 1;
-    }
+    if (!shouldSpeculativelyPrefetch()) return;
+    prefetchRoute(routeName).finally(() => prefetchSequence(routeNames, index + 1));
   });
 }
 
-export function prefetchOnUserIntent(currentRoute) {
-  // Called from app.jsx when the user scrolls, focuses a nav link, or hovers
-  // over a clickable surface that points to a known target. We bias the
-  // specifier set toward the most likely target.
-  if (!shouldPrefetch()) return;
-  scheduleIdle(() => {
-    const specifiers = ROUTE_PREFETCHES[currentRoute] || [];
-    if (specifiers[0]) prefetchRoute(specifiers[0]);
+function prefetchAdjacentRoutes(currentRoute) {
+  if (!shouldSpeculativelyPrefetch()) return;
+  const routes = (ROUTE_PREFETCHES[currentRoute] || [])
+    .filter((routeName) => routeName !== currentRoute)
+    .slice(0, MAX_ADJACENT_PREFETCHES);
+  prefetchSequence(routes);
+}
+
+function prefetchOnUserIntent(routeName) {
+  return prefetchRoute(routeName, { intent: true });
+}
+
+function markRouteIntent(routeName) {
+  if (typeof performance === "undefined" || typeof performance.mark !== "function") return;
+  if (!routeName) return;
+  const now = typeof performance.now === "function" ? performance.now() : Date.now();
+  const pending = pendingRouteMarks.get(routeName);
+  if (pending && now - pending.startedAt < 1000) return;
+  if (pending) performance.clearMarks(pending.markName);
+  const markName = `mafiking-route-intent:${routeName}:${Date.now()}`;
+  performance.mark(markName);
+  pendingRouteMarks.set(routeName, { markName, startedAt: now });
+}
+
+function markRouteRendered(routeName) {
+  if (typeof window === "undefined" || typeof performance === "undefined") return;
+  const pending = pendingRouteMarks.get(routeName);
+  if (!pending || typeof performance.mark !== "function" || typeof performance.measure !== "function") return;
+  pendingRouteMarks.delete(routeName);
+  window.requestAnimationFrame(() => {
+    const startMark = pending.markName;
+    const endMark = `mafiking-route-rendered:${routeName}:${Date.now()}`;
+    const measureName = `mafiking-route-transition:${routeName}`;
+    performance.mark(endMark);
+    performance.measure(measureName, startMark, endMark);
+    const entries = performance.getEntriesByName(measureName);
+    const duration = entries.length ? entries[entries.length - 1].duration : null;
+    window.dispatchEvent(new CustomEvent("mafiking:route-timing", {
+      detail: { route: routeName, duration },
+    }));
+    performance.clearMarks(startMark);
+    performance.clearMarks(endMark);
   });
 }
 
-let hoverListenerAttached = false;
-export function attachHoverPrefetch() {
-  if (typeof document === "undefined" || hoverListenerAttached) return;
-  hoverListenerAttached = true;
-  let lastTargetSpec = null;
-  document.addEventListener("pointerover", (event) => {
-    if (!shouldPrefetch()) return;
-    const node = event.target instanceof Element ? event.target.closest("[data-route]") : null;
-    if (!node) return;
-    const route = node.getAttribute("data-route");
-    if (!route) return;
-    const spec = (ROUTE_PREFETCHES[route] || [])[0];
-    if (!spec || spec === lastTargetSpec) return;
-    lastTargetSpec = spec;
-    scheduleIdle(() => prefetchRoute(spec));
+let intentListenerAttached = false;
+function attachIntentPrefetch() {
+  if (typeof document === "undefined" || intentListenerAttached) return;
+  intentListenerAttached = true;
+
+  const routeNodeFromEvent = (event) => {
+    return event.target instanceof Element ? event.target.closest("[data-route]") : null;
+  };
+
+  document.addEventListener("pointerdown", (event) => {
+    const node = routeNodeFromEvent(event);
+    if (!node || node.getAttribute("aria-current") === "page") return;
+    const routeName = node.getAttribute("data-route");
+    markRouteIntent(routeName);
+    prefetchRoute(routeName, { intent: true });
   }, { passive: true });
+
+  const speculativeIntent = (event) => {
+    const node = routeNodeFromEvent(event);
+    if (!node || node.getAttribute("aria-current") === "page") return;
+    const routeName = node.getAttribute("data-route");
+    if (routeName) prefetchRoute(routeName);
+  };
+  document.addEventListener("pointerover", speculativeIntent, { passive: true });
+  document.addEventListener("focusin", speculativeIntent, { passive: true });
 }
+
+// Kept as an alias for older app bundles that still call this name.
+const attachHoverPrefetch = attachIntentPrefetch;
 
 if (typeof window !== "undefined") {
   window.MafikingRoutePrefetch = {
+    loadRoute,
+    prefetchRoute,
     prefetchAdjacentRoutes,
     prefetchOnUserIntent,
+    markRouteIntent,
+    markRouteRendered,
+    attachIntentPrefetch,
     attachHoverPrefetch,
   };
 }

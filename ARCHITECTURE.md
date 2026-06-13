@@ -140,6 +140,7 @@ The frontend is not module-based. Components are defined in browser global scope
 | `src/backend-api.jsx` | Same-origin `fetch` helper. |
 | `src/clerk-auth.jsx` | Static-Babel Clerk bridge: loads Clerk browser scripts, opens sign-in/sign-up, and syncs Clerk users to local sessions. |
 | `src/onboarding.jsx` | Mandatory profile completion modal for non-admin users whose local profile fields are incomplete. |
+| `src/route-prefetch.js` | Shared Vite route-loader registry, adaptive idle prefetch, mobile intent prefetch, and route timing marks. |
 | `src/lobby.jsx` | Public marketing landing plus login/sign-up screen. |
 | `src/belajar.jsx` | Free Try Out tab, static chapter cards, animated mapel selector, chapter-to-practice navigation. |
 | `src/practice.jsx` | Practice route, multiple-choice/canvas mode state, question-source mapping, correction submit. |
@@ -170,6 +171,13 @@ admin
 profile
 practice
 ```
+
+Vite route chunks are loaded through `window.MafikingRoutePrefetch.loadRoute()`.
+The loader caches each import Promise so idle or pointer-intent prefetch is
+reused by navigation. Speculative prefetch is disabled for Save-Data and 2G,
+while a direct `pointerdown` still starts the exact route the user selected.
+The Babel-standalone path resolves the same contract from existing `window.*`
+components without importing raw JSX.
 
 For practice navigation, `setRoute` can receive an object:
 
@@ -216,7 +224,7 @@ Payment status URLs preserve their order query:
 - The landing page uses local reveal/pop animations in `src/lobby.jsx` and `src/styles.css`; it does not rely on a bundled Framer Motion runtime in this static-Babel app.
 - The demo video section intentionally has no grid background after the latest landing UI correction.
 - Login/sign-up screens expose the local email/password flow and Clerk Google auth. New local email/password accounts must verify their email via a single-use verification link before login is allowed. Clerk browser scripts are loaded dynamically by `src/clerk-auth.jsx`.
-- After auth succeeds, `GET /api/auth/me` marks incomplete non-admin profiles with `profile_needs_completion`; `src/app.jsx` then renders the fixed, non-dismissible `ProfileOnboardingModal`.
+- After auth succeeds, `GET /api/auth/me` marks incomplete non-admin profiles with `profile_needs_completion`; `src/app.jsx` then renders the fixed, non-dismissible `ProfileOnboardingModal`. If a registered non-admin already completed onboarding but has no `phone_number`, `src/app.jsx` can render a one-time dismissible `PhoneNumberPromptModal`; dismissal is browser-local, while saving uses `POST /api/auth/phone-number`.
 - The top app nav uses `Beranda` for `belajar`, `Misi Harian` for `misi`, `Paket` for `tryout`, and `Peringkat` for `leaderboard`; there is no separate `Belajar` nav link.
 - The app route shell uses a small vertical fade/slide transition. `src/shared.jsx` measures nav and segmented-control buttons so the active oval moves instead of teleporting. `src/belajar.jsx` separately measures the active mapel tab so its underline slides between `Try Out`, `Matematika`, `Fisika`, and `Kimia`; the `Try Out` underline uses the ink accent.
 - Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and locked access gates use shared `.app-page-bg` variants from `src/styles.css` for the soft grid/glow background while keeping page-specific content/layout components unchanged.
@@ -324,7 +332,7 @@ server.js
 | Body limits | `server.js` | JSON limit `12mb`; URL encoded limit `100kb`. |
 | Sessions | `server.js` | `express-session`, 7-day cookie, `sameSite: strict`. |
 | Clerk auth | `server.js` + `middleware/clerk-auth.js` + `src/clerk-auth.jsx` | `@clerk/express` verifies Clerk sessions; frontend sends Bearer token when Clerk is signed in, then middleware maps Clerk users to local SQLite users. |
-| Email verification | `routes/auth.js` + `lib/email-verification.js` + `lib/mailer.js` | Local email/password signups store only a SHA-256 verification-token hash, send a Gmail SMTP verification link, and hard-block login until `users.email_verified_at` is set. |
+| Email verification | `routes/auth.js` + `lib/email-verification.js` + `lib/mailer.js` | Local email/password signups store only a SHA-256 verification-token hash, send a Gmail SMTP verification link, and hard-block login until `users.email_verified_at` is set. When `SMTP_HOST=smtp.gmail.com`, the mailer forces `MAIL_FROM` to match `SMTP_USER` so Gmail does not send spoof-like From headers. |
 | Rate limits | `server.js` | Login, register, and correction route limits. |
 | Auth guard | `middleware/auth.js` | Requires either `req.userId` from Clerk or `req.session.userId`. |
 | Admin guard | `middleware/admin.js` | Requires admin role from either Clerk-mapped request state or session. |
@@ -340,11 +348,12 @@ server.js
 - `POST /api/auth/logout`
 - `POST /api/auth/clerk-onboard`
 - `POST /api/auth/profile-onboarding`
+- `POST /api/auth/phone-number`
 - `GET /api/auth/me`
 
 Uses bcrypt for passwords, XSS sanitization for registration fields, route-level login lockout, and sessions for auth state.
 
-Clerk-signed requests are synced before this route runs. `GET /api/auth/me` still returns the local SQLite user because the rest of the app keys progress, XP, role, and payments by local `users.id`. `POST /api/auth/clerk-onboard` remains for legacy display-name completion and guest merge. New first-login profile completion uses `POST /api/auth/profile-onboarding`, which validates phone, semester, faculty/major, and subject priorities before marking `users.onboarding_completed_at`.
+Clerk-signed requests are synced before this route runs. `GET /api/auth/me` still returns the local SQLite user because the rest of the app keys progress, XP, role, and payments by local `users.id`. `POST /api/auth/clerk-onboard` remains for legacy display-name completion and guest merge. New first-login profile completion uses `POST /api/auth/profile-onboarding`, which validates optional phone, semester, faculty/major, and subject priorities before marking `users.onboarding_completed_at`. `POST /api/auth/phone-number` updates only `users.phone_number` for the optional phone prompt and bimbel checkout path.
 
 #### `routes/webhooks.js`
 
@@ -681,6 +690,8 @@ Important: `npm run build` validates the built Vite path, but it does not valida
 - There is no versioned database migration system yet.
 - Static Belajar chapter cards outnumber imported backend question data.
 - Try Out content is portable through `db/tryout-bank.json`; SQLite runtime files remain ignored and are not the source of truth for deployment.
+- The profile UI normalizes avatar uploads to 256x256 WebP (with PNG fallback) before sending them to `profile-media/avatars/`. This runtime directory is preserved by `deploy.sh` and is not replaced by application source deploys.
+- `users.avatar_url` and `profile-media/` form one runtime-data unit. Deploy snapshots and counts avatar files before/after sync, `ops/backup.sh` archives the database together with profile media, and `scripts/reconcile-profile-media.js` can report or clear only local avatar references whose files are missing.
 - Practice is multiple-choice-first; canvas correction is still available but no longer the default entry mode.
 - Auto-guest users can accumulate during browser/API testing.
 - Payment route uses sandbox URL by default in code.

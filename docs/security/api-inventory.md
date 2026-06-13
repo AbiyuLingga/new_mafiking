@@ -80,6 +80,9 @@ gap analysis, and the CSRF / CORS coverage tests.
 | POST | `/api/auth/logout` | session | ✓ | user-scoped | `req.session.destroy`. |
 | POST | `/api/auth/clerk-onboard` | session | ✓ | user-scoped | Requires Clerk user. Merges guest via `mergeGuestIntoUser` if `guest_user_id !== userId`. |
 | POST | `/api/auth/profile-onboarding` | session | ✓ | user-scoped | Strict validation (semester ∈ {1,2}, faculty in allowlist, major in faculty→major map, mapel in priority set, phone regex, referral allowlist). |
+| POST | `/api/auth/profile` | session | ✓ | user-scoped | Updates only the viewer's display name and phone number. Phone remains optional. |
+| POST | `/api/auth/avatar` | session | ✓ | user-scoped | Uploads only the viewer's profile photo. Accepts JPG/PNG/WEBP/GIF up to 2MB and stores under `/profile-media/avatars/`. |
+| POST | `/api/auth/phone-number` | session | ✓ | user-scoped | Updates only the viewer's WhatsApp/phone number. Used by the optional one-time phone prompt and required bimbel checkout path. |
 | GET | `/api/auth/me` | session | n/a | user-scoped | Returns own user only. |
 
 ### Quiz (routes/quiz.js)
@@ -118,6 +121,7 @@ filters by `req.session.userId`.
 | GET | `/api/progress/leaderboard` | session | n/a | none | Cross-user leaderboard (intended). |
 | GET | `/api/progress/leaderboard/weekly` | session | n/a | none | Cross-user leaderboard. |
 | GET | `/api/progress/leaderboard/tryout` | session | n/a | none | Cross-user tryout leaderboard. |
+| GET | `/api/progress/leaderboard/tryout-options` | session | n/a | none | Lists tryouts that already have non-admin, non-guest attempts for leaderboard filters. |
 | GET | `/api/progress/tryout-attempts/latest` | registered | n/a | user-scoped | Reads own latest. |
 | POST | `/api/progress/tryout-attempts` | registered | ✓ | user-scoped | Saves own attempt. Uses `verifyTryoutSessionToken` to bind to a session. |
 

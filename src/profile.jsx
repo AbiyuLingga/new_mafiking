@@ -1,11 +1,12 @@
 // Profile/report route. Uses the original Mafiking visual language.
 
-const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
+const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null, onRequestSwitchAccount = null, onUserUpdated = null }) => {
   const { useState, useEffect } = React;
   const [loading, setLoading] = useState(true);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [error, setError] = useState("");
   const [user, setUser] = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
   const [stats, setStats] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -210,6 +211,47 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
     return username.includes("@") ? username : "";
   }
 
+  function getProfilePhone() {
+    const phone = String(user?.phone_number || "").trim();
+    return phone || "+62...";
+  }
+
+  function getProfileAvatarUrl() {
+    return String(user?.avatar_url || "").trim();
+  }
+
+  function getProfileMeta() {
+    const parts = [];
+    if (user?.semester) parts.push(`Semester ${user.semester}`);
+    if (user?.fakultas) parts.push(user.fakultas);
+    if (user?.jurusan) parts.push(user.jurusan);
+    return parts.join(" · ");
+  }
+
+  async function saveProfileDraft(draft) {
+    const updated = await MafikingAPI.post("/api/auth/profile", draft);
+    setUser(updated);
+    if (typeof onUserUpdated === "function") onUserUpdated(updated);
+    setEditOpen(false);
+  }
+
+  async function uploadProfileAvatar(file) {
+    if (!file) return null;
+    const optimizedFile = await compressProfileAvatar(file);
+    const body = new FormData();
+    body.append("avatar", optimizedFile);
+    const response = await fetch("/api/auth/avatar", {
+      method: "POST",
+      credentials: "same-origin",
+      body,
+    });
+    const updated = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(updated.error || "Gagal upload foto profil.");
+    setUser(updated);
+    if (typeof onUserUpdated === "function") onUserUpdated(updated);
+    return updated;
+  }
+
   function getProfileInitial() {
     const name = getProfileDisplayName();
     const parts = name.split(/\s+/).filter(Boolean);
@@ -232,20 +274,57 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
         <div className="max-w-6xl mx-auto px-6 md:px-8">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b hairline pb-6">
             <div className="flex items-center gap-4 min-w-0">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-700 text-3xl font-semibold text-white">
-                {getProfileInitial()}
-              </div>
+              <button
+                className="group relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-700 text-3xl font-semibold text-white"
+                onClick={() => setEditOpen(true)}
+                type="button"
+                aria-label="Edit foto profil"
+              >
+                {getProfileAvatarUrl() ? (
+                  <React.Fragment>
+                    <img
+                      src={getProfileAvatarUrl()}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      onError={(event) => {
+                        event.currentTarget.classList.add("hidden");
+                        event.currentTarget.nextElementSibling?.classList.remove("hidden");
+                      }}
+                    />
+                    <span className="hidden">{getProfileInitial()}</span>
+                  </React.Fragment>
+                ) : (
+                  getProfileInitial()
+                )}
+                <span className="absolute inset-x-0 bottom-0 bg-ink/75 py-0.5 text-[9px] font-black uppercase tracking-wider text-white opacity-0 transition group-hover:opacity-100">
+                  Edit
+                </span>
+              </button>
               <div className="min-w-0">
                 <h1 className="truncate text-lg font-bold leading-tight text-ink">
                   {getProfileDisplayName()}
                 </h1>
+                <p className={`mt-1 truncate text-sm font-semibold ${user?.phone_number ? "text-ink/60" : "text-ink/35"}`}>
+                  {getProfilePhone()}
+                </p>
                 {getProfileEmail() ? (
                   <p className="mt-1 truncate text-sm font-medium text-ink/55">{getProfileEmail()}</p>
                 ) : null}
-                <p className="mt-1 text-xs font-medium text-ink/35">Klik foto untuk menggantinya</p>
+                {getProfileMeta() ? (
+                  <p className="mt-1 truncate text-xs font-bold uppercase tracking-widest text-ink/35">{getProfileMeta()}</p>
+                ) : null}
               </div>
             </div>
             <div className="flex gap-2">
+              <button
+                onClick={() => setEditOpen(true)}
+                className="btn-ink !h-11 !px-4 text-sm inline-flex items-center justify-center gap-2"
+                type="button"
+              >
+                <Icon.User className="w-4 h-4" />
+                <span className="hidden sm:inline">Edit Profil</span>
+                <span className="sm:hidden">Edit</span>
+              </button>
               <button
                 onClick={() => setRoute("invoices")}
                 className="btn-ghost !h-11 !px-4 text-sm inline-flex items-center justify-center gap-2"
@@ -390,22 +469,53 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                 </div>
               </div>
             </div>
+          ) : !hasCorrectionHistory ? (
+            <div className="grid gap-6">
+              <section
+                className="relative overflow-hidden rounded-[var(--card-radius)] border border-ink/10 bg-white p-6 shadow-sm md:p-8"
+                aria-labelledby="profile-empty-canvas-title"
+              >
+                <div
+                  className="absolute inset-x-0 top-0 h-1"
+                  style={{ background: "linear-gradient(90deg, var(--yel), rgba(11, 19, 38, 0.16))" }}
+                />
+                <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-center">
+                  <div className="max-w-2xl">
+                    <p className="mb-3 text-[10px] font-black uppercase tracking-[0.22em] text-ink/45">
+                      Evaluasi Belajar
+                    </p>
+                    <h2 id="profile-empty-canvas-title" className="font-display text-2xl font-black leading-tight tracking-[-0.015em] text-ink md:text-3xl">
+                      Mulai Canvas untuk dapat evaluasi belajar
+                    </h2>
+                    <p className="mt-3 max-w-xl text-sm font-medium leading-relaxed text-ink/60 md:text-base">
+                      Kerjakan 1 soal. AI Mafiking membaca langkah caramu lalu memberi kelebihan, kelemahan, dan latihan untuk kamu.
+                    </p>
+                  </div>
+                  <button
+                    onClick={openCanvasWeaknessPractice}
+                    className="btn-yel inline-flex w-full items-center justify-center gap-2 !px-6 !py-3 text-sm md:w-auto"
+                    type="button"
+                  >
+                    Mulai Canvas <Icon.Arrow className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </section>
+
+              <section className="rounded-[var(--card-radius)] border border-ink/10 bg-white px-5 py-4 shadow-sm md:px-6">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <p className="text-sm font-black text-ink">Yang terbuka setelah 1 Canvas</p>
+                  <div className="flex flex-wrap gap-2">
+                    {["Kekuatan", "Perlu Diperbaiki", "Latihan Berikutnya"].map((label) => (
+                      <span key={label} className="rounded-full border border-ink/10 bg-ink/[0.03] px-3 py-1.5 text-xs font-bold text-ink/65">
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            </div>
           ) : (
             <div className="grid gap-8">
-
-              <button
-                onClick={openCanvasWeaknessPractice}
-                type="button"
-                className="group flex w-full items-center justify-between gap-4 rounded-[var(--card-radius)] border border-ink/10 bg-white px-5 py-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md md:px-6"
-              >
-                <span className="text-sm font-bold leading-relaxed text-ink md:text-base">
-                  Kerjakan <span className="border-b-2 border-yel pb-0.5">Canvas</span> untuk Mendapat Analisis Kelemahan &amp; Dapatkan Rekomendasi Latihan Soal
-                </span>
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink text-yel transition-transform group-hover:translate-x-1">
-                  <Icon.Arrow className="w-4 h-4" />
-                </span>
-              </button>
-
               {/* AI Evaluation Box */}
               <div
                 className="relative overflow-hidden rounded-[var(--card-radius)] p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6"
@@ -426,7 +536,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
 
                 <div className="relative z-10 flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] uppercase tracking-widest font-semibold text-white/50">AI Analysis</span>
+                    <span className="text-[10px] uppercase tracking-widest font-semibold text-white/50">Analisis</span>
                     {summaryLoading ? (
                       <span className="flex items-center gap-1.5 text-[10px] font-semibold text-amber-300">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
@@ -482,7 +592,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="card p-6">
                   <div className="flex items-center gap-2.5 mb-4">
-                    <h3 className="font-display font-bold text-lg text-ink">Strength</h3>
+                    <h3 className="font-display font-bold text-lg text-ink">Kekuatan</h3>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {summaryLoading ? (
@@ -503,7 +613,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
 
                 <div className="card p-6">
                   <div className="flex items-center gap-2.5 mb-4">
-                    <h3 className="font-display font-bold text-lg text-ink">Weakness</h3>
+                    <h3 className="font-display font-bold text-lg text-ink">Perlu Diperbaiki</h3>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {summaryLoading ? (
@@ -526,7 +636,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
               {/* Recommended Questions */}
               <div className="card p-6 w-full max-w-full overflow-hidden">
                 <div className="flex items-center gap-2.5 mb-2">
-                  <h3 className="font-display font-bold text-xl tracking-[-0.015em]">Rekomendasi Soal Latihan</h3>
+                  <h3 className="font-display font-bold text-xl tracking-[-0.015em]">Latihan Berikutnya</h3>
                   {summaryLoading && (
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
                       className="ml-1 text-amber-500" style={{ animation: "spin 1s linear infinite", flexShrink: 0 }}>
@@ -564,7 +674,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                               ) : null}
                               {item.targetSkill ? (
                                 <p className="mb-1 text-xs font-semibold text-ink/50">
-                                  Weakness: {item.targetSkill}
+                                  Perlu diperbaiki: {item.targetSkill}
                                 </p>
                               ) : null}
                               <div
@@ -582,7 +692,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
                                 setRoute({
                                   route: "practice",
                                   practice: {
-                                    title: item.targetSkill ? `Weakness: ${item.targetSkill}` : "Latihan AI",
+                                    title: item.targetSkill ? `Perlu Diperbaiki: ${item.targetSkill}` : "Latihan AI",
                                     mapel: item.mapel || "Matematika",
                                     problems: [{
                                       id: item.ref,
@@ -618,7 +728,7 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
               {/* Recent Canvas History */}
               <div className="card w-full max-w-full overflow-hidden">
                 <div className="px-6 py-4 border-b hairline flex items-center justify-between gap-2">
-                  <h3 className="font-display font-bold text-lg">History Kesalahan Canvas</h3>
+                  <h3 className="font-display font-bold text-lg">Riwayat Canvas</h3>
                   <span className="text-xs font-semibold text-ink/45 shrink-0">{attempts.length} pengerjaan terakhir</span>
                 </div>
                 {attempts.length ? (
@@ -677,30 +787,253 @@ const Profile = ({ setRoute, isAdmin = false, onRequestLogout = null }) => {
         </div>
       </section>
 
-      {typeof onRequestLogout === "function" && (
+      {(typeof onRequestLogout === "function" || typeof onRequestSwitchAccount === "function") && (
         <div className="fixed inset-x-0 bottom-0 z-40 pointer-events-none px-4 pb-4 md:px-6 md:pb-6">
           <div className="mx-auto flex max-w-6xl items-end justify-between gap-4">
-            <button
-              onClick={onRequestLogout}
-              className="pointer-events-auto inline-flex items-center gap-2 rounded-full border hairline bg-white/95 px-4 py-3 text-sm font-bold text-ink shadow-lg shadow-ink/10 backdrop-blur transition hover:bg-white"
-              type="button"
-            >
-              <Icon.SwitchAccount className="w-4 h-4" />
-              Switch account
-            </button>
-            <button
-              onClick={onRequestLogout}
-              className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-ink px-4 py-3 text-sm font-bold text-white shadow-lg shadow-ink/20 transition hover:bg-ink/90"
-              type="button"
-            >
-              Logout
-              <Icon.LogOut className="w-4 h-4" />
-            </button>
+            {typeof onRequestSwitchAccount === "function" && (
+              <button
+                onClick={onRequestSwitchAccount}
+                className="pointer-events-auto inline-flex items-center gap-2 rounded-full border hairline bg-white/95 px-4 py-3 text-sm font-bold text-ink shadow-lg shadow-ink/10 backdrop-blur transition hover:bg-white"
+                type="button"
+              >
+                <Icon.SwitchAccount className="w-4 h-4" />
+                Switch account
+              </button>
+            )}
+            {typeof onRequestLogout === "function" && (
+              <button
+                onClick={onRequestLogout}
+                className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-ink px-4 py-3 text-sm font-bold text-white shadow-lg shadow-ink/20 transition hover:bg-ink/90"
+                type="button"
+              >
+                Logout
+                <Icon.LogOut className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       )}
+
+      {editOpen && user && (
+        <ProfileEditModal
+          user={user}
+          onClose={() => setEditOpen(false)}
+          onSave={saveProfileDraft}
+          onAvatarUpload={uploadProfileAvatar}
+        />
+      )}
     </div>
   );
+};
+
+async function compressProfileAvatar(file) {
+  const size = 256;
+  const source = await loadProfileAvatarSource(file);
+  const sourceWidth = source.naturalWidth || source.width;
+  const sourceHeight = source.naturalHeight || source.height;
+  if (!sourceWidth || !sourceHeight) throw new Error("Foto profil tidak dapat dibaca.");
+
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Browser tidak dapat memproses foto profil.");
+
+  const scale = Math.max(size / sourceWidth, size / sourceHeight);
+  const drawWidth = sourceWidth * scale;
+  const drawHeight = sourceHeight * scale;
+  context.drawImage(
+    source,
+    (size - drawWidth) / 2,
+    (size - drawHeight) / 2,
+    drawWidth,
+    drawHeight
+  );
+  if (typeof source.close === "function") source.close();
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", 0.7));
+  if (!blob) throw new Error("Foto profil gagal diperkecil.");
+  const extension = blob.type === "image/webp" ? "webp" : "png";
+  return new File([blob], `profile-avatar.${extension}`, {
+    type: blob.type || "image/png",
+    lastModified: Date.now(),
+  });
+}
+
+async function loadProfileAvatarSource(file) {
+  if (typeof createImageBitmap === "function") {
+    try {
+      return await createImageBitmap(file, { imageOrientation: "from-image" });
+    } catch (_) {
+      // Fall through to the broadly supported Image element path.
+    }
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    return await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("Foto profil tidak dapat dibaca."));
+      image.src = objectUrl;
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+const ProfileEditModal = ({ user, onClose, onSave, onAvatarUpload }) => {
+  const [draft, setDraft] = React.useState({
+    display_name: user?.display_name || "",
+    phone_number: user?.phone_number || "",
+  });
+  const [error, setError] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [avatarUploading, setAvatarUploading] = React.useState(false);
+
+  function patchDraft(patch) {
+    setError("");
+    setDraft((current) => ({ ...current, ...patch }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    const displayName = draft.display_name.trim();
+    const phoneNumber = draft.phone_number.trim();
+
+    if (!displayName) {
+      setError("Nama lengkap wajib diisi.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    try {
+      await onSave({
+        display_name: displayName,
+        phone_number: phoneNumber,
+      });
+    } catch (caught) {
+      setError(caught.message || "Gagal menyimpan profil.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function uploadAvatar(file) {
+    if (!file || typeof onAvatarUpload !== "function") return;
+    setAvatarUploading(true);
+    setError("");
+    try {
+      await onAvatarUpload(file);
+    } catch (caught) {
+      setError(caught.message || "Gagal upload foto profil.");
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
+
+  const modal = (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-ink/45 px-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <form className="w-full max-w-lg rounded-[var(--card-radius)] border border-white/70 bg-white p-5 shadow-2xl shadow-ink/20 md:p-6" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="profile-edit-title">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <p className="kicker mb-1">Profil</p>
+            <h2 id="profile-edit-title" className="font-display text-2xl font-black tracking-[-0.03em] text-ink">Edit profil</h2>
+          </div>
+          <button className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-ink/10 text-ink/55 transition hover:bg-ink/5 hover:text-ink" onClick={onClose} type="button" aria-label="Tutup">
+            <Icon.X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="grid gap-4">
+          <div className="flex items-center gap-4 rounded-2xl border border-ink/10 bg-ink/[0.02] p-3">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-700 text-2xl font-bold text-white">
+              {user?.avatar_url ? (
+                <React.Fragment>
+                  <img
+                    src={user.avatar_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    onError={(event) => {
+                      event.currentTarget.classList.add("hidden");
+                      event.currentTarget.nextElementSibling?.classList.remove("hidden");
+                    }}
+                  />
+                  <span className="hidden">
+                    {String(draft.display_name || user?.display_name || "M").trim().charAt(0).toUpperCase() || "M"}
+                  </span>
+                </React.Fragment>
+              ) : (
+                String(draft.display_name || user?.display_name || "M").trim().charAt(0).toUpperCase() || "M"
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-black text-ink">Foto profil</div>
+              <div className="mt-0.5 text-xs font-semibold text-ink/45">JPG, PNG, WEBP, atau GIF. Otomatis diperkecil ke 256x256.</div>
+            </div>
+            <label className={`shrink-0 rounded-full px-3 py-2 text-xs font-black transition ${
+              avatarUploading
+                ? "bg-slate-100 text-slate-400"
+                : "cursor-pointer bg-ink text-white hover:bg-ink/90"
+            }`}>
+              {avatarUploading ? "Upload..." : "Ganti"}
+              <input
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                disabled={avatarUploading}
+                onChange={(event) => uploadAvatar(event.target.files && event.target.files[0])}
+                type="file"
+              />
+            </label>
+          </div>
+
+          <label className="grid gap-1.5">
+            <span className="text-xs font-black uppercase tracking-widest text-ink/45">Nama</span>
+            <input
+              className="h-11 rounded-xl border border-ink/10 bg-white px-3 text-sm font-semibold text-ink outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100"
+              value={draft.display_name}
+              onChange={(event) => patchDraft({ display_name: event.target.value })}
+              placeholder="Nama lengkap"
+              autoFocus
+            />
+          </label>
+
+          <label className="grid gap-1.5">
+            <span className="text-xs font-black uppercase tracking-widest text-ink/45">No. telepon</span>
+            <input
+              className="h-11 rounded-xl border border-ink/10 bg-white px-3 text-sm font-semibold text-ink outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100"
+              value={draft.phone_number}
+              onChange={(event) => patchDraft({ phone_number: event.target.value })}
+              placeholder="+62..."
+              inputMode="tel"
+            />
+          </label>
+        </div>
+
+        {error && (
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+            {error}
+          </div>
+        )}
+
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button className="btn-ghost justify-center !py-3 text-sm" onClick={onClose} type="button">
+            Batal
+          </button>
+          <button className="btn-ink justify-center !py-3 text-sm" disabled={saving} type="submit">
+            {saving ? "Menyimpan..." : "Simpan"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+
+  if (typeof ReactDOM !== "undefined" && ReactDOM.createPortal && typeof document !== "undefined" && document.body) {
+    return ReactDOM.createPortal(modal, document.body);
+  }
+
+  return modal;
 };
 
 function collectTags(attempts, key) {

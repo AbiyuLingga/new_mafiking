@@ -66,6 +66,31 @@ const AdminChunkFallback = ({ status }) => (
   </section>
 );
 
+const RouteChunkFallback = () => (
+  <section className="route-loading-shell" aria-label="Memuat halaman" aria-live="polite">
+    <div className="route-loading-kicker" />
+    <div className="route-loading-title" />
+    <div className="route-loading-grid">
+      <div />
+      <div />
+      <div />
+    </div>
+  </section>
+);
+
+function loadAppRoute(routeName, globalName, fallbackLoader) {
+  if (window[globalName]) return Promise.resolve({ [globalName]: window[globalName] });
+  const routePrefetch = window.MafikingRoutePrefetch;
+  if (routePrefetch && typeof routePrefetch.loadRoute === "function") {
+    return routePrefetch.loadRoute(routeName);
+  }
+  try {
+    return Promise.resolve(fallbackLoader());
+  } catch (error) {
+    return Promise.reject(error);
+  }
+}
+
 const AUTH_BACK_ROUTE_STORAGE_KEY = "mafiking:last-non-auth-route";
 const AUTH_BACK_PATH_STORAGE_KEY = "mafiking:last-non-auth-path";
 const CLERK_OAUTH_CALLBACK_PATH = "/sso-callback";
@@ -124,6 +149,7 @@ const App = () => {
   const [authState, setAuthState] = React.useState(() => initialLocationRef.current.authState || null);
   const [pendingClerkUser, setPendingClerkUser] = React.useState(null);
   const [authReady, setAuthReady] = React.useState(false);
+  const [phonePromptDismissed, setPhonePromptDismissed] = React.useState(false);
   const [authCallbackLoading, setAuthCallbackLoading] = React.useState(() => {
     return isClerkOAuthCallbackPath();
   });
@@ -348,9 +374,17 @@ const App = () => {
     window.MafikingAppState.isLoggedIn = isLoggedIn;
   }, [route, belajarSection, authMode, publicLanding, isLoggedIn]);
 
+  React.useEffect(() => {
+    if (!currentUser || !window.hasDismissedPhonePrompt) {
+      setPhonePromptDismissed(false);
+      return;
+    }
+    setPhonePromptDismissed(Boolean(window.hasDismissedPhonePrompt(currentUser)));
+  }, [currentUser?.id]);
+
   // Phase 2.2: idle-time prefetch of likely-next route chunks so the first
   // click feels instant. `prefetchAdjacentRoutes` is a no-op on Save-Data or
-  // 2G connections, and caps at 2 prefetches per page.
+  // 2G connections, and caps at 3 sequential prefetches per page.
   React.useEffect(() => {
     if (typeof window === "undefined") return;
     if (window.MafikingRoutePrefetch && typeof window.MafikingRoutePrefetch.prefetchAdjacentRoutes === "function") {
@@ -358,13 +392,13 @@ const App = () => {
     }
   }, [route]);
 
-  // Phase 2.2: hover-triggered prefetch. When the user moves the pointer
-  // over any element with `data-route="<x>"`, pre-warm that route's chunk.
-  // This is much more aggressive than idle-time and catches cases like
-  // hover-then-click delays. The `pointerover` listener is attached once.
+  // Warm a target route on pointer, focus, or touch intent. On touch devices
+  // pointerdown starts the chunk request just before click changes the route.
   React.useEffect(() => {
     if (typeof window === "undefined") return;
-    if (window.MafikingRoutePrefetch && typeof window.MafikingRoutePrefetch.attachHoverPrefetch === "function") {
+    if (window.MafikingRoutePrefetch && typeof window.MafikingRoutePrefetch.attachIntentPrefetch === "function") {
+      window.MafikingRoutePrefetch.attachIntentPrefetch();
+    } else if (window.MafikingRoutePrefetch && typeof window.MafikingRoutePrefetch.attachHoverPrefetch === "function") {
       window.MafikingRoutePrefetch.attachHoverPrefetch();
     }
   }, []);
@@ -413,6 +447,24 @@ const App = () => {
     });
   }, [requestConfirm]);
 
+  const switchAccount = React.useCallback(async () => {
+    try {
+      await MafikingAPI.post("/api/auth/logout", {});
+    } catch (_) {}
+    if (window.MafikingClerk && typeof window.MafikingClerk.signOut === "function") {
+      await window.MafikingClerk.signOut();
+    }
+    setCurrentUser(null);
+    setActivePackages([]);
+    setPendingClerkUser(null);
+    navigate({
+      route: "lobby",
+      authMode: "login",
+      authRedirect: { route: "belajar", section: "Try Out" },
+      authBackRoute: { route: "belajar", section: "Try Out" },
+    });
+  }, [navigate]);
+
   async function runConfirmedAction() {
     const action = confirmAction;
     setConfirmAction(null);
@@ -421,7 +473,7 @@ const App = () => {
     }
   }
 
-  const handleAuthSuccess = React.useCallback((user, redirect) => {
+  const handleAuthSuccess = React.useCallback((user) => {
     setAuthReady(true);
     setCurrentUser(user);
     setPendingClerkUser(null);
@@ -430,10 +482,6 @@ const App = () => {
       .catch(() => setActivePackages([]));
     setAuthMode(null);
     setAuthRedirect(null);
-    if (redirect) {
-      navigate(redirect);
-      return;
-    }
     navigate({ route: "belajar", section: "Try Out" });
   }, [navigate]);
 
@@ -573,7 +621,7 @@ const App = () => {
     }
     let cancelled = false;
     try {
-      const loader = import("./lobby.jsx");
+      const loader = loadAppRoute("lobby", "Lobby", () => import("./lobby.jsx"));
       if (loader && typeof loader.then === "function") {
         loader
           .then((m) => {
@@ -593,16 +641,15 @@ const App = () => {
     return () => { cancelled = true; };
   }, [lobbyComp, route]);
 
-  // Phase 2.2: lazy-load every other route on first visit. Each route file
-  // is dynamic-imported as its own Vite chunk. The Babel-standalone path
-  // already loaded every src/*.jsx as a classic <script> and exposed
-  // `window.<Name>`, so the fallback covers the legacy runtime.
+  // Phase 2.2: lazy-load every other route on first visit. Route loads share
+  // the promise cache used by route-prefetch.js, so a prefetched chunk is
+  // reused instead of starting a second import when navigation begins.
   React.useEffect(() => {
     if (route !== "belajar" || belajarComp) return undefined;
     if (window.Belajar) { setBelajarComp(() => window.Belajar); return undefined; }
     let cancelled = false;
     try {
-      const p = import("./belajar.jsx");
+      const p = loadAppRoute("belajar", "Belajar", () => import("./belajar.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -614,11 +661,11 @@ const App = () => {
   }, [belajarComp, route]);
 
   React.useEffect(() => {
-    if (route !== "misi" || misiComp) return undefined;
+    if (route !== "misi" || misiComp || !hasMissionAccess) return undefined;
     if (window.Misi) { setMisiComp(() => window.Misi); return undefined; }
     let cancelled = false;
     try {
-      const p = import("./misi.jsx");
+      const p = loadAppRoute("misi", "Misi", () => import("./misi.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -627,14 +674,14 @@ const App = () => {
       } else if (window.Misi) setMisiComp(() => window.Misi);
     } catch (_) { if (window.Misi) setMisiComp(() => window.Misi); }
     return () => { cancelled = true; };
-  }, [misiComp, route]);
+  }, [hasMissionAccess, misiComp, route]);
 
   React.useEffect(() => {
     if (route !== "tryout" || tryoutComp) return undefined;
     if (window.Tryout) { setTryoutComp(() => window.Tryout); return undefined; }
     let cancelled = false;
     try {
-      const p = import("./tryout.jsx");
+      const p = loadAppRoute("tryout", "Tryout", () => import("./tryout.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -650,7 +697,7 @@ const App = () => {
     if (window.Practice) { setPracticeComp(() => window.Practice); return undefined; }
     let cancelled = false;
     try {
-      const p = import("./practice.jsx");
+      const p = loadAppRoute("practice", "Practice", () => import("./practice.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -666,7 +713,7 @@ const App = () => {
     if (window.Payment) { setPaymentComp(() => window.Payment); return undefined; }
     let cancelled = false;
     try {
-      const p = import("./payment.jsx");
+      const p = loadAppRoute("payment", "Payment", () => import("./payment.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -682,7 +729,7 @@ const App = () => {
     if (window.Profile) { setProfileComp(() => window.Profile); return undefined; }
     let cancelled = false;
     try {
-      const p = import("./profile.jsx");
+      const p = loadAppRoute("profile", "Profile", () => import("./profile.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -698,7 +745,7 @@ const App = () => {
     if (window.Leaderboard) { setLeaderboardComp(() => window.Leaderboard); return undefined; }
     let cancelled = false;
     try {
-      const p = import("./leaderboard.jsx");
+      const p = loadAppRoute("leaderboard", "Leaderboard", () => import("./leaderboard.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -714,7 +761,7 @@ const App = () => {
     if (window.Invoices) { setInvoicesComp(() => window.Invoices); return undefined; }
     let cancelled = false;
     try {
-      const p = import("./invoices.jsx");
+      const p = loadAppRoute("invoices", "Invoices", () => import("./invoices.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -788,6 +835,39 @@ const App = () => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [route]);
 
+  const LoginRedirect = React.useCallback(({ setRoute: sr, redirectRoute = "belajar" }) => {
+    React.useEffect(() => {
+      sr({
+        route: "lobby",
+        authMode: "login",
+        authRedirect: { route: redirectRoute },
+        authBackRoute: readStoredAuthBackRoute() || { route: "lobby" },
+      });
+    }, [redirectRoute, sr]);
+    return null;
+  }, []);
+
+  const routeChunkReady = (() => {
+    if (route === "lobby" || route === "landing") return Boolean(lobbyComp || window.Lobby);
+    if (route === "belajar" || (route === "tryout" && !canSeeTryoutPage)) return Boolean(belajarComp || window.Belajar);
+    if (route === "misi") return authReady && (!hasMissionAccess || Boolean(misiComp || window.Misi));
+    if (route === "tryout") return Boolean(tryoutComp || window.Tryout);
+    if (route === "practice") return Boolean(practiceComp || window.Practice);
+    if (route === "payment") return Boolean(paymentComp || window.Payment);
+    if (route === "profile") return Boolean(profileComp || window.Profile);
+    if (route === "invoices") return Boolean(invoicesComp || window.Invoices);
+    if (route === "leaderboard") return Boolean(leaderboardComp || window.Leaderboard);
+    return true;
+  })();
+
+  React.useEffect(() => {
+    if (!routeChunkReady) return;
+    const routePrefetch = window.MafikingRoutePrefetch;
+    if (routePrefetch && typeof routePrefetch.markRouteRendered === "function") {
+      routePrefetch.markRouteRendered(route);
+    }
+  }, [route, routeChunkReady]);
+
   if (authCallbackLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-paper text-ink">
@@ -810,18 +890,6 @@ const App = () => {
     ? "belajar"
     : route === "invoices" ? "profile" : route;
   const currentSearchParams = new URLSearchParams(window.location.search);
-
-  const LoginRedirect = React.useCallback(({ setRoute: sr, redirectRoute = "profile" }) => {
-    React.useEffect(() => {
-      sr({
-        route: "lobby",
-        authMode: "login",
-        authRedirect: { route: redirectRoute },
-        authBackRoute: readStoredAuthBackRoute() || { route: "lobby" },
-      });
-    }, [redirectRoute, sr]);
-    return null;
-  }, []);
 
   const isPaymentStatusRoute = route === "payment" && currentSearchParams.has("merchantOrderId");
   const hasAppShellNav = route !== "practice" && route !== "lobby" && !isTryoutFullscreenRoute && !isPaymentStatusRoute;
@@ -852,12 +920,15 @@ const App = () => {
           data-screen-label={routeLabel(route)}
           className={route === "practice" || route === "lobby" || isTryoutFullscreenRoute ? "" : "app-route-transition"}
         >
+          {!routeChunkReady && <RouteChunkFallback />}
           {(route === "lobby" || route === "landing") && (lobbyComp || (typeof window !== "undefined" && window.Lobby)) && React.createElement(lobbyComp || window.Lobby, { setRoute: navigate, tweaks: tweaks, currentUser, isAdmin: canEditInlineAsAdmin, showTryoutLink: canSeeTryoutPage, authMode, authRedirect, authBackRoute, authState, onAuthSuccess: handleAuthSuccess, pendingClerkUser })}
           {showBelajarPage && (belajarComp || window.Belajar) && React.createElement(belajarComp || window.Belajar, { setRoute: navigate, tweaks: tweaks, isAdmin: canEditInlineAsAdmin, isLoggedIn, currentUser, authReady, hasPremiumAccess, initialSection: belajarSection, onSectionChange: setBelajarSection })}
-          {route === "misi" && (misiComp || window.Misi) && (
+          {route === "misi" && (
             <ScreenErrorBoundary>
-              {hasMissionAccess
-                ? React.createElement(misiComp || window.Misi, { setRoute: navigate, tweaks: tweaks, isAdmin })
+              {!authReady
+                ? null
+                : hasMissionAccess
+                ? (misiComp || window.Misi) && React.createElement(misiComp || window.Misi, { setRoute: navigate, tweaks: tweaks, isAdmin })
                 : <AccessGate setRoute={navigate} title="Akses Paket" message="Beli paket untuk mendapat akses ke misi harian dan latihan terarah setiap hari" variant="misi" showFreeTryout={false} hideKicker />}
             </ScreenErrorBoundary>
           )}
@@ -869,7 +940,7 @@ const App = () => {
               : <AdminChunkFallback status={adminChunkStatus} />
           )}
           {route === "profile" && (profileComp || window.Profile) && (isLoggedIn
-            ? React.createElement(profileComp || window.Profile, { setRoute: navigate, isAdmin: canEditInlineAsAdmin, onRequestLanding: confirmLandingReturn, onRequestLogout: confirmLogout })
+            ? React.createElement(profileComp || window.Profile, { setRoute: navigate, isAdmin: canEditInlineAsAdmin, onRequestLanding: confirmLandingReturn, onRequestLogout: confirmLogout, onRequestSwitchAccount: switchAccount, onUserUpdated: setCurrentUser })
             : authReady
               ? <LoginRedirect setRoute={navigate} />
               : null
@@ -905,8 +976,28 @@ const App = () => {
         onComplete: (updatedUser) => {
           setCurrentUser(updatedUser);
           setPendingClerkUser(null);
+          if (!String(updatedUser?.phone_number || '').trim() && window.markPhonePromptDismissed) {
+            window.markPhonePromptDismissed(updatedUser);
+            setPhonePromptDismissed(true);
+          }
         },
       })}
+
+      {isLoggedIn
+        && !isAdminAccount
+        && currentUser
+        && !currentUser.profile_needs_completion
+        && !String(currentUser.phone_number || '').trim()
+        && !phonePromptDismissed
+        && window.PhoneNumberPromptModal
+        && React.createElement(window.PhoneNumberPromptModal, {
+          user: currentUser,
+          onDismiss: () => setPhonePromptDismissed(true),
+          onComplete: (updatedUser) => {
+            setCurrentUser(updatedUser);
+            setPhonePromptDismissed(true);
+          },
+        })}
 
       {confirmAction && ReactDOM.createPortal((
         <div
@@ -1151,14 +1242,14 @@ const AccessGate = ({ setRoute, title, message, requireLogin = false, variant = 
         {requireLogin ? (
           <React.Fragment>
             <button
-              onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "profile" } })}
+              onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "belajar", section: "Try Out" } })}
               className="btn-ink"
               type="button"
             >
               Masuk <Icon.Arrow />
             </button>
             <button
-              onClick={() => setRoute({ route: "lobby", authMode: "signup", authRedirect: { route: "profile" } })}
+              onClick={() => setRoute({ route: "lobby", authMode: "signup", authRedirect: { route: "belajar", section: "Try Out" } })}
               className="btn-ghost"
               type="button"
             >
@@ -1270,7 +1361,7 @@ function parseAppLocation() {
       practice: {
         ...findPracticeChapterFromPath(missionPracticeMatch[1], defaultPracticeChapterSlugForMapel(mapel)),
         activeDailyMissionDay: dayMatch ? Number(dayMatch[1]) : null,
-        includeDailyMissions: true,
+        isMissionBank: true,
         initialMode: "canvas",
         disableCanvasIntro: true,
       },

@@ -1,8 +1,13 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
+const fs = require('fs');
+const multer = require('multer');
+const path = require('path');
 const xss = require('xss');
 const { mergeGuestIntoUser, readUser } = require('../lib/clerk-user-sync');
 const { sendMail, getConfig: getMailerConfig } = require('../lib/mailer');
+const { avatarFilePathFromUrl, getAvatarDir } = require('../lib/profile-media');
 const { renderVerifyEmail } = require('../lib/email-templates');
 const {
     canResend,
@@ -17,6 +22,29 @@ const PRIORITY_SUBJECTS = new Set(['Matematika', 'Fisika', 'Kimia']);
 const REFERRAL_OPTIONS = new Set(['Instagram', 'WhatsApp/Line', 'Teman', 'Orang Tua']);
 const REFERRAL_OTHER_PREFIX = 'Lainnya: ';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^[0-9+\-\s]{8,20}$/;
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+const AVATAR_MIME_EXT = new Map([
+    ['image/jpeg', '.jpg'],
+    ['image/png', '.png'],
+    ['image/webp', '.webp'],
+    ['image/gif', '.gif'],
+]);
+const avatarUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: AVATAR_MAX_BYTES,
+        files: 1,
+        fields: 2,
+    },
+    fileFilter: (_req, file, cb) => {
+        if (!AVATAR_MIME_EXT.has(String(file.mimetype || '').toLowerCase())) {
+            cb(new Error('Foto profil harus berupa JPG, PNG, WEBP, atau GIF.'));
+            return;
+        }
+        cb(null, true);
+    },
+});
 const MAJOR_OPTIONS_BY_FACULTY = {
     FMIPA: new Set(['Matematika', 'Fisika', 'Astronomi', 'Kimia', 'Aktuaria']),
     'SITH-R': new Set(['Rekayasa Hayati', 'Rekayasa Pertanian', 'Rekayasa Kehutanan', 'Teknologi Pasca Panen']),
@@ -88,6 +116,40 @@ function toPublicUser(user, session) {
         profile_needs_completion: profileNeedsCompletion,
         suggested_display_name: (session && session.clerkSuggestedDisplayName) || (user && user.display_name) || '',
     };
+}
+
+function uploadAvatarSingle(req, res, next) {
+    avatarUpload.single('avatar')(req, res, (err) => {
+        if (!err) return next();
+        const message = err.code === 'LIMIT_FILE_SIZE'
+            ? 'Ukuran foto profil maksimal 2MB.'
+            : (err.message || 'Upload foto profil gagal.');
+        return res.status(400).json({ error: message });
+    });
+}
+
+function avatarExtensionForFile(file) {
+    return AVATAR_MIME_EXT.get(String(file && file.mimetype || '').toLowerCase()) || '';
+}
+
+function isKnownImageSignature(buffer, ext) {
+    if (!Buffer.isBuffer(buffer) || buffer.length < 12) return false;
+    if (ext === '.jpg') return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    if (ext === '.png') return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    if (ext === '.webp') return buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP';
+    if (ext === '.gif') {
+        const head = buffer.subarray(0, 6).toString('ascii');
+        return head === 'GIF87a' || head === 'GIF89a';
+    }
+    return false;
+}
+
+function removeOwnedAvatarFile(avatarUrl) {
+    const filePath = avatarFilePathFromUrl(avatarUrl);
+    if (!filePath) return;
+    try {
+        fs.rmSync(filePath, { force: true });
+    } catch (_) {}
 }
 
 function buildVerifyUrl(req, token) {
@@ -459,7 +521,7 @@ router.post('/profile-onboarding', (req, res) => {
 
     if (!displayName) return res.status(400).json({ error: 'Nama lengkap wajib diisi.' });
     if (displayName.length > 100) return res.status(400).json({ error: 'Nama terlalu panjang (max 100 karakter).' });
-    if (phoneNumber && !/^[0-9+\-\s]{8,20}$/.test(phoneNumber)) return res.status(400).json({ error: 'No. HP harus 8-20 karakter dan hanya boleh angka, spasi, +, atau -.' });
+    if (phoneNumber && !PHONE_PATTERN.test(phoneNumber)) return res.status(400).json({ error: 'No. HP harus 8-20 karakter dan hanya boleh angka, spasi, +, atau -.' });
     if (!Number.isInteger(semester) || semester < 1 || semester > 2) return res.status(400).json({ error: 'Semester wajib dipilih.' });
     if (!FACULTY_OPTIONS.has(fakultas)) return res.status(400).json({ error: 'Fakultas wajib dipilih.' });
     if (semester === 2 && (!jurusan || jurusan.length > 100)) return res.status(400).json({ error: 'Jurusan wajib diisi dan maksimal 100 karakter.' });
@@ -512,6 +574,112 @@ router.post('/profile-onboarding', (req, res) => {
     }
 });
 
+// POST /api/auth/profile
+router.post('/profile', (req, res) => {
+    const userId = req.userId || (req.session && req.session.userId);
+    if (!userId) {
+        return res.status(401).json({ error: 'Login diperlukan.' });
+    }
+
+    const displayName = xss(String(req.body.display_name || '').trim());
+    const phoneNumber = xss(String(req.body.phone_number || '').trim());
+
+    if (!displayName) return res.status(400).json({ error: 'Nama lengkap wajib diisi.' });
+    if (displayName.length > 100) return res.status(400).json({ error: 'Nama terlalu panjang (max 100 karakter).' });
+    if (phoneNumber && !PHONE_PATTERN.test(phoneNumber)) return res.status(400).json({ error: 'No. HP harus 8-20 karakter dan hanya boleh angka, spasi, +, atau -.' });
+
+    const db = req.app.locals.db;
+    try {
+        const user = db.prepare('SELECT id, role, password_hash, clerk_id, display_name FROM users WHERE id = ?').get(userId);
+        if (!user) return res.status(404).json({ error: 'User tidak ditemukan.' });
+        if (user.password_hash === 'none' && !user.clerk_id && String(user.display_name || '').startsWith('Tamu_')) {
+            return res.status(401).json({ error: 'Silakan login atau sign up terlebih dahulu.' });
+        }
+
+        db.prepare(`
+            UPDATE users
+            SET display_name = ?,
+                phone_number = ?
+            WHERE id = ?
+        `).run(
+            displayName,
+            phoneNumber,
+            userId
+        );
+
+        res.json(toPublicUser(readUser(db, userId), req.session));
+    } catch (err) {
+        console.error('Profile update error:', err);
+        res.status(500).json({ error: 'Gagal menyimpan profil.' });
+    }
+});
+
+// POST /api/auth/avatar
+router.post('/avatar', uploadAvatarSingle, (req, res) => {
+    const userId = req.userId || (req.session && req.session.userId);
+    if (!userId) {
+        return res.status(401).json({ error: 'Login diperlukan.' });
+    }
+    if (!req.file || !req.file.buffer) {
+        return res.status(400).json({ error: 'Foto profil wajib dipilih.' });
+    }
+
+    const ext = avatarExtensionForFile(req.file);
+    if (!ext || !isKnownImageSignature(req.file.buffer, ext)) {
+        return res.status(400).json({ error: 'File foto profil tidak valid.' });
+    }
+
+    const db = req.app.locals.db;
+    try {
+        const user = db.prepare('SELECT id, role, password_hash, clerk_id, display_name, avatar_url FROM users WHERE id = ?').get(userId);
+        if (!user) return res.status(404).json({ error: 'User tidak ditemukan.' });
+        if (user.password_hash === 'none' && !user.clerk_id && String(user.display_name || '').startsWith('Tamu_')) {
+            return res.status(401).json({ error: 'Silakan login atau sign up terlebih dahulu.' });
+        }
+
+        const avatarsDir = getAvatarDir();
+        fs.mkdirSync(avatarsDir, { recursive: true });
+        const filename = `user-${Number(userId)}-${Date.now().toString(36)}-${crypto.randomBytes(8).toString('hex')}${ext}`;
+        const filePath = path.join(avatarsDir, filename);
+        fs.writeFileSync(filePath, req.file.buffer, { mode: 0o644 });
+        const avatarUrl = `/profile-media/avatars/${filename}`;
+
+        db.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').run(avatarUrl, userId);
+        removeOwnedAvatarFile(user.avatar_url);
+        res.json(toPublicUser(readUser(db, userId), req.session));
+    } catch (err) {
+        console.error('Avatar upload error:', err);
+        res.status(500).json({ error: 'Gagal menyimpan foto profil.' });
+    }
+});
+
+// POST /api/auth/phone-number
+router.post('/phone-number', (req, res) => {
+    const userId = req.userId || (req.session && req.session.userId);
+    if (!userId) {
+        return res.status(401).json({ error: 'Login diperlukan.' });
+    }
+
+    const phoneNumber = xss(String(req.body.phone_number || '').trim());
+    if (!PHONE_PATTERN.test(phoneNumber)) {
+        return res.status(400).json({ error: 'No. HP harus 8-20 karakter dan hanya boleh angka, spasi, +, atau -.' });
+    }
+
+    const db = req.app.locals.db;
+    try {
+        const user = db.prepare('SELECT id, role, password_hash, clerk_id, display_name FROM users WHERE id = ?').get(userId);
+        if (!user) return res.status(404).json({ error: 'User tidak ditemukan.' });
+        if (user.password_hash === 'none' && !user.clerk_id && String(user.display_name || '').startsWith('Tamu_')) {
+            return res.status(401).json({ error: 'Silakan login atau sign up terlebih dahulu.' });
+        }
+        db.prepare('UPDATE users SET phone_number = ? WHERE id = ?').run(phoneNumber, userId);
+        res.json(toPublicUser(readUser(db, userId), req.session));
+    } catch (err) {
+        console.error('Phone number update error:', err);
+        res.status(500).json({ error: 'Gagal menyimpan nomor telepon.' });
+    }
+});
+
 // GET /api/auth/me
 router.get('/me', (req, res) => {
     const userId = req.userId || (req.session && req.session.userId);
@@ -521,7 +689,7 @@ router.get('/me', (req, res) => {
 
     const db = req.app.locals.db;
     const user = db.prepare(
-        'SELECT id, username, display_name, fakultas, phone_number, semester, jurusan, mapel_prioritas, referral_source, onboarding_completed_at, role, xp, level, badge_tier, streak_days, highest_streak, last_active, email, auth_provider FROM users WHERE id = ?'
+        'SELECT id, username, display_name, avatar_url, fakultas, phone_number, semester, jurusan, mapel_prioritas, referral_source, onboarding_completed_at, role, xp, level, badge_tier, streak_days, highest_streak, last_active, email, auth_provider FROM users WHERE id = ?'
     ).get(userId);
 
     if (!user) {

@@ -93,9 +93,25 @@ function waitForServer(child, port) {
 
 (async () => {
   const clerkBridge = fs.readFileSync(path.join(projectRoot, 'src', 'clerk-auth.jsx'), 'utf8');
+  const lobbySource = fs.readFileSync(path.join(projectRoot, 'src', 'lobby.jsx'), 'utf8');
+  const appSource = fs.readFileSync(path.join(projectRoot, 'src', 'app.jsx'), 'utf8');
+  const profileSource = fs.readFileSync(path.join(projectRoot, 'src', 'profile.jsx'), 'utf8');
+  const sharedSource = fs.readFileSync(path.join(projectRoot, 'src', 'shared.jsx'), 'utf8');
   assert.match(clerkBridge, /window\.localStorage/, 'popup result fallback must use cross-window localStorage');
   assert.match(clerkBridge, /recoverClosedPopupSession/, 'closed popup must attempt session recovery');
   assert.match(clerkBridge, /readRegisteredServerUser/, 'closed popup recovery must check the shared server session');
+  assert.match(lobbySource, /prefersFullPageGoogleAuth/, 'mobile Google auth must use a full-page redirect guard');
+  assert.match(lobbySource, /window\.MafikingClerk\.openAuth\([\s\S]*provider:\s*'google'/, 'mobile Google auth must call Clerk full-page redirect');
+  assert.match(lobbySource, /window\.MafikingClerk\.openGooglePopup/, 'desktop Google auth should keep the popup flow');
+  assert.match(appSource, /const switchAccount = React\.useCallback/, 'switch account must use its own auth flow');
+  assert.match(appSource, /onRequestSwitchAccount:\s*switchAccount/, 'profile must receive the dedicated switch-account handler');
+  assert.match(appSource, /const handleAuthSuccess[\s\S]*?navigate\(\{ route: "belajar", section: "Try Out" \}\);/, 'successful login must navigate to Beranda');
+  assert.ok(
+    appSource.indexOf('const LoginRedirect = React.useCallback') < appSource.indexOf('if (authCallbackLoading) {\n    return ('),
+    'all App hooks must run before the Google callback loading early return'
+  );
+  assert.match(profileSource, /onClick=\{onRequestSwitchAccount\}[\s\S]{0,800}Switch account/, 'switch account button must use the dedicated handler');
+  assert.match(sharedSource, /gamified && !isLoggedIn[\s\S]*?md:hidden[\s\S]*?authMode: "login"[\s\S]*?Masuk[\s\S]*?authMode: "signup"[\s\S]*?Daftar/, 'mobile guest header must offer login and signup actions');
 
   const port = await getFreePort();
   const env = {

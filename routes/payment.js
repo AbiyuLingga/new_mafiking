@@ -23,7 +23,7 @@ const {
 const { collectorIpAllowlist } = require('../lib/ip-allowlist');
 const paymentBroadcaster = require('../lib/payment-broadcaster');
 const { isEnabled: isFeatureEnabled } = require('../lib/feature-flags');
-const { packageAccessGrantSpecs } = require('../lib/package-entitlements');
+const { normalizePackageAccessFeatures, packageAccessGrantSpecs } = require('../lib/package-entitlements');
 const router = express.Router();
 
 const SSE_PAYMENT_PUSH_ENABLED = isFeatureEnabled('SSE_PAYMENT_PUSH');
@@ -46,6 +46,7 @@ const SUBSCRIPTION_PACKAGES = {
     bulanan: { label: 'Bulanan', price: 99000 },
     semester: { label: 'Semester', price: 249000 },
 };
+const PHONE_PATTERN = /^[0-9+\-\s]{8,20}$/;
 
 function safeSignatureCompare(expected, received) {
     const expectedBuffer = Buffer.from(String(expected || ''));
@@ -170,17 +171,20 @@ function resolvePaymentItem({ body, db, enforceTryoutPackagesEnabled = false }) 
         }
 
         if (!db) throw paymentError('Database tidak tersedia', 500);
-        const pkg = db.prepare('SELECT id, title, price FROM tryout_packages WHERE id = ?').get(tryoutPackageId);
+        const pkg = db.prepare('SELECT id, title, price, access_features FROM tryout_packages WHERE id = ?').get(tryoutPackageId);
         if (!pkg) throw paymentError('Paket tryout tidak ditemukan', 404);
 
         const amount = parsePrice(pkg.price);
         if (amount <= 0) throw paymentError('Paket gratis tidak perlu pembayaran');
+        const accessFeatures = normalizePackageAccessFeatures(pkg.access_features);
 
         return {
             type: 'tryout',
             itemId: pkg.id,
             amount,
             productDetails: String(pkg.title).substring(0, 255),
+            accessFeatures,
+            requiresPhone: accessFeatures.includes('bimbel'),
         };
     }
 
@@ -197,7 +201,21 @@ function resolvePaymentItem({ body, db, enforceTryoutPackagesEnabled = false }) 
         itemId: packageId,
         amount: pkg.price,
         productDetails: pkg.label,
+        accessFeatures: [],
+        requiresPhone: false,
     };
+}
+
+function ensurePhoneForPayment({ db, userId, item, body }) {
+    if (!item || !item.requiresPhone) return;
+    const user = db.prepare('SELECT phone_number FROM users WHERE id = ?').get(userId);
+    if (user && String(user.phone_number || '').trim()) return;
+
+    const phoneNumber = String(body.phone_number || body.phoneNumber || '').trim();
+    if (!PHONE_PATTERN.test(phoneNumber)) {
+        throw paymentError('No. WhatsApp wajib diisi untuk paket yang termasuk bimbel.', 400);
+    }
+    db.prepare('UPDATE users SET phone_number = ? WHERE id = ?').run(phoneNumber, userId);
 }
 
 function isRegisteredPaymentUser({ db, userId }) {
@@ -490,6 +508,7 @@ router.post('/pending', async (req, res) => {
     let item;
     try {
         item = resolvePaymentItem({ body: req.body, db, enforceTryoutPackagesEnabled: true });
+        ensurePhoneForPayment({ db, userId, item, body: req.body });
     } catch (err) {
         return res.status(err.statusCode || 400).json({ error: err.message });
     }
@@ -528,6 +547,7 @@ router.post('/create', paymentLimiter, dbRateLimiter({ windowMs: 60 * 1000, maxR
     let item;
     try {
         item = resolvePaymentItem({ body: req.body, db, enforceTryoutPackagesEnabled: true });
+        ensurePhoneForPayment({ db, userId, item, body: req.body });
     } catch (err) {
         return res.status(err.statusCode || 400).json({ error: err.message });
     }
@@ -1075,6 +1095,7 @@ router.__test = {
     isLocalGuestCheckoutEnabled,
     isRegisteredPaymentUser,
     isMockPaymentEnabled,
+    ensurePhoneForPayment,
     findReusablePendingPayment,
     normalizePaymentProvider,
     parsePrice,

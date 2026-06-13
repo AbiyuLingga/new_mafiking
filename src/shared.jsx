@@ -210,7 +210,10 @@ const Logo = ({ size = 32, inverted = false }) => (
       style={{ height: size, width: "auto", filter: inverted ? "invert(1) brightness(2)" : "none" }}
       className="object-contain"
     />
-    <span className="font-display font-bold tracking-[-0.03em]" style={{ fontSize: size * 0.55 }}>
+    <span
+      className="font-display font-bold tracking-[-0.03em]"
+      style={{ color: inverted ? "#ffffff" : "#0b1326", fontSize: size * 0.55 }}
+    >
       MAFIKING
     </span>
   </div>
@@ -431,6 +434,9 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
       goHome();
       return;
     }
+    if (activeLinkId !== id && window.MafikingRoutePrefetch && typeof window.MafikingRoutePrefetch.markRouteIntent === "function") {
+      window.MafikingRoutePrefetch.markRouteIntent(id);
+    }
     if (activeLinkId && activeLinkId !== id) {
       try {
         window.sessionStorage.setItem(NAV_PILL_FROM_KEY, activeLinkId);
@@ -491,8 +497,10 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
             return (
               <button
                 key={l.id}
+                data-route={l.id}
                 data-nav-id={l.id}
                 onClick={() => goRoute(l.id)}
+                aria-current={active ? "page" : undefined}
                 className={`relative z-10 px-4 py-2 text-[14px] font-medium rounded-full transition-colors ${
                   active
                     ? "text-amber-300 font-semibold"
@@ -529,7 +537,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
               </div>
             </div>
           )}
-          {showPublicCtas && <button onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "profile" } })} className={`hidden md:inline-flex text-sm font-semibold px-4 py-2 ${isInk ? "text-white/70 hover:text-white" : "text-ink/70 hover:text-ink"}`}>Masuk</button>}
+          {showPublicCtas && <button onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "belajar", section: "Try Out" } })} className={`hidden md:inline-flex text-sm font-semibold px-4 py-2 ${isInk ? "text-white/70 hover:text-white" : "text-ink/70 hover:text-ink"}`}>Masuk</button>}
           {showPublicCtas && (
             <button onClick={() => setRoute({ route: "belajar", section: "Try Out" })} className={isInk ? "btn-yel !py-2.5 !px-5 text-sm" : "btn-ink !py-2.5 !px-5 text-sm"}>
               Coba Gratis
@@ -537,15 +545,33 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
           )}
           {gamified && !isLoggedIn && (
             <button
-              onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "profile" } })}
+              onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "belajar", section: "Try Out" } })}
               className={`hidden md:inline-flex text-sm font-semibold px-3 py-2 rounded-full transition-colors ${isInk ? "text-white/70 hover:text-white hover:bg-white/10" : "text-ink/65 hover:text-ink hover:bg-ink/5"}`}
               type="button"
             >
               Masuk
             </button>
           )}
+          {gamified && !isLoggedIn && (
+            <div className="flex items-center gap-1.5 md:hidden" aria-label="Aksi akun">
+              <button
+                onClick={() => setRoute({ route: "lobby", authMode: "login", authRedirect: { route: "belajar", section: "Try Out" } })}
+                className={`inline-flex min-h-9 items-center rounded-full px-2.5 text-xs font-semibold transition-colors ${isInk ? "text-white/80 hover:bg-white/10 hover:text-white" : "text-ink/70 hover:bg-ink/5 hover:text-ink"}`}
+                type="button"
+              >
+                Masuk
+              </button>
+              <button
+                onClick={() => setRoute({ route: "lobby", authMode: "signup", authRedirect: { route: "belajar", section: "Try Out" } })}
+                className={isInk ? "btn-yel !min-h-9 !px-3 !py-1.5 text-xs" : "btn-ink !min-h-9 !px-3 !py-1.5 text-xs"}
+                type="button"
+              >
+                Daftar
+              </button>
+            </div>
+          )}
           {gamified && isLoggedIn && (
-            <button aria-label="Buka profil" onClick={() => setRoute("profile")} type="button" className={`w-9 h-9 inline-flex items-center justify-center rounded-full border hairline ${isInk ? "text-white hover:bg-white/10" : "hover:bg-ink/5"}`}>
+            <button aria-label="Buka profil" data-route="profile" onClick={() => goRoute("profile")} type="button" className={`w-9 h-9 inline-flex items-center justify-center rounded-full border hairline ${isInk ? "text-white hover:bg-white/10" : "hover:bg-ink/5"}`}>
               <Icon.User className="w-4 h-4" />
             </button>
           )}
@@ -559,6 +585,7 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
           return (
             <button
               key={item.id}
+              data-route={item.id}
               onClick={() => goRoute(item.id)}
               className={`mafiking-mobile-bottom-nav-item ${active ? "is-active" : ""}`}
               type="button"

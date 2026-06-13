@@ -17,6 +17,8 @@ const ONBOARDING_MAJORS_BY_FACULTY = {
 
 const ONBOARDING_REFERRAL_OTHER = 'Lainnya';
 const ONBOARDING_REFERRAL_OPTIONS = ['Instagram', 'WhatsApp/Line', 'Teman', 'Orang Tua', ONBOARDING_REFERRAL_OTHER];
+const PHONE_PROMPT_DISMISSED_PREFIX = 'mafiking:phone-prompt-dismissed:';
+const PHONE_PATTERN = /^[0-9+\-\s]{8,20}$/;
 
 const emptyOnboardingDraft = (user) => {
   const currentName = String(user?.display_name || '').startsWith('Tamu_') ? '' : (user?.display_name || user?.suggested_display_name || '');
@@ -337,3 +339,103 @@ const ProfileOnboardingModal = ({ user, onComplete, onRequestLogout = null }) =>
 };
 
 window.ProfileOnboardingModal = ProfileOnboardingModal;
+
+function phonePromptDismissedKey(user) {
+  return user?.id ? `${PHONE_PROMPT_DISMISSED_PREFIX}${user.id}` : '';
+}
+
+function hasDismissedPhonePrompt(user) {
+  const key = phonePromptDismissedKey(user);
+  if (!key) return true;
+  try {
+    return localStorage.getItem(key) === '1';
+  } catch (_) {
+    return false;
+  }
+}
+
+function markPhonePromptDismissed(user) {
+  const key = phonePromptDismissedKey(user);
+  if (!key) return;
+  try {
+    localStorage.setItem(key, '1');
+  } catch (_) {}
+}
+
+const PhoneNumberPromptModal = ({ user, onComplete, onDismiss }) => {
+  const [phoneNumber, setPhoneNumber] = React.useState('');
+  const [error, setError] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+
+  function dismiss() {
+    markPhonePromptDismissed(user);
+    if (typeof onDismiss === 'function') onDismiss();
+  }
+
+  async function submitPhone(event) {
+    event.preventDefault();
+    const value = phoneNumber.trim();
+    if (!PHONE_PATTERN.test(value)) {
+      setError('No. HP harus 8-20 karakter dan hanya boleh angka, spasi, +, atau -.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await MafikingAPI.post('/api/auth/phone-number', { phone_number: value });
+      markPhonePromptDismissed(user);
+      if (typeof onComplete === 'function') onComplete(updated);
+      showToast('Nomor telepon tersimpan.', 'success');
+    } catch (err) {
+      setError(err.message || 'Gagal menyimpan nomor telepon.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return ReactDOM.createPortal((
+    <div className="onboarding-overlay phone-prompt-overlay" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) dismiss(); }}>
+      <div className="onboarding-shell phone-prompt-shell">
+        <button
+          aria-label="Tutup form nomor telepon"
+          className="onboarding-logout-button phone-prompt-close"
+          disabled={saving}
+          onClick={dismiss}
+          type="button"
+        >
+          <svg className="onboarding-logout-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12" />
+            <path d="M18 6L6 18" />
+          </svg>
+        </button>
+        <form className="onboarding-card" role="dialog" aria-modal="true" aria-labelledby="phone-prompt-title" onSubmit={submitPhone}>
+          <div className="onboarding-step">
+            <div className="onboarding-kicker">Opsional</div>
+            <h2 id="phone-prompt-title">Tambahkan nomor WhatsApp</h2>
+            <p>Nomor ini membantu admin menghubungi kamu kalau kamu ikut bimbel atau perlu bantuan paket.</p>
+            <label>No WhatsApp</label>
+            <input
+              autoFocus
+              inputMode="tel"
+              onChange={(event) => { setError(''); setPhoneNumber(event.target.value); }}
+              placeholder="cth. 081234567890"
+              type="tel"
+              value={phoneNumber}
+            />
+            {error && <div className="onboarding-error" role="alert">{error}</div>}
+            <div className="phone-prompt-actions">
+              <button className="onboarding-secondary" disabled={saving} onClick={dismiss} type="button">Nanti saja</button>
+              <button className="onboarding-primary" disabled={saving} type="submit">
+                {saving ? 'Menyimpan...' : 'Simpan'}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  ), document.body);
+};
+
+window.PhoneNumberPromptModal = PhoneNumberPromptModal;
+window.hasDismissedPhonePrompt = hasDismissedPhonePrompt;
+window.markPhonePromptDismissed = markPhonePromptDismissed;

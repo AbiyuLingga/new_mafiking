@@ -24,6 +24,9 @@ const STATE_CHANGING_ROUTES = [
   { method: 'POST', path: '/api/auth/logout', body: {} },
   { method: 'POST', path: '/api/auth/clerk-onboard', body: { display_name: 'x' } },
   { method: 'POST', path: '/api/auth/profile-onboarding', body: { display_name: 'x' } },
+  { method: 'POST', path: '/api/auth/profile', body: { display_name: 'x' } },
+  { method: 'POST', path: '/api/auth/avatar', body: {} },
+  { method: 'POST', path: '/api/auth/phone-number', body: { phone_number: '+62812345678' } },
 
   { method: 'POST', path: '/api/progress/submit', body: { problemId: 1, correct: true } },
   { method: 'POST', path: '/api/progress/tryout-attempts', body: { tryoutId: 1, answers: {} } },

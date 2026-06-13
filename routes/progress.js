@@ -261,7 +261,7 @@ router.get('/leaderboard', isAuthenticated, (req, res) => {
     const currentUserId = req.session.userId;
 
     const users = db.prepare(
-        `SELECT id, display_name, fakultas, xp, level, badge_tier, streak_days
+        `SELECT id, display_name, avatar_url, fakultas, xp, level, badge_tier, streak_days
          FROM users
          WHERE role != 'admin'
            ${NON_GUEST_LEADERBOARD_SQL}
@@ -272,6 +272,7 @@ router.get('/leaderboard', isAuthenticated, (req, res) => {
         rank: i + 1,
         id: u.id,
         display_name: u.display_name,
+        avatar_url: u.avatar_url || '',
         fakultas: u.fakultas || '',
         initials: safeInitials(u.display_name),
         xp: u.xp,
@@ -299,7 +300,7 @@ router.get('/leaderboard/weekly', isAuthenticated, (req, res) => {
     const weekStart = monday.toISOString();
 
     const users = db.prepare(
-        `SELECT u.id, u.display_name, u.fakultas, u.level, u.badge_tier, u.streak_days,
+        `SELECT u.id, u.display_name, u.avatar_url, u.fakultas, u.level, u.badge_tier, u.streak_days,
                 COALESCE(SUM(up.xp_earned), 0) AS weekly_xp
          FROM users u
          LEFT JOIN user_progress up ON up.user_id = u.id AND up.solved_at >= ?
@@ -315,6 +316,7 @@ router.get('/leaderboard/weekly', isAuthenticated, (req, res) => {
         rank: i + 1,
         id: u.id,
         display_name: u.display_name,
+        avatar_url: u.avatar_url || '',
         fakultas: u.fakultas || '',
         initials: safeInitials(u.display_name),
         xp: u.weekly_xp,
@@ -571,6 +573,7 @@ router.get('/leaderboard/tryout', isAuthenticated, (req, res) => {
             ta.duration_seconds,
             ta.completed_at,
             u.display_name,
+            u.avatar_url,
             u.fakultas
         FROM tryout_attempts ta
         JOIN users u ON u.id = ta.user_id
@@ -582,6 +585,53 @@ router.get('/leaderboard/tryout', isAuthenticated, (req, res) => {
     `).all(tryoutId);
 
     res.json(rankTryoutLeaderboardRows(rows, currentUserId));
+});
+
+// GET /api/progress/leaderboard/tryout-options — tryout yang sudah punya ranking
+router.get('/leaderboard/tryout-options', isAuthenticated, (req, res) => {
+    const db = req.app.locals.db;
+
+    const rows = db.prepare(`
+        SELECT
+            ta.tryout_id,
+            COALESCE(NULLIF(MAX(tp.title), ''), NULLIF(MAX(ta.tryout_title), ''), ta.tryout_id) AS title,
+            MAX(COALESCE(tp.questions, ta.total_questions, 0)) AS questions,
+            COALESCE(NULLIF(MAX(tp.duration), ''), '') AS duration,
+            COUNT(*) AS attempt_count,
+            MAX(ta.completed_at) AS last_attempt_at,
+            MIN(COALESCE(tp.sort_order, 9999)) AS sort_order
+        FROM tryout_attempts ta
+        JOIN users u ON u.id = ta.user_id
+        LEFT JOIN tryout_packages tp ON tp.tryout_id = ta.tryout_id
+        WHERE u.role != 'admin'
+          AND COALESCE(u.username, '') NOT LIKE 'Tamu%'
+          AND COALESCE(u.display_name, '') NOT LIKE 'Tamu%'
+        GROUP BY ta.tryout_id
+        ORDER BY
+            CASE WHEN ta.tryout_id = ? THEN 0 ELSE 1 END,
+            sort_order ASC,
+            last_attempt_at DESC,
+            title ASC
+    `).all(FREE_MATH_TRYOUT_ID);
+
+    res.json(rows.map((row) => {
+        const tryoutId = String(row.tryout_id || '').trim();
+        const questions = Math.max(0, Number(row.questions) || 0);
+        const duration = String(row.duration || '').trim();
+        const title = tryoutId === FREE_MATH_TRYOUT_ID
+            ? 'Try Out Gratis'
+            : String(row.title || 'Try Out').trim();
+
+        return {
+            id: tryoutId,
+            label: title,
+            meta: [
+                questions ? `${questions} soal` : '',
+                duration,
+            ].filter(Boolean).join(' · '),
+            attemptCount: Math.max(0, Number(row.attempt_count) || 0),
+        };
+    }).filter((option) => option.id && option.label));
 });
 
 function updateLevel(db, userId) {

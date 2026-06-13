@@ -28,6 +28,39 @@ function resetMailer() {
     console.info = originalInfo;
   }
 
+  process.env = {
+    ...originalEnv,
+    MAIL_DRY_RUN: 'false',
+    SMTP_HOST: 'smtp.gmail.com',
+    SMTP_USER: 'mafikingsolusitpb@gmail.com',
+    SMTP_PASS: 'app-password',
+    MAIL_FROM: 'no-reply@mafiking.com',
+  };
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const { getConfig } = resetMailer();
+    const cfg = getConfig();
+    assert.equal(cfg.from, 'mafikingsolusitpb@gmail.com');
+    assert.equal(cfg.auth.user, 'mafikingsolusitpb@gmail.com');
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  process.env = {
+    ...originalEnv,
+    MAIL_DRY_RUN: 'false',
+    SMTP_HOST: 'smtp.example.com',
+    SMTP_USER: 'mailer@example.com',
+    SMTP_PASS: 'secret',
+    MAIL_FROM: 'no-reply@example.com',
+  };
+  {
+    const { getConfig } = resetMailer();
+    const cfg = getConfig();
+    assert.equal(cfg.from, 'no-reply@example.com');
+  }
+
   process.env = { ...originalEnv, MAIL_DRY_RUN: 'false', SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '' };
   const { sendMail } = resetMailer();
   const originalError = console.error;

@@ -1,5 +1,7 @@
 const assert = require('assert');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const paymentRouter = require('../routes/payment');
 const {
     normalizePackageAccessFeatures,
@@ -9,6 +11,7 @@ const {
 const {
     buildMockPaymentUrl,
     canCreatePayment,
+    ensurePhoneForPayment,
     escapeHtml,
     findReusablePendingPayment,
     MANUAL_SUFFIX_MAX,
@@ -33,6 +36,7 @@ assert.strictEqual(MANUAL_SUFFIX_MAX, 399, 'manual payment unique code must stop
 assert.strictEqual(typeof resolvePaymentItem, 'function', 'resolvePaymentItem must be exported for contract tests');
 assert.strictEqual(typeof isRegisteredPaymentUser, 'function', 'isRegisteredPaymentUser must be exported for contract tests');
 assert.strictEqual(typeof canCreatePayment, 'function', 'canCreatePayment must be exported for contract tests');
+assert.strictEqual(typeof ensurePhoneForPayment, 'function', 'ensurePhoneForPayment must be exported for contract tests');
 assert.strictEqual(typeof findReusablePendingPayment, 'function', 'findReusablePendingPayment must be exported for contract tests');
 assert.strictEqual(typeof isLocalGuestCheckoutEnabled, 'function', 'isLocalGuestCheckoutEnabled must be exported for contract tests');
 assert.strictEqual(typeof isMockPaymentEnabled, 'function', 'isMockPaymentEnabled must be exported for contract tests');
@@ -65,6 +69,18 @@ assert.deepStrictEqual(
         { featureId: 'special-practice', accessType: 'practice', accessValue: 'special-practice' },
     ],
     'package entitlements must map to durable access grants'
+);
+assert.deepStrictEqual(
+    packageAccessGrantSpecs({
+        title: 'Paket Bimbel',
+        tryout_id: 'paket-bimbel',
+        access_features: '["tryout-access","bimbel"]',
+    }),
+    [
+        { featureId: 'tryout-access', accessType: 'tryout', accessValue: 'paket-bimbel' },
+        { featureId: 'bimbel', accessType: 'service', accessValue: 'bimbel' },
+    ],
+    'bimbel package entitlement must be selectable without becoming a legacy default'
 );
 
 const userDb = {
@@ -109,6 +125,8 @@ assert.deepStrictEqual(subscription, {
     itemId: 'bulanan',
     amount: SUBSCRIPTION_PACKAGES.bulanan.price,
     productDetails: SUBSCRIPTION_PACKAGES.bulanan.label,
+    accessFeatures: [],
+    requiresPhone: false,
 });
 
 const testSubscription = resolvePaymentItem({
@@ -124,6 +142,8 @@ assert.deepStrictEqual(testSubscription, {
     itemId: 'cek-payment',
     amount: 500,
     productDetails: 'Cek Payment',
+    accessFeatures: [],
+    requiresPhone: false,
 });
 
 assert.throws(
@@ -141,6 +161,7 @@ const tryoutDb = {
                     id: 7,
                     title: 'Tryout UAS Fisika',
                     price: 'Rp 49.000',
+                    access_features: '["tryout-access"]',
                 };
             },
         };
@@ -162,6 +183,8 @@ assert.deepStrictEqual(
         itemId: 7,
         amount: 49000,
         productDetails: 'Tryout UAS Fisika',
+        accessFeatures: ['tryout-access'],
+        requiresPhone: false,
     }
 );
 
@@ -180,6 +203,7 @@ assert.deepStrictEqual(
                             id: 7,
                             title: 'Paket QRIS Lokal Murah',
                             price: 'Rp 501',
+                            access_features: '["tryout-access","bimbel"]',
                         };
                     },
                 };
@@ -191,8 +215,39 @@ assert.deepStrictEqual(
         itemId: 7,
         amount: 501,
         productDetails: 'Paket QRIS Lokal Murah',
+        accessFeatures: ['tryout-access', 'bimbel'],
+        requiresPhone: true,
     }
 );
+
+let savedPhone = null;
+const phoneDb = {
+    prepare(sql) {
+        if (/SELECT phone_number FROM users/.test(sql)) {
+            return { get: () => ({ phone_number: '' }) };
+        }
+        if (/UPDATE users SET phone_number/.test(sql)) {
+            return { run: (phone, userId) => { savedPhone = { phone, userId }; } };
+        }
+        throw new Error('Unexpected phone SQL: ' + sql);
+    },
+};
+assert.throws(
+    () => ensurePhoneForPayment({
+        db: phoneDb,
+        userId: 2,
+        item: { requiresPhone: true },
+        body: {},
+    }),
+    /No\. WhatsApp wajib diisi/
+);
+ensurePhoneForPayment({
+    db: phoneDb,
+    userId: 2,
+    item: { requiresPhone: true },
+    body: { phone_number: '0812 3456 7890' },
+});
+assert.deepStrictEqual(savedPhone, { phone: '0812 3456 7890', userId: 2 });
 
 const lockedTryoutDb = {
     prepare(sql) {
@@ -279,6 +334,20 @@ assert.strictEqual(verifyMockPaymentToken({ ...mockOrder, token }), true);
 assert.strictEqual(verifyMockPaymentToken({ ...mockOrder, amount: 1, token }), false);
 assert.match(buildMockPaymentUrl(mockOrder), /^\/api\/payment\/mock-gateway\?merchantOrderId=MFK-2-123456&token=[a-f0-9]{64}$/);
 assert.strictEqual(escapeHtml('<img src=x onerror=alert(1)>'), '&lt;img src=x onerror=alert(1)&gt;');
+
+const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+const ensurePaymentPackageSource = serverSource.match(
+    /function ensurePaymentTestTryoutPackage\(database\) \{[\s\S]*?\n\}/
+)?.[0] || '';
+const existingPaymentPackageBranch = ensurePaymentPackageSource.match(
+    /if \(existing\) \{[\s\S]*?return;\s*\}/
+)?.[0] || '';
+assert.ok(existingPaymentPackageBranch, 'Cek Payment startup existing-package branch must exist');
+assert.doesNotMatch(
+    existingPaymentPackageBranch,
+    /\bprice\s*=/,
+    'server startup must preserve admin-edited Cek Payment price'
+);
 
 const gatewayState = paymentGatewayState({ NODE_ENV: 'production', PAYMENT_MOCK_MODE: 'false' });
 assert.strictEqual(gatewayState.active, false);

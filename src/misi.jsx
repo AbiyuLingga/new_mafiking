@@ -158,7 +158,7 @@ async function openMissionPractice(timeline, mission, setRoute) {
       ...chapter,
       activeDailyMissionDay: selectedDay || null,
       activeDailyMissionId: mission?.id || null,
-      includeDailyMissions: true,
+      isMissionBank: true,
       initialMode: 'canvas',
       disableCanvasIntro: true,
       topics: [...(chapter.topics || []), 'Misi Harian'],
@@ -595,17 +595,18 @@ const MissionMafikingLatihan = ({ timeline, setRoute, isAdmin, adminEdit, onDele
     getLatestActiveMission(timeline)?.day || (timeline[0]?.day || 1)
   );
   const scrollRef = useRef(null);
-  const activeRef = useRef(null);
   const marqueeTimeline = timeline.length > 1 ? [...timeline, ...timeline] : timeline;
 
   useEffect(() => {
     const latest = getLatestActiveMission(timeline);
-    if (latest) setFocusedDay(latest.day);
+    const nextDay = latest?.day || (timeline[0]?.day || 1);
+    setFocusedDay(nextDay);
+    window.requestAnimationFrame(() => {
+      const container = scrollRef.current;
+      const card = findMissionCard(container, nextDay, { primaryOnly: true });
+      if (container && card) centerMissionCard(container, card, "auto");
+    });
   }, [timeline]);
-
-  useEffect(() => {
-    activeRef.current?.scrollIntoView({ behavior: "instant", inline: "center", block: "nearest" });
-  }, [focusedDay]);
 
   const getLoopPoint = React.useCallback((container) => {
     if (!container || timeline.length < 2) return Math.max(0, container.scrollWidth - container.clientWidth);
@@ -615,34 +616,67 @@ const MissionMafikingLatihan = ({ timeline, setRoute, isAdmin, adminEdit, onDele
     return Math.max(0, duplicateFirst.offsetLeft - first.offsetLeft);
   }, [timeline.length]);
 
+  function findMissionCard(container, day, options = {}) {
+    if (!container) return null;
+    const useDuplicate = Boolean(options.useDuplicate);
+    const primaryOnly = Boolean(options.primaryOnly);
+    const cards = Array.from(container.children).filter((child) => Number(child.dataset.day) === Number(day));
+    if (primaryOnly) return cards.find((child) => child.dataset.copy === "primary") || cards[0] || null;
+    if (useDuplicate) return cards.find((child) => child.dataset.copy === "duplicate") || cards[0] || null;
+    return cards.find((child) => child.dataset.copy === "primary") || cards[0] || null;
+  }
+
+  function centerMissionCard(container, card, behavior = "smooth") {
+    if (!container || !card) return;
+    const targetLeft = card.offsetLeft + (card.clientWidth / 2) - (container.clientWidth / 2);
+    container.scrollTo({ left: Math.max(0, targetLeft), behavior });
+  }
+
   const scrollMissions = React.useCallback((direction) => {
     const container = scrollRef.current;
-    if (!container) return;
-    const scrollAmount = window.innerWidth > 768 ? 400 : 300;
+    if (!container || timeline.length === 0) return;
     const loopPoint = getLoopPoint(container);
-    if (loopPoint <= 0) return;
+    const currentIndex = Math.max(0, timeline.findIndex((mission) => Number(mission.day) === Number(focusedDay)));
+    const step = direction === "left" ? -1 : 1;
+    const nextIndex = (currentIndex + step + timeline.length) % timeline.length;
+    const nextMission = timeline[nextIndex];
+    if (!nextMission) return;
 
-    let nextLeft = container.scrollLeft + (direction === "left" ? -scrollAmount : scrollAmount);
-    if (timeline.length > 1) {
-      if (nextLeft >= loopPoint) nextLeft -= loopPoint;
-      if (nextLeft < 0) nextLeft += loopPoint;
-    } else {
-      nextLeft = Math.max(0, Math.min(loopPoint, nextLeft));
+    if (
+      timeline.length > 1
+      && direction === "left"
+      && currentIndex === 0
+      && loopPoint > 0
+      && container.scrollLeft < loopPoint * 0.5
+    ) {
+      container.scrollLeft += loopPoint;
     }
 
-    container.scrollTo({ left: nextLeft, behavior: "smooth" });
-  }, [getLoopPoint, timeline.length]);
+    const useDuplicate = timeline.length > 1 && direction === "right" && currentIndex === timeline.length - 1;
+    const target = findMissionCard(container, nextMission.day, { useDuplicate });
+    centerMissionCard(container, target);
+    setFocusedDay(nextMission.day);
+
+    if (useDuplicate && loopPoint > 0) {
+      window.setTimeout(() => {
+        if (!scrollRef.current) return;
+        scrollRef.current.scrollLeft -= loopPoint;
+      }, 650);
+    }
+  }, [focusedDay, getLoopPoint, timeline]);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
     const container = scrollRef.current;
-    const centerPosition = container.scrollLeft + container.clientWidth / 2;
+    const containerRect = container.getBoundingClientRect();
+    const centerPosition = containerRect.left + container.clientWidth / 2;
     let closestDay = focusedDay;
     let minDistance = Infinity;
     Array.from(container.children).forEach((child) => {
       const day = Number(child.dataset.day);
       if (!day) return;
-      const childCenter = child.offsetLeft - container.offsetLeft + child.clientWidth / 2;
+      const childRect = child.getBoundingClientRect();
+      const childCenter = childRect.left + childRect.width / 2;
       const distance = Math.abs(childCenter - centerPosition);
       if (distance < minDistance) { minDistance = distance; closestDay = day; }
     });
@@ -675,7 +709,7 @@ const MissionMafikingLatihan = ({ timeline, setRoute, isAdmin, adminEdit, onDele
             <article
               key={`${mission.id || mission.day}-${index}`}
               data-day={mission.day}
-              ref={isPrimaryCopy && mission.day === focusedDay ? activeRef : null}
+              data-copy={isPrimaryCopy ? "primary" : "duplicate"}
               className={`shrink-0 flex flex-col justify-between border transition-all duration-300 relative overflow-hidden w-[300px] md:w-[400px] min-h-[380px] rounded-[2rem] p-6 md:p-8 ${isFocused ? "transform scale-100 shadow-2xl z-10 opacity-100" : "transform scale-90 opacity-60 hover:opacity-80 shadow-sm"} ${isActive ? "border-amber-300 bg-gradient-to-br from-amber-50 to-white" : isCompleted ? "bg-emerald-50/30 border-emerald-100" : "bg-gray-50 border-gray-200"}`}
             >
               {isActive && <div className="absolute top-0 right-0 w-64 h-64 bg-amber-200 blur-[80px] rounded-full opacity-40 pointer-events-none" />}

@@ -55,6 +55,18 @@ assert.strictEqual(store.summary().requestsCount, 2);
 // --- Phase 0/2 bundle assertions (post mobile perf plan) ---
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(PROJECT_ROOT, 'dist');
+const stylesSource = fs.readFileSync(path.join(PROJECT_ROOT, 'src', 'styles.css'), 'utf8');
+
+assert.match(
+    stylesSource,
+    /\.mafiking-canvas-card\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);/,
+    'canvas card grid must allow mobile content to shrink without widening the viewport'
+);
+assert.match(
+    stylesSource,
+    /@media \(max-width:\s*768px\)[\s\S]*?\.mafiking-progress-dots span\s*\{[\s\S]*?flex:\s*1 1 0;/,
+    'mobile canvas progress dots must shrink within the card'
+);
 
 if (fs.existsSync(DIST)) {
     function gzSize(file) {

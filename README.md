@@ -9,7 +9,7 @@ The active browser entry point is served by `server.js`. When `dist/index.html` 
 - UI shell: copied Mafiking static UI with tweaks panel + full UX improvements.
 - Practice UI: segmented control (Pilgan | Kanvas), Submit always visible in focus mode, ResultModal with wrong-step visualization, XP toast on correct answers.
 - Lobby: `/` always opens the marketing landing page. `Coba Gratis` enters the app at `Belajar -> Try Out`, while login/sign up can redirect back into the intended app route.
-- Onboarding: after first login/sign-up, non-admin users with incomplete profile data get a mandatory centered profile modal for name, phone, semester, faculty/major, and subject priorities. It cannot be skipped and saves through `/api/auth/profile-onboarding`.
+- Onboarding: after first login/sign-up, non-admin users with incomplete profile data get a mandatory centered profile modal for name, optional phone, semester, faculty/major, and subject priorities. It cannot be skipped and saves through `/api/auth/profile-onboarding`. Registered users who already completed onboarding but still have no phone number get a one-time dismissible phone prompt; packages with the `bimbel` access feature require a phone number at checkout.
 - Belajar: mapel selector now includes `Try Out`, `Matematika`, `Fisika`, and `Kimia`. The tabs selector uses a moving underline, with `Try Out` using the ink accent. Free users can start the free 15-question / 30-minute Try Out after a confirmation screen. The Try Out tab also shows the premium Try Out card, but only users with an active package/manual grant can open it. Submitted Try Out sessions reopen as a history/review view with the user's selected answers and the saved solution snapshot.
 - Shared: global toast system (`showToast`), `Skeleton` loading states, `OfflineBanner`.
 - Peringkat: app nav includes a `Peringkat` route with an isolated-scroll leaderboard, static table header, and `Semua` / `Top Mingguan` segmented point views.
@@ -57,8 +57,8 @@ Create `.env` from `.env.example`.
 | `CLERK_SECRET_KEY` | Required for Clerk Google auth | Server-only Clerk key used by `@clerk/express`. Never expose this in client code. |
 | `CLERK_WEBHOOK_SIGNING_SECRET` | Required for production Clerk webhook | Secret used by `svix` to verify Clerk webhook signatures at `/api/webhooks/clerk`. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE` | Required for local email signup verification | SMTP connection settings. Gmail production uses `smtp.gmail.com`, `465`, and `true`. |
-| `SMTP_USER`, `SMTP_PASS` | Required for local email signup verification | Gmail sender account and App Password. Do not use the normal Google account password. |
-| `MAIL_FROM_NAME`, `MAIL_DRY_RUN` | No | Friendly sender name and local dry-run mode. Set `MAIL_DRY_RUN=true` locally to log verification links instead of sending email. |
+| `SMTP_USER`, `SMTP_PASS` | Required for local email signup verification | Gmail sender account and Google App Password. Do not use the normal Google account password. |
+| `MAIL_FROM`, `MAIL_FROM_NAME`, `MAIL_DRY_RUN` | No | Sender address, friendly sender name, and local dry-run mode. For Gmail SMTP, keep `MAIL_FROM` exactly the same as `SMTP_USER`; the mailer enforces this to avoid spoof-like From headers. |
 | `PUBLIC_BASE_URL` | Required for production email links | Base URL used in verification emails, e.g. `https://mafiking.com`. |
 | `GEMINI_KEY_1` ... `GEMINI_KEY_20` | Required for AI correction/profile narrative | Gemini API keys used with fallback rotation for Gemini and Gemma models. |
 | `GEMINI_MODELS` | No | Comma-separated model preference for OCR/evaluation before built-in fallbacks. Defaults to Gemini 3.1 Flash Lite. |
@@ -116,6 +116,8 @@ GEMMA_PROFILE_MODEL=gemma-4-31b-it
 | `npm run dev` | Start Express with `node --watch`. |
 | `npm run build` | Build the Vite shell into `dist/`; when `dist/index.html` exists, `server.js` serves this shell. |
 | `npm run perf:audit` | Run the local Lighthouse wrapper. Pass URL/output path explicitly for targeted audits. |
+| `npm run perf:mobile-nav` | Benchmark cold/warm mobile tab transitions against a running server. |
+| `npm run test:route-prefetch` | Verify route loader deduplication, network guards, and mobile intent prefetch. |
 | `npm run check` | Run Node syntax checks plus focused admin-import and recommendation-engine tests. |
 | `npm run test:admin-import` | Run focused tests for admin file-import validation helpers. |
 | `npm run test:recommendations` | Run focused tests for skill mapping, need-score formula, Purcell-inspired parsing, and recommendation difficulty gating. |
@@ -133,8 +135,20 @@ The canonical PM2 process and Nginx site name is `new_mafiking`; legacy
 process/site names such as `mafiking` and `new-mafiking` should be removed when
 deploying so `mafiking.com` cannot accidentally point at an older app process.
 
-`deploy.sh` does not overwrite the server database by default, and normal deploys
-also skip bundled content imports so admin/server-side content edits stay intact.
+`deploy.sh` does not overwrite the server database by default. Normal deploys
+also preserve runtime-uploaded profile photos under `profile-media/` and skip
+bundled content imports so admin/server-side content edits stay intact.
+Before syncing, deploy creates a `profile-media` snapshot under
+`/var/backups/mafiking/` and aborts if the avatar file count decreases.
+Deploy also installs the current `ops/backup.sh` to
+`/opt/mafiking-ops/backup.sh`; the script always creates a local archive and
+uploads to B2 only when rclone is configured.
+Treat `db/database.sqlite` and `profile-media/` as one recovery pair. Use
+`npm run audit:profile-media` for a dry-run missing-file audit and add
+`-- --apply` only after reviewing the report; apply mode backs up the database
+before clearing broken local avatar references.
+Server startup also preserves admin edits to the built-in `Cek Payment` package;
+it only creates that package when missing or repairs a legacy missing ID.
 It also skips OS bootstrap and `npm ci` when the server tooling and production
 dependency hash have not changed. Dependency installs reuse the server npm cache.
 Use `FORCE_NPM_CI=1 ./deploy.sh <ip> <user>` only when intentionally rebuilding
@@ -383,6 +397,7 @@ Most API routes require either a local session or a verified Clerk Bearer token.
 | `POST` | `/api/auth/logout` | Destroy session. |
 | `POST` | `/api/auth/clerk-onboard` | Save display name and merge guest data after first Google sign-in. |
 | `POST` | `/api/auth/profile-onboarding` | Save mandatory first-login profile data: name, phone, semester, faculty/major, and subject priorities. |
+| `POST` | `/api/auth/phone-number` | Save only the logged-in user's WhatsApp/phone number for the optional phone prompt or bimbel checkout requirement. |
 | `GET` | `/api/auth/me` | Current user profile. |
 | `POST` | `/api/webhooks/clerk` | Clerk webhook, verified with `CLERK_WEBHOOK_SIGNING_SECRET`, for user-created sync. |
 | `GET` | `/api/quiz/init` | Chapters, subtopics, and problem counts. |

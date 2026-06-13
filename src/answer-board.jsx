@@ -29,6 +29,7 @@
       onDirtyChange,
       onFocusModeToggle,
       onSubmit,
+      showCanvasCoachHint = false,
       stickyQuestion = null,
     } = props;
 
@@ -184,6 +185,12 @@
               zoom={zoom}
             />
             <div aria-hidden="true" className={`page-template template-preview pointer-events-none absolute inset-0 z-0 ${activeTemplate.previewClass}`} />
+            {showCanvasCoachHint ? (
+              <div className="canvas-board-coach-hint" aria-live="polite">
+                <span>AI Mafiking akan koreksi setiap langkahmu</span>
+                <strong>Kerjakan disini menggunakan tab kamu</strong>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>

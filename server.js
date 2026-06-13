@@ -73,6 +73,7 @@ const {
   ensureDefaultAppSettings,
 } = require('./lib/app-settings');
 const auditLog = require('./lib/audit-log');
+const { getProfileMediaDir } = require('./lib/profile-media');
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 const sessionMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
@@ -85,6 +86,8 @@ const oneYearSeconds = oneDaySeconds * 365;
 
 const dbDir = path.join(__dirname, 'db');
 fs.mkdirSync(dbDir, { recursive: true });
+const profileMediaDir = getProfileMediaDir();
+fs.mkdirSync(path.join(profileMediaDir, 'avatars'), { recursive: true });
 
 const dbPath = path.join(dbDir, 'database.sqlite');
 const db = new Database(dbPath);
@@ -145,6 +148,7 @@ for (const migration of [
   "ALTER TABLE problems ADD COLUMN created_at DATETIME",
   "ALTER TABLE problems ADD COLUMN question_text TEXT DEFAULT ''",
   "ALTER TABLE users ADD COLUMN fakultas TEXT DEFAULT ''",
+  "ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT ''",
   "ALTER TABLE users ADD COLUMN phone_number TEXT DEFAULT ''",
   "ALTER TABLE users ADD COLUMN semester INTEGER",
   "ALTER TABLE users ADD COLUMN jurusan TEXT DEFAULT ''",
@@ -1253,6 +1257,11 @@ app.get(/^\/assets\/(index|generated-admin|vendor-react)-[^/]+\.(js|css)$/, (req
 });
 app.use('/video', setStaticCacheHint);
 app.use('/video', express.static(path.join(__dirname, 'assets'), staticCache));
+app.use('/profile-media', setStaticCacheHint);
+app.use('/profile-media', express.static(profileMediaDir, staticCache));
+app.use('/profile-media', (_req, res) => {
+  res.status(404).type('text/plain; charset=utf-8').send('Profile media not found');
+});
 app.use('/src', (req, res, next) => {
   if (canServeLegacySource()) return devSourceStatic(req, res, next);
   return res.status(404).type('text/plain; charset=utf-8').send('Not found');
@@ -1416,7 +1425,7 @@ function ensurePaymentTestTryoutPackage(database) {
 
   try {
     const existing = database.prepare(`
-      SELECT id
+      SELECT id, tryout_id
       FROM tryout_packages
       WHERE tryout_id = ? OR lower(title) IN ('cek payment', 'test')
       ORDER BY CASE WHEN tryout_id = ? THEN 0 ELSE 1 END, id
@@ -1424,36 +1433,12 @@ function ensurePaymentTestTryoutPackage(database) {
     `).get(payload.tryout_id, payload.tryout_id);
 
     if (existing) {
-      database.prepare(`
-        UPDATE tryout_packages
-        SET tryout_id = ?,
-            title = ?,
-            description = ?,
-            price = ?,
-            original_price = ?,
-            badge = ?,
-            duration = ?,
-            questions = ?,
-            features = ?,
-            access_features = ?,
-            tone = ?,
-            sort_order = ?
-        WHERE id = ?
-      `).run(
-        payload.tryout_id,
-        payload.title,
-        payload.description,
-        payload.price,
-        payload.original_price,
-        payload.badge,
-        payload.duration,
-        payload.questions,
-        payload.features,
-        payload.access_features,
-        payload.tone,
-        payload.sort_order,
-        existing.id
-      );
+      // The package becomes admin-managed after creation. Startup may repair a
+      // legacy missing ID, but must preserve price and other admin edits.
+      if (String(existing.tryout_id || '').trim() !== payload.tryout_id) {
+        database.prepare('UPDATE tryout_packages SET tryout_id = ? WHERE id = ?')
+          .run(payload.tryout_id, existing.id);
+      }
       return;
     }
 

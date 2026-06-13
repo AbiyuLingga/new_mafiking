@@ -17,24 +17,24 @@ const Leaderboard = () => {
 
     async function loadTryoutOptions() {
       try {
-        const packages = await MafikingAPI.get("/api/tryout-packages");
+        const optionsData = await MafikingAPI.get("/api/progress/leaderboard/tryout-options");
         if (cancelled) return;
-        const packageOptions = Array.isArray(packages)
-          ? packages
+        const loadedOptions = Array.isArray(optionsData)
+          ? optionsData
               .map((pkg) => ({
-                id: String(pkg.tryout_id || "").trim(),
-                label: String(pkg.title || "").trim(),
-                meta: [pkg.questions ? `${Number(pkg.questions)} soal` : "", pkg.duration || ""].filter(Boolean).join(" · "),
+                id: String(pkg.id || "").trim(),
+                label: String(pkg.label || "").trim(),
+                meta: String(pkg.meta || "").trim(),
               }))
               .filter((option) => option.id && option.label)
           : [];
         const seen = new Set();
-        const options = [DEFAULT_TRYOUT_LEADERBOARD, ...packageOptions].filter((option) => {
+        const options = loadedOptions.filter((option) => {
           if (seen.has(option.id)) return false;
           seen.add(option.id);
           return true;
         });
-        setTryoutOptions(options.length ? options : [DEFAULT_TRYOUT_LEADERBOARD]);
+        setTryoutOptions(options);
         setSelectedTryoutId((current) => (
           options.some((option) => option.id === current)
             ? current
@@ -84,6 +84,7 @@ const Leaderboard = () => {
       ? "Total Poin (XP)"
       : "Poin (XP) Minggu Ini";
   const podiumRows = [rows[1], rows[0], rows[2]].filter(Boolean);
+  const mobilePodiumRows = rows.slice(0, 3);
   const showEmptyTryoutPodium = isTryoutTab && !loading && !error && rows.length === 0;
   const podiumSlots = showEmptyTryoutPodium
     ? [
@@ -93,6 +94,7 @@ const Leaderboard = () => {
       ]
     : podiumRows;
   const showPodium = !loading && !error && podiumSlots.length > 0;
+  const showMobilePodium = !loading && !error && mobilePodiumRows.length > 0;
   const selfRow = rows.find((user) => user.isMe) || null;
   const tableRows = selfRow ? rows.filter((user) => !user.isMe) : rows;
   const podiumGridClass = showEmptyTryoutPodium
@@ -138,6 +140,34 @@ const Leaderboard = () => {
     );
   }
 
+  function renderAvatar(user, className, fallbackClassName = "") {
+    const avatarUrl = String(user?.avatar_url || "").trim();
+    const initials = user?.initials || "U";
+    return (
+      <div className={`${className} overflow-hidden ${fallbackClassName || "bg-slate-700 text-white"} ${avatarUrl ? "p-0" : ""}`}>
+        {avatarUrl ? (
+          <React.Fragment>
+            <img
+              src={avatarUrl}
+              alt=""
+              className="h-full w-full object-cover"
+              loading="lazy"
+              decoding="async"
+              onError={(event) => {
+                const fallback = event.currentTarget.nextElementSibling;
+                event.currentTarget.remove();
+                fallback?.classList.remove("hidden");
+              }}
+            />
+            <span className="hidden h-full w-full items-center justify-center">{initials}</span>
+          </React.Fragment>
+        ) : (
+          initials
+        )}
+      </div>
+    );
+  }
+
   return (
     <section className="app-page-bg app-page-bg--peringkat h-[calc(100vh-72px)] overflow-hidden text-slate-900">
       <div className="mx-auto flex h-full max-w-6xl min-h-0 flex-col px-4 py-5 sm:px-6 lg:px-8">
@@ -159,7 +189,7 @@ const Leaderboard = () => {
           />
         </div>
 
-        {isTryoutTab && (
+        {isTryoutTab && tryoutOptions.length > 0 && (
           <div className="mb-4 flex shrink-0 gap-2 overflow-x-auto pb-1 hide-scrollbar">
             {tryoutOptions.map((option) => {
               const isSelected = option.id === selectedTryoutId;
@@ -207,9 +237,10 @@ const Leaderboard = () => {
                   }`}>
                     {user.rank}
                   </div>
-                  <div className={`mb-4 flex shrink-0 items-center justify-center rounded-full font-black tracking-wider ${avatarClass}`}>
-                    {!isEmpty && user.initials}
-                  </div>
+                  {!isEmpty
+                    ? renderAvatar(user, `mb-4 flex shrink-0 items-center justify-center rounded-full font-black tracking-wider ${avatarClass}`)
+                    : <div className={`mb-4 flex shrink-0 items-center justify-center rounded-full font-black tracking-wider ${avatarClass}`} />
+                  }
                   {!isEmpty && (
                     <React.Fragment>
                       <h2 className="leaderboard-podium-name text-base font-black text-ink lg:text-lg">
@@ -242,6 +273,46 @@ const Leaderboard = () => {
           </div>
         )}
 
+        {showMobilePodium && (
+          <div className="mb-4 grid shrink-0 grid-cols-3 gap-2 md:hidden">
+            {mobilePodiumRows.map((user) => {
+              const isChampion = user.rank === 1;
+              return (
+                <article
+                  key={`mobile-podium-${user.id}-${user.rank}`}
+                  className={`relative min-w-0 rounded-2xl border px-2.5 pb-3 pt-4 text-center shadow-sm ${
+                    isChampion
+                      ? "border-amber-300 bg-yel text-ink"
+                      : "border-slate-200 bg-white text-ink"
+                  }`}
+                >
+                  <div className={`absolute -top-2 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full text-[11px] font-black ring-2 ring-white ${
+                    isChampion ? "bg-ink text-white" : "bg-slate-100 text-slate-700"
+                  }`}>
+                    {user.rank}
+                  </div>
+                  {renderAvatar(
+                    user,
+                    "mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full text-xs font-black tracking-wider",
+                    isChampion ? "bg-ink text-white" : "bg-slate-700 text-white"
+                  )}
+                  <div className="truncate text-xs font-black text-ink">
+                    {user.display_name}
+                  </div>
+                  {user.fakultas && (
+                    <div className="mt-0.5 truncate text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                      {user.fakultas}
+                    </div>
+                  )}
+                  <div className="mt-2 text-sm font-black text-ink">
+                    {renderPrimaryMetric(user, true)}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="grid shrink-0 grid-cols-[64px_1fr_128px] gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-400 sm:grid-cols-[80px_1fr_180px] sm:px-6">
             <div>Rank</div>
@@ -251,18 +322,16 @@ const Leaderboard = () => {
 
           <div key={activeTab} className="custom-scrollbar leaderboard-list-transition min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto overscroll-contain">
             {selfRow && (
-              <div className="sticky top-0 z-10 border-b border-amber-200 bg-amber-50/95 px-4 py-3 backdrop-blur sm:px-6">
-                <div className="mb-2 text-[10px] font-black uppercase tracking-[0.28em] text-amber-600">
-                  Peringkat Dirimu
-                </div>
-                <div className="grid grid-cols-[64px_1fr_128px] items-center gap-3 rounded-xl border border-amber-200 bg-white px-4 py-4 shadow-sm sm:grid-cols-[80px_1fr_180px]">
-                  <div className="font-black tabular-nums text-amber-700">
-                    {selfRow.rank < 10 ? `0${selfRow.rank}` : selfRow.rank}
+              <div className="sticky top-0 z-10 border-b border-amber-200 bg-amber-50/95 backdrop-blur">
+                <div className="grid grid-cols-[64px_1fr_128px] items-center gap-3 px-4 py-3 sm:grid-cols-[80px_1fr_180px] sm:px-6">
+                  <div className="min-w-0">
+                    <div className="text-[9px] font-black uppercase tracking-widest text-amber-600">Kamu</div>
+                    <div className="font-black tabular-nums text-amber-800">
+                      #{selfRow.rank < 10 ? `0${selfRow.rank}` : selfRow.rank}
+                    </div>
                   </div>
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink text-sm font-black text-white ring-2 ring-amber-300">
-                      {selfRow.initials}
-                    </div>
+                    {renderAvatar(selfRow, "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-black ring-2 ring-amber-300", "bg-ink text-white")}
                     <div className="min-w-0">
                       <div className="truncate text-sm font-black text-ink sm:text-base">{selfRow.display_name}</div>
                       {selfRow.fakultas && (
@@ -313,16 +382,14 @@ const Leaderboard = () => {
               <div
                 key={`${activeTab}-${user.rank}-${user.id}`}
                 className={`grid grid-cols-[64px_1fr_128px] items-center gap-3 px-4 py-4 transition-colors hover:bg-slate-50 sm:grid-cols-[80px_1fr_180px] sm:px-6 ${
-                  user.rank <= 3 ? "md:hidden" : ""
+                  user.rank <= 3 ? "hidden" : ""
                 }`}
               >
                 <div className="font-black tabular-nums text-ink">
                   {user.rank < 10 ? `0${user.rank}` : user.rank}
                 </div>
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink text-sm font-black text-white">
-                    {user.initials}
-                  </div>
+                  {renderAvatar(user, "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-black", "bg-ink text-white")}
                   <div className="min-w-0">
                     <div className="truncate text-sm font-black text-ink sm:text-base">{user.display_name}</div>
                     {user.fakultas && (

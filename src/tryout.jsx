@@ -4,6 +4,7 @@ const PACKAGE_ACCESS_OPTIONS = [
   { id: "tryout-access", label: "Try Out paket" },
   { id: "daily-missions", label: "Misi Harian" },
   { id: "special-practice", label: "Latihan Soal Khusus" },
+  { id: "bimbel", label: "Bimbel" },
 ];
 
 const DEFAULT_PACKAGE_ACCESS_FEATURES = ["tryout-access", "daily-missions", "special-practice"];
@@ -289,11 +290,11 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context, c
         <section>
           <div className="max-w-6xl mx-auto px-6 md:px-8 pb-10">
             {loading ? (
-              <div className="grid md:grid-cols-3 gap-5">
-                {[1,2,3].map(i => <Skeleton key={i} className="h-96 rounded-3xl" />)}
+              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-5">
+                {[1,2,3].map(i => <Skeleton key={i} className="h-44 md:h-96 rounded-2xl md:rounded-3xl" />)}
               </div>
             ) : (
-              <div className="grid md:grid-cols-3 gap-5">
+              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-5">
                 {packages.map(pkg => (
                   <PackageCard
                     key={pkg.id}
@@ -319,7 +320,7 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context, c
         <section className="animate-fade-in">
           <div className="max-w-6xl mx-auto px-6 md:px-8 pb-10">
             {packages.filter(hasAccess).length > 0 ? (
-              <div className="grid md:grid-cols-3 gap-5">
+              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-5">
                 {packages.filter(hasAccess).map((pkg) => (
                   <PackageCard
                     key={pkg.id}
@@ -560,51 +561,57 @@ const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, 
   const mutedTextClass = feature ? "text-white/62" : "text-ink/60";
   const subtleTextClass = feature ? "text-white/50" : "text-ink/50";
   const dividerClass = feature ? "border-white/12" : "hairline";
+  const extraFeatureCount = Math.max(0, featureList.length - 2);
 
   return (
-    <article className={`rounded-3xl p-7 flex flex-col ${cardClass}`}>
-      <div className="flex items-center justify-between mb-5">
+    <article className={`rounded-2xl md:rounded-3xl p-4 md:p-7 flex flex-col ${cardClass}`}>
+      <div className="flex items-start justify-between gap-3 mb-3 md:mb-5">
         <AdminEditablePackageField pkg={pkg} field="badge" isAdmin={isAdmin} adminEdit={adminEdit}>
           <span className={feature ? "tag-yel tag" : "tag"}>{pkg.badge}</span>
         </AdminEditablePackageField>
-        <Icon.Trophy className={`w-5 h-5 ${feature ? "text-yel" : "text-ink/40"}`} />
+        <Icon.Trophy className={`w-4 h-4 md:w-5 md:h-5 shrink-0 ${feature ? "text-yel" : "text-ink/40"}`} />
       </div>
       <AdminEditablePackageField pkg={pkg} field="title" isAdmin={isAdmin} adminEdit={adminEdit}>
-        <h3 className="font-display font-bold text-2xl leading-tight tracking-[-0.02em]">{pkg.title}</h3>
+        <h3 className="font-display font-bold text-lg md:text-2xl leading-tight tracking-[-0.02em]">{pkg.title}</h3>
       </AdminEditablePackageField>
       <AdminEditablePackageField pkg={pkg} field="description" rows={3} isAdmin={isAdmin} adminEdit={adminEdit}>
-        <p className={`text-sm leading-relaxed mt-2 ${mutedTextClass}`}>{pkg.description}</p>
+        <p className={`text-xs md:text-sm leading-snug md:leading-relaxed mt-1.5 md:mt-2 line-clamp-2 md:line-clamp-none ${mutedTextClass}`}>{pkg.description}</p>
       </AdminEditablePackageField>
 
-      <div className={`grid grid-cols-2 gap-4 mt-6 pt-5 border-t ${dividerClass}`}>
+      <div className={`grid grid-cols-2 gap-2 md:gap-4 mt-3 md:mt-6 pt-3 md:pt-5 border-t ${dividerClass}`}>
         <AdminEditablePackageField pkg={pkg} field="duration" isAdmin={isAdmin} adminEdit={adminEdit}>
-          <div><div className={`text-xs ${subtleTextClass}`}>Durasi</div><div className="font-display font-bold text-xl">{pkg.duration}</div></div>
+          <div><div className={`text-[10px] md:text-xs ${subtleTextClass}`}>Durasi</div><div className="font-display font-bold text-base md:text-xl leading-tight">{pkg.duration}</div></div>
         </AdminEditablePackageField>
         <AdminEditablePackageField pkg={pkg} field="questions" isAdmin={isAdmin} adminEdit={adminEdit}>
-          <div><div className={`text-xs ${subtleTextClass}`}>Soal</div><div className="font-display font-bold text-xl tnum">{pkg.questions}</div></div>
+          <div><div className={`text-[10px] md:text-xs ${subtleTextClass}`}>Soal</div><div className="font-display font-bold text-base md:text-xl leading-tight tnum">{pkg.questions}</div></div>
         </AdminEditablePackageField>
       </div>
 
       <AdminEditablePackageField pkg={pkg} field="features" rows={4} isAdmin={isAdmin} adminEdit={adminEdit}>
-        <ul className="space-y-2.5 mt-5 mb-7 flex-1">
+        <ul className="space-y-1.5 md:space-y-2.5 mt-3 md:mt-5 mb-4 md:mb-7 flex-1">
           {featureList.map((f, i) => (
-            <li key={i} className={`flex items-start gap-2 text-sm ${feature ? "text-white/78" : "text-ink/75"}`}>
-              <Icon.Check className={`w-4 h-4 mt-0.5 shrink-0 ${feature ? "text-yel" : ""}`} />
+            <li key={i} className={`items-start gap-1.5 md:gap-2 text-xs md:text-sm leading-snug md:leading-normal ${i > 1 ? "hidden md:flex" : "flex"} ${feature ? "text-white/78" : "text-ink/75"}`}>
+              <Icon.Check className={`w-3.5 h-3.5 md:w-4 md:h-4 mt-0.5 shrink-0 ${feature ? "text-yel" : ""}`} />
               <span>{f}</span>
             </li>
           ))}
+          {extraFeatureCount > 0 && (
+            <li className={`md:hidden text-[11px] leading-tight ${feature ? "text-white/50" : "text-ink/45"}`}>
+              +{extraFeatureCount} fitur lain
+            </li>
+          )}
         </ul>
       </AdminEditablePackageField>
 
-      <div className={`pt-5 border-t ${dividerClass} flex items-end justify-between gap-3`}>
-        <div>
+      <div className={`pt-3 md:pt-5 border-t ${dividerClass} flex items-end justify-between gap-2 md:gap-3`}>
+        <div className="min-w-0">
           {pkg.original_price && (
             <AdminEditablePackageField pkg={pkg} field="original_price" isAdmin={isAdmin} adminEdit={adminEdit}>
-              <div className={`text-xs line-through ${feature ? "text-white/38" : "text-ink/40"}`}>{pkg.original_price}</div>
+              <div className={`text-xs md:text-sm line-through ${feature ? "text-white/38" : "text-ink/40"}`}>{pkg.original_price}</div>
             </AdminEditablePackageField>
           )}
           <AdminEditablePackageField pkg={pkg} field="price" isAdmin={isAdmin} adminEdit={adminEdit}>
-            <div className="font-display font-bold text-3xl tracking-[-0.02em]">{pkg.price}</div>
+            <div className="font-display font-bold text-xl md:text-3xl leading-tight tracking-[-0.02em]">{pkg.price}</div>
           </AdminEditablePackageField>
         </div>
         <button
@@ -621,9 +628,9 @@ const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, 
               setRoute({ route: "payment", payment: { type: "tryout", package: pkg } });
             }
           }}
-          className={feature ? "btn-yel !py-3 !px-5 text-sm" : "btn-ink !py-3 !px-5 text-sm"}
+          className={feature ? "btn-yel !py-2 !px-3 md:!py-3 md:!px-5 text-xs md:text-sm shrink-0" : "btn-ink !py-2 !px-3 md:!py-3 md:!px-5 text-xs md:text-sm shrink-0"}
         >
-          {hasAccess ? "Mulai" : "Beli"} <Icon.Arrow className="w-3.5 h-3.5" />
+          {hasAccess ? "Mulai" : "Beli"} <Icon.Arrow className="w-3 h-3 md:w-3.5 md:h-3.5" />
         </button>
       </div>
 

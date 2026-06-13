@@ -42,6 +42,23 @@ function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
 }
 
+function isValidPhoneNumber(value) {
+  return /^[0-9+\-\s]{8,20}$/.test(String(value || "").trim());
+}
+
+function parseAccessFeatures(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map((item) => String(item || "").trim()).filter(Boolean);
+    } catch (_) {
+      return value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
+    }
+  }
+  return [];
+}
+
 function isPaymentExpiredStatus(statusValue) {
   return String(statusValue || "").toUpperCase() === "EXPIRED";
 }
@@ -77,6 +94,7 @@ function paymentProductFromContext(context, selectedId = "cek-payment") {
       access: pkg.duration,
       purchaseType: "tryout",
       tryoutPackageId: pkg.id,
+      accessFeatures: parseAccessFeatures(pkg.access_features),
     };
   }
   const pkg = PAKET_LIST.find((paket) => paket.id === selectedId) || PAKET_LIST[0];
@@ -90,6 +108,7 @@ function paymentProductFromContext(context, selectedId = "cek-payment") {
     access: pkg.access,
     purchaseType: "subscription",
     packageId: pkg.id,
+    accessFeatures: [],
   };
 }
 
@@ -129,9 +148,11 @@ const PaymentCheckoutModal = ({ context, currentUser, onAccessChanged, onClose, 
   const [checkingPending, setCheckingPending] = useState(true);
   const [name] = useState(() => initialPaymentName(currentUser));
   const [email] = useState(() => initialPaymentEmail(currentUser));
+  const [phoneNumber, setPhoneNumber] = useState(() => currentUser?.phone_number || "");
   const accessRefreshDoneRef = useRef(false);
   const product = useMemo(() => paymentProductFromContext(context), [context]);
   const gatewayReady = gatewayConfig ? Boolean(gatewayConfig.active) : false;
+  const requiresBimbelPhone = product.accessFeatures.includes("bimbel") && !String(currentUser?.phone_number || "").trim();
 
   function notifyAccessChangedOnce() {
     if (accessRefreshDoneRef.current) return;
@@ -227,18 +248,24 @@ const PaymentCheckoutModal = ({ context, currentUser, onAccessChanged, onClose, 
     if (!isValidEmail(cleanEmail)) {
       throw new Error("Email akun belum valid. Login ulang atau lengkapi profil sebelum membeli.");
     }
+    const cleanPhone = String(phoneNumber || "").trim();
+    if (requiresBimbelPhone && !isValidPhoneNumber(cleanPhone)) {
+      throw new Error("No. WhatsApp wajib diisi untuk paket yang termasuk bimbel.");
+    }
     return product.purchaseType === "tryout"
       ? {
           purchaseType: "tryout",
           tryoutPackageId: product.tryoutPackageId,
           email: cleanEmail,
           name: cleanName,
+          phone_number: cleanPhone,
         }
       : {
           purchaseType: "subscription",
           packageId: product.packageId,
           email: cleanEmail,
           name: cleanName,
+          phone_number: cleanPhone,
         };
   }
 
@@ -364,14 +391,17 @@ const PaymentCheckoutModal = ({ context, currentUser, onAccessChanged, onClose, 
       loading={loading}
       onClose={onClose}
       onPay={handlePay}
+      phoneNumber={phoneNumber}
       product={product}
       promoCode={promoCode}
+      requiresBimbelPhone={requiresBimbelPhone}
+      setPhoneNumber={setPhoneNumber}
       setPromoCode={setPromoCode}
     />
   );
 };
 
-const CheckoutModal = ({ config, error, onClose, onPay, product, loading, promoCode, setPromoCode }) => {
+const CheckoutModal = ({ config, error, onClose, onPay, phoneNumber, product, loading, promoCode, requiresBimbelPhone, setPhoneNumber, setPromoCode }) => {
   const total = product.price;
   const ready = Boolean(config?.active);
   const providerLabel = config?.provider === "manual" ? "konfirmasi manual" : "QRIS";
@@ -409,6 +439,20 @@ const CheckoutModal = ({ config, error, onClose, onPay, product, loading, promoC
             />
             <button className="checkout-promo-btn" type="button">Gunakan</button>
           </div>
+          {requiresBimbelPhone ? (
+            <div className="checkout-phone-box">
+              <label className="checkout-phone-label">No WhatsApp untuk bimbel</label>
+              <input
+                className="checkout-promo-input"
+                inputMode="tel"
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="cth. 081234567890"
+                type="tel"
+                value={phoneNumber}
+              />
+              <div className="checkout-phone-note">Wajib untuk koordinasi jadwal dan grup bimbel.</div>
+            </div>
+          ) : null}
           {error ? (
             <div className="mt-4 rounded-xl border border-red-100 bg-red-50 px-3 py-3 text-sm font-semibold text-red-700">
               {error}

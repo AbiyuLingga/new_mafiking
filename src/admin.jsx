@@ -1285,15 +1285,57 @@ const AdminAiImportPanel = ({ subtopics, selectedSubtopic, onSelectSubtopic, onI
   );
 };
 
+const ADMIN_PACKAGE_ACCESS_OPTIONS = [
+  {
+    id: 'tryout-access',
+    label: 'Try Out paket',
+    description: 'User bisa membuka try out dari paket ini.',
+  },
+  {
+    id: 'daily-missions',
+    label: 'Misi Harian',
+    description: 'User mendapat akses fitur misi harian.',
+  },
+  {
+    id: 'special-practice',
+    label: 'Latihan Soal Khusus',
+    description: 'User mendapat akses latihan premium/khusus.',
+  },
+  {
+    id: 'bimbel',
+    label: 'Bimbel',
+    description: 'User wajib mengisi WhatsApp dan mendapat layanan bimbel.',
+  },
+];
+
+const ADMIN_DEFAULT_PACKAGE_ACCESS_FEATURES = ['tryout-access', 'daily-missions', 'special-practice'];
+
+function normalizeAdminPackageAccessFeatures(value, { useDefault = true } = {}) {
+  let raw = value;
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw || '[]');
+    } catch (e) {
+      raw = raw.split(/[\n,]/);
+    }
+  }
+  const selected = Array.isArray(raw)
+    ? raw.map((item) => String(item || '').trim()).filter((item) => ADMIN_PACKAGE_ACCESS_OPTIONS.some((option) => option.id === item))
+    : [];
+  const unique = [...new Set(selected)];
+  if (unique.length || !useDefault) return unique;
+  if (value == null || String(value).trim() === '') return ADMIN_DEFAULT_PACKAGE_ACCESS_FEATURES;
+  return [];
+}
+
+function getAdminPackageAccessLabel(featureId) {
+  const option = ADMIN_PACKAGE_ACCESS_OPTIONS.find((item) => item.id === featureId);
+  return option ? option.label : featureId;
+}
+
 // ─── Users table ──────────────────────────────────────────────────────────────
 const AdminTryoutPackageModal = ({ pkg, onDone, onClose }) => {
   const isEdit = Boolean(pkg && pkg.id);
-  const accessOptions = [
-    { id: 'tryout-access', label: 'Try Out paket' },
-    { id: 'daily-missions', label: 'Misi Harian' },
-    { id: 'special-practice', label: 'Latihan Soal Khusus' },
-  ];
-  const defaultAccessFeatures = ['tryout-access', 'daily-missions', 'special-practice'];
   function parseFeatures(value) {
     if (Array.isArray(value)) return value.join('\n');
     try {
@@ -1302,23 +1344,6 @@ const AdminTryoutPackageModal = ({ pkg, onDone, onClose }) => {
     } catch (e) {
       return String(value || '');
     }
-  }
-  function parseAccessFeatures(value) {
-    let raw = value;
-    if (typeof raw === 'string') {
-      try {
-        raw = JSON.parse(raw || '[]');
-      } catch (e) {
-        raw = raw.split(/[\n,]/);
-      }
-    }
-    const selected = Array.isArray(raw)
-      ? raw.map((item) => String(item || '').trim()).filter((item) => accessOptions.some((option) => option.id === item))
-      : [];
-    const unique = [...new Set(selected)];
-    if (unique.length) return unique;
-    if (value == null || String(value).trim() === '') return defaultAccessFeatures;
-    return [];
   }
   const [form, setForm] = useAdminState({
     tryout_id: (pkg && pkg.tryout_id) || '',
@@ -1330,7 +1355,7 @@ const AdminTryoutPackageModal = ({ pkg, onDone, onClose }) => {
     duration: (pkg && pkg.duration) || '',
     questions: (pkg && pkg.questions) || 0,
     features: parseFeatures(pkg && pkg.features),
-    access_features: parseAccessFeatures(pkg && pkg.access_features),
+    access_features: normalizeAdminPackageAccessFeatures(pkg && pkg.access_features),
     tone: (pkg && pkg.tone) || 'default',
     sort_order: (pkg && pkg.sort_order != null) ? pkg.sort_order : 0,
   });
@@ -1402,13 +1427,14 @@ const AdminTryoutPackageModal = ({ pkg, onDone, onClose }) => {
       </AdminField>
       <AdminField label="Aktifkan saat dibeli">
         <div className="flex flex-col gap-2">
-          {accessOptions.map((option) => {
+          {ADMIN_PACKAGE_ACCESS_OPTIONS.map((option) => {
             const selected = Array.isArray(form.access_features) ? form.access_features : [];
             const checked = selected.includes(option.id);
             return (
-              <label key={option.id} className="inline-flex items-center gap-2 text-sm font-bold text-ink/75">
+              <label key={option.id} className="flex items-start gap-3 rounded-xl border border-ink/10 bg-white px-3 py-2 text-sm text-ink/75">
                 <input
                   type="checkbox"
+                  className="mt-1"
                   checked={checked}
                   onChange={(e) => {
                     const current = Array.isArray(form.access_features) ? form.access_features : [];
@@ -1420,7 +1446,10 @@ const AdminTryoutPackageModal = ({ pkg, onDone, onClose }) => {
                     });
                   }}
                 />
-                <span>{option.label}</span>
+                <span>
+                  <span className="block font-black text-ink">{option.label}</span>
+                  <span className="block text-xs font-semibold leading-relaxed text-ink/45">{option.description}</span>
+                </span>
               </label>
             );
           })}
@@ -2214,6 +2243,15 @@ const AdminTryoutPackagesPanel = ({ setRoute }) => {
               <div className="flex-1 min-w-0">
                 <div className="admin-tree-label">{pkg.title}</div>
                 <div className="text-xs text-ink/45 mt-1">{pkg.price} - {pkg.duration || '-'} - {Number(pkg.questions) || 0} soal - {pkg.tryout_id || 'ID belum ada'}</div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {normalizeAdminPackageAccessFeatures(pkg.access_features, { useDefault: false }).length ? (
+                    normalizeAdminPackageAccessFeatures(pkg.access_features, { useDefault: false }).map((featureId) => (
+                      <span key={featureId} className="tag">{getAdminPackageAccessLabel(featureId)}</span>
+                    ))
+                  ) : (
+                    <span className="text-xs font-semibold text-ink/35">Tidak memberi fitur otomatis</span>
+                  )}
+                </div>
               </div>
               <span className="tag">{pkg.badge || 'Paket'}</span>
               <div className="flex gap-1 shrink-0">

@@ -327,13 +327,52 @@ const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authSta
     return null;
   };
 
+  const prefersFullPageGoogleAuth = () => {
+    try {
+      if (navigator.userAgentData && navigator.userAgentData.mobile) return true;
+    } catch (_) {}
+    try {
+      const coarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      const canHover = window.matchMedia && window.matchMedia('(hover: hover)').matches;
+      if (coarsePointer && !canHover) return true;
+    } catch (_) {}
+    try {
+      return /Android|iPhone|iPad|iPod|Mobile|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
+    } catch (_) {
+      return false;
+    }
+  };
+
   const handleClerkAuth = async () => {
     setClerkLoading(true);
     setError('');
     try {
-      if (!window.MafikingClerk || typeof window.MafikingClerk.openGooglePopup !== 'function') {
+      if (!window.MafikingClerk) {
         throw new Error('Login Google belum siap dimuat.');
       }
+
+      if (
+        prefersFullPageGoogleAuth()
+        && typeof window.MafikingClerk.openAuth === 'function'
+      ) {
+        await window.MafikingClerk.openAuth(isSignup ? 'signup' : 'login', {
+          provider: 'google',
+          redirect,
+        });
+        return;
+      }
+
+      if (typeof window.MafikingClerk.openGooglePopup !== 'function') {
+        if (typeof window.MafikingClerk.openAuth === 'function') {
+          await window.MafikingClerk.openAuth(isSignup ? 'signup' : 'login', {
+            provider: 'google',
+            redirect,
+          });
+          return;
+        }
+        throw new Error('Login Google belum siap dimuat.');
+      }
+
       const result = await window.MafikingClerk.openGooglePopup(isSignup ? 'signup' : 'login', {
         redirect,
       });
@@ -1310,7 +1349,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
       video.load();
       video.dataset.sourceKey = sourceKey;
     }
-    video.playbackRate = 2.5;
+    video.playbackRate = 1;
 
     let cleanedUp = false;
     let isVideoVisible = false;
@@ -1322,7 +1361,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
       video.muted = true;
       soundEnabledRef.current = false;
       setSoundEnabled(false);
-      video.playbackRate = 2.5;
+      video.playbackRate = 1;
       try {
         await video.play();
       } catch (_) {}
@@ -1332,7 +1371,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
       if (cleanedUp || !isVideoVisible) return;
       video.muted = !soundEnabledRef.current;
       video.volume = 1;
-      video.playbackRate = 2.5;
+      video.playbackRate = 1;
       try {
         await video.play();
         setSoundEnabled(!video.muted);
@@ -1347,7 +1386,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
       setSoundEnabled(true);
       video.muted = false;
       video.volume = 1;
-      video.playbackRate = 2.5;
+      video.playbackRate = 1;
       try {
         if (isVideoVisible) await video.play();
       } catch (_) {
@@ -1369,7 +1408,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
     video.pause();
     video.muted = !soundEnabledRef.current;
     video.volume = 1;
-    video.playbackRate = 2.5;
+    video.playbackRate = 1;
 
     const frame = demoVideoFrameRef.current || video;
     if (typeof IntersectionObserver === "function") {
@@ -1476,13 +1515,13 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
   const testimonials = [
     ["Jujur baru pertama ikut dan aku langsung ngerti sama penjelasannya. Tutornya keren-keren dan websitenya juga membantu aku belajar. Sukses selalu MAFIKING!", "Aya", "FTTM 25", "A"],
     ["Keren, tutornya berkualitas. Dari orang sampai mentornya mantab", "Rafi", "FTTM 25", "R"],
-    ["KEREN ANEETTT HUWUW >\\\< aku jadi paham materi materi yang aku lupa kyaaa >\\\< seru juga belajar sama my tomodachi", "Alfiqi", "FTMD 25", "A"],
+    ["KEREN ANEETTT HUWUW >///< aku jadi paham materi materi yang aku lupa kyaaa >///< seru juga belajar sama my tomodachi", "Alfiqi", "FTMD 25", "A"],
     ["Jujur jelas banget dan mudah dimengerti, tapi mungkin tulisan di papannya bisa diperbesar dan diperjelas", "Ragam", "FTMD 25", "R"],
     ["Jujur nyesel ga ikut dari awal! ngajarnya jelas pake bangettt. Harus lanjut plss MY SAVIOURS", "Marafen", "FTMD 25", "M"],
-    ["Tutornya jangan ganteng ganteng dongg aku gak fokus belajarnya :(", "-", "-", "-"],
-    ["Seru banget tutornya sangat friendly. materinya gampang dimengerti. We love MAFIKING", "-", "-", "-"],
-    ["Terimakasih mafiking. jujur sangat membantu memahami materi. tutor juga sangat GACOR debest lah. Buat juga untuk UAS MAT 2D yakk wkwkwkkwkw", "-", "-", "-"],
-    ["Tutornya gacor gacor dan helpful banget :D (sayang otak sayanya aja yang gak nyampe)", "-", "-", "-"],
+    ["Tutornya jangan ganteng ganteng dongg aku gak fokus belajarnya :(", "Anonymus", "-", "A"],
+    ["Seru banget tutornya sangat friendly. materinya gampang dimengerti. We love MAFIKING", "Anonymus", "-", "A"],
+    ["Terimakasih mafiking. jujur sangat membantu memahami materi. tutor juga sangat GACOR debest lah. Buat juga untuk UAS MAT 2D yakk wkwkwkkwkw", "Anonymus", "-", "A"],
+    ["Tutornya gacor gacor dan helpful banget :D (sayang otak sayanya aja yang gak nyampe)", "Anonymus", "-", "A"]
   ];
   const landingOffers = buildLandingOffers(tryoutPackages);
   const teacherLoopProfiles = [...teacherProfiles, ...teacherProfiles, ...teacherProfiles];
@@ -1623,7 +1662,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
           <LandingFade delay={80} className="relative z-10">
             <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 md:px-12 lg:px-20">
               <div className="grid grid-cols-2 gap-4 sm:gap-8 md:grid-cols-4 md:gap-4 md:divide-x md:divide-slate-100">
-                {[["250+", "Pengguna Aktif"], ["100+", "Soal Latihan"], ["98%", "Rating"], ["24/7", "Belajar Kapan Saja"]].map(([value, label]) => (
+                {[["250+", "Pengguna Aktif"], ["120+", "Soal Latihan"], ["98%", "Rating"], ["24/7", "Belajar Kapan Saja"]].map(([value, label]) => (
                   <div key={label} className="px-2 sm:px-4 text-left md:text-center"><div className="mb-1 sm:mb-2 text-xl sm:text-3xl font-extrabold text-slate-900 md:text-4xl">{value}</div><div className="text-xs sm:text-sm font-medium text-slate-500">{label}</div></div>
                 ))}
               </div>

@@ -65,7 +65,6 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
   const [semester, setSemester] = useState(1);
   const [dbInit, setDbInit] = useState(null);
   const [dbInitLoading, setDbInitLoading] = useState(true);
-  const [missionCountsByMapel, setMissionCountsByMapel] = useState({});
 
   const cardStyle = tweaks.chapterCard || "list";
   const selectorStyle = tweaks.mapelSelector || "pills";
@@ -93,30 +92,6 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
 
   useEffect(() => { loadDbChapters(); }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!hasPremiumAccess && !isAdmin) {
-      setMissionCountsByMapel({});
-      return () => { cancelled = true; };
-    }
-    MafikingAPI.get(`/api/missions${isAdmin ? '?admin=1' : ''}`)
-      .then((missions) => {
-        if (cancelled) return;
-        const counts = {};
-        (Array.isArray(missions) ? missions : []).forEach((mission) => {
-          const status = mission?.effective_status || mission?.status || 'locked';
-          const missionMapel = normalizeBelajarSection(mission?.mapel);
-          if (!missionMapel || missionMapel === "Try Out" || status === 'locked' || !String(mission?.question || '').trim()) return;
-          counts[missionMapel] = (counts[missionMapel] || 0) + 1;
-        });
-        setMissionCountsByMapel(counts);
-      })
-      .catch(() => {
-        if (!cancelled) setMissionCountsByMapel({});
-      });
-    return () => { cancelled = true; };
-  }, [hasPremiumAccess, isAdmin]);
-
   const problemCounts = (dbInit && dbInit.problemCounts) || {};
   const rawDbChapters = dbInit ? (dbInit.chapters || []).map((c, idx) => ({
     id: c.id,
@@ -141,15 +116,7 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
   const staticSemesterChapters = staticMapelChapters.filter(c => c.semester === semester);
   const allMapelChapters = useDb ? dbMapelChapters : staticMapelChapters;
   const baseChapters = useDb ? dbSemesterChapters : staticSemesterChapters;
-  const premiumMissionCount = (hasPremiumAccess || isAdmin) ? Number(missionCountsByMapel[mapel] || 0) : 0;
-  const chapters = premiumMissionCount > 0
-    ? baseChapters.map((chapter) => ({
-        ...chapter,
-        dailyMissionCount: premiumMissionCount,
-        includeDailyMissions: true,
-        total: Number(chapter.total || 0) + premiumMissionCount,
-      }))
-    : baseChapters;
+  const chapters = baseChapters;
   const isTryOutSection = mapel === "Try Out";
   const greetingName = isLoggedIn ? getTwoWordDisplayName(currentUser) : "";
   const showChapterLoading = !isTryOutSection && dbInitLoading;
@@ -322,7 +289,7 @@ const TryOutBelajarPanel = ({ setRoute, isLoggedIn, isAdmin = false }) => {
 
   const startPremiumTryout = () => {
     if (!hasPremiumAccess) {
-      showToast("Akses Try Out premium belum aktif untuk akun ini.", "error");
+      setRoute("tryout");
       return;
     }
     const timeLimitSeconds = parseBelajarTryoutDurationSeconds(premiumPackage.duration, 90 * 60);
@@ -406,11 +373,11 @@ const TryOutBelajarPanel = ({ setRoute, isLoggedIn, isAdmin = false }) => {
             </span>
             <button
               onClick={startPremiumTryout}
-              className={hasPremiumAccess ? "btn-yel !px-3 !py-1.5 sm:!px-4 sm:!py-2 text-[10px] sm:text-xs shrink-0" : "inline-flex items-center gap-1.5 sm:gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 sm:px-4 sm:py-2 text-[10px] sm:text-xs font-bold text-white/65 hover:bg-white/10 transition-colors shrink-0"}
+              className={hasPremiumAccess ? "btn-yel !px-3 !py-1.5 sm:!px-4 sm:!py-2 text-[10px] sm:text-xs shrink-0" : "inline-flex items-center gap-1.5 sm:gap-2 rounded-full border border-white bg-white px-3 py-1.5 sm:px-4 sm:py-2 text-[10px] sm:text-xs font-bold text-ink shadow-sm hover:bg-slate-100 transition-colors shrink-0"}
               type="button"
             >
-              {hasPremiumAccess ? "Mulai" : "Terkunci"}
-              {hasPremiumAccess ? <Icon.Arrow className="w-3 h-3 sm:w-3.5 sm:h-3.5 transition-transform group-hover:translate-x-1" /> : <Icon.Lock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
+              {hasPremiumAccess ? "Mulai" : "Beli"}
+              <Icon.Arrow className="w-3 h-3 sm:w-3.5 sm:h-3.5 transition-transform group-hover:translate-x-1" />
             </button>
           </div>
         </div>
@@ -690,7 +657,7 @@ const ChaptersNumbered = ({ chapters, setRoute, mapel, hasPremiumAccess = false 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
               {isActive && <span className="tag-yel tag">Aktif</span>}
-              <span className="text-xs text-ink/55 flex items-center gap-1"><Icon.Clock className="w-3 h-3" /> {c.est} · {c.total} soal{!hasPremiumAccess && c.total > 5 && <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider text-amber-700 ml-1">5 gratis</span>}</span>
+              <span className="text-xs text-ink/55 flex items-center gap-1"><Icon.Clock className="w-3 h-3" /> {c.est} · {c.total} soal</span>
             </div>
             <h3 className="font-display font-bold text-2xl md:text-3xl tracking-[-0.02em] leading-tight mb-1.5">{c.title}</h3>
             {pct > 0 && (
@@ -796,9 +763,6 @@ const ChaptersSoft = ({ chapters, setRoute, mapel, hasPremiumAccess = false }) =
               ) : (
                 <span className="text-[10px] sm:text-xs font-mono font-bold text-ink/45 flex items-center gap-1.5">
                   <span>{c.total} soal</span>
-                  {!hasPremiumAccess && c.total > 5 && (
-                    <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] sm:text-[9px] font-extrabold uppercase tracking-wider text-amber-700">5 gratis</span>
-                  )}
                 </span>
               )}
 
@@ -850,7 +814,7 @@ const ChaptersMagazine = ({ chapters, setRoute, mapel, hasPremiumAccess = false 
             )}
             {!pct && (
               <div className={`mt-4 pt-4 border-t ${isHero ? "border-white/10" : "hairline"} flex items-center justify-between`}>
-                <span className={`text-xs font-mono ${isHero ? "text-white/40" : "text-ink/45"}`}>{c.total} soal{!hasPremiumAccess && c.total > 5 && <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider text-amber-700 ml-1.5">5 gratis</span>}</span>
+                <span className={`text-xs font-mono ${isHero ? "text-white/40" : "text-ink/45"}`}>{c.total} soal</span>
                 <Icon.Arrow className={`w-4 h-4 transition-transform group-hover:translate-x-1 ${isHero ? "text-white/60" : ""}`} />
               </div>
             )}

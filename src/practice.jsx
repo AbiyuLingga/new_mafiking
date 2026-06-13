@@ -3,7 +3,7 @@
 const CANVAS_DEMO_VIDEO_SRC = "/assets/saas_demo_video_popup.mp4";
 const CANVAS_INTRO_LAST_SHOWN_KEY = "mafiking:canvasIntroLastShownAt";
 const CANVAS_INTRO_COOLDOWN_MS = 15 * 60 * 1000;
-const CANVAS_INTRO_PLAYBACK_RATE = 1.25;
+const CANVAS_INTRO_PLAYBACK_RATE = 1.75;
 
 function slugifyPracticePath(value, fallback = "latihan") {
   const slug = String(value || "")
@@ -75,6 +75,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   const [canvasProcess, setCanvasProcess] = useState(null);
   const [canvasProcessSlow, setCanvasProcessSlow] = useState(false);
   const [canvasDepsReady, setCanvasDepsReady] = useState(() => areCanvasDependenciesReady());
+  const [canvasCoachStep, setCanvasCoachStep] = useState(null);
 
   // Phase 1.3: Lazy-load KaTeX the first time the Practice page mounts so the
   // marketing/belajar routes do not pay the cost of math CSS+JS.
@@ -96,6 +97,19 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   const canAdminEditProblems = isAdmin && !isMissionPractice;
 
   function dismissCanvasIntro() { setShowCanvasIntro(false); }
+  function skipCanvasCoach() { setCanvasCoachStep(null); }
+  function startCanvasCoachAfterIntro() {
+    if (context?.disableCanvasMode) {
+      dismissCanvasIntro();
+      return;
+    }
+    if (requiresLoginForDiscussion()) {
+      requestDiscussionLogin();
+      return;
+    }
+    dismissCanvasIntro();
+    setCanvasCoachStep("mode-button");
+  }
   function requiresLogin() {
     return !context?.isPreview && !isLoggedIn && !isAdmin;
   }
@@ -132,12 +146,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     });
   }
   function openCanvasFromIntro() {
-    if (requiresLoginForDiscussion()) {
-      requestDiscussionLogin();
-      return;
-    }
-    dismissCanvasIntro();
-    switchMode("canvas");
+    startCanvasCoachAfterIntro();
   }
 
   useEffect(() => {
@@ -178,6 +187,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     timeExpiredNoticeRef.current = false;
     setShowCanvasIntro(shouldShowCanvasIntro(context));
     setMode(context?.initialMode === "canvas" ? "canvas" : "choice");
+    setCanvasCoachStep(null);
   }, [context?.id, context?.timeLimitSeconds, context?.disableCanvasIntro, context?.initialMode]);
 
   useEffect(() => {
@@ -207,6 +217,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
     setError("");
     setCanvasProcess(null);
     setShowResultModal(false);
+    setCanvasCoachStep((step) => step === "board" ? null : step);
   }, [problemIndex, session?.subtopic?.id]);
 
   useEffect(() => {
@@ -250,10 +261,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
         return;
       }
       const init = await MafikingAPI.get("/api/quiz/init");
-      const effectiveContext = context?.mapel && !context?.isMissionPractice && !context?.isTryoutSession
-        ? { ...context, includeDailyMissions: true }
-        : context;
-      const questionSource = chooseQuestionSource(init, effectiveContext);
+      const questionSource = chooseQuestionSource(init, context);
       if (!questionSource) {
         setSession({ problems: [], subtopic: { title: context?.title || "Latihan" } });
         setProblemIndex(0);
@@ -290,6 +298,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
 
   function moveProblem(delta) {
     const total = session?.problems?.length || 0;
+    setCanvasCoachStep(null);
     setProblemIndex((current) => Math.min(Math.max(current + delta, 0), total - 1));
   }
 
@@ -423,6 +432,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
 
   async function submitCanvas() {
     if (!problem) return;
+    setCanvasCoachStep(null);
     if (timeExpired) { setError("Waktu try out sudah habis."); return; }
     if (context?.isPreview) { setError("Canvas correction tidak tersedia di mode preview."); return; }
     if (requiresLoginForAnswer()) { requestAnswerLogin(); return; }
@@ -482,17 +492,32 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   }
 
   function switchMode(nextMode) {
-    if (nextMode === mode) return;
-    if (nextMode === "canvas" && context?.disableCanvasMode) return;
+    if (nextMode === mode) return true;
+    if (nextMode === "canvas" && context?.disableCanvasMode) return false;
     if (nextMode === "canvas" && requiresLoginForDiscussion()) {
       requestDiscussionLogin();
-      return;
+      return false;
     }
-    if (mode === "canvas" && boardDirty && !window.confirm("Beralih mode akan mengosongkan canvas. Lanjut?")) return;
+    if (mode === "canvas" && boardDirty && !window.confirm("Beralih mode akan mengosongkan canvas. Lanjut?")) return false;
     setMode(nextMode);
     setBoardDirty(false);
     setShowResultModal(false);
     setFocusMode(false);
+    if (nextMode !== "canvas") setCanvasCoachStep(null);
+    return true;
+  }
+
+  function switchModeWithCoach(nextMode) {
+    const didSwitch = switchMode(nextMode);
+    if (nextMode === "canvas" && didSwitch && canvasCoachStep === "mode-button") {
+      setCanvasCoachStep("board");
+    }
+    return didSwitch;
+  }
+
+  function handleBoardDirtyChange(nextDirty) {
+    setBoardDirty(nextDirty);
+    if (nextDirty) setCanvasCoachStep(null);
   }
 
   function selectChapter(chapter) {
@@ -579,7 +604,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
               </div>
               <div className="mafiking-answer-heading text-center">Masuk untuk melanjutkan</div>
               <p className="mafiking-canvas-instruction mt-3 text-center">
-                Kamu sudah mengerjakan 5 soal gratis. Masuk atau daftar akun Mafiking untuk mengakses semua soal dan fitur belajar lainnya.
+                Masuk atau daftar akun Mafiking untuk mengakses latihan soal berbayar dan fitur belajar lainnya.
               </p>
               <div className="flex items-center justify-center gap-3 mt-6">
                 <button
@@ -605,7 +630,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
               </div>
               <div className="mafiking-answer-heading text-center">Beli Paket untuk lanjut</div>
               <p className="mafiking-canvas-instruction mt-3 text-center">
-                Kamu sudah mengerjakan 5 soal gratis. dapatkan akses ke semua soal, pembahasan lengkap, dan fitur AI dengan membeli paket Mafiking.
+                Dapatkan akses ke semua soal, pembahasan lengkap, dan fitur AI dengan membeli paket Mafiking.
               </p>
               <div className="flex items-center justify-center gap-3 mt-6">
                 <button
@@ -644,12 +669,13 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
         boardRef={boardRef}
         canvasProcess={canvasProcess}
         canvasProcessSlow={canvasProcessSlow}
+        canvasCoachStep={canvasCoachStep}
         error={error}
         focusMode={focusMode}
         isAdmin={canAdminEditProblems}
         onBackToChoice={() => switchMode("choice")}
-        onSwitchMode={switchMode}
-        onBoardDirtyChange={setBoardDirty}
+        onSwitchMode={switchModeWithCoach}
+        onBoardDirtyChange={handleBoardDirtyChange}
         onFocusModeToggle={() => setFocusMode((v) => !v)}
         onMoveProblem={moveProblem}
         onProblemSelect={setProblemIndex}
@@ -664,6 +690,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
         onCloseResult={() => setShowResultModal(false)}
         subtopicTitle={session?.subtopic?.title}
         setRoute={setRoute}
+        onSkipCanvasCoach={skipCanvasCoach}
       />
     );
   }
@@ -699,7 +726,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
         onProblemSelect={setProblemIndex}
         onReloadSession={loadPractice}
         onSubmit={submitChoice}
-        onSwitchMode={switchMode}
+        onSwitchMode={switchModeWithCoach}
         problem={problem}
         problemIndex={problemIndex}
         problems={session?.problems || []}
@@ -713,8 +740,10 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
         getChoices={getChoices}
         getCorrectChoiceIndex={getCorrectChoiceIndex}
         showCanvasIntro={showCanvasIntro}
-        onDismissCanvasIntro={dismissCanvasIntro}
+        onDismissCanvasIntro={startCanvasCoachAfterIntro}
         onOpenCanvasFromIntro={openCanvasFromIntro}
+        canvasCoachStep={canvasCoachStep}
+        onSkipCanvasCoach={skipCanvasCoach}
         isCanvasModeDisabled={Boolean(context?.disableCanvasMode)}
         isTimedTryout={isTimedTryout}
         timeExpired={timeExpired}
@@ -724,10 +753,11 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   );
 };
 
-const ModeSegment = ({ value, onChange }) => (
+const ModeSegment = ({ coachTarget = null, value, onChange }) => (
   <div aria-label="Mode latihan" className="mode-segment" role="group">
     <button
       aria-pressed={value === "choice"}
+      data-mode-button="choice"
       className={`mode-segment-item ${value === "choice" ? "is-active" : ""}`}
       onClick={() => onChange("choice")}
       type="button"
@@ -735,8 +765,11 @@ const ModeSegment = ({ value, onChange }) => (
       Pilgan
     </button>
     <button
+      aria-describedby={coachTarget === "canvas" ? "canvas-coach-note" : undefined}
       aria-pressed={value === "canvas"}
-      className={`mode-segment-item ${value === "canvas" ? "is-active" : ""}`}
+      data-canvas-mode-button="true"
+      data-mode-button="canvas"
+      className={`mode-segment-item ${value === "canvas" ? "is-active" : ""}${coachTarget === "canvas" ? " canvas-coach-target" : ""}`}
       onClick={() => onChange("canvas")}
       type="button"
     >
@@ -1292,6 +1325,7 @@ const ChoiceView = ({
   problems, onProblemSelect, showHint, totalProblems, subtopicTitle, currentChapter, availableChapters,
   onChapterSelect, getChoices, getCorrectChoiceIndex,
   showCanvasIntro, onDismissCanvasIntro, onOpenCanvasFromIntro,
+  canvasCoachStep, onSkipCanvasCoach,
   isCanvasModeDisabled, isTimedTryout, timeExpired, timeLeftSeconds,
 }) => {
   const rawChoices = getChoices(problem);
@@ -1313,6 +1347,14 @@ const ChoiceView = ({
   const questionText = problem.question_display || problem.question_text || "";
 
   useEffect(() => { setQDraft(null); setEditingChoice(null); }, [problem.id]);
+  useEffect(() => {
+    if (canvasCoachStep !== "mode-button") return;
+    const frame = window.requestAnimationFrame(() => {
+      const button = document.querySelector('[data-canvas-mode-button="true"]');
+      button && button.focus && button.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [canvasCoachStep]);
 
   async function saveProblem(overrides) {
     setAdminSaving(true);
@@ -1356,6 +1398,17 @@ const ChoiceView = ({
       {showCanvasIntro && (
         <CanvasIntroModal onDismiss={onDismissCanvasIntro} onOpenCanvas={onOpenCanvasFromIntro} />
       )}
+      {canvasCoachStep === "mode-button" && (
+        <>
+          <div className="canvas-coach-dim" aria-hidden="true" />
+          <div id="canvas-coach-note" className="canvas-coach-note" role="status">
+            Tekan Kanvas untuk mulai menulis jawaban.
+          </div>
+          <button className="canvas-coach-skip" onClick={onSkipCanvasCoach} type="button">
+            Lewati
+          </button>
+        </>
+      )}
       <div className="mafiking-session-bar">
         <button className="mafiking-back-button" onClick={onBack} type="button">
           <Icon.ChevL className="w-4 h-4" />
@@ -1375,7 +1428,13 @@ const ChoiceView = ({
               {formatDurationClock(timeLeftSeconds || 0)}
             </div>
           )}
-          {!isCanvasModeDisabled && <ModeSegment value="choice" onChange={onSwitchMode} />}
+          {!isCanvasModeDisabled && (
+            <ModeSegment
+              coachTarget={canvasCoachStep === "mode-button" ? "canvas" : null}
+              value="choice"
+              onChange={onSwitchMode}
+            />
+          )}
         </div>
       </div>
 
@@ -1883,18 +1942,27 @@ const CanvasProcessOverlay = ({ phase, slow }) => {
 };
 
 const CanvasView = ({
-  attempt, boardDirty, boardRef, canvasProcess, canvasProcessSlow, error, focusMode, isAdmin, onBackToChoice, onSwitchMode,
+  attempt, boardDirty, boardRef, canvasCoachStep, canvasProcess, canvasProcessSlow, error, focusMode, isAdmin, onBackToChoice, onSwitchMode,
   onBoardDirtyChange, onFocusModeToggle, onMoveProblem, onProblemSelect,
   onReloadSession, onSubmit, problem,
   problemIndex, problems, showResultModal, submitting, totalProblems, onCloseResult,
-  subtopicTitle, setRoute,
+  subtopicTitle, setRoute, onSkipCanvasCoach,
 }) => {
   const AnswerBoard = window.AnswerBoard;
 
   const [cqDraft, setCqDraft] = useState(null);
   const [cAdminSaving, setCAdminSaving] = useState(false);
+  const showCanvasCoachHint = canvasCoachStep === "board" && !boardDirty && !submitting && !canvasProcess;
 
   useEffect(() => { setCqDraft(null); }, [problem.id]);
+  useEffect(() => {
+    if (canvasCoachStep !== "board") return undefined;
+    const timer = window.setTimeout(() => {
+      const board = document.querySelector(".answer-board-shell");
+      board && board.scrollIntoView && board.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [canvasCoachStep, problem.id]);
 
   async function saveCanvasQuestion() {
     if (cqDraft === null) return;
@@ -1935,6 +2003,11 @@ const CanvasView = ({
   return (
     <div className={`mafiking-practice mafiking-canvas-practice ${focusMode ? "is-focus-mode" : ""}`}>
       <CanvasProcessOverlay phase={canvasProcess} slow={canvasProcessSlow} />
+      {showCanvasCoachHint && (
+        <button className="canvas-coach-skip canvas-coach-skip-board" onClick={onSkipCanvasCoach} type="button">
+          Lewati
+        </button>
+      )}
       {!focusMode ? (
         <div className="mafiking-session-bar">
           <button className="mafiking-back-button" onClick={() => setRoute("belajar")} type="button">
@@ -2067,6 +2140,7 @@ const CanvasView = ({
         onDirtyChange={onBoardDirtyChange}
         onFocusModeToggle={onFocusModeToggle}
         onSubmit={onSubmit}
+        showCanvasCoachHint={showCanvasCoachHint}
         stickyQuestion={(
           <div className="canvas-board-question-card">
             <div className="mafiking-question-meta">
@@ -2122,17 +2196,6 @@ function getCurrentChapter(context, session, availableChapters) {
 }
 
 async function loadQuestionSource(questionSource) {
-  const withDailyMissionProblems = async (data) => {
-    if (!questionSource.includeDailyMissions) return data;
-    const missionData = await MafikingAPI.get(`/api/missions/premium-practice/${encodeURIComponent(questionSource.mapelSlug || "matematika")}`).catch(() => null);
-    const missionProblems = Array.isArray(missionData?.problems) ? missionData.problems : [];
-    if (!missionProblems.length) return data;
-    return {
-      ...data,
-      problems: [...(data?.problems || []), ...missionProblems],
-    };
-  };
-
   if (questionSource.type === "daily-missions") {
     const data = await MafikingAPI.get(`/api/missions/premium-practice/${encodeURIComponent(questionSource.mapelSlug || "matematika")}`);
     return {
@@ -2149,10 +2212,10 @@ async function loadQuestionSource(questionSource) {
       .filter(Boolean)
       .flatMap((data) => data.problems.map((p) => ({ ...p, sourceSubtopic: data.subtopic })));
     const easyProblems = filterProblemsByDifficulty(problems, "Easy", { strict: true });
-    return withDailyMissionProblems({
+    return {
       problems: limitProblems(easyProblems, questionSource.limit || 1),
       subtopic: { id: "public-easy-canvas", title: questionSource.title || "Latihan Canvas Mudah" },
-    });
+    };
   }
 
   if (questionSource.type === "subtopic") {
@@ -2164,10 +2227,10 @@ async function loadQuestionSource(questionSource) {
       ),
       questionSource.limit
     );
-    return withDailyMissionProblems({
+    return {
       ...data,
       problems,
-    });
+    };
   }
   const subtopicSessions = await Promise.all(
     questionSource.subtopics.map((s) => MafikingAPI.get(`/api/quiz/subtopics/${s.id}/full`))
@@ -2175,10 +2238,10 @@ async function loadQuestionSource(questionSource) {
   const problems = subtopicSessions.flatMap((data) =>
     data.problems.map((p) => ({ ...p, sourceSubtopic: data.subtopic }))
   );
-  return withDailyMissionProblems({
+  return {
     problems: limitProblems(filterProblemsByDifficulty(problems, questionSource.difficulty), questionSource.limit),
     subtopic: { id: questionSource.chapter.id, title: questionSource.title },
-  });
+  };
 }
 
 function chooseQuestionSource(init, context) {
@@ -2188,32 +2251,18 @@ function chooseQuestionSource(init, context) {
   const withProblems = allSubtopics.filter((s) => Number(problemCounts[s.id] || 0) > 0);
   const mapel = normalizeText(context?.mapel);
   const mapelSlug = slugifyPracticePath(context?.mapelSlug || context?.mapel || "matematika", "matematika");
-  const includeDailyMissions = Boolean(context?.includeDailyMissions);
   const dailyMissionSource = () => ({
-    includeDailyMissions: false,
     mapelSlug,
     title: context?.title || "Latihan",
     type: "daily-missions",
   });
-  const withDailyMissionSource = (source) => ({
-    ...source,
-    includeDailyMissions,
-    mapelSlug,
-  });
   const limit = Number(context?.problemLimit || 0);
   const difficulty = context?.difficulty || "";
-  if (!withProblems.length) {
-    if (includeDailyMissions) return dailyMissionSource();
-    return null;
-  }
-  if (!context) return { subtopic: withProblems[0], type: "subtopic" };
   if (context?.isMissionBank) {
-    return {
-      mapelSlug,
-      title: context.title || "Latihan",
-      type: "daily-missions",
-    };
+    return dailyMissionSource();
   }
+  if (!withProblems.length) return null;
+  if (!context) return { subtopic: withProblems[0], type: "subtopic" };
   if (context.publicEasyCanvas) {
     const subtopics = mapel
       ? chapters
@@ -2222,12 +2271,12 @@ function chooseQuestionSource(init, context) {
           .filter((subtopic) => Number(problemCounts[subtopic.id] || 0) > 0)
       : withProblems;
     if (!subtopics.length) return null;
-    return withDailyMissionSource({
+    return {
       limit: limit || 1,
       subtopics,
       title: context.title || "Latihan Canvas Mudah",
       type: "public-easy",
-    });
+    };
   }
 
   if (context.tryoutMode === "math") {
@@ -2236,24 +2285,21 @@ function chooseQuestionSource(init, context) {
       .flatMap((chapter) => chapter.subtopics || [])
       .filter((subtopic) => Number(problemCounts[subtopic.id] || 0) > 0);
     if (!subtopics.length) return null;
-    return withDailyMissionSource({
+    return {
       chapter: { id: context.id || "tryout-math", title: context.title || "Try Out Matematika" },
       limit: Number(context.problemLimit || 15),
       subtopics,
       title: context.title || "Try Out Matematika",
       type: "chapter",
-    });
+    };
   }
 
   const title = normalizeText(context.title);
   if (title.includes("teknik integrasi") || title === "integral" || title.includes("integral")) {
     const integralChapter = chapters.find((c) => normalizeText(c.title).includes("integral"));
     const subtopics = (integralChapter?.subtopics || []).filter((s) => Number(problemCounts[s.id] || 0) > 0);
-    if (!integralChapter || !subtopics.length) {
-      if (includeDailyMissions) return dailyMissionSource();
-      return null;
-    }
-    return withDailyMissionSource({ chapter: integralChapter, difficulty, limit, subtopics, title: context.title, type: "chapter" });
+    if (!integralChapter || !subtopics.length) return null;
+    return { chapter: integralChapter, difficulty, limit, subtopics, title: context.title, type: "chapter" };
   }
 
   const searchTerms = [context.title, ...(context.topics || [])]
@@ -2270,9 +2316,8 @@ function chooseQuestionSource(init, context) {
     const haystack = normalizeText(`${s.title} ${s.slug} ${s.description || ""}`);
     return searchTerms.some((t) => haystack.includes(t) || t.includes(haystack));
   });
-  if (matched) return withDailyMissionSource({ difficulty, limit, subtopic: matched, type: "subtopic" });
-  if (mapel && searchableSubtopics.length) return withDailyMissionSource({ difficulty, limit, subtopic: searchableSubtopics[0], type: "subtopic" });
-  if (includeDailyMissions) return dailyMissionSource();
+  if (matched) return { difficulty, limit, subtopic: matched, type: "subtopic" };
+  if (mapel && searchableSubtopics.length) return { difficulty, limit, subtopic: searchableSubtopics[0], type: "subtopic" };
   return null;
 }
 
