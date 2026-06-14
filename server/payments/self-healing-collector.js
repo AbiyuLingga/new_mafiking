@@ -4,7 +4,7 @@
  * @fileoverview Self-healing mutation collector.
  *
  * Phase B of the self-healing payment plan. Replaces the original
- * `lib/mutation-collector.js` with a collector that:
+ * `server/payments/mutation-collector.js` with a collector that:
  *
  * 1. Wraps a 3-state circuit breaker (CLOSED → OPEN → HALF_OPEN → CLOSED).
  * 2. Detects qris-mutasi session-expired errors and forces a client re-init.
@@ -22,7 +22,7 @@
  *
  * Backward compatibility: `startSelfHealingCollector` is exported as
  * `startSelfHealingCollector`. `startMutationCollector` in
- * `lib/mutation-collector.js` delegates here when the
+ * `server/payments/mutation-collector.js` delegates here when the
  * `SELF_HEALING_COLLECTOR` feature flag is on.
  */
 

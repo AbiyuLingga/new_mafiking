@@ -290,6 +290,20 @@ function makePaymentDb() {
         assert.equal(process.cwd(), beforeCwd, 'cwd unchanged after chdir-throw');
         ok('Cookie atomicity: QrisMutasiProvider._ensureClient restores cwd even when chdir throws');
 
+        const absoluteCookieProvider = new QrisMutasiProvider({
+            email: 'test@example.com',
+            password: 'x',
+            cookieDir: sandbox,
+            timeout: 1000,
+        });
+        await absoluteCookieProvider._ensureClient();
+        assert.equal(
+            absoluteCookieProvider.qris.cookieFile,
+            path.join(sandbox, `${absoluteCookieProvider._hash('test@example.comx')}_cookie.txt`),
+            'qris-mutasi cookie path is pinned to the sandbox'
+        );
+        ok('Cookie atomicity: qris-mutasi uses an absolute sandbox cookie path');
+
         fs.rmSync(sandbox, { recursive: true, force: true });
     } catch (err) {
         fail('Cookie atomicity: process.cwd() restoration', err);

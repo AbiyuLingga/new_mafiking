@@ -1,4 +1,4 @@
-// lib/feature-flags.js
+// server/config/feature-flags.js
 // Runtime feature flags for the v3 payment system.
 // Default: all flags ON. Set env var to 'false' to disable.
 

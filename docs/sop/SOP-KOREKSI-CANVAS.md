@@ -28,7 +28,7 @@ Frontend tampilkan modal hasil
 
 ## 2. Capture Gambar (Frontend)
 
-**File:** `src/drawing-canvas.jsx`, `src/answer-board.jsx`, `src/practice.jsx`
+**File:** `src/features/practice/drawing-canvas.jsx`, `src/features/practice/answer-board.jsx`, `src/features/practice/practice.jsx`
 
 Saat user klik tombol "Kirim Jawaban", fungsi `submitCanvas()` di `practice.jsx:125` dipanggil:
 
@@ -293,7 +293,7 @@ Backend mengembalikan:
 
 ## 12. Tampilan Hasil (Frontend)
 
-**File:** `src/practice.jsx` → komponen `CanvasResultModal`
+**File:** `src/features/practice/practice.jsx` → komponen `CanvasResultModal`
 
 Modal hasil menampilkan:
 1. **Badge skor** — bulat, warna hijau (benar) atau kuning (salah/parsial)
@@ -358,7 +358,7 @@ Membuat raport belajar dari riwayat koreksi user. Backend memakai dua window: ma
 }
 ```
 
-Pemilihan item rekomendasi tidak diserahkan bebas ke AI. Backend menggabungkan ringkasan AI dengan output deterministik dari `server/learning/recommendation-engine.js`, berdasarkan `data/recommendation-catalog.json` dan `docs/purcell-inspired-question-bank.md`. `recommendedQuestions` tetap ada untuk kompatibilitas lama, sedangkan UI profil memakai `recommendedItems` saat tersedia.
+Pemilihan item rekomendasi tidak diserahkan bebas ke AI. Backend menggabungkan ringkasan AI dengan output deterministik dari `server/learning/recommendation-engine.js`, berdasarkan `data/recommendation-catalog.json` dan `docs/product/purcell-inspired-question-bank.md`. `recommendedQuestions` tetap ada untuk kompatibilitas lama, sedangkan UI profil memakai `recommendedItems` saat tersedia.
 
 Jika tidak ada API key aktif → fallback memakai engine lokal yang menghitung kebutuhan skill dan memilih soal katalog tanpa memanggil AI.
 

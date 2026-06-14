@@ -20,8 +20,13 @@ const allowedRootFiles = new Set([
   'postcss.config.js',
   'server.js',
   'tailwind.config.js',
-  'tweaks-panel.jsx',
   'vite.config.js',
+]);
+
+const allowedSrcRootFiles = new Set([
+  'src/main.css',
+  'src/main.jsx',
+  'src/styles.css',
 ]);
 
 const trackedFiles = execFileSync('git', ['ls-files', '-z'], {
@@ -36,6 +41,12 @@ for (const file of trackedFiles) {
   }
   if (/^scripts\/test-.*\.js$/.test(file)) {
     violations.push(`${file}: test harus berada di tests/`);
+  }
+  if (/^(lib|middleware|routes)\//.test(file)) {
+    violations.push(`${file}: backend harus berada di server/`);
+  }
+  if (/^src\/[^/]+$/.test(file) && !allowedSrcRootFiles.has(file)) {
+    violations.push(`${file}: source frontend harus berada di core/pages/features`);
   }
   if (
     /(^|\/)database\.sqlite(?:$|-)/.test(file)

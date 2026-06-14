@@ -81,8 +81,8 @@ Responsibilities:
 
 - Load fonts and `src/main.jsx` as the Vite module entry.
 - Load React 18 UMD and expose `window.React` / `window.ReactDOM` for existing global-style JSX files.
-- Load shell dependencies in legacy order before `src/app.jsx`.
-- Keep route files out of the main chunk; `src/app.jsx` dynamic-imports route chunks.
+- Load shell dependencies in legacy order before `src/core/app.jsx`.
+- Keep route files out of the main chunk; `src/core/app.jsx` dynamic-imports route chunks.
 
 Legacy fallback file:
 
@@ -101,31 +101,31 @@ Responsibilities:
 Script load order matters:
 
 ```text
-tweaks-panel.jsx
-src/clerk-auth.jsx
-src/math-loader.js
-src/backend-api.jsx
-src/shared.jsx
-src/onboarding.jsx
-src/route-prefetch.js
-src/lobby.jsx
-src/belajar.jsx
-src/profile.jsx
-src/invoices.jsx
-src/toolbar.jsx
-src/drawing-canvas.jsx
-src/answer-board.jsx
-src/practice.jsx
-src/misi.jsx
-src/tryout.jsx
-src/leaderboard.jsx
-src/payment.jsx
-src/admin-monitoring.jsx
-src/admin.jsx
-src/app.jsx
+/tweaks-panel.jsx -> src/core/tweaks-panel.jsx
+src/core/clerk-auth.jsx
+src/core/math-loader.js
+src/core/backend-api.jsx
+src/core/shared.jsx
+src/core/onboarding.jsx
+src/core/route-prefetch.js
+src/pages/lobby.jsx
+src/pages/belajar.jsx
+src/pages/profile.jsx
+src/pages/invoices.jsx
+src/features/practice/toolbar.jsx
+src/features/practice/drawing-canvas.jsx
+src/features/practice/answer-board.jsx
+src/features/practice/practice.jsx
+src/pages/misi.jsx
+src/pages/tryout.jsx
+src/pages/leaderboard.jsx
+src/pages/payment.jsx
+src/features/admin/admin-monitoring.jsx
+src/features/admin/admin.jsx
+src/core/app.jsx
 ```
 
-`src/app.jsx` must load last because it mounts the React root and expects previous components to exist globally.
+`src/core/app.jsx` must load last because it mounts the React root and expects previous components to exist globally.
 
 ## Frontend Architecture
 
@@ -135,31 +135,31 @@ The production frontend is Vite-built, while components preserve browser-global 
 
 | File | Role |
 | --- | --- |
-| `src/app.jsx` | Route state, tweaks defaults, root render. |
-| `src/shared.jsx` | Navigation, footer, icons, shared components. |
-| `src/backend-api.jsx` | Same-origin `fetch` helper. |
-| `src/clerk-auth.jsx` | Static-Babel Clerk bridge: loads Clerk browser scripts, opens sign-in/sign-up, and syncs Clerk users to local sessions. |
-| `src/onboarding.jsx` | Mandatory profile completion modal for non-admin users whose local profile fields are incomplete. |
-| `src/route-prefetch.js` | Shared Vite route-loader registry, adaptive idle prefetch, mobile intent prefetch, and route timing marks. |
-| `src/lobby.jsx` | Public marketing landing plus login/sign-up screen. |
-| `src/belajar.jsx` | Free Try Out tab, static chapter cards, animated mapel selector, chapter-to-practice navigation. |
-| `src/practice.jsx` | Practice route, multiple-choice/canvas mode state, question-source mapping, correction submit. |
-| `src/toolbar.jsx` | Canvas drawing toolbar, eraser/lasso controls, focus-mode edge navigation. |
-| `src/drawing-canvas.jsx` | Low-level writable canvas surface. |
-| `src/answer-board.jsx` | Stylus answer board wrapper and canvas export surface. |
-| `src/profile.jsx` | Profile/report view using progress and correction APIs. |
-| `src/misi.jsx` | Daily mission screen. |
-| `src/tryout.jsx` | Paket / paid tryout package screen; `Semua Paket` and `Paket Saya` share the same `PackageCard` layout. |
-| `src/leaderboard.jsx` | Peringkat page with isolated-scroll leaderboard and `Semua` / `Top Mingguan` views. |
-| `src/payment.jsx` | Checkout popup plus QRIS/manual popup rendering and status polling. |
-| `src/invoices.jsx` | Authenticated user payment-history page, pending-status reopen action, and printable invoice view. |
-| `src/admin.jsx` | Admin page/modal shell, subject/Try Out content CRUD, import tab, users tab, and monitoring tab shell. |
+| `src/core/app.jsx` | Route state, tweaks defaults, root render. |
+| `src/core/shared.jsx` | Navigation, footer, icons, shared components. |
+| `src/core/backend-api.jsx` | Same-origin `fetch` helper. |
+| `src/core/clerk-auth.jsx` | Static-Babel Clerk bridge: loads Clerk browser scripts, opens sign-in/sign-up, and syncs Clerk users to local sessions. |
+| `src/core/onboarding.jsx` | Mandatory profile completion modal for non-admin users whose local profile fields are incomplete. |
+| `src/core/route-prefetch.js` | Shared Vite route-loader registry, adaptive idle prefetch, mobile intent prefetch, and route timing marks. |
+| `src/pages/lobby.jsx` | Public marketing landing plus login/sign-up screen. |
+| `src/pages/belajar.jsx` | Free Try Out tab, static chapter cards, animated mapel selector, chapter-to-practice navigation. |
+| `src/features/practice/practice.jsx` | Practice route, multiple-choice/canvas mode state, question-source mapping, correction submit. |
+| `src/features/practice/toolbar.jsx` | Canvas drawing toolbar, eraser/lasso controls, focus-mode edge navigation. |
+| `src/features/practice/drawing-canvas.jsx` | Low-level writable canvas surface. |
+| `src/features/practice/answer-board.jsx` | Stylus answer board wrapper and canvas export surface. |
+| `src/pages/profile.jsx` | Profile/report view using progress and correction APIs. |
+| `src/pages/misi.jsx` | Daily mission screen. |
+| `src/pages/tryout.jsx` | Paket / paid tryout package screen; `Semua Paket` and `Paket Saya` share the same `PackageCard` layout. |
+| `src/pages/leaderboard.jsx` | Peringkat page with isolated-scroll leaderboard and `Semua` / `Top Mingguan` views. |
+| `src/pages/payment.jsx` | Checkout popup plus QRIS/manual popup rendering and status polling. |
+| `src/pages/invoices.jsx` | Authenticated user payment-history page, pending-status reopen action, and printable invoice view. |
+| `src/features/admin/admin.jsx` | Admin page/modal shell, subject/Try Out content CRUD, import tab, users tab, and monitoring tab shell. |
 | `src/styles.css` | Local custom CSS and appended feature styles. |
-| `tweaks-panel.jsx` | Tweaks panel and persisted tweak state. |
+| `src/core/tweaks-panel.jsx` | Tweaks panel and persisted tweak state. |
 
 ### Route Model
 
-`src/app.jsx` keeps a simple route string in React state:
+`src/core/app.jsx` keeps a simple route string in React state:
 
 ```text
 lobby
@@ -203,7 +203,7 @@ Route objects are also used for auth redirects, payment context, and Belajar sec
 }
 ```
 
-`src/app.jsx` stores `practice` as `practiceContext` and passes it into `Practice`. It also stores the selected Belajar section so `Coba Gratis` can land directly on the free Try Out tab.
+`src/core/app.jsx` stores `practice` as `practiceContext` and passes it into `Practice`. It also stores the selected Belajar section so `Coba Gratis` can land directly on the free Try Out tab.
 
 The global `Nav` is intentionally not rendered while `route === "practice"`, `route === "lobby"`, or while `route === "payment"` has a `merchantOrderId` query. The practice route owns its own session bar and canvas toolbar, the public landing owns its own marketing header, and payment status owns a modal-style popup that must not be pushed under the app shell nav.
 
@@ -213,7 +213,7 @@ Payment status URLs preserve their order query:
 /payment?merchantOrderId=MFK-...
 ```
 
-`appStateToPath()` must keep that query when syncing route state to browser history; otherwise the app cannot reopen the order status popup. Normal package purchase should not navigate to `/payment`; `src/app.jsx` intercepts `{ route: "payment", payment: ... }` and renders `PaymentCheckoutModal` over the current page.
+`appStateToPath()` must keep that query when syncing route state to browser history; otherwise the app cannot reopen the order status popup. Normal package purchase should not navigate to `/payment`; `src/core/app.jsx` intercepts `{ route: "payment", payment: ... }` and renders `PaymentCheckoutModal` over the current page.
 
 ### Public Landing And Access Gates
 
@@ -221,12 +221,12 @@ Payment status URLs preserve their order query:
 - Clicking the Mafiking logo from app routes returns to the public landing.
 - The landing `Coba Gratis` CTA routes to `Belajar -> Try Out`.
 - Landing media slots are loaded from `GET /api/landing-media`; admin mode can replace them inline through `/api/admin/landing-media`, while the old Admin Panel `Landing Page` tab remains removed.
-- The landing page uses local reveal/pop animations in `src/lobby.jsx` and `src/styles.css`; it does not rely on a bundled Framer Motion runtime in this static-Babel app.
+- The landing page uses local reveal/pop animations in `src/pages/lobby.jsx` and `src/styles.css`; it does not rely on a bundled Framer Motion runtime in this static-Babel app.
 - The demo video section intentionally has no grid background after the latest landing UI correction.
-- Login/sign-up screens expose the local email/password flow and Clerk Google auth. New local email/password accounts must verify their email via a single-use verification link before login is allowed. Clerk browser scripts are loaded dynamically by `src/clerk-auth.jsx`.
-- After auth succeeds, `GET /api/auth/me` marks incomplete non-admin profiles with `profile_needs_completion`; `src/app.jsx` then renders the fixed, non-dismissible `ProfileOnboardingModal`. If a registered non-admin already completed onboarding but has no `phone_number`, `src/app.jsx` can render a one-time dismissible `PhoneNumberPromptModal`; dismissal is browser-local, while saving uses `POST /api/auth/phone-number`.
+- Login/sign-up screens expose the local email/password flow and Clerk Google auth. New local email/password accounts must verify their email via a single-use verification link before login is allowed. Clerk browser scripts are loaded dynamically by `src/core/clerk-auth.jsx`.
+- After auth succeeds, `GET /api/auth/me` marks incomplete non-admin profiles with `profile_needs_completion`; `src/core/app.jsx` then renders the fixed, non-dismissible `ProfileOnboardingModal`. If a registered non-admin already completed onboarding but has no `phone_number`, `src/core/app.jsx` can render a one-time dismissible `PhoneNumberPromptModal`; dismissal is browser-local, while saving uses `POST /api/auth/phone-number`.
 - The top app nav uses `Beranda` for `belajar`, `Misi Harian` for `misi`, `Paket` for `tryout`, and `Peringkat` for `leaderboard`; there is no separate `Belajar` nav link.
-- The app route shell uses a small vertical fade/slide transition. `src/shared.jsx` measures nav and segmented-control buttons so the active oval moves instead of teleporting. `src/belajar.jsx` separately measures the active mapel tab so its underline slides between `Try Out`, `Matematika`, `Fisika`, and `Kimia`; the `Try Out` underline uses the ink accent.
+- The app route shell uses a small vertical fade/slide transition. `src/core/shared.jsx` measures nav and segmented-control buttons so the active oval moves instead of teleporting. `src/pages/belajar.jsx` separately measures the active mapel tab so its underline slides between `Try Out`, `Matematika`, `Fisika`, and `Kimia`; the `Try Out` underline uses the ink accent.
 - Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and locked access gates use shared `.app-page-bg` variants from `src/styles.css` for the soft grid/glow background while keeping page-specific content/layout components unchanged.
 - The leaderboard consumes overall, weekly, and per-Try-Out ranking APIs from `server/routes/progress.js`.
 - Logged-out users can open the free Try Out confirmation and start the free 15-question / 30-minute session.
@@ -236,7 +236,7 @@ Payment status URLs preserve their order query:
 
 ### Tweaks
 
-Tweaks are controlled by `src/app.jsx` defaults and `tweaks-panel.jsx`.
+Tweaks are controlled by `src/core/app.jsx` defaults and `src/core/tweaks-panel.jsx`.
 
 Current defaults:
 
@@ -257,7 +257,7 @@ Current defaults:
 
 ### Practice Question Mapping
 
-`src/belajar.jsx` has static chapter card data for Matematika, Fisika, and Kimia, plus a `Try Out` tab for the free package entry point.
+`src/pages/belajar.jsx` has static chapter card data for Matematika, Fisika, and Kimia, plus a `Try Out` tab for the free package entry point.
 
 Backend question data is currently narrower:
 
@@ -270,7 +270,7 @@ limit
   - no problems
 ```
 
-`src/practice.jsx` owns the mapping between static chapter cards and backend question sources.
+`src/features/practice/practice.jsx` owns the mapping between static chapter cards and backend question sources.
 
 Important invariant:
 
@@ -293,7 +293,7 @@ Multiple-choice behavior:
 
 - The question card is deliberately narrow and centered.
 - The chapter title is centered in the session bar as `Bab 7: Teknik Integrasi`.
-- `src/belajar.jsx` exposes `window.chapterData`; `src/practice.jsx` uses it for the chapter switcher.
+- `src/pages/belajar.jsx` exposes `window.chapterData`; `src/features/practice/practice.jsx` uses it for the chapter switcher.
 - The action row keeps `Sebelumnya` on the left, `Hint` in the center, and `Lewati` or `Cek Jawaban` on the right.
 - `Cek Jawaban` appears only after the user selects an option.
 - `Try Canvas` switches to canvas mode.
@@ -331,7 +331,7 @@ server.js
 | Security headers | `server.js` | Helmet with CSP that allows required CDN scripts/styles. |
 | Body limits | `server.js` | JSON limit `12mb`; URL encoded limit `100kb`. |
 | Sessions | `server.js` | `express-session`, 7-day cookie, `sameSite: strict`. |
-| Clerk auth | `server.js` + `server/middleware/clerk-auth.js` + `src/clerk-auth.jsx` | `@clerk/express` verifies Clerk sessions; frontend sends Bearer token when Clerk is signed in, then middleware maps Clerk users to local SQLite users. |
+| Clerk auth | `server.js` + `server/middleware/clerk-auth.js` + `src/core/clerk-auth.jsx` | `@clerk/express` verifies Clerk sessions; frontend sends Bearer token when Clerk is signed in, then middleware maps Clerk users to local SQLite users. |
 | Email verification | `server/routes/auth.js` + `server/auth/email-verification.js` + `server/notifications/mailer.js` | Local email/password signups store only a SHA-256 verification-token hash, send a Gmail SMTP verification link, and hard-block login until `users.email_verified_at` is set. When `SMTP_HOST=smtp.gmail.com`, the mailer forces `MAIL_FROM` to match `SMTP_USER` so Gmail does not send spoof-like From headers. |
 | Rate limits | `server.js` | Login, register, and correction route limits. |
 | Auth guard | `server/middleware/auth.js` | Requires either `req.userId` from Clerk or `req.session.userId`. |
@@ -371,7 +371,7 @@ The route receives a raw JSON body before the normal Express JSON parser, verifi
 - `GET /api/quiz/subtopics/:id`
 - `GET /api/quiz/subtopics/:id/full`
 
-`/api/quiz/init` is the lightweight bootstrap call used by `src/practice.jsx` to discover available chapters, subtopics, and problem counts.
+`/api/quiz/init` is the lightweight bootstrap call used by `src/features/practice/practice.jsx` to discover available chapters, subtopics, and problem counts.
 
 #### `server/routes/progress.js`
 
@@ -425,7 +425,7 @@ Admin-only CRUD for:
 
 This route requires both session auth and admin role.
 
-The backend dashboard endpoint is present at `GET /api/admin/dashboard-data`. The richer monitoring UI lives in `src/admin-monitoring.jsx`, exports `window.AdminMonitoringPanel`, and is loaded before `src/admin.jsx` in `MAFIKING.html`.
+The backend dashboard endpoint is present at `GET /api/admin/dashboard-data`. The richer monitoring UI lives in `src/features/admin/admin-monitoring.jsx`, exports `window.AdminMonitoringPanel`, and is loaded before `src/features/admin/admin.jsx` in `MAFIKING.html`.
 
 #### `server/routes/payment.js`
 
@@ -434,7 +434,7 @@ QRIS-first payment integration with legacy Duitku fallback:
 - `POST /api/payment/create` creates a QRIS/manual/Duitku payment depending on `PAYMENT_PROVIDER`.
 - `POST /api/payment/pending` reopens an unexpired pending QRIS/manual order for the same user and package before the frontend creates a new order.
 - `GET /api/payment/invoices` returns at most 100 transactions owned by the current registered user. It derives ownership from the server session and returns an allowlisted invoice summary without QR payloads or buyer email.
-- QRIS/manual responses are rendered in-app by `src/payment.jsx` as a popup portal, then polled by `GET /api/payment/status/:merchantOrderId`.
+- QRIS/manual responses are rendered in-app by `src/pages/payment.jsx` as a popup portal, then polled by `GET /api/payment/status/:merchantOrderId`.
 - Duitku responses may still redirect to `paymentUrl` in legacy/fallback mode.
 - `POST /api/payment/callback` verifies Duitku callback signatures.
 - QRIS reconciliation webhooks and admin payment actions update the `payments` table through the reconciler helpers.
@@ -471,7 +471,7 @@ Recommendation metadata:
 
 ```text
 data/recommendation-catalog.json
-docs/purcell-inspired-question-bank.md
+docs/product/purcell-inspired-question-bank.md
 ```
 
 ### Tables
@@ -529,15 +529,15 @@ There is no versioned migration directory yet.
 GET /
   -> server.js sends dist/index.html if built, or MAFIKING.html fallback in non-production
   -> built path runs src/main.jsx compatibility bootstrap; fallback path loads CSS/CDN scripts/static JSX
-  -> src/app.jsx renders App
+  -> src/core/app.jsx renders App
 ```
 
 ### Practice Load Flow
 
 ```text
-Click chapter card in src/belajar.jsx
+Click chapter card in src/pages/belajar.jsx
   -> setRoute({ route: "practice", practice: context })
-  -> src/app.jsx passes context to Practice
+  -> src/core/app.jsx passes context to Practice
   -> Practice calls GET /api/quiz/init
   -> chooseQuestionSource(init, context)
   -> loadQuestionSource(questionSource)
@@ -571,7 +571,7 @@ User opens Try Canvas
 
 Wrong-answer visualization depends on the merged AI response retaining
 `wrongSteps` and `redlineTargets`. Latency work must not remove these fields:
-`src/practice.jsx` stores the original stroke snapshot with the attempt, and
+`src/features/practice/practice.jsx` stores the original stroke snapshot with the attempt, and
 the result modal redraws those strokes while overlaying matched wrong strokes
 in red. The fast path is only allowed to clear redline fields when the detected
 answer is equivalent to the expected answer and the final result is correct.
@@ -611,7 +611,7 @@ need_score =
   )
 ```
 
-`data/recommendation-catalog.json` owns official skill aliases, prerequisites, scoring weights, and difficulty gating. `docs/purcell-inspired-question-bank.md` owns the original Purcell-aligned question references used by the recommendation engine.
+`data/recommendation-catalog.json` owns official skill aliases, prerequisites, scoring weights, and difficulty gating. `docs/product/purcell-inspired-question-bank.md` owns the original Purcell-aligned question references used by the recommendation engine.
 
 Runtime recommendation selection must stay deterministic: Gemma can contribute `overallSummary` text, but `recommendedItems`, `recommendedQuestions`, and `skillNeedScores` are merged from `server/learning/recommendation-engine.js` so profile recommendations point at real catalog refs instead of invented items.
 
@@ -705,15 +705,15 @@ Important: `npm run build` validates the built Vite path, but it does not valida
 1. Export or create rows for `chapters`, `subtopics`, `problems`, and `problem_steps`.
 2. Update `db/seeds/question-bank.json`.
 3. Import into local DB.
-4. Update `src/practice.jsx` mapping if the new static chapter title should open the new backend data.
+4. Update `src/features/practice/practice.jsx` mapping if the new static chapter title should open the new backend data.
 5. Smoke-test the chapter in browser.
 
 ### Add New Frontend Route
 
 1. Create `src/<route>.jsx`.
 2. Export the component globally if needed.
-3. Add the script to `MAFIKING.html` before `src/app.jsx`.
-4. Add route state/rendering in `src/app.jsx`.
+3. Add the script to `MAFIKING.html` before `src/core/app.jsx`.
+4. Add route state/rendering in `src/core/app.jsx`.
 5. Keep visual style aligned with existing copied Mafiking UI.
 
 ### Add New API Route

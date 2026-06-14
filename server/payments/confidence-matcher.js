@@ -1,4 +1,4 @@
-// lib/confidence-matcher.js
+// server/payments/confidence-matcher.js
 // Confidence-scored matching for incoming QRIS mutations.
 // Replaces exact-match-only logic with a 0-230 score; >= 180 → auto-match.
 

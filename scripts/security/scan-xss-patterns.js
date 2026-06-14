@@ -36,14 +36,14 @@ const SAFE_HELPERS = new Set([
   'renderEquationHTML',
   'renderKatexToString',
   'escapeHtml',
-  'xss', // the xss library used in routes/auth.js
+  'xss', // the xss library used in server/routes/auth.js
 ]);
 
 // Helpers that have been manually reviewed and confirmed safe in the
 // audit-2026-06.md review. When adding a new helper to this set, the audit
 // doc must be updated to record the review.
 const MANUALLY_REVIEWED_SAFE = new Set([
-  'renderRecommendationQuestionHTML', // src/profile.jsx — escapes via escapeHtml or math helper; verified in audit-2026-06.md
+  'renderRecommendationQuestionHTML', // src/pages/profile.jsx — escapes via escapeHtml or math helper; verified in audit-2026-06.md
 ]);
 
 function walk(dir, files = []) {

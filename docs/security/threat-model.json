@@ -276,7 +276,7 @@
         "impact": "High",
         "risk": "High",
         "mitigations": [
-          "src/profile.jsx:160 and :586 — both now use window.escapeHtml",
+          "src/pages/profile.jsx:160 and :586 — both now use window.escapeHtml",
           "scan-xss-patterns.js enforces escapeHtml on every innerHTML assign",
           "helmet CSP blocks inline event handlers"
         ]

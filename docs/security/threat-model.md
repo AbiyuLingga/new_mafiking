@@ -19,7 +19,7 @@
 | Actor | Trust | Notes |
 |---|---|---|
 | Public visitor (logged out) | Untrusted | Browses lobby, may start free tryout, sees marketing pages. Auto-guest session created on first `/api/*` hit. |
-| Registered Mafiking user | Semi-trusted | Owns a local SQLite row synced from Clerk (`server/auth/clerk-user-sync.js`). Must complete onboarding (`src/onboarding.jsx`) before protected features. |
+| Registered Mafiking user | Semi-trusted | Owns a local SQLite row synced from Clerk (`server/auth/clerk-user-sync.js`). Must complete onboarding (`src/core/onboarding.jsx`) before protected features. |
 | Local admin | Trusted | Local-only fallback for dev (`isLocalAdminMode`). Production admins are Clerk users with `role = 'admin'` in the `users` table. |
 | Clerk (third party) | Trusted infra | Identity provider. Webhooks are svix-signed. Bearer tokens are verified by `@clerk/express`. |
 | QRIS/local payment rails | Trusted payment evidence source | Mafiking generates QRIS/manual orders locally, reconciles by webhook/admin/mutation evidence, and tracks status by `merchantOrderId`. No card data touches Mafiking servers. |

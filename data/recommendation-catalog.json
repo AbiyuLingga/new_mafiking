@@ -2,7 +2,7 @@
   "version": "2026-05-20.purcell-v1",
   "questionSource": {
     "kind": "markdown",
-    "path": "docs/purcell-inspired-question-bank.md",
+    "path": "docs/product/purcell-inspired-question-bank.md",
     "sourceAlignment": "Purcell/Varberg/Rigdon Calculus chapter and section topics",
     "copyrightNote": "Original Mafiking questions inspired by Purcell topic coverage, not copied Purcell exercises."
   },

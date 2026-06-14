@@ -1,4 +1,4 @@
-// lib/payment-broadcaster.js
+// server/payments/payment-broadcaster.js
 // In-memory pub/sub for real-time payment status push (SSE).
 // Singleton — one EventEmitter shared across the app.
 

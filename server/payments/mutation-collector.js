@@ -6,8 +6,8 @@
  *
  * Historically, callers did `const { startMutationCollector } = require('./mutation-collector')`.
  * Phase B of the self-healing plan replaces the inner loop with
- * `lib/self-healing-collector.js`, but keeps this file as a stable import
- * surface so existing wiring (e.g. `server.js`, `scripts/collector.js` tests)
+ * `server/payments/self-healing-collector.js`, but keeps this file as a stable import
+ * surface so existing wiring (e.g. `server.js`, `server/workers/collector.js` tests)
  * continues to work.
  *
  * The `SELF_HEALING_COLLECTOR` feature flag controls which implementation

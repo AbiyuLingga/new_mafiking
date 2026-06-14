@@ -1,7 +1,7 @@
 // Contract test for the CSP factory and the /api/csp-report endpoint.
 //
 // Verifies:
-// - lib/csp.js produces a tightened directive set (no `https:` allowlist).
+// - server/security/csp.js produces a tightened directive set (no `https:` allowlist).
 // - Clerk frontend API is injected when a publishable key is set.
 // - /api/csp-report accepts a CSP report and returns 204.
 // - /api/csp-report does not break when payload is malformed.

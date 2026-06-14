@@ -29,7 +29,7 @@ SOP ini menyuruh AI mengisi 6 field per langkah. **Tapi saat ini UI belum menamp
 | Field langkah | Tampil ke siswa sekarang? |
 |---|---|
 | `title` | ✅ Ya — judul langkah. |
-| `content` | ⚠️ **Tidak** — ada bug nama field. `src/practice.jsx:534` membaca `step.body`/`step.description`, padahal kolom DB bernama `content`. Akibatnya kotak rumus kosong. |
+| `content` | ⚠️ **Tidak** — ada bug nama field. `src/features/practice/practice.jsx:534` membaca `step.body`/`step.description`, padahal kolom DB bernama `content`. Akibatnya kotak rumus kosong. |
 | `why` | ❌ Belum dirender di mana pun. |
 | `intuition` | ❌ Belum dirender di mana pun. |
 | `mistakes` | ❌ Belum dirender di mana pun. |
@@ -37,7 +37,7 @@ SOP ini menyuruh AI mengisi 6 field per langkah. **Tapi saat ini UI belum menamp
 
 **Konsekuensi:** Walau AI menulis pembahasan sesempurna apa pun, siswa **hanya melihat judul langkah** sampai frontend diperbaiki.
 
-**Prasyarat agar SOP ini benar-benar menghasilkan "input yang mudah dipahami siswa":** perbaiki `src/practice.jsx` agar:
+**Prasyarat agar SOP ini benar-benar menghasilkan "input yang mudah dipahami siswa":** perbaiki `src/features/practice/practice.jsx` agar:
 1. Membaca `step.content` (bukan `step.body`/`step.description`).
 2. Menampilkan `why`, `intuition`, `mistakes` sebagai blok teks bernama (mis. "Kenapa langkah ini?", "Cara memahaminya", "Hati-hati"), bukan sebagai LaTeX.
 

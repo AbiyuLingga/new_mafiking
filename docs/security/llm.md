@@ -39,7 +39,7 @@ access.
 (`cleanBase64`). EXIF metadata (camera model, GPS, timestamp) is
 included. Privacy concern: a student who draws on a real photo would
 leak metadata to the third-party model.
-**Remediation:** Add `lib/image-sanitize.js` that decodes the image,
+**Remediation:** Add `server/security/image-sanitize.js` that decodes the image,
 strips EXIF, and re-encodes. Use `sharp` (~30 MB install) or
 `piexifjs` (smaller, PNG/JPEG only). Decision deferred to Phase 4 so
 we can size the install against the rest of the Nevacloud hardening.

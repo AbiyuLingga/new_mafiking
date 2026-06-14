@@ -3,7 +3,7 @@ const path = require('path');
 const { PROJECT_ROOT } = require('../project-paths');
 
 const DEFAULT_CATALOG_PATH = path.join(PROJECT_ROOT, 'data', 'recommendation-catalog.json');
-const DEFAULT_QUESTION_BANK_PATH = path.join(PROJECT_ROOT, 'docs', 'purcell-inspired-question-bank.md');
+const DEFAULT_QUESTION_BANK_PATH = path.join(PROJECT_ROOT, 'docs', 'product', 'purcell-inspired-question-bank.md');
 
 const DIFFICULTY_RANK = {
   Easy: 1,

@@ -15,7 +15,7 @@ The active browser entry point is served by `server.js`. When `dist/index.html` 
 - Peringkat: app nav includes a live `Peringkat` route with overall, weekly, and per-Try-Out rankings from `/api/progress/leaderboard*`.
 - Motion polish: app route transitions, the top-nav active pill, Belajar mapel underline, shared segmented controls, landing reveal effects, testimonial marquee, and mission carousel motion use local CSS/JS motion; no new frontend runtime dependency is required.
 - App backgrounds: Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and their locked access gates share a soft grid/glow page background with per-page color variants from `src/styles.css`.
-- Paket: `Semua Paket` and `Paket Saya` render the same `PackageCard` layout; accessible packages show `Mulai`, while locked packages route through login or open the checkout popup directly. Payment flow is `Beli` → checkout popup → `POST /api/payment/create` → QRIS/manual payment popup in `src/payment.jsx`; `/payment?merchantOrderId=...` reopens the status popup without the global app nav.
+- Paket: `Semua Paket` and `Paket Saya` render the same `PackageCard` layout; accessible packages show `Mulai`, while locked packages route through login or open the checkout popup directly. Payment flow is `Beli` → checkout popup → `POST /api/payment/create` → QRIS/manual payment popup in `src/pages/payment.jsx`; `/payment?merchantOrderId=...` reopens the status popup without the global app nav.
 - Invoice: logged-in users open `Riwayat Pembelian` from Profil. `/invoices` reads only the current user's transactions from `GET /api/payment/invoices`, can reopen pending payment status, and prints a selected invoice without exposing QR payloads or buyer email in the list response.
 - Admin mode: role-gated shield toggle button (bottom-right corner). Pressing shield enables admin mode; the top nav then shows an `Admin Panel` entry that opens the full admin page. The admin page can manage Try Out packages, per-package Try Out questions/import/results, Matematika/Fisika/Kimia chapters and subtopics, users/access, and Gemini usage backend data. The Users tab has quick manual grants for premium Try Out and daily missions. On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete.
 - SOP: `docs/sop/SOP-AI-INPUT-SOAL.md` documents the general AI question-entry guide. `docs/sop/SOP-DEEPSEEK-IMPORT-SOAL.md` is the stricter prompt contract for admin file import via DeepSeek.
@@ -24,7 +24,7 @@ The active browser entry point is served by `server.js`. When `dist/index.html` 
 - Imported question data at time of writing: 2 chapters, 4 subtopics, 23 problems, 86 problem steps.
 - Available real practice bank: Integral only. The static Belajar UI has more chapter cards, but only `Teknik Integrasi` currently maps to real backend problems.
 - Canvas correction: one submit sends a compressed JPEG canvas image to `/api/correction/evaluate-stream` with `/api/correction/evaluate` fallback. OCR + evaluation can route through the multi-provider pool (Gemini + Groq + optional OpenRouter), or direct Gemini fallback when the pool is disabled. Wrong-answer redline data is preserved through `wrongSteps` and `redlineTargets` so the result modal can redraw the user's canvas with incorrect strokes marked red. Profile summary has a local fallback when keys are missing.
-- Recommendation engine: profile recommendations are deterministic from correction attempts, multiple-choice mistakes, `data/recommendation-catalog.json` (`2026-05-20.purcell-v1`), and `docs/purcell-inspired-question-bank.md`; Gemma writes the profile narrative text only. The local engine applies half-life review scoring, BKT-lite mastery estimates, KST-style frontier/review tagging, recall interleaving, and per-item evidence metadata so selected follow-up questions stay catalog-backed and auditable.
+- Recommendation engine: profile recommendations are deterministic from correction attempts, multiple-choice mistakes, `data/recommendation-catalog.json` (`2026-05-20.purcell-v1`), and `docs/product/purcell-inspired-question-bank.md`; Gemma writes the profile narrative text only. The local engine applies half-life review scoring, BKT-lite mastery estimates, KST-style frontier/review tagging, recall interleaving, and per-item evidence metadata so selected follow-up questions stay catalog-backed and auditable.
 
 ## Quick Start
 
@@ -190,7 +190,7 @@ The admin mode toggle is visible only to users whose `role` is `admin`.
 - Tap again to exit (button returns to black). If you are on the Admin Panel page, exiting returns you to Belajar.
 - While admin mode is active, the top nav shows an **Admin Panel** button. Click it to open the dedicated Admin Panel page.
 - Local development bypass: in non-production, `/api/admin/*` accepts localhost requests even when the current session is only an auto-guest. Set `LOCAL_ADMIN_MODE=false` to force real admin login again.
-- `Users & Token Monitoring` is implemented by `src/admin-monitoring.jsx` and reads backend data from `/api/admin/dashboard-data`.
+- `Users & Token Monitoring` is implemented by `src/features/admin/admin-monitoring.jsx` and reads backend data from `/api/admin/dashboard-data`.
 - `Bab & Subtopik` starts with a content selector: `Try Out`, `Matematika`, `Fisika`, or `Kimia`. Try Out opens package CRUD; the subject options open chapter/subtopic CRUD.
 - The old `Landing Page` tab is removed from Admin Panel. Admin mode can still replace landing media inline through `Ganti gambar` / `Ganti video`, backed by `/api/landing-media` and `/api/admin/landing-media`.
 
@@ -247,59 +247,44 @@ The import script refuses to replace question tables when user progress or corre
 |-- server.js                  # Express app, SQLite boot, middleware, static serving
 |-- db/
 |   |-- schema.sql             # SQLite schema
-|   |-- question-bank.json     # Exported question bank
+|   |-- migrations/            # Versioned SQLite migrations
+|   |-- seeds/                 # Portable question, tryout, and mission data
 |   `-- database.sqlite        # Local runtime DB (NOT db/mafiking.db)
 |-- data/
 |   `-- recommendation-catalog.json # Versioned skill aliases, prerequisites, scoring weights, difficulty policy
 |-- docs/
-|   `-- purcell-inspired-question-bank.md # Original Purcell-aligned reference questions for recommendations
-|-- lib/
-|   |-- admin-import.js        # Admin import normalization and DeepSeek helper logic
-|   |-- clerk-user-sync.js     # Clerk user -> local SQLite user sync and guest merge helpers
-|   |-- gemini-client.js       # Pool-compatible Gemini client
-|   |-- groq-client.js         # Pool-compatible Groq vision client
-|   |-- log-token-usage.js     # Non-blocking AI token usage logger
-|   |-- multi-provider-pool.js # AI provider routing, cache, queue, fallback
-|   `-- recommendation-engine.js # Deterministic weakness scoring and follow-up question picker
-|-- server/ai/prompts/SOP-PROFILE-SUMMARY.md # Required profile narrative prompt for Gemma
-|-- server/routes/
-|   |-- auth.js                # Register, login, logout, current user
-|   |-- webhooks.js            # Clerk webhook verification and user-created sync
-|   |-- quiz.js                # Chapters, subtopics, problems, full quiz payload
-|   |-- progress.js            # XP, streaks, progress, leaderboard
-|   |-- correction.js          # Gemini transcription/evaluation and Gemma profile summary
-|   |-- admin.js               # Admin CRUD for content/users
-|   |-- admin-import.js        # Admin DeepSeek draft/commit import from PDF/DOCX/TXT/MD
-|   `-- payment.js             # QRIS/manual/Duitku payment create/status/reconciliation
-|-- server/middleware/
-|   |-- auth.js
-|   |-- clerk-auth.js          # Dual auth bridge from Clerk Bearer token to local req/session user
-|   `-- admin.js
+|   |-- project-layout.md      # Canonical placement rules
+|   |-- security/              # Security inventory, runbooks, and audits
+|   |-- sop/                   # Active operational SOPs
+|   `-- archive/               # Historical plans and agent memory
+|-- server/
+|   |-- project-paths.js       # Root/runtime filesystem path source of truth
+|   |-- routes/                # Express API routers
+|   |-- middleware/            # Request authentication/authorization
+|   |-- ai/                    # AI clients, pool, token logging, prompts
+|   |-- auth/                  # User linking and email verification
+|   |-- learning/              # Recommendation, ranking, session logic
+|   |-- payments/              # QRIS, mutation, reconciliation, providers
+|   |-- security/              # CSP, CSRF, guards, audit logging
+|   |-- storage/               # SQLite session, backup, profile media
+|   `-- workers/               # Standalone background processes
 |-- scripts/
-|   |-- test-admin-import.js   # Focused tests for admin import helpers
-|   |-- test-recommendation-engine.js
-|   |-- export-question-bank.js
-|   `-- import-question-bank.js
+|   |-- build/                 # Build/generation helpers
+|   |-- data/                  # Import/export/migration tools
+|   |-- maintenance/           # Runtime reconciliation tools
+|   |-- performance/           # Benchmarks and visual checks
+|   |-- quality/               # Repository layout guard
+|   `-- security/              # Security audits/scanners
+|-- tests/                     # Tests grouped by product domain
 |-- src/
-|   |-- app.jsx                # Router, isAdmin toggle state, shield button, root render
-|   |-- shared.jsx             # Nav, footer, icons, Skeleton, showToast, ToastContainer, OfflineBanner
-|   |-- clerk-auth.jsx         # ClerkJS browser bridge for static Babel runtime
-|   |-- backend-api.jsx        # Fetch helper for same-origin API calls
-|   |-- onboarding.jsx         # Mandatory first-login profile completion modal
-|   |-- lobby.jsx              # Public landing + login/signup screen using the existing auth shell
-|   |-- belajar.jsx            # Try Out tab + static chapter cards; admin branch to AdminBelajarView
-|   |-- practice.jsx           # Practice route: ChoiceView, CanvasView, ModeSegment, ResultModal
-|   |-- toolbar.jsx            # Canvas drawing toolbar and focus-mode actions
-|   |-- drawing-canvas.jsx     # Low-level canvas drawing surface
-|   |-- answer-board.jsx       # Stylus answer board wrapper
-|   |-- profile.jsx            # Profile/report view
-|   |-- misi.jsx               # Daily mission screen
-|   |-- tryout.jsx             # Paket / paid tryout package screen
-|   |-- leaderboard.jsx        # Peringkat page with isolated-scroll leaderboard
-|   |-- payment.jsx            # Checkout popup + QRIS/manual popup + status polling
-|   |-- admin.jsx              # Admin UI: content CRUD, users, import, and monitoring tab shell
-|   `-- styles.css             # All CSS including admin styles appended at end
-|-- tweaks-panel.jsx
+|   |-- main.jsx               # Vite entry
+|   |-- core/                  # App shell, globals, auth, API, prefetch
+|   |-- pages/                 # Route-level pages
+|   |-- features/admin/        # Admin-only UI
+|   |-- features/practice/     # Practice and Canvas UI
+|   |-- generated/             # Ignored build-generated legacy bundles
+|   `-- styles.css             # Shared custom CSS
+|-- public/legal/              # Public legal HTML with stable URLs
 |-- vite.config.js
 |-- tailwind.config.js
 `-- package.json
@@ -311,7 +296,7 @@ The import script refuses to replace question tables when user progress or corre
 
 1. Browser opens `/`.
 2. `server.js` sends `dist/index.html` when the built client exists, or `MAFIKING.html` as a non-production fallback.
-3. In the built path, `src/main.jsx` exposes `window.React` / `window.ReactDOM` and loads the global shell modules in legacy order before `src/app.jsx` mounts.
+3. In the built path, `src/main.jsx` exposes `window.React` / `window.ReactDOM` and loads the global shell modules in legacy order before `src/core/app.jsx` mounts.
 4. In the fallback path, `MAFIKING.html` loads Tailwind CDN, React UMD, Babel standalone, then JSX files from `src/` in order.
 
 ### Lobby / Home
@@ -320,9 +305,9 @@ The import script refuses to replace question tables when user progress or corre
 - The Mafiking logo returns to this landing page from app routes.
 - `Coba Gratis` opens `Belajar` with the `Try Out` tab selected. If the user is already logged in, the same button continues into their account context.
 - The login screen uses the existing auth UI. Email/password sign up asks for email and password, then requires the user to click a verification link sent by email before login is allowed.
-- The auth screen also includes Clerk Google login/sign-up controls. Clerk is loaded through `src/clerk-auth.jsx`, using `/api/config/clerk` to fetch only the publishable key.
+- The auth screen also includes Clerk Google login/sign-up controls. Clerk is loaded through `src/core/clerk-auth.jsx`, using `/api/config/clerk` to fetch only the publishable key.
 - Clerk users are synced into local SQLite users on API requests through `@clerk/express`; the local `users.id` remains the source of truth for progress, XP, admin role, and payments.
-- First-time Google users are synced into the local account model, then incomplete non-admin profiles are completed through the mandatory modal in `src/onboarding.jsx`.
+- First-time Google users are synced into the local account model, then incomplete non-admin profiles are completed through the mandatory modal in `src/core/onboarding.jsx`.
 - The profile modal stores draft progress in localStorage, stays fixed in the center of the viewport, and saves through `POST /api/auth/profile-onboarding`. Admin users are exempt.
 
 ### Belajar / Free Entry
@@ -338,8 +323,8 @@ The import script refuses to replace question tables when user progress or corre
 ### Opening a Chapter
 
 1. User opens `Belajar`.
-2. `src/belajar.jsx` sends the selected card context into the `practice` route.
-3. `src/practice.jsx` calls `/api/quiz/init`.
+2. `src/pages/belajar.jsx` sends the selected card context into the `practice` route.
+3. `src/features/practice/practice.jsx` calls `/api/quiz/init`.
 4. `chooseQuestionSource()` maps only supported static chapters to real backend questions.
 5. `Teknik Integrasi` loads all Integral subtopics with problems and starts in multiple-choice mode.
 6. Unsupported chapters show an empty-state message with a "Pilih bab lain" CTA.
@@ -355,7 +340,7 @@ The import script refuses to replace question tables when user progress or corre
 ### Canvas Correction
 
 1. User enters canvas mode via `ModeSegment`.
-2. User writes on the canvas in `src/practice.jsx` / `src/answer-board.jsx`.
+2. User writes on the canvas in `src/features/practice/practice.jsx` / `src/features/practice/answer-board.jsx`.
 3. Submit exports the canvas image as WEBP data URL.
 4. Frontend posts once to `POST /api/correction/evaluate`; the old `/api/correction/transcribe` route remains for compatibility and is marked deprecated.
 5. Backend validates image size/type, calls the multi-provider pool for merged OCR + evaluation when enabled, logs successful token usage in `ai_token_usage`, normalizes the JSON response, stores a row in `correction_attempts`, then returns feedback.
@@ -363,7 +348,7 @@ The import script refuses to replace question tables when user progress or corre
 
 ### Profile Report
 
-1. `src/profile.jsx` loads `/api/auth/me`, `/api/progress/stats`, and `/api/correction/attempts`.
+1. `src/pages/profile.jsx` loads `/api/auth/me`, `/api/progress/stats`, and `/api/correction/attempts`.
 2. It posts attempts to `/api/correction/profile-summary`.
 3. Backend computes deterministic skill need scores from up to 200 recent canvas correction attempts using wrong frequency, recency, low score, attempt pressure, and prerequisite gap.
 4. Backend adds recent multiple-choice evidence from `practice_attempts` so the narrative can mention repeated wrong subtopics, difficulty, selected answer, and correct answer.
@@ -373,12 +358,12 @@ The import script refuses to replace question tables when user progress or corre
 
 ### Payment
 
-1. User presses `Beli` from a locked package; `src/app.jsx` intercepts the payment route intent and opens `PaymentCheckoutModal` instead of navigating to a checkout page.
+1. User presses `Beli` from a locked package; `src/core/app.jsx` intercepts the payment route intent and opens `PaymentCheckoutModal` instead of navigating to a checkout page.
 2. `GET /api/payment/config` determines whether QRIS/manual/Duitku is active.
 3. Pressing `Bayar Sekarang` first checks `POST /api/payment/pending` for an unexpired pending order for the same package.
 4. If a pending QRIS/manual order exists, the old QR/payment popup is reopened with the remaining countdown; otherwise the frontend posts to `POST /api/payment/create`.
 5. QRIS/manual responses render as a centered payment popup via `ReactDOM.createPortal`, so the overlay is mounted at `document.body` instead of inside the app shell.
-6. The URL is updated to `/payment?merchantOrderId=X`; `src/app.jsx` preserves that query during history sync and hides the global `Nav` while the payment status popup is active.
+6. The URL is updated to `/payment?merchantOrderId=X`; `src/core/app.jsx` preserves that query during history sync and hides the global `Nav` while the payment status popup is active.
 7. Status is polled every 5s from `GET /api/payment/status/:merchantOrderId`.
 8. Duitku remains available for legacy/fallback provider modes that return `paymentUrl`; QRIS/local/manual payments stay in-app.
 9. Shows pending / success / failed/timeout states.
@@ -488,13 +473,13 @@ owner), F-10 / F-11 / F-12 LLM-side follow-ups.
 - Preserve the copied UI unless a task explicitly asks for UI changes.
 - Do not convert route/component `src/*.jsx` files to normal module-import architecture casually. The built path uses `src/main.jsx` as a compatibility bootstrap, while the source files still rely on globals and legacy load order.
 - **Do not use IIFE `(function(){...})()`** in `src/*.jsx` files — variables inside are scoped and invisible to other scripts. Define components at top level.
-- Clerk auth is integrated through the browser-global bridge in `src/clerk-auth.jsx`, not `@clerk/react` components. Both the Vite-built app and legacy fallback load Clerk's browser scripts dynamically.
-- `src/app.jsx` owns route state, tweaks defaults, and `isAdmin` toggle.
-- `src/app.jsx` intentionally does not render the global `Nav` while `route === "practice"` or while `/payment?merchantOrderId=...` is showing payment status.
-- `src/shared.jsx` owns the sliding top-nav active pill and reusable `SlidingSegmented` control used by Paket and Peringkat.
+- Clerk auth is integrated through the browser-global bridge in `src/core/clerk-auth.jsx`, not `@clerk/react` components. Both the Vite-built app and legacy fallback load Clerk's browser scripts dynamically.
+- `src/core/app.jsx` owns route state, tweaks defaults, and `isAdmin` toggle.
+- `src/core/app.jsx` intentionally does not render the global `Nav` while `route === "practice"` or while `/payment?merchantOrderId=...` is showing payment status.
+- `src/core/shared.jsx` owns the sliding top-nav active pill and reusable `SlidingSegmented` control used by Paket and Peringkat.
 - `src/styles.css` owns the shared `.app-page-bg` grid/glow background variants used by Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and locked access gates.
-- `src/leaderboard.jsx` reads live overall, weekly, and per-Try-Out ranking data from `/api/progress/leaderboard*`.
-- `src/belajar.jsx` loads chapter data from `/api/quiz/init` on mount and maps DB rows to display cards. `window.chapterData` is set here for use by practice.jsx. Static fallback is used while loading.
+- `src/pages/leaderboard.jsx` reads live overall, weekly, and per-Try-Out ranking data from `/api/progress/leaderboard*`.
+- `src/pages/belajar.jsx` loads chapter data from `/api/quiz/init` on mount and maps DB rows to display cards. `window.chapterData` is set here for use by practice.jsx. Static fallback is used while loading.
 - Admin mode in `belajar.jsx` shows `AdminBelajarView` — API-wired CRUD that persists to DB. Admin mode in `practice.jsx` enables inline click-to-edit on question cards and a compact admin question control for add/delete/reorder; `AdminPracticeBar` (separate bar) has been removed.
 - `server.js` applies SQLite schema on startup and includes inline migrations for older local DBs.
 - Correct DB file is `db/database.sqlite`. The file `db/mafiking.db` is unused/empty.
@@ -544,7 +529,7 @@ Browser checks:
 - Auto-guest sessions create users for API requests. Guest names start with `Tamu_`.
 - Only Integral question data is currently imported. Static chapter cards for other subjects are placeholders.
 - Admin shield visibility is role-gated in the frontend, and admin APIs remain protected by backend middleware. Local development still has localhost admin API bypass unless `LOCAL_ADMIN_MODE=false`.
-- `src/admin-monitoring.jsx` must load before `src/admin.jsx` because it exports `window.AdminMonitoringPanel`.
+- `src/features/admin/admin-monitoring.jsx` must load before `src/features/admin/admin.jsx` because it exports `window.AdminMonitoringPanel`.
 - Gemini/Gemma token "remaining" values are monitoring estimates from configured daily limits, not a live Google quota lookup.
 - QRIS is the default payment provider; Duitku routes remain as legacy/fallback provider code and point at sandbox base URL unless deliberately configured. Review payment environment, QRIS static string, reconciliation secrets, and any Duitku base URL before production use.
 - Before production deploy with `DEPLOY_IMPORTS=1`, confirm bundled JSON contains the intended content and run the import against a temporary DB if the bank changed.

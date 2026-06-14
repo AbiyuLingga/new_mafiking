@@ -108,10 +108,14 @@ class QrisMutasiProvider {
             const originalCwd = process.cwd();
             try {
                 process.chdir(this.cookieDir);
-                this.qris = new Qris(this.email, this.password);
                 // Cookie file path mirrors the library's hash(name) formula.
                 const hash = this._hash(this.email + this.password);
                 this._cookieFilePath = path.join(this.cookieDir, `${hash}_cookie.txt`);
+                this.qris = new Qris(this.email, this.password);
+                // qris-mutasi keeps a relative cookieFile and writes it later
+                // during requests, after cwd has been restored. Pin it to the
+                // sandbox so runtime cookies never leak into the project root.
+                this.qris.cookieFile = this._cookieFilePath;
                 this._ensureSecureCookieFilePermissions();
             } finally {
                 try {
@@ -147,6 +151,7 @@ class QrisMutasiProvider {
                     setTimeout(() => reject(new Error('Mutasi fetch timeout')), this.timeout)
                 ),
             ]);
+            this._ensureSecureCookieFilePermissions();
 
             if (!Array.isArray(data)) {
                 if (this.debug) {

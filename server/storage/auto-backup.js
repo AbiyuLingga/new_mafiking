@@ -1,4 +1,4 @@
-// lib/auto-backup.js — automatic SQLite database backup every N minutes.
+// server/storage/auto-backup.js — automatic SQLite database backup every N minutes.
 // Uses better-sqlite3's .backup() API for consistent, non-blocking snapshots.
 
 const fs = require('fs');

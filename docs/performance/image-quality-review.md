@@ -8,7 +8,7 @@ or quality settings change.
 
 | Source asset | Size on disk | Used in |
 |---|---:|---|
-| `assets/landing_mentors_20260607.png` | 6,2 MB | `src/lobby.jsx` mentor preview card |
+| `assets/landing_mentors_20260607.png` | 6,2 MB | `src/pages/lobby.jsx` mentor preview card |
 | `assets/landing_page.png` | 5,8 MB | legacy |
 
 **Variants generated 2026-06-12:**

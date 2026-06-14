@@ -52,7 +52,7 @@ routes and 35/35 CSRF coverage; VPS Phase 4 was applied via `ops/apply-all.sh`; 
   `CSRF_SECRET` and `SESSION_SECRET` must be set; the loader throws on boot
   if either is missing or shorter than 32 characters.
 - Token endpoint: `GET /api/csrf-token` returns `{ csrfToken }`. The frontend
-  helper `src/backend-api.jsx` fetches this once and attaches
+  helper `src/core/backend-api.jsx` fetches this once and attaches
   `X-CSRF-Token` on every state-changing request.
 - Exempt paths (no CSRF check): `/api/payment/callback`, `/api/payment/reconcile/webhook`, `/api/payment/reconcile/mutasiku-webhook`, `/api/webhooks/clerk`, `/api/csp-report`, `/api/csp-report/`, `/api/performance/vitals`.
 - Defense in depth: `server/security/request-guard.js` enforces Origin / Referer /

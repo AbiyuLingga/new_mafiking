@@ -9,7 +9,7 @@
 //   can be observed without breaking the app. Flip to enforced after 7 days
 //   of clean reports.
 //
-// Allowlist source: lib/csp.js (this file), driven by external resources
+// Allowlist source: server/security/csp.js (this file), driven by external resources
 // referenced from the production Vite bundle and legacy development fallback.
 
 function frontendApiFromPublishableKey(publishableKey) {

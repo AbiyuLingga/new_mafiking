@@ -124,7 +124,7 @@ if (fileExists(envExample)) {
     }
 }
 
-// 7. Tidak ada referensi midtrans di src/, routes/, lib/, scripts/ (excluding test-cleanup-deps.js sendiri)
+// 7. Tidak ada referensi midtrans di source tree (excluding test-cleanup-deps.js sendiri)
 const midtransHits = grepInTree(projectRoot, /midtrans|Midtrans|MIDTRANS_/g)
     .filter((hit) => !hit.file.endsWith('test-cleanup-deps.js'));
 if (midtransHits.length === 0) {

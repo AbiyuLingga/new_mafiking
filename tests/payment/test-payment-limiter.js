@@ -1,7 +1,7 @@
 // paymentLimiter contract test.
 //
 // Mounts a minimal Express app with the same rate-limit config used in
-// routes/payment.js and verifies that the 9th request in a 60-second
+// server/routes/payment.js and verifies that the 9th request in a 60-second
 // window returns 429 with a RateLimit-* header.
 //
 // Run via `node tests/payment/test-payment-limiter.js` or as part of

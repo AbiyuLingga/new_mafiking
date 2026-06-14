@@ -262,7 +262,7 @@ function notifyPaymentSuccess({ db, payment, grantId, source }) {
     };
 
     // P0-2 FIX: publish SSE SYNCHRONOUSLY (not via setImmediate), so the
-    // 'close' cleanup in routes/payment.js sees the same connection state
+    // 'close' cleanup in server/routes/payment.js sees the same connection state
     // as the commit. If publish throws, we log and continue — the SSE
     // client will fall back to polling.
     try {

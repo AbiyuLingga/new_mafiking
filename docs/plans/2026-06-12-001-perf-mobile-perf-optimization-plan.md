@@ -398,7 +398,7 @@ const ROUTE_ASPECTS = {
 - Run Butteraugli per image, hitung SSIM + distance score.
 - Manual side-by-side review di Chrome DevTools mobile viewport (Pixel 5 emulation).
 - Pilih quality level: target Butteraugli < 1.0 (imperceptible).
-- Doc hasil di `docs/perf/image-quality-review.md`.
+- Doc hasil di `docs/performance/image-quality-review.md`.
 
 **Final setting (setelah calibration):**
 - **Hero image (landing_mentors):** AVIF q=70, WebP q=85 (no LQIP blur — pure instant rendering)
@@ -441,7 +441,7 @@ const ROUTE_ASPECTS = {
 - `card-fisika.png` (753KB), `card-kimia.png` (716KB), `card-matematika.png` (751KB) — sama, > 700KB tapi `.webp` (4-6KB) sudah ada.
 - `20f1fadc-a331-4841-9834-4f5cc4cb3ea7.jpg` (70KB) — investigasi referensi.
 
-**File baru (2):** `scripts/build/optimize-images.js`, `docs/perf/image-quality-review.md`. **File diubah (2-4):** `package.json`, `src/lobby.jsx`. **Risk:** LOW. **Rollback:** Gunakan `.png` original.
+**File baru (2):** `scripts/build/optimize-images.js`, `docs/performance/image-quality-review.md`. **File diubah (2-4):** `package.json`, `src/lobby.jsx`. **Risk:** LOW. **Rollback:** Gunakan `.png` original.
 
 **Quality gate (S1 + S2):**
 - Butteraugli score < 1.0 untuk setiap image (S1)
@@ -838,7 +838,7 @@ Tiap fase deploy ke staging dulu, validate Core Web Vitals, baru lanjut.
 - [ ] CLS < 0.05, INP < 200ms
 
 **Fase 3 (Image Pipeline):**
-- [ ] `docs/perf/image-quality-review.md` ada dengan hasil Butteraugli calibration
+- [ ] `docs/performance/image-quality-review.md` ada dengan hasil Butteraugli calibration
 - [ ] `scripts/build/optimize-images.js` generate AVIF + WebP variants (3 sizes)
 - [ ] `src/lobby.jsx` pakai `<picture>` dengan srcset
 - [ ] LCP image < 100KB transferred di mobile viewport
@@ -967,4 +967,4 @@ Setelah plan ini selesai, **AGENTS.md** perlu update dengan section "Performance
 ---
 
 **Status:** Planned. Belum ada eksekusi. Menunggu approval user.
-**Rekomendasi langkah pertama:** Mulai dari **Fase 3.0 (Butteraugli calibration)** sebagai isolated experiment. Output: `docs/perf/image-quality-review.md` dengan side-by-side comparison 5 quality level × 10 image = 50 evaluation points. Setelah itu, baru masuk ke Fase 1-2 dengan konfidensi quality terjaga.
+**Rekomendasi langkah pertama:** Mulai dari **Fase 3.0 (Butteraugli calibration)** sebagai isolated experiment. Output: `docs/performance/image-quality-review.md` dengan side-by-side comparison 5 quality level × 10 image = 50 evaluation points. Setelah itu, baru masuk ke Fase 1-2 dengan konfidensi quality terjaga.

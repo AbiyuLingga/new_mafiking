@@ -113,7 +113,7 @@ Struktur minimum `strokeSnapshot`:
 
 Catatan implementasi:
 
-- `src/drawing-canvas.jsx` saat ini menyimpan `strokesRef.current`.
+- `src/features/practice/drawing-canvas.jsx` saat ini menyimpan `strokesRef.current`.
 - `exportImage()` saat ini hanya mengembalikan PNG.
 - Implementasi berikutnya perlu menambah method seperti `exportSnapshot()`.
 - Snapshot tidak dikirim ke Gemini sebagai sumber utama evaluasi; snapshot

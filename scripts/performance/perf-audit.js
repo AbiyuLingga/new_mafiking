@@ -137,7 +137,7 @@ async function main() {
     console.log('  To audit properly, run:');
     console.log('    PORT=3001 node server.js &  # one terminal');
     console.log('    npx lighthouse http://127.0.0.1:3001/landing --view  # another terminal');
-    console.log('  Or wire up @lhci/cli in GitHub Actions (see docs/perf/lighthouse-ci.md).');
+    console.log('  Or wire up @lhci/cli in GitHub Actions (see docs/performance/lighthouse-ci.md).');
     process.exit(0);
   }
 

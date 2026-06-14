@@ -38,16 +38,17 @@ db/schema.sql
 server/routes/
 server/middleware/clerk-auth.js
 server/auth/clerk-user-sync.js
-src/app.jsx
-src/belajar.jsx
-src/practice.jsx
-src/profile.jsx
-src/backend-api.jsx
-src/onboarding.jsx
-src/clerk-auth.jsx
+src/core/app.jsx
+src/pages/belajar.jsx
+src/features/practice/practice.jsx
+src/pages/profile.jsx
+src/core/backend-api.jsx
+src/core/onboarding.jsx
+src/core/clerk-auth.jsx
 MAFIKING.html
 README.md
 ARCHITECTURE.md
+docs/project-layout.md
 ```
 
 For question-bank tasks, also inspect:
@@ -62,7 +63,7 @@ For profile recommendation tasks, also inspect:
 
 ```text
 data/recommendation-catalog.json
-docs/purcell-inspired-question-bank.md
+docs/product/purcell-inspired-question-bank.md
 server/learning/recommendation-engine.js
 tests/learning/test-recommendation-engine.js
 server/ai/prompts/SOP-PROFILE-SUMMARY.md
@@ -74,16 +75,16 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 
 - `server.js` binds to `0.0.0.0` and defaults to `PORT=3000`.
 - `server.js` serves `dist/index.html` for app routes when the built client exists. `MAFIKING.html` is a non-production fallback.
-- The Vite entry is `index.html -> src/main.jsx`; route chunks load through `src/route-prefetch.js`.
+- The Vite entry is `index.html -> src/main.jsx`; route chunks load through `src/core/route-prefetch.js`.
 - The fallback `MAFIKING.html` loads Tailwind CDN, React UMD, ReactDOM UMD, Babel standalone, then `type="text/babel"` scripts.
-- `src/*.jsx` files use global symbols and assign components to `window.*`.
-- `src/app.jsx` owns route state and tweaks defaults.
-- `src/app.jsx` must preserve `/payment?merchantOrderId=...` when syncing route state to browser history. Do not normalize payment status URLs down to `/payment`, or refresh/deep-link QRIS status will break.
-- Normal package purchase must open `PaymentCheckoutModal` from `src/payment.jsx` over the current page when user presses `Beli`; do not restore the old full-page checkout at `/payment`.
+- Frontend JSX files use global symbols and assign shared components to `window.*`.
+- `src/core/app.jsx` owns route state and tweaks defaults.
+- `src/core/app.jsx` must preserve `/payment?merchantOrderId=...` when syncing route state to browser history. Do not normalize payment status URLs down to `/payment`, or refresh/deep-link QRIS status will break.
+- Normal package purchase must open `PaymentCheckoutModal` from `src/pages/payment.jsx` over the current page when user presses `Beli`; do not restore the old full-page checkout at `/payment`.
 - If a user closes a pending QRIS/manual payment and clicks `Beli` for the same package again before expiry, reuse the existing order through `POST /api/payment/pending` instead of creating a duplicate QR/unique-code order.
-- `src/backend-api.jsx` is the same-origin API helper.
-- `src/clerk-auth.jsx` is the static-Babel Clerk bridge. It fetches only the public publishable key from `/api/config/clerk`, loads Clerk browser scripts, and exposes `window.MafikingClerk`.
-- `src/onboarding.jsx` owns the mandatory non-admin profile-completion modal. It must load after `src/shared.jsx` and before `src/app.jsx`.
+- `src/core/backend-api.jsx` is the same-origin API helper.
+- `src/core/clerk-auth.jsx` is the static-Babel Clerk bridge. It fetches only the public publishable key from `/api/config/clerk`, loads Clerk browser scripts, and exposes `window.MafikingClerk`.
+- `src/core/onboarding.jsx` owns the mandatory non-admin profile-completion modal. It must load after `src/core/shared.jsx` and before `src/core/app.jsx`.
 - `server/middleware/clerk-auth.js` maps verified Clerk Bearer tokens to local SQLite users before API routes run.
 - `server/auth/clerk-user-sync.js` owns Clerk-to-local linking and guest-to-Google merge behavior.
 - `/` opens the public landing for guests and redirects registered sessions to `/belajar`; `/landing` is the explicit marketing route for logged-in users.
@@ -91,16 +92,16 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - The `Belajar` mapel tabs use a measured sliding underline; keep `Try Out` on the ink underline color (`rgb(11 19 38)`) and subject tabs on their mapel accent colors.
 - The app top nav labels are `Beranda`, `Misi Harian`, `Paket`, and `Peringkat`; `Beranda` maps to the `belajar` route, `Paket` maps to `tryout`, and `Peringkat` maps to `leaderboard`.
 - `Belajar` sections are `Try Out`, `Matematika`, `Fisika`, and `Kimia`. The `Try Out` section is the free entry point.
-- `src/leaderboard.jsx` owns the live Peringkat page and reads overall, weekly, and per-Try-Out rankings from `/api/progress/leaderboard*`.
-- `src/shared.jsx` owns the sliding top-nav active pill and reusable `SlidingSegmented` control. Keep those globals loaded before pages that use them.
-- `src/admin.jsx` owns the admin page. The monitoring tab is implemented by `src/admin-monitoring.jsx`, which must load before `src/admin.jsx` in `MAFIKING.html`.
+- `src/pages/leaderboard.jsx` owns the live Peringkat page and reads overall, weekly, and per-Try-Out rankings from `/api/progress/leaderboard*`.
+- `src/core/shared.jsx` owns the sliding top-nav active pill and reusable `SlidingSegmented` control. Keep those globals loaded before pages that use them.
+- `src/features/admin/admin.jsx` owns the admin page. The monitoring tab is implemented by `src/features/admin/admin-monitoring.jsx`, which must load before `src/features/admin/admin.jsx` in `MAFIKING.html`.
 - `src/styles.css` owns shared `.app-page-bg` variants for Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and locked access gates. Keep those as background layers; do not change page flow just to alter glow colors.
 - Landing media is stored in `landing_media` and served through `GET /api/landing-media`. Admin mode can replace media inline through `/api/admin/landing-media`; do not restore the removed Admin Panel `Landing Page` tab unless requested.
 - Profile avatar uploads are resized in the browser to 256x256 WebP (PNG fallback) before upload. `profile-media/` is runtime state protected from `deploy.sh --delete`; do not remove that protection.
 - Treat `db/database.sqlite` and `profile-media/` as a recovery pair. Run `npm run audit:profile-media` before using `-- --apply`; apply mode backs up the DB and clears only local avatar references whose files are missing.
 - The startup `Cek Payment` package seed may create the package or repair its missing `tryout_id`, but must not overwrite admin-managed fields such as `price`.
 - Profile `Switch account` signs out the active session and opens Login directly; it is separate from the confirmed Logout flow. Successful login routes to Beranda (`belajar`), not Profil.
-- The public landing uses local reveal/pop animations in `src/lobby.jsx` and `src/styles.css`. The demo video section should not have the old grid background.
+- The public landing uses local reveal/pop animations in `src/pages/lobby.jsx` and `src/styles.css`. The demo video section should not have the old grid background.
 - The global `Nav` is intentionally not rendered on the `practice` route; practice owns its own compact session bars/toolbars.
 - The global `Nav` is also intentionally not rendered for `/payment?merchantOrderId=...`; QRIS/manual status owns a full-viewport popup overlay.
 - `db/database.sqlite` is generated local runtime state.
@@ -110,14 +111,14 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 
 Do:
 
-- Keep route names consistent with `src/app.jsx`: `lobby`, `belajar`, `misi`, `tryout`, `leaderboard`, `admin`, `profile`, `invoices`, `payment`, `practice`.
+- Keep route names consistent with `src/core/app.jsx`: `lobby`, `belajar`, `misi`, `tryout`, `leaderboard`, `admin`, `profile`, `invoices`, `payment`, `practice`.
 - Keep Vite route-loader registration and fallback script order valid when adding frontend files.
 - Export browser components/functions on `window` when they must be used by later scripts.
 - Use existing utility classes, card styles, icon globals, and layout patterns.
 - Keep the `practice` route free of the global top navigation unless the user explicitly asks to restore it.
 - Keep the `lobby` route using its own marketing header; do not add the global app `Nav` to the public landing.
 - Keep logged-out access behavior: the free Try Out confirmation and 15-question / 30-minute session can open, but protected review paths and subject chapters should route through login/sign-up.
-- Keep tweaks defaults in `src/app.jsx` aligned with the user's selected defaults:
+- Keep tweaks defaults in `src/core/app.jsx` aligned with the user's selected defaults:
   - `heroLayout: "split"`
   - `density: "normal"`
   - `chapterCard: "soft"`
@@ -137,7 +138,7 @@ Do not:
 The practice page is in:
 
 ```text
-src/practice.jsx
+src/features/practice/practice.jsx
 ```
 
 Important behavior:
@@ -192,7 +193,7 @@ server/routes/webhooks.js
 Rules:
 
 - Keep API responses JSON.
-- Keep session auth behavior compatible with `src/backend-api.jsx`.
+- Keep session auth behavior compatible with `src/core/backend-api.jsx`.
 - Keep Clerk auth compatible with the existing session/local-user model. Clerk users must sync to local SQLite `users` before app features read progress, role, XP, or payments.
 - Keep `/api/health` public.
 - Keep `/api/config/clerk` public but never expose `CLERK_SECRET_KEY`.
@@ -236,7 +237,7 @@ Rules:
 
 - Most API routes require `req.session.userId`.
 - Clerk-signed API requests can set `req.userId` and `req.session.userId` after the server verifies the Bearer token with `@clerk/express`.
-- First-time or incomplete non-admin users are forced through `src/onboarding.jsx`; `POST /api/auth/profile-onboarding` saves name, phone, semester, faculty/major, and subject priorities. Keep this modal non-dismissible and fixed center.
+- First-time or incomplete non-admin users are forced through `src/core/onboarding.jsx`; `POST /api/auth/profile-onboarding` saves name, phone, semester, faculty/major, and subject priorities. Keep this modal non-dismissible and fixed center.
 - `server.js` creates a guest user for API requests that lack a session, except `/api/health`, `/api/config/clerk`, `/api/payment/callback`, `/api/landing-media`, and `/api/webhooks/clerk`.
 - Admin routes require both `isAuthenticated` and `isAdmin`.
 - Admin monitoring/users uses `GET /api/admin/dashboard-data`, `POST /api/admin/users/:id/reset-password`, `POST /api/admin/users/:id/grant-access`, `POST /api/admin/users/:id/role`, and `DELETE /api/admin/users/:id`. Keep those endpoints admin-only, validate user IDs/access payloads, and never allow deleting the current admin account from the panel.
@@ -244,7 +245,7 @@ Rules:
 - Admin content management starts with a `Try Out` / `Matematika` / `Fisika` / `Kimia` selector in the `Bab & Subtopik` tab. `Try Out` opens package CRUD; subject options open chapter/subtopic CRUD filtered by `chapters.mapel`.
 - The admin shield is frontend-visible only for `currentUser.role === "admin"`; do not expose it to every user. Admin mode adds an `Admin Panel` button to the top nav, and that button navigates to the dedicated `admin` route/page.
 - Logout and return-to-landing confirmation dialogs are centered modals with Mafiking yellow/ink styling, not browser confirms or blue theme popups.
-- Payment checkout and QRIS/manual status dialogs are rendered through a portal from `src/payment.jsx` into `document.body` so they are not clipped by the route shell or hidden under app navigation. Keep the overlay scroll-safe for browser zoom and preserve the `merchantOrderId` URL query for status/deep-link routes.
+- Payment checkout and QRIS/manual status dialogs are rendered through a portal from `src/pages/payment.jsx` into `document.body` so they are not clipped by the route shell or hidden under app navigation. Keep the overlay scroll-safe for browser zoom and preserve the `merchantOrderId` URL query for status/deep-link routes.
 - Gemini/Gemma token usage is observational data in `ai_token_usage`, written by `server/ai/log-token-usage.js`. Logging failures must not break correction/transcription/profile AI requests.
 - `server/routes/correction.js` supports up to 20 Gemini keys: `GEMINI_KEY_1` through `GEMINI_KEY_20`.
 - Profile summary uses Gemma 4 31B via the Gemini API key pool and can fall back locally when keys/model calls are unavailable.
@@ -262,24 +263,24 @@ These invariants prevent mobile performance regressions and ensure image / KaTeX
 - All landing images served via `<picture>` with AVIF + WebP + JPEG/PNG fallback chain.
 - All landing images served with 3 responsive size variants (mobile 640w, tablet 960w, desktop 1280w).
 - LCP image must have `loading="lazy"` + `decoding="async"` if CSS genuinely hides it; otherwise `loading="eager"` + `fetchpriority="high"`.
-- New images must pass per-asset visual review in `docs/perf/image-quality-review.md` before commit (S1).
+- New images must pass per-asset visual review in `docs/performance/image-quality-review.md` before commit (S1).
 - Responsive variants are committed to `assets/` and copied to `dist/assets/` by the `mafiking-responsive-images` Vite plugin.
 
 ### Route Splitting (Phase 2)
 - **Vite path**: `src/main.jsx` statically imports only the shell (`shared.jsx`, `backend-api.jsx`, `math-loader.js`, `onboarding.jsx`, `clerk-auth.jsx`, `app.jsx`). Each route (`lobby` / `belajar` / `practice` / `misi` / `tryout` / `leaderboard` / `payment` / `profile` / `invoices`) is dynamic-imported as its own chunk.
 - **Babel-standalone path** (`MAFIKING.html`): each route.jsx is loaded as a classic `<script>` and exposes `window.<Name>` at the end. The same `app.jsx` works because the lazy load falls back to `window.<Name>` when the dynamic import is not available.
 - **`vite.config.js` `mafikingRouteExportPlugin`** appends `export { X };` to every route file (skipping `generated-*` and files that already export) so Vite sees them as proper ESM modules. Do NOT remove this plugin — the dynamic imports will fail without it.
-- **Route prefetch**: `src/route-prefetch.js` owns the explicit route loader registry and cached import Promises. `src/app.jsx` must load routes through `window.MafikingRoutePrefetch.loadRoute()` so prefetched chunks are reused.
+- **Route prefetch**: `src/core/route-prefetch.js` owns the explicit route loader registry and cached import Promises. `src/core/app.jsx` must load routes through `window.MafikingRoutePrefetch.loadRoute()` so prefetched chunks are reused.
 - **Mobile navigation intent**: primary nav buttons carry `data-route`; `pointerdown` immediately warms the exact target. Idle/hover/focus prefetch remains disabled on Save-Data or 2G and is capped at three sequential adjacent routes.
-- **Adding a new route**: (1) create `src/<name>.jsx`, (2) append `window.<Name> = <Name>;` at the end, (3) add it to the route regex in `vite.config.js` if not already matched, (4) add `<name>Comp` state + dynamic-import `useEffect` in `src/app.jsx`, (5) replace direct JSX with `React.createElement(<name>Comp || window.<Name>, props)`.
-- **Removing a route**: just delete the file and its `useState`/`useEffect` in `src/app.jsx`. The plugin's regex matches by name so it auto-skips.
-- **Adding a non-route component to a route**: do NOT add it to `src/main.jsx` (it would defeat the split). If the new component is shared, put it in `src/shared.jsx`; if route-specific, put it next to the route file and dynamic-import it from there.
+- **Adding a new route**: (1) create `src/pages/<name>.jsx` or a domain route under `src/features/`, (2) append `window.<Name> = <Name>;` at the end, (3) add it to the route regex in `vite.config.js` if not already matched, (4) add `<name>Comp` state + dynamic-import `useEffect` in `src/core/app.jsx`, (5) replace direct JSX with `React.createElement(<name>Comp || window.<Name>, props)`.
+- **Removing a route**: just delete the file and its `useState`/`useEffect` in `src/core/app.jsx`. The plugin's regex matches by name so it auto-skips.
+- **Adding a non-route component to a route**: do NOT add it to `src/main.jsx` (it would defeat the split). If the new component is shared, put it in `src/core/shared.jsx`; if route-specific, put it next to the route file and dynamic-import it from there.
 - Per-asset quality — no universal q value. Faces need q=65-70; illustrations can drop to q=50-55.
 - Responsive variants are committed to `assets/` and copied to `dist/assets/` by the `mafiking-responsive-images` Vite plugin. Do not remove the variants when removing the source PNG — the `<picture>` element still references them.
 
 ### Lazy Resource Loading
-- KaTeX CSS+JS: lazy-loaded on first math component (`src/math-loader.js`). NOT eager in MAFIKING.html/index.html/dist/index.html. The `useKatexReady()` hook fires `mafiking:katex-ready` when the load resolves; `Eq` and `MissionQuestionText` re-render on that event.
-- Clerk SDK+UI: lazy-loaded on first auth action (login click, OAuth callback, getToken for auth endpoint). NOT auto-loaded for guest public API calls. `clerkAuthHeaders()` in `src/backend-api.jsx` short-circuits when `window.MafikingAppState.isLoggedIn === false`.
+- KaTeX CSS+JS: lazy-loaded on first math component (`src/core/math-loader.js`). NOT eager in MAFIKING.html/index.html/dist/index.html. The `useKatexReady()` hook fires `mafiking:katex-ready` when the load resolves; `Eq` and `MissionQuestionText` re-render on that event.
+- Clerk SDK+UI: lazy-loaded on first auth action (login click, OAuth callback, getToken for auth endpoint). NOT auto-loaded for guest public API calls. `clerkAuthHeaders()` in `src/core/backend-api.jsx` short-circuits when `window.MafikingAppState.isLoggedIn === false`.
 - Mentor image and landing image: `<picture>` with `loading="lazy"` + responsive srcSet. The PNG fallback stays so legacy browsers and Safari < 16 still render.
 
 ### Performance Budgets (CI gate)

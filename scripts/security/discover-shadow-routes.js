@@ -96,7 +96,7 @@ const shadow = discovered.filter((r) => {
   if (KNOWN_DEAD.some((d) => d.method === r.method && d.path === r.relPath)) return false;
 
   // Normalize: inventory sometimes lists paths without a leading slash
-  // (e.g. `tweaks-panel.jsx` instead of `/tweaks-panel.jsx`).
+  // (e.g. `src/core/tweaks-panel.jsx` instead of `/tweaks-panel.jsx`).
   const candidates = new Set([r.fullPath, r.fullPath.replace(/^\/+/, ''), '/' + r.fullPath.replace(/^\/+/, '')]);
   for (const c of candidates) {
     if (inventoryPaths.has(c)) return false;

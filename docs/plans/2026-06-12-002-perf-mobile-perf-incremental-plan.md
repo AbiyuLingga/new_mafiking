@@ -185,7 +185,7 @@ Baseline produksi terukur pada 12 Juni 2026:
 
 ### 4.2 Per-Asset Visual Review (Bukan Universal q Value)
 
-**File baru (1):** `docs/perf/image-quality-review.md`
+**File baru (1):** `docs/performance/image-quality-review.md`
 
 **Workflow:**
 1. Generate 5 candidate: AVIF q=50, 60, 65, 70, 75 untuk 10 representative image (10 mentor + landing images)
@@ -195,7 +195,7 @@ Baseline produksi terukur pada 12 Juni 2026:
    - Hero image (mentor foto orang) → konservatif (q=65-70)
    - Landing page background → agresif (q=50-55)
    - Icons/illustrations → tidak perlu AVIF (SVG cukup)
-4. Doc hasil per-image di `docs/perf/image-quality-review.md` dengan side-by-side screenshot
+4. Doc hasil per-image di `docs/performance/image-quality-review.md` dengan side-by-side screenshot
 
 **Catatan:** Tidak ada satu nilai quality universal. Setiap asset punya profil sendiri (foto manusia = perlu akurasi skin tone; ilustrasi = toleran; ikon = SVG).
 
@@ -546,7 +546,7 @@ Optimalkan **hanya** leak/long task yang terbukti:
 
 | # | Safeguard | Fase | Tujuan | Cara Validasi |
 |---|-----------|------|--------|---------------|
-| **S1** | **Butteraugli Per-Asset Review** | 1 | Kompresi gambar imperceptible per asset | Butteraugli score < 1.0 per image + manual side-by-side review, doc di `docs/perf/image-quality-review.md` |
+| **S1** | **Butteraugli Per-Asset Review** | 1 | Kompresi gambar imperceptible per asset | Butteraugli score < 1.0 per image + manual side-by-side review, doc di `docs/performance/image-quality-review.md` |
 | **S2** | **Lighthouse CI Quality Gate** | 0-3 | Performance ≥ 90, A11y ≥ 95, Best Practices ≥ 95, SEO ≥ 95 | Automated di PR check, fail = block merge |
 | **S3** | **Visual Regression Test Suite** | 1-2 | Layout/UI tidak bergeser setelah optim | Playwright snapshot per route, diff threshold < 1% pixel |
 
@@ -567,7 +567,7 @@ These invariants prevent performance regressions and ensure visual/accessibility
 - All landing images served via `<picture>` with AVIF + WebP + JPEG fallback chain.
 - All landing images served with 3 responsive size variants (640w, 960w, 1280w).
 - Hero images use `loading="lazy"` only if CSS genuinely hides them; otherwise `loading="eager"` + `fetchpriority="high"`.
-- New images must pass per-asset visual review in `docs/perf/image-quality-review.md` before commit (S1).
+- New images must pass per-asset visual review in `docs/performance/image-quality-review.md` before commit (S1).
 - No universal quality value — each asset has its own Butteraugli profile (photo of person: q=65-70, illustration: q=50-55).
 
 ### Lazy Resource Loading

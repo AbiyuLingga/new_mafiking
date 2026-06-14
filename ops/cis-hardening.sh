@@ -20,7 +20,7 @@
 #   1.4.x  AIDE/Tripwire       — see ops/integrity-check.sh
 #   1.5.x  Bootloader password — not in scope; KVM console only
 #   5.2.x  SSH                  — handled by ops/sshd-hardening.conf
-#   5.4.x  Password hashing    — handled by lib/auth (bcrypt cost)
+#   5.4.x  Password hashing    — handled by server/routes/auth.js (bcrypt cost)
 #   6.2.x  World-writable      — handled by ops/backup.sh preflight
 #
 # Usage:

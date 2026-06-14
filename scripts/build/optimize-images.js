@@ -2,11 +2,11 @@
 //
 // Why this script: MAFIKING.html historically served a single 6.2MB PNG to every
 // device even when CSS hid the image on mobile. The Phase 1 quick win needs
-// three size variants per asset so the `<picture>` element in src/lobby.jsx
+// three size variants per asset so the `<picture>` element in src/pages/lobby.jsx
 // can serve an appropriately-sized AVIF/WebP and the browser can skip the
 // larger variants.
 //
-// Per-asset quality is reviewed in docs/perf/image-quality-review.md (S1) and
+// Per-asset quality is reviewed in docs/performance/image-quality-review.md (S1) and
 // adjusted per asset rather than using a universal q value.
 //
 // Run:
