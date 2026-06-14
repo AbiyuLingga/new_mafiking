@@ -2,6 +2,7 @@ node_modules/
 dist/
 src/generated-app.jsx
 src/generated-admin.jsx
+.vite/
 .env
 .env*
 !.env.example
@@ -12,5 +13,11 @@ logs/
 db/*.sqlite
 db/*.sqlite-shm
 db/*.sqlite-wal
+db/*.backup-*
+db/*.bak
+db/*.rot-*.bak
 db/backups/
 profile-media/
+*_cookie.txt
+new-mafiking@*
+node

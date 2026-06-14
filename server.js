@@ -1272,7 +1272,7 @@ app.get('/SOP-DEEPSEEK-IMPORT-SOAL.md', (req, res) => {
   if (!req.session?.role || req.session.role !== 'admin') {
     return res.status(403).send('Forbidden');
   }
-  res.type('text/markdown; charset=utf-8').sendFile(path.join(__dirname, 'SOP-DEEPSEEK-IMPORT-SOAL.md'));
+  res.type('text/markdown; charset=utf-8').sendFile(path.join(__dirname, 'docs', 'sop', 'SOP-DEEPSEEK-IMPORT-SOAL.md'));
 });
 app.get('/tweaks-panel.jsx', (_req, res) => {
   if (canServeLegacySource()) {
@@ -1282,7 +1282,7 @@ app.get('/tweaks-panel.jsx', (_req, res) => {
   res.status(404).type('text/plain; charset=utf-8').send('Not found');
 });
 app.get(['/syarat-ketentuan.html', '/terms.html', '/tnc.html'], (_req, res) => {
-  res.sendFile(path.join(__dirname, 'syarat-ketentuan.html'));
+  res.sendFile(path.join(__dirname, 'public', 'legal', 'syarat-ketentuan.html'));
 });
 app.get('/robots.txt', (_req, res) => {
   res
