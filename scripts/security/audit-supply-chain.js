@@ -31,7 +31,7 @@ const RISK_REGISTER = [
     {
         name: 'qris-mutasi',
         reason: 'Scrape-based library against merchant dashboard; cookie persistence in cookieDir.',
-        mitigation: 'Pinned exact version, isolated collector process with restricted env (see scripts/collector.js).',
+        mitigation: 'Pinned exact version, isolated collector process with restricted env (see server/workers/collector.js).',
     },
     {
         name: 'qrcode',

@@ -4,7 +4,7 @@
 
 const assert = require('assert');
 const http = require('http');
-const broadcaster = require('../../lib/payment-broadcaster');
+const broadcaster = require('../../server/payments/payment-broadcaster');
 
 let passed = 0;
 let failed = 0;
@@ -98,7 +98,7 @@ asyncTest('getStats returns diagnostics', () => {
 
 // 7. Email template renders without throwing
 asyncTest('renderPaymentSuccess returns valid template', () => {
-    const { renderPaymentSuccess } = require('../../lib/email-templates');
+    const { renderPaymentSuccess } = require('../../server/notifications/email-templates');
     const result = renderPaymentSuccess({
         user: { display_name: 'Test User', email: 'test@example.com' },
         payment: {

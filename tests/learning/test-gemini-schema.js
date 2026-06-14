@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { simplifyGeminiSchema } = require('../../lib/gemini-schema');
+const { simplifyGeminiSchema } = require('../../server/ai/gemini-schema');
 
 const schema = {
   type: 'object',

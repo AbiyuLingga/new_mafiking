@@ -12,8 +12,8 @@ const cookieParser = require('cookie-parser');
 const {
   createCsrfProtection,
   CSRF_EXEMPT_PATHS,
-} = require('../../lib/csrf-protection');
-const { loadCsrfSecret } = require('../../lib/csrf-secret');
+} = require('../../server/security/csrf-protection');
+const { loadCsrfSecret } = require('../../server/security/csrf-secret');
 
 // Source of truth: docs/security/api-inventory.md. Keep this list in sync
 // with the inventory. Each entry is the path; the test fires a POST with a

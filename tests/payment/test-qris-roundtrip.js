@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 const { calculateCRC16, parseQRIS, validateQRIS } = require('@prasetya/qris');
-const { generateDynamicQRIS } = require('../../lib/qris-dynamic');
+const { generateDynamicQRIS } = require('../../server/payments/qris-dynamic');
 
 function buildStaticFixture() {
     const body = '00020101021126320014ID.CO.QRIS.WWW011012345678905204000053033605802ID5908MAFIKING6007BANDUNG6304';

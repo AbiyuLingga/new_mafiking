@@ -194,12 +194,12 @@ const correctionLimiter = rateLimit({
 
 **Free tier limits:** ~20 requests/day per model, ~200/day total.
 
-#### 3.3.2 Buat `lib/openrouter-client.js`
+#### 3.3.2 Buat `server/ai/openrouter-client.js`
 
 Pattern sama dengan `groq-client.js` (OpenAI-compatible). Length ~110 baris. Skeleton:
 
 ```js
-// lib/openrouter-client.js
+// server/ai/openrouter-client.js
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const OPENROUTER_DEFAULT_MODEL = 'google/gemini-2.0-flash-exp:free';
 const OPENROUTER_TIMEOUT_MS = 60000;
@@ -214,7 +214,7 @@ class OpenRouterClient {
 module.exports = { OpenRouterClient, OPENROUTER_DEFAULT_MODEL, OPENROUTER_BASE_URL };
 ```
 
-#### 3.3.3 Update `lib/multi-provider-pool.js`
+#### 3.3.3 Update `server/ai/multi-provider-pool.js`
 
 Tambah provider ke-3:
 
@@ -265,7 +265,7 @@ MAFIKING_POOL_MAX_CONCURRENT=5
 
 **Konsep:** Setelah AI OCR return `detectedAnswerLatex`, bandingkan dengan `problem.answer_display` dari database. Jika equivalent, return `isCorrect: true, score: 100` dengan simplified feedback. Skip generate detailed redline/wrongSteps.
 
-#### 3.4.1 Buat `lib/answer-equivalence.js`
+#### 3.4.1 Buat `server/learning/answer-equivalence.js`
 
 ```js
 function normalizeForEquivalence(value) {
@@ -309,7 +309,7 @@ function isAnswerEquivalent(detected, expected) {
 module.exports = { normalizeForEquivalence, isAnswerEquivalent };
 ```
 
-#### 3.4.2 Integrasi di `routes/correction.js`
+#### 3.4.2 Integrasi di `server/routes/correction.js`
 
 Wrapper `callAiWithPoolFallback` dengan fast-path:
 
@@ -380,7 +380,7 @@ const result = await callAiWithPoolFallbackWithFastPath({
 
 #### 3.5.1 Backend: `/api/correction/evaluate-stream`
 
-**File:** `routes/correction.js` — tambah route baru (existing `/evaluate` tetap utuh)
+**File:** `server/routes/correction.js` — tambah route baru (existing `/evaluate` tetap utuh)
 
 ```js
 router.post('/evaluate-stream', isAuthenticated, requireRegisteredUser, async (req, res) => {
@@ -551,7 +551,7 @@ CREATE INDEX IF NOT EXISTS idx_latency_created ON correction_latency_metrics(cre
 CREATE INDEX IF NOT EXISTS idx_latency_provider ON correction_latency_metrics(provider);
 ```
 
-#### 3.6.2 Buat `lib/latency-tracker.js`
+#### 3.6.2 Buat `server/observability/latency-tracker.js`
 
 Helper untuk record + query metrics. Length ~80 baris.
 
@@ -563,7 +563,7 @@ function getLatencySummary(db, { sinceHours = 24 } = {}) {
 }
 ```
 
-#### 3.6.3 Integrasi di `routes/correction.js`
+#### 3.6.3 Integrasi di `server/routes/correction.js`
 
 Di route `/evaluate` (existing), tambah tracking sebelum return:
 
@@ -605,11 +605,11 @@ Tambah tab "Latency Monitoring" di admin panel — p50/p90/p99 chart, cache hit 
 |------|------|------|--------|------|--------|
 | 1 | Image downsize 700→550 + JPEG 0.55 | `src/practice.jsx` | 5 min | LOW | -1-2s |
 | 2 | correctionLimiter per-user | `server.js` | 10 min | LOW | Hilang shared-IP throttle |
-| 3 | Tambah OpenRouter provider | `lib/openrouter-client.js`, `lib/multi-provider-pool.js`, `.env*` | 2-3 jam | MEDIUM | +20-30 RPM, peak -5-10s |
+| 3 | Tambah OpenRouter provider | `server/ai/openrouter-client.js`, `server/ai/multi-provider-pool.js`, `.env*` | 2-3 jam | MEDIUM | +20-30 RPM, peak -5-10s |
 | 4 | Pool concurrency 3→5 | `.env` | 1 min | LOW | Peak lebih lancar |
-| 5 | Latency tracking schema + tracker | `db/schema.sql`, `lib/latency-tracker.js`, `routes/correction.js` | 3-4 jam | LOW | Visibility |
-| 6 | Fast-path equivalence check | `lib/answer-equivalence.js`, `routes/correction.js` | 2-3 jam | MEDIUM | -1-2s untuk jawaban benar |
-| 7 | SSE streaming | `routes/correction.js`, `src/backend-api.jsx`, `src/practice.jsx` | 6-8 jam | MEDIUM | -30-50% perceived latency |
+| 5 | Latency tracking schema + tracker | `db/schema.sql`, `server/observability/latency-tracker.js`, `server/routes/correction.js` | 3-4 jam | LOW | Visibility |
+| 6 | Fast-path equivalence check | `server/learning/answer-equivalence.js`, `server/routes/correction.js` | 2-3 jam | MEDIUM | -1-2s untuk jawaban benar |
+| 7 | SSE streaming | `server/routes/correction.js`, `src/backend-api.jsx`, `src/practice.jsx` | 6-8 jam | MEDIUM | -30-50% perceived latency |
 | 8 | Admin latency dashboard | `src/admin-monitoring.jsx` (opsional) | 4-6 jam | LOW | Visibility untuk user |
 
 **Total effort:** 18-26 jam coding + testing
@@ -730,17 +730,17 @@ $0/bulan (semua provider free tier)
 - Fast-path hanya mengosongkan `wrongSteps` dan `redlineTargets` saat jawaban terdeteksi equivalent dengan kunci dan hasil akhirnya benar. Jawaban salah tetap memakai output AI lengkap untuk redline.
 
 ### File Baru (3-4)
-- [x] `lib/openrouter-client.js`
-- [x] `lib/answer-equivalence.js`
-- [x] `lib/latency-tracker.js`
+- [x] `server/ai/openrouter-client.js`
+- [x] `server/learning/answer-equivalence.js`
+- [x] `server/observability/latency-tracker.js`
 - [ ] `scripts/load-test-canvas.js` (opsional)
 
 ### File Diubah (5-6)
 - [x] `src/practice.jsx` — image config + SSE event handler
 - [x] `src/backend-api.jsx` — SSE client support
 - [x] `server.js` — correctionLimiter per-user
-- [x] `lib/multi-provider-pool.js` — OpenRouter provider
-- [x] `routes/correction.js` — fast-path + SSE endpoint + tracking
+- [x] `server/ai/multi-provider-pool.js` — OpenRouter provider
+- [x] `server/routes/correction.js` — fast-path + SSE endpoint + tracking
 - [x] `.env.example` — new env vars
 - [x] `db/schema.sql` — latency_metrics table
 

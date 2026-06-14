@@ -240,7 +240,7 @@ new_mafiking/
 
 ### Step 1: Provider Interface
 
-**File: `lib/providers/PaymentMutationProvider.js`**
+**File: `server/payments/providers/PaymentMutationProvider.js`**
 
 Module dokumentasi yang mendefinisikan kontrak interface. Tidak ada runtime code yang kompleks, hanya typedef dan validasi helper.
 
@@ -280,7 +280,7 @@ module.exports = { validateNormalizedMutation };
 
 ### Step 2: QrisMutasiProvider
 
-**File: `lib/providers/QrisMutasiProvider.js`**
+**File: `server/payments/providers/QrisMutasiProvider.js`**
 
 Adapter yang membungkus `qris-mutasi` library.
 
@@ -359,7 +359,7 @@ module.exports = { QrisMutasiProvider };
 
 ### Step 3: MockMutationProvider
 
-**File: `lib/providers/MockMutationProvider.js`**
+**File: `server/payments/providers/MockMutationProvider.js`**
 
 Provider palsu untuk testing dan development.
 
@@ -391,7 +391,7 @@ module.exports = { MockMutationProvider };
 
 ### Step 4: Mutation Ingester
 
-**File: `lib/mutation-ingester.js`**
+**File: `server/payments/mutation-ingester.js`**
 
 Bertugas menerima `NormalizedMutation[]`, melakukan deduplication via content hash, masking data sensitif, dan menyimpan ke `incoming_mutations`.
 
@@ -517,7 +517,7 @@ module.exports = {
 
 ### Step 5: Matching Engine
 
-**File: `lib/mutation-matcher.js`**
+**File: `server/payments/mutation-matcher.js`**
 
 Inti dari auto-verification. Mencocokkan mutasi masuk dengan pending payments.
 
@@ -699,7 +699,7 @@ module.exports = {
 
 ### Step 6: Mutation Collector
 
-**File: `lib/mutation-collector.js`**
+**File: `server/payments/mutation-collector.js`**
 
 In-process polling worker. Pola sama dengan `startMutasikuPoller` dan `startExpirySweeper`.
 
@@ -824,19 +824,19 @@ const MUTATION_COLLECTOR_ENABLED = ['1', 'true', 'yes', 'on'].includes(
 );
 
 if (MUTATION_COLLECTOR_ENABLED) {
-    const { startMutationCollector } = require('./lib/mutation-collector');
+    const { startMutationCollector } = require('./server/payments/mutation-collector');
     const providerName = String(process.env.MUTATION_PROVIDER || 'mock').toLowerCase();
 
     let provider;
     if (providerName === 'qris_merchant') {
-        const { QrisMutasiProvider } = require('./lib/providers/QrisMutasiProvider');
+        const { QrisMutasiProvider } = require('./server/payments/providers/QrisMutasiProvider');
         provider = new QrisMutasiProvider({
             email: process.env.QRIS_MERCHANT_EMAIL,
             password: process.env.QRIS_MERCHANT_PASSWORD,
             cookieDir: process.env.QRIS_COOKIE_DIR || '/tmp',
         });
     } else {
-        const { MockMutationProvider } = require('./lib/providers/MockMutationProvider');
+        const { MockMutationProvider } = require('./server/payments/providers/MockMutationProvider');
         provider = new MockMutationProvider();
     }
 
@@ -857,7 +857,7 @@ if (MUTATION_COLLECTOR_ENABLED) {
 Juga tambahkan `autoVerifyEnabled` ke response `GET /api/payment/config`:
 
 ```js
-// Di routes/payment.js, function paymentGatewayState()
+// Di server/routes/payment.js, function paymentGatewayState()
 // Tambah field:
 autoVerifyEnabled: MUTATION_COLLECTOR_ENABLED,
 ```
@@ -1013,12 +1013,12 @@ Test cases:
 | 1 | `npm install qris-mutasi` | - | 1 min |
 | 2 | `db/migrations/003_incoming_mutations.sql` | - | 5 min |
 | 3 | `db/schema.sql` (append) | Step 2 | 2 min |
-| 4 | `lib/providers/PaymentMutationProvider.js` | - | 5 min |
-| 5 | `lib/providers/MockMutationProvider.js` | Step 4 | 10 min |
-| 6 | `lib/mutation-ingester.js` | Step 2 | 20 min |
-| 7 | `lib/mutation-matcher.js` | Step 6 | 25 min |
-| 8 | `lib/mutation-collector.js` | Step 6, 7 | 15 min |
-| 9 | `lib/providers/QrisMutasiProvider.js` | Step 1, 4 | 20 min |
+| 4 | `server/payments/providers/PaymentMutationProvider.js` | - | 5 min |
+| 5 | `server/payments/providers/MockMutationProvider.js` | Step 4 | 10 min |
+| 6 | `server/payments/mutation-ingester.js` | Step 2 | 20 min |
+| 7 | `server/payments/mutation-matcher.js` | Step 6 | 25 min |
+| 8 | `server/payments/mutation-collector.js` | Step 6, 7 | 15 min |
+| 9 | `server/payments/providers/QrisMutasiProvider.js` | Step 1, 4 | 20 min |
 | 10 | `server.js` (wire) | Step 8 | 5 min |
 | 11 | `.env.example` (append) | Step 10 | 3 min |
 | 12 | `tests/payment/test-auto-verification.js` | Step 5-8 | 30 min |

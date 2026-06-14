@@ -1,5 +1,5 @@
 const { getAuth } = require('@clerk/express');
-const { syncClerkUserFromId } = require('../lib/clerk-user-sync');
+const { syncClerkUserFromId } = require('../auth/clerk-user-sync');
 
 async function clerkAuthMiddleware(req, res, next) {
   if (!req.path.startsWith('/api/')) return next();

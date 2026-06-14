@@ -10,7 +10,7 @@ const {
     summarizeVitalsFromDb,
     publicApiCacheHeader,
     shouldLogRequestTiming,
-} = require('../../lib/performance');
+} = require('../../server/observability/performance');
 
 const normalized = normalizeVitalsPayload({
     metrics: [

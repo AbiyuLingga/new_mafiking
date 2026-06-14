@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
+const { PROJECT_ROOT } = require('../project-paths');
 
-const PROJECT_ROOT = path.join(__dirname, '..');
 const DEFAULT_CATALOG_PATH = path.join(PROJECT_ROOT, 'data', 'recommendation-catalog.json');
 const DEFAULT_QUESTION_BANK_PATH = path.join(PROJECT_ROOT, 'docs', 'purcell-inspired-question-bank.md');
 

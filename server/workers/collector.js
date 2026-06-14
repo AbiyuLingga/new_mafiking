@@ -4,7 +4,7 @@
 // restricted network egress, and signed-encrypted batched ingestion to main app.
 //
 // Usage:
-//   COLLECTOR_HMAC_SECRET=... HASH_PEPPER=... MAIN_APP_URL=... node scripts/collector.js
+//   COLLECTOR_HMAC_SECRET=... HASH_PEPPER=... MAIN_APP_URL=... node server/workers/collector.js
 //
 // Required env:
 //   COLLECTOR_HMAC_SECRET   Shared secret with main app for HMAC-signed batches
@@ -63,7 +63,7 @@ console.log(`[collector] isolated process started`);
 console.log(`[collector] key_id=${process.env.COLLECTOR_KEY_ID}`);
 console.log(`[collector] cookie_dir=${COOKIE_DIR}`);
 
-const { QrisMutasiProvider } = require('../lib/providers/QrisMutasiProvider');
+const { QrisMutasiProvider } = require('../payments/providers/QrisMutasiProvider');
 
 const provider = new QrisMutasiProvider({
     email: process.env.QRIS_MERCHANT_EMAIL,
@@ -91,8 +91,8 @@ let totalMatched = 0;
 let totalRejected = 0;
 let stopped = false;
 
-const { maskName, hashPayerId } = require('../lib/mutation-ingester');
-const { computeWebhookEventHash } = require('../lib/payment-reconciler');
+const { maskName, hashPayerId } = require('../payments/mutation-ingester');
+const { computeWebhookEventHash } = require('../payments/payment-reconciler');
 
 function sanitizeMutation(raw) {
     if (!raw || typeof raw !== 'object') return null;

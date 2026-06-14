@@ -1,11 +1,11 @@
 # Mafiking API inventory
 
 Static inventory of every HTTP route exposed by `server.js` and the route
-files in `routes/`. Generated for Phase 1 of the OWASP ASVS L2 hardening
+files in `server/routes/`. Generated for Phase 1 of the OWASP ASVS L2 hardening
 roadmap. Drives the OWASP API Top 10 review, the BOLA scan, the rate-limit
 gap analysis, and the CSRF / CORS coverage tests.
 
-**Source of truth:** `grep -nE "router\.(get|post|put|patch|delete)\(" routes/*.js` and `server.js` mounts, cross-checked by hand.
+**Source of truth:** `grep -nE "router\.(get|post|put|patch|delete)\(" server/routes/*.js` and `server.js` mounts, cross-checked by hand.
 **Generated:** Phase 1, commit `64afa11` + 1.
 
 ## Legend
@@ -64,12 +64,12 @@ gap analysis, and the CSRF / CORS coverage tests.
 | GET | `/SOP-DEEPSEEK-IMPORT-SOAL.md` | admin | n/a | admin | Static file. 403 unless `req.session.role === 'admin'`. |
 | GET | `/tweaks-panel.jsx` | public | n/a | none | Dev-only tweak panel source. 404 when `canServeLegacySource()` is false (production / built client). |
 | GET | `/syarat-ketentuan.html`, `/terms.html`, `/tnc.html` | public | n/a | none | Static T&C page. |
-| GET | `/auth-popup` | public | n/a | none | Static popup HTML shim served by `routes/auth-popup.js`. Loads Clerk in a popup window, writes pending OAuth to `sessionStorage`, and posts the result back to `window.opener` via `postMessage` on `/sso-callback?popup=1`. No-store. Same-origin target only. |
+| GET | `/auth-popup` | public | n/a | none | Static popup HTML shim served by `server/routes/auth-popup.js`. Loads Clerk in a popup window, writes pending OAuth to `sessionStorage`, and posts the result back to `window.opener` via `postMessage` on `/sso-callback?popup=1`. No-store. Same-origin target only. |
 | GET | `/robots.txt` | public | n/a | none | Static crawler policy. Plain text, allows indexing. |
 | GET | `/`, `/index.html`, `/MAFIKING.html` | session | n/a | none | SPA shell. Registered (non-guest) sessions are 302-redirected to `/belajar`. Otherwise serves `dist/index.html` (or `MAFIKING.html` when no client bundle exists). |
 | GET | `/landing` | public | n/a | none | SPA shell explicit marketing deep link. Bypasses the auth-aware redirect so logged-in users can still open the marketing page. |
 
-### Auth (routes/auth.js)
+### Auth (server/routes/auth.js)
 
 | Method | Path | Auth | CSRF | BOLA | Notes |
 |---|---|---|---|---|---|
@@ -85,7 +85,7 @@ gap analysis, and the CSRF / CORS coverage tests.
 | POST | `/api/auth/phone-number` | session | ✓ | user-scoped | Updates only the viewer's WhatsApp/phone number. Used by the optional one-time phone prompt and required bimbel checkout path. |
 | GET | `/api/auth/me` | session | n/a | user-scoped | Returns own user only. |
 
-### Quiz (routes/quiz.js)
+### Quiz (server/routes/quiz.js)
 
 All `GET` and `isAuthenticated`. No `:id` ownership risk because the data is
 public catalog data. All routes are `GET` so CSRF is `n/a`.
@@ -101,14 +101,14 @@ public catalog data. All routes are `GET` so CSRF is `n/a`.
 | GET | `/api/quiz/subtopics/:id/full` | session | n/a | id-scoped | Catalog. |
 | GET | `/api/quiz/tryout/free-math-session` | session | n/a | none | Issues a free tryout session token. |
 
-### Tryout (routes/tryouts.js)
+### Tryout (server/routes/tryouts.js)
 
 | Method | Path | Auth | CSRF | BOLA | Notes |
 |---|---|---|---|---|---|
 | GET | `/api/tryouts/:tryoutId/full` | session | n/a | user/id-scoped | Reads tryout by id and creates/resumes the viewer's active timed session. |
 | PUT | `/api/tryouts/:tryoutId/session` | session | ✓ | user/id-scoped | Autosaves answers/choice snapshot for the viewer's active timed session before final submit. |
 
-### Progress (routes/progress.js)
+### Progress (server/routes/progress.js)
 
 All non-`GET` routes are `requireRegisteredUser`. BOLA pattern: every query
 filters by `req.session.userId`.
@@ -125,7 +125,7 @@ filters by `req.session.userId`.
 | GET | `/api/progress/tryout-attempts/latest` | registered | n/a | user-scoped | Reads own latest. |
 | POST | `/api/progress/tryout-attempts` | registered | ✓ | user-scoped | Saves own attempt. Uses `verifyTryoutSessionToken` to bind to a session. |
 
-### Correction (routes/correction.js)
+### Correction (server/routes/correction.js)
 
 All routes `isAuthenticated`. Body validation lives in
 `validateImagePayload` and the schema validation in the call sites.
@@ -140,7 +140,7 @@ All routes `isAuthenticated`. Body validation lives in
 | GET | `/api/correction/pool/stats` | session | n/a | admin | Admin/local-admin only. Read-only AI provider pool counters; no user data. |
 | GET | `/api/correction/latency/summary` | session | n/a | admin | Admin/local-admin only. Read-only latency percentiles and provider breakdown. |
 
-### Payment (routes/payment.js)
+### Payment (server/routes/payment.js)
 
 | Method | Path | Auth | CSRF | BOLA | Notes |
 |---|---|---|---|---|---|
@@ -149,7 +149,7 @@ All routes `isAuthenticated`. Body validation lives in
 | POST | `/api/payment/create` | registered/local-dev-guest | ✓ | user-scoped | QRIS local, Duitku, or mock. Body: `email`, `name`, package selector. Production rejects auto-guests; local debugging should set `PAYMENT_LOCAL_GUEST_CHECKOUT=false` when testing auth gates. |
 | POST | `/api/payment/toggle-package-access` | session | ✓ | user-scoped | Dev utility. Toggles tryout access grant for the current user by `tryout_id`. |
 | GET | `/api/payment/status/:merchantOrderId` | session | n/a | id-scoped | Filters by `user_id = ? AND merchant_order_id = ?` — explicit ownership check. |
-| GET | `/api/payment/stream/:merchantOrderId` | session | n/a | id-scoped | SSE stream that pushes `event: paid` via `lib/payment-broadcaster`. Filters by `payment.user_id === req.session.userId` (403 otherwise). Per-user connection cap (`SSE_MAX_CONN_PER_USER`, 429 when exceeded). 15s `: heartbeat` keepalive (`.unref()` so SMTP/event-loop blocks don't block shutdown). Gated by `SSE_PAYMENT_PUSH` feature flag — returns 503 when off. |
+| GET | `/api/payment/stream/:merchantOrderId` | session | n/a | id-scoped | SSE stream that pushes `event: paid` via `server/payments/payment-broadcaster`. Filters by `payment.user_id === req.session.userId` (403 otherwise). Per-user connection cap (`SSE_MAX_CONN_PER_USER`, 429 when exceeded). 15s `: heartbeat` keepalive (`.unref()` so SMTP/event-loop blocks don't block shutdown). Gated by `SSE_PAYMENT_PUSH` feature flag — returns 503 when off. |
 | GET | `/api/payment/active-packages` | session | n/a | user-scoped | Own data only. |
 | POST | `/api/payment/callback` | clerk-public | exempt | n/a | Duitku MD5-signed. Updates `payments` by `merchant_order_id`. |
 | POST | `/api/payment/reconcile/webhook` | public | exempt | n/a | QRIS HMAC-signed reconciliation endpoint. Calls idempotent reconciler. |
@@ -159,7 +159,7 @@ All routes `isAuthenticated`. Body validation lives in
 | GET | `/api/payment/mock-gateway` | public | n/a | none | Dev-only. |
 | GET | `/api/payment/mock-complete` | public | n/a | none | Dev-only. |
 
-### Admin payments (routes/admin-payments.js)
+### Admin payments (server/routes/admin-payments.js)
 
 All routes `isAuthenticated` + `isAdmin` and use `adminPaymentLimiter`.
 
@@ -173,18 +173,18 @@ All routes `isAuthenticated` + `isAdmin` and use `adminPaymentLimiter`.
 | POST | `/api/admin/payments/bulk-mark-paid` | admin | ✓ | admin | Up to 50 items/call. Each item invokes `markPaymentPaid(source: 'admin_bulk')`; per-item errors are collected and the response carries `summary { total, success, failed }`. Stricter `adminBulkMarkPaidLimiter` (5-min/5) in addition to the shared `adminPaymentLimiter`; the bulk limiter is a no-op when `BULK_ADMIN` is off. |
 | POST | `/api/admin/payments/:merchantOrderId/mark-paid` | admin | ✓ | admin | Marks payment `SUCCESS`, releases suffix, grants access, logs audit row. Stricter 5-min/10-action per-admin rate limit; IP allowlist if `ADMIN_IP_ALLOWLIST` is set. |
 | POST | `/api/admin/payments/:merchantOrderId/mark-failed` | admin | ✓ | admin | Marks payment `FAILED`, releases suffix, logs audit row. |
-| POST | `/api/admin/payments/:merchantOrderId/resend-email` | admin | ✓ | admin | Re-renders the success email via `lib/email-templates.renderPaymentSuccess` and resends it through `lib/mailer`. Only allowed for `status=SUCCESS` payments (409 otherwise). Writes a `payment_reconciliation_log` row with `action='email_resent'`. Returns 503 if the mailer has no `sendMail`/`send`. |
+| POST | `/api/admin/payments/:merchantOrderId/resend-email` | admin | ✓ | admin | Re-renders the success email via `server/notifications/email-templates.renderPaymentSuccess` and resends it through `server/notifications/mailer`. Only allowed for `status=SUCCESS` payments (409 otherwise). Writes a `payment_reconciliation_log` row with `action='email_resent'`. Returns 503 if the mailer has no `sendMail`/`send`. |
 | GET | `/api/admin/payments/:merchantOrderId/audit-log` | admin | n/a | admin | Reads reconciliation audit log for one order. |
 | GET | `/api/admin/payments/metrics` | admin | n/a | admin | 24h rollups from `payment_reconciliation_log` (auto_paid, manual_paid, bulk_paid, force_paid, webhook_paid, ambiguous_resolved, ambiguous_open, emails_sent, emails_resent) plus the latest `collectorHeartbeat` snapshot and `paymentBroadcaster.getStats()`. Tolerates missing tables by reporting 0. |
 
-### Admin import (routes/admin-import.js)
+### Admin import (server/routes/admin-import.js)
 
 | Method | Path | Auth | CSRF | BOLA | Notes |
 |---|---|---|---|---|---|
 | POST | `/api/admin/import/draft` | admin | ✓ | admin | `multer.single('file')` upload, 12 MB cap. Body schema validated. |
 | POST | `/api/admin/import/commit` | admin | ✓ | admin | DeepSeek call + transaction. |
 
-### Admin (routes/admin.js)
+### Admin (server/routes/admin.js)
 
 All routes `isAdmin`. Routes that take `:id` operate on catalog content
 (chapters, problems, missions, tryout packages/questions) or on `users`.
@@ -239,7 +239,7 @@ All routes `isAdmin`. Routes that take `:id` operate on catalog content
 | POST | `/api/admin/users/:id/role` | admin | ✓ | admin | |
 | DELETE | `/api/admin/users/:id` | admin | ✓ | admin | Refuses to delete the current admin (per AGENTS.md). |
 
-### Internal (routes/internal.js)
+### Internal (server/routes/internal.js)
 
 Worker-only endpoints. Not consumed by browsers or admins; mounted at
 `/api/internal` in `server.js:483` so the file header explicitly states
@@ -260,8 +260,8 @@ order, not by `CSRF_EXEMPT_PATHS`.
   `server.js:483` is the only state-changing prefix mounted before
   `csrfProtection`; it relies on the `x-internal-secret` header for
   auth and is intended for worker-to-server calls only.
-- The CSRF exempt list (`lib/csrf-protection.js:4`) and
-  `lib/request-guard.js` `STATE_CHANGE_EXEMPT_PATHS` are kept in sync
+- The CSRF exempt list (`server/security/csrf-protection.js:4`) and
+  `server/security/request-guard.js` `STATE_CHANGE_EXEMPT_PATHS` are kept in sync
   and both name `/api/internal/collector-heartbeat` so the worker
   heartbeat cannot be silently rejected by a future CSRF layer that
   moves past the `/api/internal` mount point.

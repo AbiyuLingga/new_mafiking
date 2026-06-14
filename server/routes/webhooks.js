@@ -1,6 +1,6 @@
 const express = require('express');
 const { Webhook } = require('svix');
-const { upsertClerkUser } = require('../lib/clerk-user-sync');
+const { upsertClerkUser } = require('../auth/clerk-user-sync');
 
 const router = express.Router();
 

@@ -14,7 +14,7 @@ const fs = require('node:fs');
 const projectRoot = path.resolve(__dirname, '..', '..');
 process.chdir(projectRoot);
 
-const { buildDirectives, frontendApiFromPublishableKey, helmetCspOptions, resolveClerkOrigins } = require(path.join(projectRoot, 'lib', 'csp.js'));
+const { buildDirectives, frontendApiFromPublishableKey, helmetCspOptions, resolveClerkOrigins } = require(path.join(projectRoot, 'server', 'security', 'csp.js'));
 
 // 1. Unit tests for the factory itself.
 
@@ -82,7 +82,7 @@ async function bootServer() {
   // Load server.js in-process and listen on an ephemeral port.
   const express = require(path.join(projectRoot, 'node_modules', 'express'));
   // Minimal mount mimicking the production endpoint.
-  const auditLog = require(path.join(projectRoot, 'lib', 'audit-log.js'));
+  const auditLog = require(path.join(projectRoot, 'server', 'security', 'audit-log.js'));
   const app = express();
   app.post(['/api/csp-report', '/api/csp-report/'],
     express.json({ type: ['application/csp-report', 'application/reports+json', 'application/json'], limit: '32kb' }),

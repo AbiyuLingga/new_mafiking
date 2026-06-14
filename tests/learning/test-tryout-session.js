@@ -6,7 +6,7 @@ const {
     normalizeTryoutDraftAnswers,
     normalizeTryoutDraftChoiceMap,
     verifyTryoutSessionToken,
-} = require('../../lib/tryout-session');
+} = require('../../server/learning/tryout-session');
 
 const now = new Date('2026-06-02T00:00:00.000Z');
 const { session, token } = createTryoutSession({

@@ -1,7 +1,7 @@
 // Shadow API endpoint discovery.
 //
-// Walks server.js + routes/*.js and lists every HTTP route the app exposes.
-// Resolves `app.use('/api/foo', require('./routes/foo'))` mount prefixes so
+// Walks server.js + server/routes/*.js and lists every HTTP route the app exposes.
+// Resolves `app.use('/api/foo', require('./server/routes/foo'))` mount prefixes so
 // the reported paths match the real URLs the client sees. Cross-references
 // against docs/security/api-inventory.md and reports any route that is
 // mounted in code but not mentioned in the inventory.
@@ -17,7 +17,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..', '..');
-const ROUTES_DIR = path.join(ROOT, 'routes');
+const ROUTES_DIR = path.join(ROOT, 'server', 'routes');
 const INVENTORY = path.join(ROOT, 'docs', 'security', 'api-inventory.md');
 
 function readFile(file) {
@@ -25,11 +25,11 @@ function readFile(file) {
 }
 
 // Map a router file path to the mount prefix used in server.js. We look
-// for `app.use('/api/...', require('./routes/<name>'))` (with optional
+// for `app.use('/api/...', require('./server/routes/<name>'))` (with optional
 // subpath like `/api/admin/import`).
 function buildMountMap() {
   const text = readFile(path.join(ROOT, 'server.js'));
-  const mountRegex = /app\.use\(\s*['"]([^'"]+)['"]\s*,\s*require\(\s*['"]\.\/routes\/([\w-]+)['"]\s*\)\s*\)/g;
+  const mountRegex = /app\.use\(\s*['"]([^'"]+)['"]\s*,\s*require\(\s*['"]\.\/server\/routes\/([\w-]+)['"]\s*\)\s*\)/g;
   const map = new Map(); // file basename -> mount prefix
   let m;
   while ((m = mountRegex.exec(text)) !== null) {
@@ -90,8 +90,8 @@ const shadow = discovered.filter((r) => {
   // unmounted (tracked in the audit). Keep this list short and always
   // point to a finding in docs/security/audit-2026-06.md.
   const KNOWN_DEAD = [
-    { method: 'POST', path: '/' }, // routes/webhooks.js:55 — see F-9
-    { method: 'POST', path: '/clerk' }, // routes/webhooks.js:56 — see F-9
+    { method: 'POST', path: '/' }, // server/routes/webhooks.js:55 — see F-9
+    { method: 'POST', path: '/clerk' }, // server/routes/webhooks.js:56 — see F-9
   ];
   if (KNOWN_DEAD.some((d) => d.method === r.method && d.path === r.relPath)) return false;
 

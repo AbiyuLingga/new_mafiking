@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const { PROMPTS_DIR } = require('../project-paths');
 const { isAuthenticated, requireRegisteredUser } = require('../middleware/auth');
 const { isLocalAdminMode } = require('../middleware/admin');
 const {
@@ -11,13 +12,13 @@ const {
   formatLearningSkillLabel,
   interleaveRecallSlots,
   loadMasteryStates,
-} = require('../lib/recommendation-engine');
-const { logTokenUsage } = require('../lib/log-token-usage');
-const { sanitizeForPrompt } = require('../lib/text-sanitize');
-const { callWithPool, isPoolAvailable } = require('../lib/multi-provider-pool');
-const { isAnswerEquivalent } = require('../lib/answer-equivalence');
-const { getLatencySummary, recordLatency } = require('../lib/latency-tracker');
-const { simplifyGeminiSchema } = require('../lib/gemini-schema');
+} = require('../learning/recommendation-engine');
+const { logTokenUsage } = require('../ai/log-token-usage');
+const { sanitizeForPrompt } = require('../security/text-sanitize');
+const { callWithPool, isPoolAvailable } = require('../ai/multi-provider-pool');
+const { isAnswerEquivalent } = require('../learning/answer-equivalence');
+const { getLatencySummary, recordLatency } = require('../observability/latency-tracker');
+const { simplifyGeminiSchema } = require('../ai/gemini-schema');
 
 const router = express.Router();
 
@@ -314,7 +315,7 @@ function boxSchema() {
 
 function readProfileNarrativeSop() {
   try {
-    return fs.readFileSync(path.join(__dirname, '..', 'SOP-PROFILE-SUMMARY.md'), 'utf8');
+    return fs.readFileSync(path.join(PROMPTS_DIR, 'SOP-PROFILE-SUMMARY.md'), 'utf8');
   } catch {
     return [
       'SOP Profile Summary:',
@@ -1733,7 +1734,7 @@ function enrichWithDbProblems(db, userId, attempts, multipleChoiceEvidence, summ
    return summary;
 }
 
-const { getPoolStats: getStats } = require('../lib/multi-provider-pool');
+const { getPoolStats: getStats } = require('../ai/multi-provider-pool');
 router.get('/pool/stats', isAuthenticated, (req, res) => {
   if (!(req.session?.role === 'admin' || isLocalAdminMode(req))) {
     return res.status(403).json({ error: 'Akses admin diperlukan' });

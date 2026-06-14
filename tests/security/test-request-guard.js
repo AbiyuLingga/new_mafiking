@@ -3,7 +3,7 @@ const {
     isStateChangingRequest,
     isTrustedRequestOrigin,
     shouldRejectCrossSiteRequest,
-} = require('../../lib/request-guard');
+} = require('../../server/security/request-guard');
 
 function makeReq({ method = 'POST', path = '/api/progress/submit', headers = {}, protocol = 'https', host = 'mafiking.test' } = {}) {
     const lowerHeaders = Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]));

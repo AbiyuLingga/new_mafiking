@@ -11,8 +11,6 @@ const allowedRootFiles = new Set([
   'ARCHITECTURE.md',
   'MAFIKING.html',
   'README.md',
-  'SOP-DEEPSEEK-AI.md',
-  'SOP-PROFILE-SUMMARY.md',
   'deploy.ps1',
   'deploy.sh',
   'ecosystem.config.js',

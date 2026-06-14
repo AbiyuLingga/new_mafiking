@@ -6,7 +6,7 @@
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const express = require('express');
-const { createCanaryMiddleware } = require('../../lib/canary');
+const { createCanaryMiddleware } = require('../../server/security/canary');
 
 function makeApp(paths) {
   const app = express();

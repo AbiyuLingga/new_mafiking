@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { isLocalAdminMode, isLoopbackAddress } = require('../../middleware/admin');
+const { isLocalAdminMode, isLoopbackAddress } = require('../../server/middleware/admin');
 
 const originalEnv = { ...process.env };
 

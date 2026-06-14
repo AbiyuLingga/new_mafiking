@@ -10,7 +10,7 @@ origin: User request — generate dynamic QRIS dari QRIS statis pribadi agar tid
 
 ## Problem Frame
 
-Mafiking saat ini menggunakan **Duitku** sebagai payment gateway di `routes/payment.js`. Untuk aktivasi Duitku production perlu:
+Mafiking saat ini menggunakan **Duitku** sebagai payment gateway di `server/routes/payment.js`. Untuk aktivasi Duitku production perlu:
 1. Pendaftaran merchant + KYC bisnis.
 2. Proses review BI-compliant (butuh waktu hari-minggu).
 3. Konfigurasi callback URL & whitelisting IP server.
@@ -54,7 +54,7 @@ Owner memiliki **QRIS statis pribadi** (mis. dari GoPay Merchant, DANA Bisnis, a
 - Express 5, helmet, CSRF protection, rate limiter, audit log sudah ada.
 - `qrcode` (1.5+) adalah dependency rendering yang ringan & pure JS.
 - Frontend pakai React UMD + Babel runtime — tidak ada module bundler.
-- `routes/payment.js` saat ini handle Duitku flow + mock mode. Kita **keep** Duitku sebagai fallback opt-in via env.
+- `server/routes/payment.js` saat ini handle Duitku flow + mock mode. Kita **keep** Duitku sebagai fallback opt-in via env.
 - Existing payment table schema di `db/schema.sql` lines 109-122: `payments` table dengan `merchant_order_id`, `amount`, `status` enum (`PENDING|SUCCESS|FAILED`).
 
 ---
@@ -87,7 +87,7 @@ Owner memiliki **QRIS statis pribadi** (mis. dari GoPay Merchant, DANA Bisnis, a
                       │ POST /api/payment/create
                       ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              BACKEND (routes/payment.js + lib/qris-dynamic.js)  │
+│              BACKEND (server/routes/payment.js + server/payments/qris-dynamic.js)  │
 │  - Generate suffix unik (1-999) dari pool                      │
 │  - Modify Tag 01: "11" → "12"                                   │
 │  - Inject Tag 54: base+suffix                                  │
@@ -216,7 +216,7 @@ Append blok migration di atas ke `db/schema.sql` agar fresh install include colu
 
 ### Phase 3: QRIS Dynamic Adapter
 
-**File: `lib/qris-dynamic.js` (NEW)**
+**File: `server/payments/qris-dynamic.js` (NEW)**
 
 ```js
 const { convertQRIS, parseQRIS, validateQRIS } = require('@prasetya/qris');
@@ -280,7 +280,7 @@ module.exports = {
 
 ### Phase 4: Suffix Pool Allocator
 
-**File: `lib/qris-suffix-pool.js` (NEW)**
+**File: `server/payments/qris-suffix-pool.js` (NEW)**
 
 ```js
 const SUFFIX_MIN = parseInt(process.env.QRIS_SUFFIX_MIN || '1', 10);
@@ -350,7 +350,7 @@ module.exports = {
 - `expires_at` set pada lock → suffix otomatis "available" setelah expire (query filter `expires_at > NOW`).
 - Tidak perlu UNIQUE constraint pada `(base_amount, suffix, released_at IS NULL)` — filter di query cukup untuk atomicy.
 
-### Phase 5: Refactor `routes/payment.js`
+### Phase 5: Refactor `server/routes/payment.js`
 
 **Tambah provider routing di top file:**
 
@@ -363,9 +363,9 @@ const QRIS_CONFIG = {
   adminWhatsapp: process.env.QRIS_ADMIN_WHATSAPP,
 };
 
-const { generateDynamicQRIS, assertValidStaticQris } = require('../lib/qris-dynamic');
-const { allocateSuffix, releaseSuffix, SuffixPoolExhaustedError } = require('../lib/qris-suffix-pool');
-const { markPaymentPaid, markPaymentFailed } = require('../lib/payment-reconciler');
+const { generateDynamicQRIS, assertValidStaticQris } = require('../server/payments/qris-dynamic');
+const { allocateSuffix, releaseSuffix, SuffixPoolExhaustedError } = require('../server/payments/qris-suffix-pool');
+const { markPaymentPaid, markPaymentFailed } = require('../server/payments/payment-reconciler');
 ```
 
 **Validate static QRIS saat startup:**
@@ -509,7 +509,7 @@ res.json({
 
 ### Phase 6: Multi-Channel Reconciler
 
-**File: `lib/payment-reconciler.js` (NEW)**
+**File: `server/payments/payment-reconciler.js` (NEW)**
 
 ```js
 const crypto = require('crypto');
@@ -614,7 +614,7 @@ module.exports = {
 Channel 1 — admin klik tombol di panel:
 
 ```js
-// Digunakan di routes/admin-payments.js
+// Digunakan di server/routes/admin-payments.js
 function handleAdminMarkPaid(req, res) {
   const db = req.app.locals.db;
   const { merchantOrderId } = req.params;
@@ -732,7 +732,7 @@ Channel 3 — Android listener. **TIDAK ada runtime code**. Hanya dokumentasi se
 
 ### Phase 7: Expiry Sweeper
 
-**File: `lib/payment-expiry-sweeper.js` (NEW)**
+**File: `server/payments/payment-expiry-sweeper.js` (NEW)**
 
 ```js
 function sweepExpiredPayments(db) {
@@ -780,7 +780,7 @@ module.exports = { sweepExpiredPayments, startExpirySweeper };
 
 **Wire ke `server.js`:**
 ```js
-const { startExpirySweeper } = require('./lib/payment-expiry-sweeper');
+const { startExpirySweeper } = require('./server/payments/payment-expiry-sweeper');
 const { startMutasikuPoller } = require('./lib/reconcilers/mutasiku');
 
 // ... after db initialized ...
@@ -792,13 +792,13 @@ if (PAYMENT_PROVIDER === 'qris' || PAYMENT_PROVIDER === 'both') {
 
 ### Phase 8: Admin Endpoints
 
-**File: `routes/admin-payments.js` (NEW)**
+**File: `server/routes/admin-payments.js` (NEW)**
 
 ```js
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { isAdmin } = require('../middleware/admin');
-const { markPaymentPaid, markPaymentFailed } = require('../lib/payment-reconciler');
+const { isAdmin } = require('../server/middleware/admin');
+const { markPaymentPaid, markPaymentFailed } = require('../server/payments/payment-reconciler');
 const router = express.Router();
 
 const adminLimiter = rateLimit({
@@ -901,7 +901,7 @@ module.exports = router;
 
 **Wire ke `server.js`:**
 ```js
-app.use('/api/admin/payments', require('./routes/admin-payments'));
+app.use('/api/admin/payments', require('./server/routes/admin-payments'));
 ```
 
 ### Phase 9: Frontend `src/payment.jsx` Rewrite
@@ -1271,7 +1271,7 @@ new_mafiking/
 │       ├── webhook.js                    # NEW
 │       ├── mutasiku.js                   # NEW
 │       └── sms-listener.js               # NEW (dokumentasi only)
-├── routes/
+├── server/routes/
 │   ├── payment.js                        # MODIFY
 │   └── admin-payments.js                 # NEW
 ├── scripts/

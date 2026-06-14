@@ -66,10 +66,10 @@
 
 | Check | Where | Status |
 |---|---|---|
-| Gemini text sanitization | `routes/correction.js:920,954` + `lib/text-sanitize.js` | Active — 4000-char cap, control-char + bidi + zero-width strip, LaTeX-preserving |
-| Gemma / DeepSeek scope (server-side only) | `routes/correction.js`, `lib/admin-import.js` | Server-side only; no `process.env` in `src/*.jsx`; Vite `VITE_*`-only |
-| Clerk webhook signature | `routes/webhooks.js` (svix) | svix-verified; raw body parser in front |
-| Payment signatures + idempotency | `routes/payment.js`, `lib/payment-reconciler.js` | QRIS reconciliation HMAC/timestamp where configured; Duitku MD5 fallback verified; `merchantOrderId` uniqueness enforced |
+| Gemini text sanitization | `server/routes/correction.js:920,954` + `server/security/text-sanitize.js` | Active — 4000-char cap, control-char + bidi + zero-width strip, LaTeX-preserving |
+| Gemma / DeepSeek scope (server-side only) | `server/routes/correction.js`, `server/ai/admin-import.js` | Server-side only; no `process.env` in `src/*.jsx`; Vite `VITE_*`-only |
+| Clerk webhook signature | `server/routes/webhooks.js` (svix) | svix-verified; raw body parser in front |
+| Payment signatures + idempotency | `server/routes/payment.js`, `server/payments/payment-reconciler.js` | QRIS reconciliation HMAC/timestamp where configured; Duitku MD5 fallback verified; `merchantOrderId` uniqueness enforced |
 | F-10 (id coercion) | `/api/correction/evaluate` | Open — tracked in `llm.md` |
 | F-11 (EXIF strip) | `/api/correction/transcribe` upload | Open — `sharp` install pending |
 | F-12 (per-user adaptive throttle) | `/api/correction/*` | Open — tracked in `llm.md` |

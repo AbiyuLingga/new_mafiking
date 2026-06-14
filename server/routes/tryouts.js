@@ -9,7 +9,7 @@ const {
   normalizeTryoutDraftChoiceMap,
   parseTryoutSessionJson,
   verifyTryoutSessionToken,
-} = require('../lib/tryout-session');
+} = require('../learning/tryout-session');
 
 const router = express.Router();
 

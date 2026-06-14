@@ -2,12 +2,12 @@ const express = require('express');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { isRegisteredUser } = require('../middleware/auth');
-const { areTryoutPackagesEnabled } = require('../lib/app-settings');
-const { setPublicApiCache } = require('../lib/performance');
-const { generateDynamicQRIS, assertValidStaticQris } = require('../lib/qris-dynamic');
-const { allocateRotatingSuffix, allocateSuffix, releaseSuffix, SuffixPoolExhaustedError } = require('../lib/qris-suffix-pool');
-const { expirePaymentIfNeeded } = require('../lib/payment-expiry-sweeper');
-const { paymentRateLimiter: dbRateLimiter } = require('../lib/payment-rate-limiter');
+const { areTryoutPackagesEnabled } = require('../config/app-settings');
+const { setPublicApiCache } = require('../observability/performance');
+const { generateDynamicQRIS, assertValidStaticQris } = require('../payments/qris-dynamic');
+const { allocateRotatingSuffix, allocateSuffix, releaseSuffix, SuffixPoolExhaustedError } = require('../payments/qris-suffix-pool');
+const { expirePaymentIfNeeded } = require('../payments/payment-expiry-sweeper');
+const { paymentRateLimiter: dbRateLimiter } = require('../payments/payment-rate-limiter');
 const {
     canonicalAmount,
     checkAndRecordWebhookEvent,
@@ -19,11 +19,11 @@ const {
     storeIdempotencyKey,
     validateProviderStatus,
     verifyWebhookSignature,
-} = require('../lib/payment-reconciler');
-const { collectorIpAllowlist } = require('../lib/ip-allowlist');
-const paymentBroadcaster = require('../lib/payment-broadcaster');
-const { isEnabled: isFeatureEnabled } = require('../lib/feature-flags');
-const { normalizePackageAccessFeatures, packageAccessGrantSpecs } = require('../lib/package-entitlements');
+} = require('../payments/payment-reconciler');
+const { collectorIpAllowlist } = require('../security/ip-allowlist');
+const paymentBroadcaster = require('../payments/payment-broadcaster');
+const { isEnabled: isFeatureEnabled } = require('../config/feature-flags');
+const { normalizePackageAccessFeatures, packageAccessGrantSpecs } = require('../learning/package-entitlements');
 const router = express.Router();
 
 const SSE_PAYMENT_PUSH_ENABLED = isFeatureEnabled('SSE_PAYMENT_PUSH');
@@ -1164,11 +1164,11 @@ router.post('/reconcile/mutation-batch', collectorIpAllowlist, (req, res) => {
         return res.status(400).json({ error: 'mutations array diperlukan' });
     }
 
-    const { ingestBatch } = require('../lib/mutation-ingester');
+    const { ingestBatch } = require('../payments/mutation-ingester');
     const pepper = String(process.env.HASH_PEPPER || '');
     const results = ingestBatch(req.app.locals.db, mutations, pepper);
 
-    const { processNewMutations } = require('../lib/mutation-matcher');
+    const { processNewMutations } = require('../payments/mutation-matcher');
     const matchResult = processNewMutations(req.app.locals.db, mutations, pepper);
 
     res.json({

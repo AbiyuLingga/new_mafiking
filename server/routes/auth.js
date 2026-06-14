@@ -5,16 +5,16 @@ const fs = require('fs');
 const multer = require('multer');
 const path = require('path');
 const xss = require('xss');
-const { mergeGuestIntoUser, readUser } = require('../lib/clerk-user-sync');
-const { sendMail, getConfig: getMailerConfig } = require('../lib/mailer');
-const { avatarFilePathFromUrl, getAvatarDir } = require('../lib/profile-media');
-const { renderVerifyEmail } = require('../lib/email-templates');
+const { mergeGuestIntoUser, readUser } = require('../auth/clerk-user-sync');
+const { sendMail, getConfig: getMailerConfig } = require('../notifications/mailer');
+const { avatarFilePathFromUrl, getAvatarDir } = require('../storage/profile-media');
+const { renderVerifyEmail } = require('../notifications/email-templates');
 const {
     canResend,
     createOrRefreshVerification,
     consumeVerificationToken,
     RESEND_COOLDOWN_MS,
-} = require('../lib/email-verification');
+} = require('../auth/email-verification');
 const router = express.Router();
 
 const FACULTY_OPTIONS = new Set(['FMIPA', 'FITB', 'FTMD', 'FTTM', 'FTSL', 'FTI', 'SF', 'SAPPK', 'SITH-S', 'SITH-R', 'STEI-R', 'STEI-K']);

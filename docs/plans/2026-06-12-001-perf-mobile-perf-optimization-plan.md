@@ -504,7 +504,7 @@ const ROUTE_ASPECTS = {
 
 **File baru (2):**
 - `public/sw.js` — minimal SW, static cache only
-- `routes/sw-admin.js` — `POST /api/admin/sw-emergency-clear` (admin-only)
+- `server/routes/sw-admin.js` — `POST /api/admin/sw-emergency-clear` (admin-only)
 
 **File diubah (2):**
 - `dist/index.html` (via Vite plugin) — `if ('serviceWorker' in navigator && location.protocol === 'https:') register('/sw.js')`

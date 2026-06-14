@@ -45,7 +45,7 @@ const {
     computeWebhookEventHash,
     resolveIdempotencyKey,
     storeIdempotencyKey,
-} = require('../../lib/payment-reconciler');
+} = require('../../server/payments/payment-reconciler');
 
 console.log('Webhook replay prevention tests:');
 

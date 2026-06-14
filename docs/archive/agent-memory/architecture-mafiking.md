@@ -81,29 +81,29 @@ Landing media is read through `GET /api/landing-media`. Admin mode can replace m
 Mounted route modules:
 
 ```text
-routes/auth.js
-routes/auth-popup.js
-routes/webhooks.js
-routes/quiz.js
-routes/tryouts.js
-routes/progress.js
-routes/correction.js
-routes/payment.js
-routes/admin.js
-routes/admin-import.js
-routes/admin-payments.js
-routes/internal.js
+server/routes/auth.js
+server/routes/auth-popup.js
+server/routes/webhooks.js
+server/routes/quiz.js
+server/routes/tryouts.js
+server/routes/progress.js
+server/routes/correction.js
+server/routes/payment.js
+server/routes/admin.js
+server/routes/admin-import.js
+server/routes/admin-payments.js
+server/routes/internal.js
 ```
 
 Key backend boundaries:
 
-- `middleware/clerk-auth.js` verifies Clerk Bearer sessions and maps them to local users.
-- `middleware/auth.js` and `middleware/admin.js` enforce registered/admin access.
-- `lib/security-headers.js`, `lib/csp.js`, `lib/csrf-protection.js`, and `lib/request-guard.js` own HTTP hardening.
-- `lib/sqlite-session-store.js` persists sessions.
-- `lib/profile-media.js` validates profile files; `scripts/maintenance/reconcile-profile-media.js` audits missing files.
-- `lib/recommendation-engine.js` chooses deterministic catalog-backed recommendations.
-- `lib/multi-provider-pool.js` coordinates Gemini, Groq, and optional OpenRouter for canvas evaluation.
+- `server/middleware/clerk-auth.js` verifies Clerk Bearer sessions and maps them to local users.
+- `server/middleware/auth.js` and `server/middleware/admin.js` enforce registered/admin access.
+- `server/security/security-headers.js`, `server/security/csp.js`, `server/security/csrf-protection.js`, and `server/security/request-guard.js` own HTTP hardening.
+- `server/storage/sqlite-session-store.js` persists sessions.
+- `server/storage/profile-media.js` validates profile files; `scripts/maintenance/reconcile-profile-media.js` audits missing files.
+- `server/learning/recommendation-engine.js` chooses deterministic catalog-backed recommendations.
+- `server/ai/multi-provider-pool.js` coordinates Gemini, Groq, and optional OpenRouter for canvas evaluation.
 
 ## Payment Architecture
 

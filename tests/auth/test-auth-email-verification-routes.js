@@ -83,7 +83,7 @@ function request({ baseUrl, method = 'GET', path, body, cookie }) {
     resave: false,
     saveUninitialized: false,
   }));
-  app.use('/api/auth', require('../../routes/auth'));
+  app.use('/api/auth', require('../../server/routes/auth'));
   const server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;

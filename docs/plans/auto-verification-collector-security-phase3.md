@@ -21,12 +21,12 @@ target_posture: OWASP ASVS Level 2
 
 ### 0.1 In-Scope
 
-- `lib/mutation-collector.js` — in-process poller (`setInterval`, default 15s)
-- `lib/mutation-ingester.js` — dedupe, masking, HMAC-SHA256 content hashing
-- `lib/mutation-matcher.js` — match `incoming_mutations` rows to `payments` PENDING
-- `lib/providers/QrisMutasiProvider.js` — unofficial DANA/QRIS merchant-dashboard scraper
-- `lib/providers/PaymentMutationProvider.js` — interface typedef + validator
-- `lib/providers/MockMutationProvider.js` — test fake
+- `server/payments/mutation-collector.js` — in-process poller (`setInterval`, default 15s)
+- `server/payments/mutation-ingester.js` — dedupe, masking, HMAC-SHA256 content hashing
+- `server/payments/mutation-matcher.js` — match `incoming_mutations` rows to `payments` PENDING
+- `server/payments/providers/QrisMutasiProvider.js` — unofficial DANA/QRIS merchant-dashboard scraper
+- `server/payments/providers/PaymentMutationProvider.js` — interface typedef + validator
+- `server/payments/providers/MockMutationProvider.js` — test fake
 - Tabel `incoming_mutations` + `payment_reconciliation_log`
 - Env vars: `MUTATION_COLLECTOR_ENABLED`, `MUTATION_PROVIDER`,
   `MUTATION_POLL_INTERVAL_MS`, `MUTATION_MAX_ERRORS`, `QRIS_MERCHANT_EMAIL`,
@@ -159,7 +159,7 @@ clarity and to map cleanly into the threat-model.json nodes).
 
 | ID | Threat | Pre-Phase 3 | Phase 3 Mitigation | Verification |
 |----|--------|-------------|--------------------|--------------|
-| AV-9 | Admin claims "I never enabled auto-verify" | collector start/stop logged to stdout | Emit `lib/audit-log.js` events for `mutation_collector_start`, `mutation_collector_stop`, `mutation_collector_disabled_no_pepper` | T-AVS-12 |
+| AV-9 | Admin claims "I never enabled auto-verify" | collector start/stop logged to stdout | Emit `server/security/audit-log.js` events for `mutation_collector_start`, `mutation_collector_stop`, `mutation_collector_disabled_no_pepper` | T-AVS-12 |
 | AV-10 | User complains "payment auto-claimed by someone else" | `payment_reconciliation_log` JSON | Include `content_hash` and `provider_mutation_id` in the audit detail so the row can be re-derived | T-AVS-8 |
 | AV-11 | False-positive match is invisible to admin | unmatched mutations in DB | Add `GET /api/admin/auto-verify/stats` + `GET /api/admin/auto-verify/unmatched?limit=50` (admin-only) | T-AVS-15 |
 
@@ -247,42 +247,42 @@ clarity and to map cleanly into the threat-model.json nodes).
 | Step | Action | File |
 |------|--------|------|
 | 4.2.1 | Audit `server.js` startup logger: confirm `QRIS_MERCHANT_PASSWORD` and `HASH_PEPPER` are never logged, even at debug level. Add a grep-based test. | new `scripts/test-secret-leak.js` |
-| 4.2.2 | Emit `lib/audit-log.js` event in `startMutationCollector()`: `action='mutation_collector_start', details={ provider, intervalMs, pepperLength }` (length only, not value) | `lib/mutation-collector.js` |
+| 4.2.2 | Emit `server/security/audit-log.js` event in `startMutationCollector()`: `action='mutation_collector_start', details={ provider, intervalMs, pepperLength }` (length only, not value) | `server/payments/mutation-collector.js` |
 | 4.2.3 | Document `HASH_PEPPER` rotation cost in `.env.example`: "Rotating this key invalidates all `payer_id_hash` and `content_hash` values; collector will re-ingest from scratch on next poll" | `.env.example` |
-| 4.2.4 | After `qris-mutasi` writes the cookie file, explicitly `chmod 0600` (don't rely on umask) | `lib/providers/QrisMutasiProvider.js` |
-| 4.2.5 | Restrict `QRIS_COOKIE_DIR` default to `/opt/mafiking/tmp/` (not `/tmp` which is world-readable on shared hosts); update `.env.example` and `QrisMutasiProvider.js` default | `.env.example`, `lib/providers/QrisMutasiProvider.js` |
+| 4.2.4 | After `qris-mutasi` writes the cookie file, explicitly `chmod 0600` (don't rely on umask) | `server/payments/providers/QrisMutasiProvider.js` |
+| 4.2.5 | Restrict `QRIS_COOKIE_DIR` default to `/opt/mafiking/tmp/` (not `/tmp` which is world-readable on shared hosts); update `.env.example` and `QrisMutasiProvider.js` default | `.env.example`, `server/payments/providers/QrisMutasiProvider.js` |
 | 4.2.6 | Verify `env` and `.env.local` are in `.gitignore` (already documented in AGENTS.md) | n/a |
 
 ### 4.3 Provider Hardening
 
 | Step | Action | File |
 |------|--------|------|
-| 4.3.1 | Verify `merchant.qris.online` URL is hardcoded as a module constant, NOT read from env. Add a test that fails if the URL is found in `process.env.*` | `lib/providers/QrisMutasiProvider.js`, new test |
-| 4.3.2 | Add `rejectUnauthorized: true` explicitly in the `httpsAgent` or equivalent (assert Node default) | `lib/providers/QrisMutasiProvider.js` |
-| 4.3.3 | Sanitize `error.message` before logging: strip URLs (`/https?:\/\/[^\s]+/g`), strip HTML tags (`/<[^>]+>/g`), cap to 200 chars. Log only `[QrisMutasiProvider] fetch error: <sanitized>`. | `lib/providers/QrisMutasiProvider.js:342` |
-| 4.3.4 | Wrap `provider.qris.mutasi()` in `AbortController` with 15s timeout, independent of library timeout | `lib/providers/QrisMutasiProvider.js` |
-| 4.3.5 | Cap response body size at 1 MB before cheerio parse (cheerio can OOM on very large HTML) | `lib/providers/QrisMutasiProvider.js` |
-| 4.3.6 | Strengthen `validateNormalizedMutation` (`lib/providers/PaymentMutationProvider.js`): reject `payerName` containing control chars (`/[\x00-\x1f\x7f]/`), cap `payerName` length to 100 chars, cap `note` length to 50 chars | `lib/providers/PaymentMutationProvider.js` |
-| 4.3.7 | Add `parsePositiveInt()` helper for `nominal`: reject `NaN`, reject non-safe-integer, reject values > Rp 100.000.000 (sanity cap) | `lib/providers/QrisMutasiProvider.js` |
+| 4.3.1 | Verify `merchant.qris.online` URL is hardcoded as a module constant, NOT read from env. Add a test that fails if the URL is found in `process.env.*` | `server/payments/providers/QrisMutasiProvider.js`, new test |
+| 4.3.2 | Add `rejectUnauthorized: true` explicitly in the `httpsAgent` or equivalent (assert Node default) | `server/payments/providers/QrisMutasiProvider.js` |
+| 4.3.3 | Sanitize `error.message` before logging: strip URLs (`/https?:\/\/[^\s]+/g`), strip HTML tags (`/<[^>]+>/g`), cap to 200 chars. Log only `[QrisMutasiProvider] fetch error: <sanitized>`. | `server/payments/providers/QrisMutasiProvider.js:342` |
+| 4.3.4 | Wrap `provider.qris.mutasi()` in `AbortController` with 15s timeout, independent of library timeout | `server/payments/providers/QrisMutasiProvider.js` |
+| 4.3.5 | Cap response body size at 1 MB before cheerio parse (cheerio can OOM on very large HTML) | `server/payments/providers/QrisMutasiProvider.js` |
+| 4.3.6 | Strengthen `validateNormalizedMutation` (`server/payments/providers/PaymentMutationProvider.js`): reject `payerName` containing control chars (`/[\x00-\x1f\x7f]/`), cap `payerName` length to 100 chars, cap `note` length to 50 chars | `server/payments/providers/PaymentMutationProvider.js` |
+| 4.3.7 | Add `parsePositiveInt()` helper for `nominal`: reject `NaN`, reject non-safe-integer, reject values > Rp 100.000.000 (sanity cap) | `server/payments/providers/QrisMutasiProvider.js` |
 
 ### 4.4 Matcher Integrity
 
 | Step | Action | File |
 |------|--------|------|
-| 4.4.1 | Add `transacted_at <= datetime('now', '+60 seconds')` to the candidates query in `matchMutation` | `lib/mutation-matcher.js:537` |
-| 4.4.2 | Wrap `matchMutation` body in `try/catch SQLITE_BUSY` with 3× retry and 50–150 ms jitter | `lib/mutation-matcher.js` |
-| 4.4.3 | Same retry logic in `ingestBatch` (already wrapped in `db.transaction()`; verify it surfaces BUSY cleanly) | `lib/mutation-ingester.js` |
-| 4.4.4 | Verify `markPaymentPaid` records `actor='auto_verify'` and `mutationId` in the reconciliation log | `lib/payment-reconciler.js` (verify) |
-| 4.4.5 | Add `matchMutation` summary log: `{ mutationId, candidateCount, action: 'matched'\|'unmatched'\|'ambiguous' }` | `lib/mutation-matcher.js` |
-| 4.4.6 | When `markPaymentPaid` is called from the matcher, also write a one-liner to `lib/audit-log.js` so it shows up in the per-day analyzer rollup | `lib/mutation-matcher.js` |
+| 4.4.1 | Add `transacted_at <= datetime('now', '+60 seconds')` to the candidates query in `matchMutation` | `server/payments/mutation-matcher.js:537` |
+| 4.4.2 | Wrap `matchMutation` body in `try/catch SQLITE_BUSY` with 3× retry and 50–150 ms jitter | `server/payments/mutation-matcher.js` |
+| 4.4.3 | Same retry logic in `ingestBatch` (already wrapped in `db.transaction()`; verify it surfaces BUSY cleanly) | `server/payments/mutation-ingester.js` |
+| 4.4.4 | Verify `markPaymentPaid` records `actor='auto_verify'` and `mutationId` in the reconciliation log | `server/payments/payment-reconciler.js` (verify) |
+| 4.4.5 | Add `matchMutation` summary log: `{ mutationId, candidateCount, action: 'matched'\|'unmatched'\|'ambiguous' }` | `server/payments/mutation-matcher.js` |
+| 4.4.6 | When `markPaymentPaid` is called from the matcher, also write a one-liner to `server/security/audit-log.js` so it shows up in the per-day analyzer rollup | `server/payments/mutation-matcher.js` |
 
 ### 4.5 Audit and Detection
 
 | Step | Action | File |
 |------|--------|------|
-| 4.5.1 | New event types in `lib/audit-log.js` whitelist: `mutation_collector_start`, `mutation_collector_stop`, `mutation_collector_disabled_no_pepper`, `auto_verify_matched`, `auto_verify_ambiguous`, `auto_verify_unmatched` | `lib/audit-log.js` |
-| 4.5.2 | New admin endpoint `GET /api/admin/auto-verify/stats` returning `{ enabled, provider, lastPollAt, consecutiveErrors, totalChecked, totalMatched, backoffMs }` — guarded by `isAdmin` | `routes/admin.js` |
-| 4.5.3 | New admin endpoint `GET /api/admin/auto-verify/unmatched?limit=50` returning the most recent unmatched `incoming_mutations` rows — guarded by `isAdmin` | `routes/admin.js` |
+| 4.5.1 | New event types in `server/security/audit-log.js` whitelist: `mutation_collector_start`, `mutation_collector_stop`, `mutation_collector_disabled_no_pepper`, `auto_verify_matched`, `auto_verify_ambiguous`, `auto_verify_unmatched` | `server/security/audit-log.js` |
+| 4.5.2 | New admin endpoint `GET /api/admin/auto-verify/stats` returning `{ enabled, provider, lastPollAt, consecutiveErrors, totalChecked, totalMatched, backoffMs }` — guarded by `isAdmin` | `server/routes/admin.js` |
+| 4.5.3 | New admin endpoint `GET /api/admin/auto-verify/unmatched?limit=50` returning the most recent unmatched `incoming_mutations` rows — guarded by `isAdmin` | `server/routes/admin.js` |
 | 4.5.4 | Extend `GET /api/health` to include `autoVerify: { enabled, provider, lastPollAt, consecutiveErrors }` (no PII) | `server.js` |
 | 4.5.5 | Wire the new events into `scripts/security/analyze-audit-log.js` so the daily summary rollup includes auto-verify counts | `scripts/security/analyze-audit-log.js` |
 
@@ -389,7 +389,7 @@ milestones.
 | V3.5.1 — Input validation | `validateNormalizedMutation` | done | 4.3.6 (control chars, length cap) |
 | V4.3.1 — Cryptographic storage | HMAC-SHA256 + pepper | done | 4.2.3 (rotation cost documented) |
 | V5.5.1 — Output encoding | masked data | done | 4.3.6 (validate at boundary) |
-| V6.5.1 — Logging | `payment_reconciliation_log` | done | 4.5.1 + 4.5.5 (lib/audit-log.js + analyze-audit-log.js) |
+| V6.5.1 — Logging | `payment_reconciliation_log` | done | 4.5.1 + 4.5.5 (server/security/audit-log.js + analyze-audit-log.js) |
 | V7.5.1 — Error handling | fail-closed | done | 4.3.3 (sanitize error messages) |
 | V8.5.1 — Data protection | PII masking | done | 4.2.5 (cookie dir) + wait for F-15 |
 | V9.5.1 — Communications | HTTPS to merchant.qris.online | done | 4.3.1 (hardcoded URL) + 4.3.2 (rejectUnauthorized explicit) |
@@ -496,13 +496,13 @@ review.
 | # | File(s) | Depends on | Est. |
 |---|---------|-----------|------|
 | 1 | `package.json` (pin `qris-mutasi` exact version) | — | 5 min |
-| 2 | `lib/providers/QrisMutasiProvider.js` (chmod 0600, AbortController, body cap, sanitized error) | 1 | 30 min |
-| 3 | `lib/providers/PaymentMutationProvider.js` (length cap, control-char strip) | — | 15 min |
-| 4 | `lib/providers/QrisMutasiProvider.js` (hardcoded URL constant + rejectUnauthorized explicit) | 2 | 15 min |
-| 5 | `lib/mutation-matcher.js` (future-timestamp guard, SQLITE_BUSY retry, summary log) | — | 30 min |
-| 6 | `lib/mutation-collector.js` (audit-log emit on start/stop/disabled) | 5 | 20 min |
-| 7 | `lib/audit-log.js` (new event types) | — | 15 min |
-| 8 | `routes/admin.js` (`/auto-verify/stats`, `/auto-verify/unmatched`) | 7 | 30 min |
+| 2 | `server/payments/providers/QrisMutasiProvider.js` (chmod 0600, AbortController, body cap, sanitized error) | 1 | 30 min |
+| 3 | `server/payments/providers/PaymentMutationProvider.js` (length cap, control-char strip) | — | 15 min |
+| 4 | `server/payments/providers/QrisMutasiProvider.js` (hardcoded URL constant + rejectUnauthorized explicit) | 2 | 15 min |
+| 5 | `server/payments/mutation-matcher.js` (future-timestamp guard, SQLITE_BUSY retry, summary log) | — | 30 min |
+| 6 | `server/payments/mutation-collector.js` (audit-log emit on start/stop/disabled) | 5 | 20 min |
+| 7 | `server/security/audit-log.js` (new event types) | — | 15 min |
+| 8 | `server/routes/admin.js` (`/auto-verify/stats`, `/auto-verify/unmatched`) | 7 | 30 min |
 | 9 | `server.js` (`/api/health` extension) | — | 10 min |
 | 10 | `scripts/security/analyze-audit-log.js` (DE-AV-1..6 rules) | 7 | 30 min |
 | 11 | `scripts/test-auto-verification-security.js` (15 test cases) | 2, 3, 4, 5, 6, 7, 8 | 90 min |
@@ -611,12 +611,12 @@ Before claiming Phase 3 complete, all of the following must be true.
 - `ops/modsecurity/STATUS.md` — ModSecurity v3 status (F-13)
 - `package.json` — dependency manifest
 - `.env.example` — environment variable documentation
-- `lib/mutation-collector.js`, `lib/mutation-ingester.js`,
-  `lib/mutation-matcher.js`, `lib/providers/QrisMutasiProvider.js`,
-  `lib/providers/PaymentMutationProvider.js`,
-  `lib/providers/MockMutationProvider.js` — Phase 1+2 implementation
-- `lib/payment-reconciler.js` — `markPaymentPaid` (called by matcher)
-- `lib/audit-log.js` — NDJSON audit writer
-- `routes/admin.js` — admin endpoints (extend with `/auto-verify/*`)
+- `server/payments/mutation-collector.js`, `server/payments/mutation-ingester.js`,
+  `server/payments/mutation-matcher.js`, `server/payments/providers/QrisMutasiProvider.js`,
+  `server/payments/providers/PaymentMutationProvider.js`,
+  `server/payments/providers/MockMutationProvider.js` — Phase 1+2 implementation
+- `server/payments/payment-reconciler.js` — `markPaymentPaid` (called by matcher)
+- `server/security/audit-log.js` — NDJSON audit writer
+- `server/routes/admin.js` — admin endpoints (extend with `/auto-verify/*`)
 - `scripts/security/analyze-audit-log.js` — daily analyzer (extend with DE-AV rules)
 - `scripts/test-*.js` — existing test suite

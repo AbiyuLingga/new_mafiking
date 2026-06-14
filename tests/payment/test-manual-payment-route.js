@@ -4,7 +4,7 @@ const http = require('http');
 const path = require('path');
 const express = require('express');
 const Database = require('better-sqlite3');
-const { markPaymentPaid } = require('../../lib/payment-reconciler');
+const { markPaymentPaid } = require('../../server/payments/payment-reconciler');
 
 function request({ baseUrl, method = 'GET', path: requestPath, body, headers = {} }) {
     const url = new URL(requestPath, baseUrl);
@@ -61,7 +61,7 @@ async function main() {
         VALUES (7, 'tryout-manual-test', 'Tryout Manual Test', 'Manual route test', 'Rp 50.000', '90 mnt', 30, '[]', 1)
     `).run();
 
-    const paymentRouter = require('../../routes/payment');
+    const paymentRouter = require('../../server/routes/payment');
     const app = express();
     app.locals.db = db;
     let sessionUserId = 2;

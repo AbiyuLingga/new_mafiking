@@ -3,10 +3,10 @@ const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 const { calculateCRC16 } = require('@prasetya/qris');
-const { generateDynamicQRIS } = require('../../lib/qris-dynamic');
-const { allocateSuffix, releaseExpiredSuffixes } = require('../../lib/qris-suffix-pool');
-const { markPaymentPaid, signWebhookPayload, verifyWebhookSignature } = require('../../lib/payment-reconciler');
-const { sweepExpiredPayments } = require('../../lib/payment-expiry-sweeper');
+const { generateDynamicQRIS } = require('../../server/payments/qris-dynamic');
+const { allocateSuffix, releaseExpiredSuffixes } = require('../../server/payments/qris-suffix-pool');
+const { markPaymentPaid, signWebhookPayload, verifyWebhookSignature } = require('../../server/payments/payment-reconciler');
+const { sweepExpiredPayments } = require('../../server/payments/payment-expiry-sweeper');
 
 function buildStaticFixture() {
     const body = '00020101021126320014ID.CO.QRIS.WWW011012345678905204000053033605802ID5908MAFIKING6007BANDUNG6304';

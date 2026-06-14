@@ -33,7 +33,7 @@ db.exec(schema);
 const auditMigration = fs.readFileSync(path.join(__dirname, '..', '..', 'db', 'migrations', '005_audit_immutability.sql'), 'utf-8');
 db.exec(auditMigration);
 
-const { logReconciliation, checkAndRecordWebhookEvent, computeWebhookEventHash } = require('../../lib/payment-reconciler');
+const { logReconciliation, checkAndRecordWebhookEvent, computeWebhookEventHash } = require('../../server/payments/payment-reconciler');
 
 console.log('Audit log immutability tests:');
 

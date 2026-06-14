@@ -2,11 +2,11 @@ const assert = require('assert');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const paymentRouter = require('../../routes/payment');
+const paymentRouter = require('../../server/routes/payment');
 const {
     normalizePackageAccessFeatures,
     packageAccessGrantSpecs,
-} = require('../../lib/package-entitlements');
+} = require('../../server/learning/package-entitlements');
 
 const {
     buildMockPaymentUrl,

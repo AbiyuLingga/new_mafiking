@@ -61,42 +61,42 @@ function grepInTree(root, pattern, includeExt = ['.js', '.jsx', '.json']) {
     return results;
 }
 
-// 1. lib/reconcilers/mutasiku.js tidak ada
-const mutasikuFile = path.join(projectRoot, 'lib', 'reconcilers', 'mutasiku.js');
+// 1. server/payments/reconcilers/mutasiku.js tidak ada
+const mutasikuFile = path.join(projectRoot, 'server', 'payments', 'reconcilers', 'mutasiku.js');
 if (!fileExists(mutasikuFile)) {
-    ok('lib/reconcilers/mutasiku.js dihapus');
+    ok('server/payments/reconcilers/mutasiku.js dihapus');
 } else {
-    fail('lib/reconcilers/mutasiku.js masih ada', mutasikuFile);
+    fail('server/payments/reconcilers/mutasiku.js masih ada', mutasikuFile);
 }
 
-// 2. routes/payment.js tidak ada import Mutasiku
-const paymentJs = path.join(projectRoot, 'routes', 'payment.js');
+// 2. server/routes/payment.js tidak ada import Mutasiku
+const paymentJs = path.join(projectRoot, 'server', 'routes', 'payment.js');
 if (fileExists(paymentJs)) {
-    const { count } = grepInFile(paymentJs, /handleMutasikuWebhook|lib\/reconcilers\/mutasiku/g);
+    const { count } = grepInFile(paymentJs, /handleMutasikuWebhook|server\/payments\/reconcilers\/mutasiku/g);
     if (count === 0) {
-        ok('routes/payment.js tidak import Mutasiku');
+        ok('server/routes/payment.js tidak import Mutasiku');
     } else {
-        fail('routes/payment.js masih import Mutasiku', `count=${count}`);
+        fail('server/routes/payment.js masih import Mutasiku', `count=${count}`);
     }
 }
 
-// 3. routes/payment.js tidak ada string duitku/Duitku/DUITKU_
+// 3. server/routes/payment.js tidak ada string duitku/Duitku/DUITKU_
 if (fileExists(paymentJs)) {
     const { count } = grepInFile(paymentJs, /duitku|Duitku|DUITKU_/g);
     if (count === 0) {
-        ok('routes/payment.js tidak ada referensi Duitku');
+        ok('server/routes/payment.js tidak ada referensi Duitku');
     } else {
-        fail('routes/payment.js masih ada referensi Duitku', `count=${count}`);
+        fail('server/routes/payment.js masih ada referensi Duitku', `count=${count}`);
     }
 }
 
-// 4. routes/payment.js tidak ada /callback (Duitku callback)
+// 4. server/routes/payment.js tidak ada /callback (Duitku callback)
 if (fileExists(paymentJs)) {
     const { count } = grepInFile(paymentJs, /router\.post\(['"]\/callback['"]/g);
     if (count === 0) {
-        ok('routes/payment.js tidak ada route /callback (Duitku)');
+        ok('server/routes/payment.js tidak ada route /callback (Duitku)');
     } else {
-        fail('routes/payment.js masih ada /callback route', `count=${count}`);
+        fail('server/routes/payment.js masih ada /callback route', `count=${count}`);
     }
 }
 

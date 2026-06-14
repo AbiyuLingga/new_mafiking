@@ -3,8 +3,8 @@ const assert = require('assert');
 const originalEnv = { ...process.env };
 
 function resetMailer() {
-  delete require.cache[require.resolve('../../lib/mailer')];
-  return require('../../lib/mailer');
+  delete require.cache[require.resolve('../../server/notifications/mailer')];
+  return require('../../server/notifications/mailer');
 }
 
 (async () => {

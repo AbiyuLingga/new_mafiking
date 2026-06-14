@@ -89,7 +89,7 @@ Users & Token Monitoring
 - Portable content: `db/seeds/question-bank.json`, `db/seeds/tryout-bank.json`, and `db/seeds/daily-missions.json`.
 - Runtime profile files: `profile-media/`; back up and restore them together with SQLite.
 - Core routes: `auth`, `quiz`, `tryouts`, `progress`, `correction`, `payment`, `admin`, `admin-import`, `admin-payments`, `internal`, `auth-popup`, and `webhooks`.
-- Payment v3 helpers include `lib/payment-reconciler.js`, `lib/payment-broadcaster.js`, `lib/confidence-matcher.js`, and `lib/self-healing-collector.js`.
+- Payment v3 helpers include `server/payments/payment-reconciler.js`, `server/payments/payment-broadcaster.js`, `server/payments/confidence-matcher.js`, and `server/payments/self-healing-collector.js`.
 
 ## Validation
 

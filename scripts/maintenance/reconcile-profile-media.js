@@ -5,7 +5,7 @@ const {
   clearMissingAvatarRows,
   findMissingAvatarRows,
   getAvatarDir,
-} = require('../../lib/profile-media');
+} = require('../../server/storage/profile-media');
 
 const projectRoot = path.join(__dirname, '..', '..');
 const dbPath = path.resolve(process.env.TARGET_DB || path.join(projectRoot, 'db', 'database.sqlite'));

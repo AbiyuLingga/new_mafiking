@@ -24,7 +24,7 @@ POST /api/progress/submit        → SQLite (instan)
 
 **Total wait user:** ~11-23 detik per soal canvas (sequential)
 
-Backend saat ini (`routes/correction.js:575-643`, fungsi `callGeminiWithFallback`):
+Backend saat ini (`server/routes/correction.js:575-643`, fungsi `callGeminiWithFallback`):
 - Loop sequential melalui 3 Gemini keys
 - Kalau key 1 limit (429), tunggu network timeout sebelum coba key 2
 - Tidak ada queue global, tidak ada cache, tidak ada parallel key rotation
@@ -138,7 +138,7 @@ MAFIKING_POOL_CACHE_TTL_MS=3600000
 GROQ_API_KEY=
 ```
 
-### 3.2 File Baru: `lib/multi-provider-pool.js`
+### 3.2 File Baru: `server/ai/multi-provider-pool.js`
 
 **Tujuan:** Router yang memilih provider terbaik dan mengeksekusi request.
 
@@ -414,7 +414,7 @@ module.exports = {
 };
 ```
 
-### 3.3 File Baru: `lib/groq-client.js`
+### 3.3 File Baru: `server/ai/groq-client.js`
 
 **Tujuan:** HTTP client untuk Groq API (OpenAI-compatible).
 
@@ -502,7 +502,7 @@ class GroqClient {
 module.exports = { GroqClient, GROQ_VISION_MODEL };
 ```
 
-### 3.4 File Baru: `lib/gemini-client.js`
+### 3.4 File Baru: `server/ai/gemini-client.js`
 
 **Tujuan:** Refactor Gemini call dari inline di `correction.js` ke module terpisah. Pool-agnostic.
 
@@ -551,7 +551,7 @@ class GeminiClient {
 module.exports = { GeminiClient, GEMINI_FLASH_LITE_MODEL };
 ```
 
-### 3.5 File Diubah: `routes/correction.js`
+### 3.5 File Diubah: `server/routes/correction.js`
 
 **Perubahan besar:**
 
@@ -630,7 +630,7 @@ const MERGED_SYSTEM_PROMPT = [
 **Route `/evaluate` yang dimodifikasi (single request):**
 
 ```js
-const { callWithPool } = require('../lib/multi-provider-pool');
+const { callWithPool } = require('../server/ai/multi-provider-pool');
 
 router.post('/evaluate', isAuthenticated, requireRegisteredUser, async (req, res) => {
   try {
@@ -904,11 +904,11 @@ Tambah `GROQ_API_KEY=gsk_...` ke local env.
 | 1 | Signup Groq + generate API key | External | 5 min | None |
 | 2 | Tambah env vars ke `.env.local` | .env.local | 2 min | Low |
 | 3 | Update `.env.example` dokumentasi | .env.example | 5 min | None |
-| 4 | Buat `lib/groq-client.js` | New file | 1 hour | Low |
-| 5 | Buat `lib/gemini-client.js` | New file | 30 min | Low |
-| 6 | Buat `lib/multi-provider-pool.js` | New file | 2-3 hours | Medium |
+| 4 | Buat `server/ai/groq-client.js` | New file | 1 hour | Low |
+| 5 | Buat `server/ai/gemini-client.js` | New file | 30 min | Low |
+| 6 | Buat `server/ai/multi-provider-pool.js` | New file | 2-3 hours | Medium |
 | 7 | Test pool di isolation | Test script | 1 hour | Low |
-| 8 | Modify `routes/correction.js` | Modified | 2-3 hours | High |
+| 8 | Modify `server/routes/correction.js` | Modified | 2-3 hours | High |
 | 9 | Modify `src/practice.jsx` | Modified | 2-3 hours | Medium |
 | 10 | Manual testing end-to-end | Test | 1 hour | — |
 | 11 | Load test concurrent users | Test | 1 hour | — |
@@ -1034,7 +1034,7 @@ Setiap AI call di-log:
 - Token count
 - Cache hit/miss
 
-Sudah ada via `logTokenUsage()` di `lib/log-token-usage.js`.
+Sudah ada via `logTokenUsage()` di `server/ai/log-token-usage.js`.
 
 ### 8.3 Admin UI (opsional, phase 2)
 
@@ -1070,13 +1070,13 @@ Tambah tab di admin panel yang menampilkan pool stats real-time.
 
 ### 11.1 File Baru (3)
 
-- [x] `lib/multi-provider-pool.js`
-- [x] `lib/groq-client.js`
-- [x] `lib/gemini-client.js`
+- [x] `server/ai/multi-provider-pool.js`
+- [x] `server/ai/groq-client.js`
+- [x] `server/ai/gemini-client.js`
 
 ### 11.2 File Diubah (3)
 
-- [x] `routes/correction.js` — pakai pool, tambah merged flow
+- [x] `server/routes/correction.js` — pakai pool, tambah merged flow
 - [x] `src/practice.jsx` — hapus OCR step, single request
 - [x] `.env.example` — dokumentasi env vars
 

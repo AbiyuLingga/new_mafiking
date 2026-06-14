@@ -3,7 +3,7 @@
 // Run from project root: node tests/payment/test-feature-flags.js
 
 const assert = require('assert');
-const { isEnabled, flags } = require('../../lib/feature-flags');
+const { isEnabled, flags } = require('../../server/config/feature-flags');
 
 let passed = 0;
 let failed = 0;
@@ -57,8 +57,8 @@ test('SSE_PAYMENT_PUSH=false via env returns false', () => {
     const original = process.env.SSE_PAYMENT_PUSH;
     process.env.SSE_PAYMENT_PUSH = 'false';
     // Reload to pick up env
-    delete require.cache[require.resolve('../../lib/feature-flags')];
-    const reloaded = require('../../lib/feature-flags');
+    delete require.cache[require.resolve('../../server/config/feature-flags')];
+    const reloaded = require('../../server/config/feature-flags');
     assert.strictEqual(reloaded.isEnabled('SSE_PAYMENT_PUSH'), false);
     // Restore
     if (original === undefined) {
@@ -66,7 +66,7 @@ test('SSE_PAYMENT_PUSH=false via env returns false', () => {
     } else {
         process.env.SSE_PAYMENT_PUSH = original;
     }
-    delete require.cache[require.resolve('../../lib/feature-flags')];
+    delete require.cache[require.resolve('../../server/config/feature-flags')];
 });
 
 // 4. Unknown flag returns false

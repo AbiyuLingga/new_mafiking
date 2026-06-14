@@ -119,8 +119,8 @@ function normalizeMode(mode) {
   return IMPORT_MODES.has(mode) ? mode : 'ai_complete';
 }
 
-function getSopText(projectRoot) {
-  const sopPath = path.join(projectRoot, 'SOP-DEEPSEEK-AI.md');
+function getSopText(promptsDir) {
+  const sopPath = path.join(promptsDir, 'SOP-DEEPSEEK-AI.md');
   return fs.existsSync(sopPath)
     ? fs.readFileSync(sopPath, 'utf8')
     : 'Output harus berupa json valid sesuai schema MAFIKING.';

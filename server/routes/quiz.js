@@ -1,13 +1,13 @@
 const express = require('express');
 const { isAuthenticated } = require('../middleware/auth');
-const { getTryoutChoices } = require('../lib/tryout-ranking');
+const { getTryoutChoices } = require('../learning/tryout-ranking');
 const {
     FREE_MATH_TIME_LIMIT_SECONDS,
     FREE_MATH_TRYOUT_ID,
     FREE_MATH_TRYOUT_TITLE,
     createTryoutSession,
-} = require('../lib/tryout-session');
-const { setPublicApiCache } = require('../lib/performance');
+} = require('../learning/tryout-session');
+const { setPublicApiCache } = require('../observability/performance');
 const router = express.Router();
 
 function canSeeHiddenChapters(req) {

@@ -98,9 +98,9 @@ asyncTest('P0-2: notifyPaymentSuccess is called AFTER transaction commit (succes
     seedPendingPayment(db, { orderId: 'MFK-P02-1', userId: 1, amount: 29000 });
     // Clear broadcaster side effects from any earlier tests by deleting
     // require cache so payment-broadcaster singleton re-initializes.
-    delete require.cache[require.resolve('../../lib/payment-broadcaster')];
-    const broadcaster = require('../../lib/payment-broadcaster');
-    const { markPaymentPaid } = require('../../lib/payment-reconciler');
+    delete require.cache[require.resolve('../../server/payments/payment-broadcaster')];
+    const broadcaster = require('../../server/payments/payment-broadcaster');
+    const { markPaymentPaid } = require('../../server/payments/payment-reconciler');
 
     let observed = null;
     broadcaster.subscribe('MFK-P02-1', (payload) => { observed = payload; });
@@ -126,9 +126,9 @@ asyncTest('P0-2: notifyPaymentSuccess is NOT called when transaction throws (fai
     const db = makeDb();
     seedUser(db, 1);
     seedPendingPayment(db, { orderId: 'MFK-P02-2', userId: 1, amount: 29000 });
-    delete require.cache[require.resolve('../../lib/payment-broadcaster')];
-    const broadcaster = require('../../lib/payment-broadcaster');
-    const { markPaymentPaid } = require('../../lib/payment-reconciler');
+    delete require.cache[require.resolve('../../server/payments/payment-broadcaster')];
+    const broadcaster = require('../../server/payments/payment-broadcaster');
+    const { markPaymentPaid } = require('../../server/payments/payment-reconciler');
 
     let observed = null;
     broadcaster.subscribe('MFK-P02-2', (payload) => { observed = payload; });
@@ -150,13 +150,13 @@ asyncTest('P0-2: notifyPaymentSuccess is NOT called when transaction throws (fai
 // ========== P0-1: markProviderSessionExpired null-safe + idempotent ==========
 
 asyncTest('P0-1: markProviderSessionExpired handles null provider', () => {
-    const { markProviderSessionExpired } = require('../../lib/self-healing-collector');
+    const { markProviderSessionExpired } = require('../../server/payments/self-healing-collector');
     assert.strictEqual(markProviderSessionExpired(null), false);
     assert.strictEqual(markProviderSessionExpired(undefined), false);
 });
 
 asyncTest('P0-1: markProviderSessionExpired does not mutate arbitrary properties', () => {
-    const { markProviderSessionExpired } = require('../../lib/self-healing-collector');
+    const { markProviderSessionExpired } = require('../../server/payments/self-healing-collector');
     // Foreign object without own qris/client — must not add those props.
     const foreign = { fetchLatestMutations: () => [] };
     markProviderSessionExpired(foreign);
@@ -167,7 +167,7 @@ asyncTest('P0-1: markProviderSessionExpired does not mutate arbitrary properties
 });
 
 asyncTest('P0-1: markProviderSessionExpired is idempotent within 500ms', () => {
-    const { markProviderSessionExpired } = require('../../lib/self-healing-collector');
+    const { markProviderSessionExpired } = require('../../server/payments/self-healing-collector');
     const provider = { qris: { stub: true }, markSessionExpired() { this.qris = null; } };
     const r1 = markProviderSessionExpired(provider);
     const r2 = markProviderSessionExpired(provider);
@@ -188,7 +188,7 @@ asyncTest('P1-1: recordAmbiguous inserts 3 rows for 3 candidates', () => {
         VALUES ('test', 'RRN-P11-1', 'hash-p11-1', 'IN', 29000, 'SUCCESS', '2026-06-12 10:00:00')
     `).run();
     const mutationId = db.prepare('SELECT last_insert_rowid() AS id').get().id;
-    const { recordAmbiguous } = require('../../lib/confidence-matcher');
+    const { recordAmbiguous } = require('../../server/payments/confidence-matcher');
     recordAmbiguous(db, {
         mutationId,
         mutation: { transacted_at: '2026-06-12 10:00:00', amount: 29000, payer_name_masked: 'B***' },
@@ -216,7 +216,7 @@ asyncTest('P1-1: recordAmbiguous skips invalid candidates atomically', () => {
         VALUES ('test', 'RRN-P11-2', 'hash-p11-2', 'IN', 29000, 'SUCCESS', '2026-06-12 10:00:00')
     `).run();
     const mutationId = db.prepare('SELECT last_insert_rowid() AS id').get().id;
-    const { recordAmbiguous } = require('../../lib/confidence-matcher');
+    const { recordAmbiguous } = require('../../server/payments/confidence-matcher');
     recordAmbiguous(db, {
         mutationId,
         mutation: { transacted_at: '2026-06-12 10:00:00', amount: 29000 },
@@ -264,7 +264,7 @@ asyncTest('P1-2: collision count reflects DB state, not just candidate array len
     `).run(nowSql);
     const mutation = db.prepare('SELECT * FROM incoming_mutations WHERE content_hash = ?').get('hash-col-1');
 
-    const { findCandidatesWithScores } = require('../../lib/confidence-matcher');
+    const { findCandidatesWithScores } = require('../../server/payments/confidence-matcher');
     const scored = findCandidatesWithScores({ db, mutation, limit: 5 });
     assert.strictEqual(scored.length, 5, `expected 5 candidates, got ${scored.length}`);
     // Each scored candidate should have otherPendingSameAmount = 4
@@ -312,7 +312,7 @@ asyncTest('P1-2 (deep): collision count uses DB query, not just candidates array
     `).run(nowSql);
     const mutation = db.prepare('SELECT * FROM incoming_mutations WHERE content_hash = ?').get('hash-deep-1');
 
-    const { findCandidatesWithScores } = require('../../lib/confidence-matcher');
+    const { findCandidatesWithScores } = require('../../server/payments/confidence-matcher');
     const scored = findCandidatesWithScores({ db, mutation, limit: 5 });
     assert.strictEqual(scored.length, 5, 'should return up to 5 candidates');
     // 10 PENDING total, trueCollisionCount = 9. Score should be ≤ 170.
@@ -324,8 +324,8 @@ asyncTest('P1-2 (deep): collision count uses DB query, not just candidates array
 // ========== P2-2: broadcaster enforces per-user connection cap ==========
 
 asyncTest('P2-2: broadcaster rejects 4th connection from same user (default cap 3)', () => {
-    delete require.cache[require.resolve('../../lib/payment-broadcaster')];
-    const broadcaster = require('../../lib/payment-broadcaster');
+    delete require.cache[require.resolve('../../server/payments/payment-broadcaster')];
+    const broadcaster = require('../../server/payments/payment-broadcaster');
     // Simulate 3 connections from user 100.
     for (let i = 0; i < 3; i += 1) {
         const r = broadcaster.registerConnection({
@@ -347,8 +347,8 @@ asyncTest('P2-2: broadcaster rejects 4th connection from same user (default cap 
 });
 
 asyncTest('P2-2: different users can each have up to cap connections', () => {
-    delete require.cache[require.resolve('../../lib/payment-broadcaster')];
-    const broadcaster = require('../../lib/payment-broadcaster');
+    delete require.cache[require.resolve('../../server/payments/payment-broadcaster')];
+    const broadcaster = require('../../server/payments/payment-broadcaster');
     for (let i = 0; i < 3; i += 1) {
         const r = broadcaster.registerConnection({ userId: 200, merchantOrderId: 'MFK-200-' + i, onPaid: () => {} });
         assert.strictEqual(r.ok, true);
@@ -360,8 +360,8 @@ asyncTest('P2-2: different users can each have up to cap connections', () => {
 });
 
 asyncTest('P2-2: releaseConnection frees a slot', () => {
-    delete require.cache[require.resolve('../../lib/payment-broadcaster')];
-    const broadcaster = require('../../lib/payment-broadcaster');
+    delete require.cache[require.resolve('../../server/payments/payment-broadcaster')];
+    const broadcaster = require('../../server/payments/payment-broadcaster');
     const r1 = broadcaster.registerConnection({ userId: 300, merchantOrderId: 'MFK-300-1', onPaid: () => {} });
     const r2 = broadcaster.registerConnection({ userId: 300, merchantOrderId: 'MFK-300-2', onPaid: () => {} });
     const r3 = broadcaster.registerConnection({ userId: 300, merchantOrderId: 'MFK-300-3', onPaid: () => {} });
@@ -378,8 +378,8 @@ asyncTest('P2-2: releaseConnection frees a slot', () => {
 });
 
 asyncTest('P2-2: getStats includes activeSseConnections', () => {
-    delete require.cache[require.resolve('../../lib/payment-broadcaster')];
-    const broadcaster = require('../../lib/payment-broadcaster');
+    delete require.cache[require.resolve('../../server/payments/payment-broadcaster')];
+    const broadcaster = require('../../server/payments/payment-broadcaster');
     broadcaster.registerConnection({ userId: 400, merchantOrderId: 'MFK-400-1', onPaid: () => {} });
     broadcaster.registerConnection({ userId: 401, merchantOrderId: 'MFK-401-1', onPaid: () => {} });
     broadcaster.registerConnection({ userId: 401, merchantOrderId: 'MFK-401-2', onPaid: () => {} });
@@ -395,7 +395,7 @@ asyncTest('P2-2: getStats includes activeSseConnections', () => {
 asyncTest('P2-3: setTimeout in notifyPaymentSuccess is unref-d (non-blocking)', () => {
     // Inspect the source code: the setTimeout(...).unref?.() pattern.
     const src = fs.readFileSync(
-        path.join(projectRoot, 'lib', 'payment-reconciler.js'),
+        path.join(projectRoot, 'server', 'payments', 'payment-reconciler.js'),
         'utf8',
     );
     // The actual code is `setTimeout(..., 50).unref?.();` — use String.includes

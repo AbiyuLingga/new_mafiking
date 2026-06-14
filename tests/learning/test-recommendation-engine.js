@@ -13,7 +13,7 @@ const {
   loadRecommendationCatalog,
   normalizeSkillTag,
   recommendItems,
-} = require('../../lib/recommendation-engine');
+} = require('../../server/learning/recommendation-engine');
 
 function daysAgo(days) {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000);

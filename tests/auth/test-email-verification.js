@@ -9,7 +9,7 @@ const {
   canResend,
   createOrRefreshVerification,
   consumeVerificationToken,
-} = require('../../lib/email-verification');
+} = require('../../server/auth/email-verification');
 
 let assertions = 0;
 function ok(value, message) {

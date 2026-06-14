@@ -41,10 +41,10 @@ routes and 35/35 CSRF coverage; VPS Phase 4 was applied via `ops/apply-all.sh`; 
 
 | Cookie | Dev | Production | Notes |
 |---|---|---|---|
-| Session | `mafiking.sid` | `__Host-mafiking.sid` | `httpOnly: true`, `sameSite: 'strict'`, `secure: 'auto'`, `maxAge: 7d`, stored in custom SQLite store (`lib/sqlite-session-store.js`). |
+| Session | `mafiking.sid` | `__Host-mafiking.sid` | `httpOnly: true`, `sameSite: 'strict'`, `secure: 'auto'`, `maxAge: 7d`, stored in custom SQLite store (`server/storage/sqlite-session-store.js`). |
 | CSRF | `mafiking.csrf-token` | `__Host-mafiking.csrf-token` | `httpOnly: true`, `sameSite: 'strict'`, `secure: true` (prod), `path: '/'`. Set by `csrf-csrf@4.0.3` double-submit. |
 
-## CSRF (lib/csrf-protection.js, lib/csrf-secret.js)
+## CSRF (server/security/csrf-protection.js, server/security/csrf-secret.js)
 
 - Library: `csrf-csrf@^4.0.3` (double-submit cookie + HMAC).
 - Secret resolution order: `CSRF_SECRET` → `SESSION_SECRET` (hashed) →
@@ -55,11 +55,11 @@ routes and 35/35 CSRF coverage; VPS Phase 4 was applied via `ops/apply-all.sh`; 
   helper `src/backend-api.jsx` fetches this once and attaches
   `X-CSRF-Token` on every state-changing request.
 - Exempt paths (no CSRF check): `/api/payment/callback`, `/api/payment/reconcile/webhook`, `/api/payment/reconcile/mutasiku-webhook`, `/api/webhooks/clerk`, `/api/csp-report`, `/api/csp-report/`, `/api/performance/vitals`.
-- Defense in depth: `lib/request-guard.js` enforces Origin / Referer /
+- Defense in depth: `server/security/request-guard.js` enforces Origin / Referer /
   `Sec-Fetch-Site: same-origin` on state-changing requests, with the same
   exempt path list.
 
-## Content Security Policy (lib/csp.js, server.js:323)
+## Content Security Policy (server/security/csp.js, server.js:323)
 
 - Mode: **report-only by default**. Set `CSP_ENFORCE=1` to flip to enforcing
   (or `CSP_REPORT_ONLY=0`). The 7-day report-only observation window is
@@ -88,7 +88,7 @@ routes and 35/35 CSRF coverage; VPS Phase 4 was applied via `ops/apply-all.sh`; 
 - `Permissions-Policy` is app-owned and denies unused high-risk browser
   capabilities. Clipboard write remains available because payment flows use it.
 
-## Audit log (lib/audit-log.js)
+## Audit log (server/security/audit-log.js)
 
 - NDJSON writer to `logs/audit.log` (and `logs/csp-reports.log`).
 - Best-effort: never throws to the caller. A failure to write a log line
@@ -101,7 +101,7 @@ routes and 35/35 CSRF coverage; VPS Phase 4 was applied via `ops/apply-all.sh`; 
 
 - `express-rate-limit` mounted on auth and correction endpoints.
 - `performanceLimiter` mounted on `/api/performance/vitals`.
-- Per-route limits live in `routes/auth.js` and `routes/correction.js`. A
+- Per-route limits live in `server/routes/auth.js` and `server/routes/correction.js`. A
   full per-route rate-limit table is produced in Phase 1 (`api-inventory.md`).
 
 ## Webhooks

@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const { PROMPTS_DIR } = require('../project-paths');
 const { isAuthenticated } = require('../middleware/auth');
 const { isAdmin } = require('../middleware/admin');
 const {
@@ -16,7 +17,7 @@ const {
   normalizeQuestionsForCommit,
   parseJsonObject,
   requestDeepSeekDraft,
-} = require('../lib/admin-import');
+} = require('../ai/admin-import');
 
 const router = express.Router();
 const upload = multer({
@@ -96,7 +97,7 @@ router.post('/draft', uploadSingle, async (req, res) => {
       sourceInfo = { filename: 'input-latex.txt', size: Buffer.byteLength(extractedText, 'utf8'), extracted_chars: extractedText.length, preview: extractedText.slice(0, 800) };
     }
 
-    const sopText = getSopText(path.join(__dirname, '..'));
+    const sopText = getSopText(PROMPTS_DIR);
     const messages = buildDeepSeekMessages({
       sopText,
       extractedText,

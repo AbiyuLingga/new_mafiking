@@ -459,7 +459,7 @@ Backend harus menormalisasi semua koordinat:
 
 ## 12. Model dan API Key
 
-Gunakan pola existing di `routes/correction.js`:
+Gunakan pola existing di `server/routes/correction.js`:
 
 - `GEMINI_KEY_1` sampai `GEMINI_KEY_20`
 - `GEMINI_MODELS` sebagai override urutan model OCR/evaluasi canvas

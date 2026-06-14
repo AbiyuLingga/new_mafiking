@@ -2,10 +2,10 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { isAuthenticated } = require('../middleware/auth');
 const { isAdmin } = require('../middleware/admin');
-const { adminIpAllowlist } = require('../lib/ip-allowlist');
-const { markPaymentFailed, markPaymentPaid } = require('../lib/payment-reconciler');
-const { isEnabled: isFeatureEnabled } = require('../lib/feature-flags');
-const paymentBroadcaster = require('../lib/payment-broadcaster');
+const { adminIpAllowlist } = require('../security/ip-allowlist');
+const { markPaymentFailed, markPaymentPaid } = require('../payments/payment-reconciler');
+const { isEnabled: isFeatureEnabled } = require('../config/feature-flags');
+const paymentBroadcaster = require('../payments/payment-broadcaster');
 
 const router = express.Router();
 
@@ -345,8 +345,8 @@ router.post('/:merchantOrderId/resend-email', async (req, res) => {
     const user = db.prepare('SELECT id, email, display_name FROM users WHERE id = ?').get(payment.user_id);
     if (!user || !user.email) return res.status(400).json({ error: 'User tidak punya email' });
     try {
-        const mailer = require('../lib/mailer');
-        const emailTpl = require('../lib/email-templates');
+        const mailer = require('../notifications/mailer');
+        const emailTpl = require('../notifications/email-templates');
         const rendered = emailTpl.renderPaymentSuccess({ user, payment });
         const send = mailer.sendMail || mailer.send;
         if (typeof send !== 'function') {

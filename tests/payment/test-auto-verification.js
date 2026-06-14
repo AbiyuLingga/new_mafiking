@@ -83,7 +83,7 @@ async function runAll() {
 
     // --- Test maskName ---
     console.log('\n--- maskName ---');
-    const { maskName } = require('../../lib/mutation-ingester');
+    const { maskName } = require('../../server/payments/mutation-ingester');
     assert(maskName('Budi Santoso') === 'B*** S***', 'full name masked');
     assert(maskName('Budi') === 'B***', 'single name masked');
     assert(maskName('') === null, 'empty returns null');
@@ -92,7 +92,7 @@ async function runAll() {
 
     // --- Test hashPayerId ---
     console.log('\n--- hashPayerId ---');
-    const { hashPayerId } = require('../../lib/mutation-ingester');
+    const { hashPayerId } = require('../../server/payments/mutation-ingester');
     assert(hashPayerId('ABC123', TEST_PEPPER) !== null, 'hash returns value');
     assert(hashPayerId('ABC123', TEST_PEPPER) === hashPayerId('ABC123', TEST_PEPPER), 'deterministic with same input');
     assert(hashPayerId('ABC123', TEST_PEPPER) !== hashPayerId('XYZ789', TEST_PEPPER), 'different for different input');
@@ -101,7 +101,7 @@ async function runAll() {
 
     // --- Test computeContentHash ---
     console.log('\n--- computeContentHash ---');
-    const { computeContentHash } = require('../../lib/mutation-ingester');
+    const { computeContentHash } = require('../../server/payments/mutation-ingester');
     const mutation1 = {
         provider: 'qris_merchant',
         providerMutationId: 'RRN123',
@@ -124,7 +124,7 @@ async function runAll() {
 
     // --- Test ingestMutation ---
     console.log('\n--- ingestMutation ---');
-    const { ingestMutation, ingestBatch } = require('../../lib/mutation-ingester');
+    const { ingestMutation, ingestBatch } = require('../../server/payments/mutation-ingester');
 
     const result1 = ingestMutation(db, mutation1, TEST_PEPPER);
     assert(result1.inserted === true, 'first ingest inserts');
@@ -199,7 +199,7 @@ async function runAll() {
     const ingResult = ingestMutation(db, matchMutation1, TEST_PEPPER);
     assert(ingResult.inserted === true, 'match mutation ingested');
 
-    const { matchMutation } = require('../../lib/mutation-matcher');
+    const { matchMutation } = require('../../server/payments/mutation-matcher');
     const matchResult = matchMutation(db, ingResult.mutationId);
     assert(matchResult !== null, 'matchMutation returns result');
     assert(matchResult.ok === true, 'matchMutation ok');
@@ -366,7 +366,7 @@ async function runAll() {
 
     // --- Test matchPendingMutations ---
     console.log('\n--- matchPendingMutations ---');
-    const { matchPendingMutations } = require('../../lib/mutation-matcher');
+    const { matchPendingMutations } = require('../../server/payments/mutation-matcher');
     // Force-clear the expired check - it's a pending mutation that should be re-checked
     const unmatchedBefore = db.prepare(
         'SELECT COUNT(*) as cnt FROM incoming_mutations WHERE matched_order_id IS NULL AND direction = ? AND status = ?'
@@ -377,7 +377,7 @@ async function runAll() {
 
     // --- Test processNewMutations ---
     console.log('\n--- processNewMutations ---');
-    const { processNewMutations } = require('../../lib/mutation-matcher');
+    const { processNewMutations } = require('../../server/payments/mutation-matcher');
     const newMuts = [{
         provider: 'qris_merchant',
         providerMutationId: 'PROCESS-RRN',
@@ -393,7 +393,7 @@ async function runAll() {
 
     // --- Test MockMutationProvider ---
     console.log('\n--- MockMutationProvider ---');
-    const { MockMutationProvider } = require('../../lib/providers/MockMutationProvider');
+    const { MockMutationProvider } = require('../../server/payments/providers/MockMutationProvider');
     const mockProvider = new MockMutationProvider();
     mockProvider.addMutation({
         provider: 'mock',
@@ -410,7 +410,7 @@ async function runAll() {
 
     // --- Test validateNormalizedMutation ---
     console.log('\n--- validateNormalizedMutation ---');
-    const { validateNormalizedMutation } = require('../../lib/providers/PaymentMutationProvider');
+    const { validateNormalizedMutation } = require('../../server/payments/providers/PaymentMutationProvider');
     assert(validateNormalizedMutation({
         provider: 'mock', direction: 'IN', amount: 1000,
         status: 'SUCCESS', transactedAt: new Date(),
@@ -433,7 +433,7 @@ async function runAll() {
         normalizeStatus,
         parseAmount,
         parseMutationDate,
-    } = require('../../lib/providers/QrisMutasiProvider');
+    } = require('../../server/payments/providers/QrisMutasiProvider');
     assert(parseAmount('Rp 1.002') === 1002, 'parses rupiah formatted amount');
     assert(parseAmount('1.002') === 1002, 'parses Indonesian thousands separator');
     assert(normalizeStatus('BERHASIL') === 'SUCCESS', 'BERHASIL maps to SUCCESS');

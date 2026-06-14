@@ -7,8 +7,8 @@ const {
     areTryoutPackagesEnabled,
     normalizeSettingBoolean,
     setTryoutPackagesEnabled,
-} = require('../lib/app-settings');
-const { normalizePackageAccessFeatures } = require('../lib/package-entitlements');
+} = require('../config/app-settings');
+const { normalizePackageAccessFeatures } = require('../learning/package-entitlements');
 const router = express.Router();
 
 router.use(isAuthenticated, isAdmin);

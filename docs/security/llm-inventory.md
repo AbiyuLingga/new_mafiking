@@ -9,19 +9,19 @@ of truth when the model set changes.
 ## Gemini / Groq / OpenRouter — image OCR + canvas evaluation
 
 ### `/api/correction/transcribe` — image-to-LaTeX transcription
-- **File:** `routes/correction.js:918`
+- **File:** `server/routes/correction.js:918`
 - **Auth:** `isAuthenticated` + `requireRegisteredUser`
 - **CSRF:** mounted behind `app.use('/api/correction', correctionLimiter)`
   (server.js:456) and global `csrfProtection` (server.js:411).
 - **Model:** `gemini-3.1-flash-lite` (`TRANSCRIBE_MODELS`).
-- **System prompt:** `TRANSCRIBE_SYSTEM_PROMPT` (routes/correction.js:36).
+- **System prompt:** `TRANSCRIBE_SYSTEM_PROMPT` (server/routes/correction.js:36).
   Tells the model to (a) only transcribe, (b) not correct answers, (c)
   return only JSON matching the schema, (d) format text in LaTeX.
 - **User inputs that reach the prompt:**
   - `imageBase64` + `mimeType` — sent as `inlineData` to Gemini. Validated
     by `validateImagePayload` (MIME allowlist, 10 MB cap).
   - `questionText` — interpolated into the prompt as `Soal: ${questionText}`.
-    **Sanitized** by `sanitizeForPrompt` (lib/text-sanitize.js) since
+    **Sanitized** by `sanitizeForPrompt` (server/security/text-sanitize.js) since
     the Phase 2 fix. The sanitizer caps at 4000 chars and strips control,
     bidi-override, and zero-width characters.
 - **Risk class:** AML.T0051 (LLM Prompt Injection: Direct). Mitigated
@@ -29,11 +29,11 @@ of truth when the model set changes.
   server-side schema validation (`safeTranscriptionParse`).
 - **Cost control:** `correctionLimiter` (12 req / 60 sec / IP) and the
   per-user `MAX_OUTPUT_TOKENS` cap.
-- **Audit:** logged in `ai_token_usage` (lib/log-token-usage.js) and
+- **Audit:** logged in `ai_token_usage` (server/ai/log-token-usage.js) and
   surfaced to admin via `/api/admin/...` dashboards.
 
 ### `/api/correction/evaluate` and `/api/correction/evaluate-stream` — canvas redline evaluation
-- **File:** `routes/correction.js:952`
+- **File:** `server/routes/correction.js:952`
 - **Auth:** `isAuthenticated` + `requireRegisteredUser`
 - **CSRF:** same mount as transcribe.
 - **Model/provider:** direct fallback uses `gemini-3.1-flash-lite`
@@ -42,7 +42,7 @@ of truth when the model set changes.
   (`meta-llama/llama-4-scout-17b-16e-instruct`), or optional OpenRouter
   (`OPENROUTER_MODEL`, default `google/gemma-4-31b-it:free`) depending on
   configured keys and pool weights.
-- **System prompt:** `EVALUATE_SYSTEM_PROMPT` (routes/correction.js:46).
+- **System prompt:** `EVALUATE_SYSTEM_PROMPT` (server/routes/correction.js:46).
   Tells the model to (a) act as a math teacher, (b) use the confirmed
   LaTeX as the source of truth, (c) return only JSON, (d) cap tags at
   5 each, (e) return LaTeX for `Latex` fields and Indonesian plain
@@ -69,13 +69,13 @@ of truth when the model set changes.
 ## Gemma 4 31B — profile summary narrative
 
 ### `/api/correction/profile-summary` — student profile prose
-- **File:** `routes/correction.js:1043`
+- **File:** `server/routes/correction.js:1043`
 - **Auth:** `isAuthenticated` (no `requireRegisteredUser` because the
   summary is allowed for any session-bound user; the data is read
   from `correction_attempts` scoped to `req.session.userId`).
 - **CSRF:** behind `csrfProtection`.
 - **Model:** `gemma-4-31b-it` (`PROFILE_MODELS`, via the Gemini path in
-  `routes/correction.js`).
+  `server/routes/correction.js`).
 - **System prompt:** `PROFILE_NARRATIVE_SOP` (read from disk). The
   Gemma path constructs a structured evidence object via
   `buildProfileAiEvidence` and calls Gemma.
@@ -97,7 +97,7 @@ of truth when the model set changes.
 ## DeepSeek — admin question-bank import (draft mode)
 
 ### `POST /api/admin/import/draft` — DeepSeek draft generation
-- **File:** `lib/admin-import.js:193` (call), `routes/admin-import.js:78`
+- **File:** `server/ai/admin-import.js:193` (call), `server/routes/admin-import.js:78`
   (mount).
 - **Auth:** `isAdmin` (admin-only).
 - **CSRF:** behind `csrfProtection`.

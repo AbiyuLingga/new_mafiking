@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 
-const correctionRouter = require('../../routes/correction');
+const correctionRouter = require('../../server/routes/correction');
 
 const {
   GEMMA_PROFILE_MODEL,

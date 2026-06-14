@@ -4,8 +4,8 @@
 
 const assert = require('assert');
 const { validateQRIS, parseQRIS, convertQRIS } = require('@prasetya/qris');
-const { generateDynamicQRIS, assertValidStaticQris } = require('../../lib/qris-dynamic');
-const { normalizeQrisString } = require('../../lib/qris-dynamic');
+const { generateDynamicQRIS, assertValidStaticQris } = require('../../server/payments/qris-dynamic');
+const { normalizeQrisString } = require('../../server/payments/qris-dynamic');
 const QRCode = require('qrcode');
 
 const STATIC_QRIS = '00020101021126760024ID.CO.SPEEDCASH.MERCHANT01189360081530004444050215ID10260044440590303UKE51440014ID.CO.QRIS.WWW0215ID10265317196840303UKE5204541153033605802ID5908MAFIKING6008SUMEDANG61054536362410509S383407200117202606111547283820703A01630482DD';

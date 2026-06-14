@@ -6,7 +6,7 @@ const Database = require('better-sqlite3');
 const {
   SQLiteSessionStore,
   expiresAtFromSession,
-} = require('../../lib/sqlite-session-store');
+} = require('../../server/storage/sqlite-session-store');
 
 function callStore(store, method, ...args) {
   return new Promise((resolve, reject) => {

@@ -7,8 +7,8 @@ const {
   createCsrfProtection,
   csrfCookieName,
   shouldSkipCsrf,
-} = require('../../lib/csrf-protection');
-const { loadCsrfSecret } = require('../../lib/csrf-secret');
+} = require('../../server/security/csrf-protection');
+const { loadCsrfSecret } = require('../../server/security/csrf-secret');
 
 function createTestApp() {
   const app = express();

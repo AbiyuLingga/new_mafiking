@@ -3,8 +3,9 @@
 
 const fs = require('fs');
 const path = require('path');
+const { DB_DIR } = require('../project-paths');
 
-const BACKUP_DIR = path.join(__dirname, '..', 'db', 'backups');
+const BACKUP_DIR = path.join(DB_DIR, 'backups');
 const BACKUP_PREFIX = 'mafiking-auto-';
 const RETENTION_MS = 24 * 60 * 60 * 1000; // 24 hours
 const STARTUP_GRACE_MS = 30 * 1000; // skip first backup within 30s of start

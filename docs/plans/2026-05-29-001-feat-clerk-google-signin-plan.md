@@ -216,12 +216,12 @@ try { db.prepare("ALTER TABLE users ADD COLUMN fakultas TEXT DEFAULT ''").run();
 **Dependencies:** U1 (packages installed), U2 (schema migrated).
 
 **Files:**
-- `middleware/clerk-auth.js` — **[NEW]** Clerk token verification + local user mapping
+- `server/middleware/clerk-auth.js` — **[NEW]** Clerk token verification + local user mapping
 - `server.js` — mount the new middleware in the middleware chain (before route handlers, after session middleware)
-- `middleware/auth.js` — modify `isAuthenticated` to check both `req.userId` (Clerk-set) and `req.session.userId`
+- `server/middleware/auth.js` — modify `isAuthenticated` to check both `req.userId` (Clerk-set) and `req.session.userId`
 
 **Approach:**
-1. Create `middleware/clerk-auth.js`:
+1. Create `server/middleware/clerk-auth.js`:
    - Import `clerkMiddleware` or `verifyToken` from `@clerk/express`
    - For each request with `Authorization: Bearer <token>`:
      - Verify the Clerk JWT
@@ -231,7 +231,7 @@ try { db.prepare("ALTER TABLE users ADD COLUMN fakultas TEXT DEFAULT ''").run();
      - If NOT found (lazy sync): create a new user row with `clerk_id`, `auth_provider = 'clerk'`, fetch user details from Clerk API for email/display_name
    - If no Bearer token: call `next()` (fall through to session flow)
 
-2. Update `middleware/auth.js` `isAuthenticated`:
+2. Update `server/middleware/auth.js` `isAuthenticated`:
    - Check `req.userId` (set by Clerk middleware) OR `req.session.userId`
    - Normalize to a single `req.userId` for downstream routes
 
@@ -241,7 +241,7 @@ try { db.prepare("ALTER TABLE users ADD COLUMN fakultas TEXT DEFAULT ''").run();
    ```
 
 **Patterns to follow:**
-- Existing `isAuthenticated` in `middleware/auth.js` (9 lines, simple check)
+- Existing `isAuthenticated` in `server/middleware/auth.js` (9 lines, simple check)
 - Existing auto-guest middleware in `server.js`
 
 **Test scenarios:**
@@ -266,11 +266,11 @@ try { db.prepare("ALTER TABLE users ADD COLUMN fakultas TEXT DEFAULT ''").run();
 **Dependencies:** U1 (svix installed), U2 (schema migrated).
 
 **Files:**
-- `routes/webhooks.js` — **[NEW]** webhook handler for Clerk events
+- `server/routes/webhooks.js` — **[NEW]** webhook handler for Clerk events
 - `server.js` — mount webhook route (BEFORE `express.json()` middleware — webhook needs raw body)
 
 **Approach:**
-1. Create `routes/webhooks.js`:
+1. Create `server/routes/webhooks.js`:
    - Use `svix` to verify webhook signature
    - Handle `user.created` event:
      - Extract `clerk_id`, `email_addresses`, `first_name`, `last_name` from event data
@@ -445,7 +445,7 @@ try { db.prepare("ALTER TABLE users ADD COLUMN fakultas TEXT DEFAULT ''").run();
    - After display name set → call `onAuthSuccess()` and navigate
 
 3. Backend:
-   - Add `POST /api/auth/clerk-onboard` endpoint in `routes/auth.js`:
+   - Add `POST /api/auth/clerk-onboard` endpoint in `server/routes/auth.js`:
      - Accepts `{ display_name }` from authenticated Clerk user
      - Updates `users.display_name` where `clerk_id` matches
      - Returns updated user profile
@@ -475,8 +475,8 @@ try { db.prepare("ALTER TABLE users ADD COLUMN fakultas TEXT DEFAULT ''").run();
 **Dependencies:** U3 (dual-auth), U6 (Google button flow), U7 (display name prompt).
 
 **Files:**
-- `middleware/clerk-auth.js` — add guest upgrade logic to lazy sync
-- `routes/auth.js` — add `POST /api/auth/clerk-onboard` with guest merge capability
+- `server/middleware/clerk-auth.js` — add guest upgrade logic to lazy sync
+- `server/routes/auth.js` — add `POST /api/auth/clerk-onboard` with guest merge capability
 - `server.js` — ensure guest session data is accessible during upgrade
 
 **Approach:**
@@ -600,7 +600,7 @@ try { db.prepare("ALTER TABLE users ADD COLUMN fakultas TEXT DEFAULT ''").run();
 
 3. `AGENTS.md`:
    - Add `clerk_id`, `email`, `auth_provider` to runtime facts
-   - Add `middleware/clerk-auth.js` and `routes/webhooks.js` to required context
+   - Add `server/middleware/clerk-auth.js` and `server/routes/webhooks.js` to required context
    - Add Clerk-related rules (e.g., "Keep dual-auth middleware order")
 
 **Test scenarios:**

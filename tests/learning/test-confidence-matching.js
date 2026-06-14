@@ -8,7 +8,7 @@ const {
     findCandidatesWithScores,
     shouldAutoMatch,
     THRESHOLDS,
-} = require('../../lib/confidence-matcher');
+} = require('../../server/payments/confidence-matcher');
 
 let passed = 0;
 let failed = 0;

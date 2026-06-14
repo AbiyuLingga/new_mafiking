@@ -13,7 +13,7 @@ process.env.PROFILE_MEDIA_DIR = path.join(tempRoot, 'profile-media');
 const {
   findMissingAvatarRows,
   getProfileMediaDir,
-} = require('../../lib/profile-media');
+} = require('../../server/storage/profile-media');
 
 const pngBytes = Buffer.from(
   '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cfc000000301010018dd8db10000000049454e44ae426082',
@@ -59,8 +59,8 @@ function createApp(db) {
     next();
   });
   app.use('/profile-media', express.static(getProfileMediaDir()));
-  app.use('/api/auth', require('../../routes/auth'));
-  app.use('/api/progress', require('../../routes/progress'));
+  app.use('/api/auth', require('../../server/routes/auth'));
+  app.use('/api/progress', require('../../server/routes/progress'));
   return app;
 }
 

@@ -35,9 +35,9 @@ Before planning or implementing non-trivial work, inspect:
 ```text
 server.js
 db/schema.sql
-routes/
-middleware/clerk-auth.js
-lib/clerk-user-sync.js
+server/routes/
+server/middleware/clerk-auth.js
+server/auth/clerk-user-sync.js
 src/app.jsx
 src/belajar.jsx
 src/practice.jsx
@@ -63,9 +63,9 @@ For profile recommendation tasks, also inspect:
 ```text
 data/recommendation-catalog.json
 docs/purcell-inspired-question-bank.md
-lib/recommendation-engine.js
+server/learning/recommendation-engine.js
 tests/learning/test-recommendation-engine.js
-SOP-PROFILE-SUMMARY.md
+server/ai/prompts/SOP-PROFILE-SUMMARY.md
 ```
 
 For visual/UI tasks, inspect the actual rendered page in a browser after changes.
@@ -84,8 +84,8 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - `src/backend-api.jsx` is the same-origin API helper.
 - `src/clerk-auth.jsx` is the static-Babel Clerk bridge. It fetches only the public publishable key from `/api/config/clerk`, loads Clerk browser scripts, and exposes `window.MafikingClerk`.
 - `src/onboarding.jsx` owns the mandatory non-admin profile-completion modal. It must load after `src/shared.jsx` and before `src/app.jsx`.
-- `middleware/clerk-auth.js` maps verified Clerk Bearer tokens to local SQLite users before API routes run.
-- `lib/clerk-user-sync.js` owns Clerk-to-local linking and guest-to-Google merge behavior.
+- `server/middleware/clerk-auth.js` maps verified Clerk Bearer tokens to local SQLite users before API routes run.
+- `server/auth/clerk-user-sync.js` owns Clerk-to-local linking and guest-to-Google merge behavior.
 - `/` opens the public landing for guests and redirects registered sessions to `/belajar`; `/landing` is the explicit marketing route for logged-in users.
 - `Coba Gratis` routes into `Belajar` with the `Try Out` section selected.
 - The `Belajar` mapel tabs use a measured sliding underline; keep `Try Out` on the ink underline color (`rgb(11 19 38)`) and subject tabs on their mapel accent colors.
@@ -175,18 +175,18 @@ server.js
 Route files:
 
 ```text
-routes/auth.js
-routes/quiz.js
-routes/progress.js
-routes/correction.js
-routes/admin.js
-routes/admin-import.js
-routes/admin-payments.js
-routes/payment.js
-routes/tryouts.js
-routes/internal.js
-routes/auth-popup.js
-routes/webhooks.js
+server/routes/auth.js
+server/routes/quiz.js
+server/routes/progress.js
+server/routes/correction.js
+server/routes/admin.js
+server/routes/admin-import.js
+server/routes/admin-payments.js
+server/routes/payment.js
+server/routes/tryouts.js
+server/routes/internal.js
+server/routes/auth-popup.js
+server/routes/webhooks.js
 ```
 
 Rules:
@@ -200,7 +200,7 @@ Rules:
 - Keep `/api/payment/callback` public for server-to-server callbacks.
 - Keep auto-guest session behavior unless the user asks to change auth.
 - Validate request payloads before calling external services.
-- Keep Gemini image payload validation in `routes/correction.js` for MIME type and size.
+- Keep Gemini image payload validation in `server/routes/correction.js` for MIME type and size.
 - Keep rate limiting for login/register/correction.
 
 ## Database Rules
@@ -245,8 +245,8 @@ Rules:
 - The admin shield is frontend-visible only for `currentUser.role === "admin"`; do not expose it to every user. Admin mode adds an `Admin Panel` button to the top nav, and that button navigates to the dedicated `admin` route/page.
 - Logout and return-to-landing confirmation dialogs are centered modals with Mafiking yellow/ink styling, not browser confirms or blue theme popups.
 - Payment checkout and QRIS/manual status dialogs are rendered through a portal from `src/payment.jsx` into `document.body` so they are not clipped by the route shell or hidden under app navigation. Keep the overlay scroll-safe for browser zoom and preserve the `merchantOrderId` URL query for status/deep-link routes.
-- Gemini/Gemma token usage is observational data in `ai_token_usage`, written by `lib/log-token-usage.js`. Logging failures must not break correction/transcription/profile AI requests.
-- `routes/correction.js` supports up to 20 Gemini keys: `GEMINI_KEY_1` through `GEMINI_KEY_20`.
+- Gemini/Gemma token usage is observational data in `ai_token_usage`, written by `server/ai/log-token-usage.js`. Logging failures must not break correction/transcription/profile AI requests.
+- `server/routes/correction.js` supports up to 20 Gemini keys: `GEMINI_KEY_1` through `GEMINI_KEY_20`.
 - Profile summary uses Gemma 4 31B via the Gemini API key pool and can fall back locally when keys/model calls are unavailable.
 - Profile recommendations are catalog-backed and deterministic. Preserve `recommendedItems`, `recommendedQuestions`, and `skillNeedScores` in `/api/correction/profile-summary`; Gemma writes summary prose but must not choose follow-up question refs at runtime. Keep the larger local recommendation window separate from the smaller AI prompt window.
 - Clerk CLI writes `.env.local`; do not read, print, or commit secret env files. `.env.local` and `env` are ignored.
@@ -300,7 +300,7 @@ These invariants prevent mobile performance regressions and ensure image / KaTeX
 - Table `web_vital_metrics` (db/schema.sql) captures field p75 metrics with `navigationType` and `deviceClass`.
 - 30-day retention via `retention_until` column + `purgeExpiredVitals()` called every 6 hours.
 - No PII, no URL query, no user ID.
-- `lib/performance.js` exports `persistVitalsToDb`, `purgeExpiredVitals`, `summarizeVitalsFromDb`.
+- `server/observability/performance.js` exports `persistVitalsToDb`, `purgeExpiredVitals`, `summarizeVitalsFromDb`.
 - `/api/performance/summary` (admin) exposes `fieldP75Last7Days` per metric.
 - INP is calculated via `processingEnd - processingStart` from the `event-timing` API (not `max(event.duration)`).
 
@@ -391,7 +391,7 @@ F-15 (B2 rclone config — needs `/root/.config/rclone/rclone.conf`).
 - Verification is enforced with `users.email_verified_at`; Clerk/Google users, linked Clerk users, and admins bypass it.
 - Verification links are single-use, expire after 24 hours, and only the SHA-256 token hash is stored.
 - Resend cooldown is 60 seconds per user; `/api/auth/resend-verification` returns generic success to avoid account enumeration.
-- Outbound email is sent through `lib/mailer.js` using Gmail SMTP and `mafikingsolusitpb@gmail.com`; production needs a Gmail App Password in `SMTP_PASS`.
+- Outbound email is sent through `server/notifications/mailer.js` using Gmail SMTP and `mafikingsolusitpb@gmail.com`; production needs a Gmail App Password in `SMTP_PASS`.
 - Local development can set `MAIL_DRY_RUN=true`; the server logs the verification URL instead of sending SMTP mail.
 - The verification link is a SPA hash route: `https://mafiking.com/#verify-email?token=...`.
 

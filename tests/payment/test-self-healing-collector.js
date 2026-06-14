@@ -37,12 +37,12 @@ const {
     countPendingPayments,
     isSessionExpiredError,
     buildDefaultHeartbeatConfig,
-} = require('../../lib/self-healing-collector');
+} = require('../../server/payments/self-healing-collector');
 const {
     QrisMutasiProvider,
     isSessionExpiredError: providerSessionCheck,
-} = require('../../lib/providers/QrisMutasiProvider');
-const internalRouter = require('../../routes/internal');
+} = require('../../server/payments/providers/QrisMutasiProvider');
+const internalRouter = require('../../server/routes/internal');
 const { buildInternalRouter } = internalRouter;
 
 let passed = 0;

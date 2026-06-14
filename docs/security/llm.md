@@ -23,7 +23,7 @@ import path. Out of scope: any future browser-side LLM.
 ## Findings
 
 ### F-10 [Low] `questionId` / `problemId` not coerced to `Number` before prompt interpolation
-**Status:** Fixed. `parsePositiveId` added in `routes/correction.js` and
+**Status:** Fixed. `parsePositiveId` added in `server/routes/correction.js` and
 applied to both `questionId` and `problemId` at the top of the
 `/evaluate` handler; the validated integer (or `null`) is the only
 value interpolated into the Gemini prompt. A 400 is returned when the
@@ -55,21 +55,21 @@ machine but rotating users would evade it entirely.
 ## Controls added in Phase 2
 
 ### C-1 Input sanitization for every LLM-bound text field
-- New module: `lib/text-sanitize.js`.
+- New module: `server/security/text-sanitize.js`.
 - Exports: `sanitizeForPrompt(value, options)` → `{ text, truncated, originalLength, sanitizedLength }`.
 - Behavior: caps at `DEFAULT_MAX_CHARS = 4000`; strips null bytes,
   zero-width characters, bidi-override characters, and ASCII control
   characters except `\n \t \r`. Preserves LaTeX (`\frac`, `\int`, etc.).
 - Test: `tests/learning/test-text-sanitize.js` (11 assertions).
 - Applied to:
-  - `routes/correction.js:920` `/transcribe` — `questionText`.
-  - `routes/correction.js:954` `/evaluate` — `questionText`,
+  - `server/routes/correction.js:920` `/transcribe` — `questionText`.
+  - `server/routes/correction.js:954` `/evaluate` — `questionText`,
     `expectedAnswer`, `confirmedAnswerLatex`, `text`, `topicTags`.
 - Truncation is logged at `console.warn` for observability.
 
 ### C-2 Rate limit on payment creation (F-8 closeout)
 - New limiter: `paymentLimiter` (8 req / 60 sec, per-IP).
-- Mounted at `routes/payment.js:193` (`POST /api/payment/create`).
+- Mounted at `server/routes/payment.js:193` (`POST /api/payment/create`).
 - Closes the OWASP API Security #4 finding from the Phase 1 audit.
 
 ## What this does NOT do (and why)

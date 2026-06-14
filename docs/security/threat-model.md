@@ -19,13 +19,13 @@
 | Actor | Trust | Notes |
 |---|---|---|
 | Public visitor (logged out) | Untrusted | Browses lobby, may start free tryout, sees marketing pages. Auto-guest session created on first `/api/*` hit. |
-| Registered Mafiking user | Semi-trusted | Owns a local SQLite row synced from Clerk (`lib/clerk-user-sync.js`). Must complete onboarding (`src/onboarding.jsx`) before protected features. |
+| Registered Mafiking user | Semi-trusted | Owns a local SQLite row synced from Clerk (`server/auth/clerk-user-sync.js`). Must complete onboarding (`src/onboarding.jsx`) before protected features. |
 | Local admin | Trusted | Local-only fallback for dev (`isLocalAdminMode`). Production admins are Clerk users with `role = 'admin'` in the `users` table. |
 | Clerk (third party) | Trusted infra | Identity provider. Webhooks are svix-signed. Bearer tokens are verified by `@clerk/express`. |
 | QRIS/local payment rails | Trusted payment evidence source | Mafiking generates QRIS/manual orders locally, reconciles by webhook/admin/mutation evidence, and tracks status by `merchantOrderId`. No card data touches Mafiking servers. |
 | Duitku (third party) | Trusted infra for legacy/fallback payment redirects | MD5-signs callbacks. Mafiking can redirect users out and back in legacy/fallback mode. No card data ever touches Mafiking servers. |
 | Gemini / Gemma (Google AI) | Trusted infra for prompts | Image OCR, canvas evaluation, profile summary prose. Inputs may be untrusted (see threats below). |
-| DeepSeek (third party) | Trusted infra for question import | Admin-only tool (`routes/admin-import.js`). Not in the user request path. |
+| DeepSeek (third party) | Trusted infra for question import | Admin-only tool (`server/routes/admin-import.js`). Not in the user request path. |
 | Local SQLite (`db/database.sqlite`) | Trusted storage | Single process, WAL mode. Not exposed to the network. |
 
 Trust boundaries: **browser → app**, **app → DB**, **app → Clerk**, **app →
@@ -46,7 +46,7 @@ candidate threat source.
 2. **Tampering — payment callback spoofing** *(Mitigated)*
    An attacker could try to forge a QRIS reconciliation event or Duitku callback to grant paid access
    without paying.
-   *Control:* QRIS reconciliation webhooks use HMAC/timestamp checks where configured; Duitku callback is MD5-signed against `merchantCode + amount + merchantOrderId + API_KEY`; status updates are idempotent and keyed by `merchantOrderId`. CSRF exempt only for server-to-server endpoints. *Verification:* `routes/payment.js` and payment contract/reconciler tests.
+   *Control:* QRIS reconciliation webhooks use HMAC/timestamp checks where configured; Duitku callback is MD5-signed against `merchantCode + amount + merchantOrderId + API_KEY`; status updates are idempotent and keyed by `merchantOrderId`. CSRF exempt only for server-to-server endpoints. *Verification:* `server/routes/payment.js` and payment contract/reconciler tests.
 
 3. **Repudiation — admin actions without an audit trail** *(Partial)*
    Admin resets, role changes, and content edits need a tamper-evident log
@@ -56,7 +56,7 @@ candidate threat source.
    `posture.md` as a post-L2 hardening item.
 
 4. **Information disclosure — Gemini API keys leaking to the client bundle** *(Mitigated)*
-   A misconfiguration in `routes/correction.js` or Vite could ship
+   A misconfiguration in `server/routes/correction.js` or Vite could ship
    `GEMINI_KEY_*` to the browser.
    *Control:* env hygiene, no `process.env` interpolation in `src/*.jsx`,
    Vite only exposes `VITE_*` prefixed variables, TruffleHog job in CI.
@@ -78,11 +78,11 @@ candidate threat source.
    `audit-2026-06.md`).
 
 7. **Tampering (AI) — prompt injection via canvas image or OCR text** *(Mitigated)*
-   The Gemini / Gemma calls in `routes/correction.js` accept
+   The Gemini / Gemma calls in `server/routes/correction.js` accept
    user-supplied content (canvas drawings, image uploads). A crafted image could carry instructions that
    the model follows, leaking the system prompt or producing unsafe output.
-   *Control:* `lib/text-sanitize.js` (4000-char cap, control-char strip,
-   LaTeX-preserving) applied at `routes/correction.js:920` and `:954`;
+   *Control:* `server/security/text-sanitize.js` (4000-char cap, control-char strip,
+   LaTeX-preserving) applied at `server/routes/correction.js:920` and `:954`;
    strict system prompt; per-route LLM rate limits. *Verification:* Phase 2
    LLM inventory (`docs/security/llm.md`); F-10, F-11, F-12 tracked.
 

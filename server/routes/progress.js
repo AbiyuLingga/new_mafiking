@@ -6,14 +6,14 @@ const {
     normalizeTryoutAttemptInput,
     rankTryoutLeaderboardRows,
     safeInitials
-} = require('../lib/tryout-ranking');
+} = require('../learning/tryout-ranking');
 const {
     FREE_MATH_TRYOUT_ID,
     normalizeTryoutDraftAnswers,
     normalizeTryoutDraftChoiceMap,
     parseTryoutSessionJson,
     verifyTryoutSessionToken,
-} = require('../lib/tryout-session');
+} = require('../learning/tryout-session');
 const router = express.Router();
 
 // POST /api/progress/submit — submit answer

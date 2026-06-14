@@ -261,8 +261,8 @@ The import script refuses to replace question tables when user progress or corre
 |   |-- log-token-usage.js     # Non-blocking AI token usage logger
 |   |-- multi-provider-pool.js # AI provider routing, cache, queue, fallback
 |   `-- recommendation-engine.js # Deterministic weakness scoring and follow-up question picker
-|-- SOP-PROFILE-SUMMARY.md # Required profile narrative prompt for Gemma
-|-- routes/
+|-- server/ai/prompts/SOP-PROFILE-SUMMARY.md # Required profile narrative prompt for Gemma
+|-- server/routes/
 |   |-- auth.js                # Register, login, logout, current user
 |   |-- webhooks.js            # Clerk webhook verification and user-created sync
 |   |-- quiz.js                # Chapters, subtopics, problems, full quiz payload
@@ -271,7 +271,7 @@ The import script refuses to replace question tables when user progress or corre
 |   |-- admin.js               # Admin CRUD for content/users
 |   |-- admin-import.js        # Admin DeepSeek draft/commit import from PDF/DOCX/TXT/MD
 |   `-- payment.js             # QRIS/manual/Duitku payment create/status/reconciliation
-|-- middleware/
+|-- server/middleware/
 |   |-- auth.js
 |   |-- clerk-auth.js          # Dual auth bridge from Clerk Bearer token to local req/session user
 |   `-- admin.js

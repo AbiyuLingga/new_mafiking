@@ -5,7 +5,7 @@ const {
     getTryoutChoices,
     normalizeTryoutAttemptInput,
     rankTryoutLeaderboardRows
-} = require('../../lib/tryout-ranking');
+} = require('../../server/learning/tryout-ranking');
 
 const problems = [
     { id: 10, answer_display: '2', acceptable_answers: JSON.stringify(['2']), mc_options: JSON.stringify(['1', '2', '3', '4']) },

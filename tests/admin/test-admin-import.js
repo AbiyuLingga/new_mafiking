@@ -5,7 +5,7 @@ const {
   detectUploadKind,
   normalizeDeepSeekDraft,
   normalizeQuestionsForCommit,
-} = require('../../lib/admin-import');
+} = require('../../server/ai/admin-import');
 
 function mockFile(originalname, mimetype, body) {
   const buffer = Buffer.isBuffer(body) ? body : Buffer.from(body);

@@ -65,7 +65,7 @@ async function main() {
         VALUES (7, 'tryout-route-test', 'Tryout Route Test', 'Route test', 'Rp 50.000', '90 mnt', 30, '[]', 1)
     `).run();
 
-    const paymentRouter = require('../../routes/payment');
+    const paymentRouter = require('../../server/routes/payment');
     const { signWebhookPayload } = paymentRouter.__test;
     const app = express();
     app.locals.db = db;

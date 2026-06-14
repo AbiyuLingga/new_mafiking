@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { isRegisteredUser } = require('../../middleware/auth');
+const { isRegisteredUser } = require('../../server/middleware/auth');
 
 const db = {
     prepare(sql) {

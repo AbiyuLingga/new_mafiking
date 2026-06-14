@@ -4,7 +4,7 @@ const {
     alertAmountMismatch,
     alertExpiredResurrection,
 } = require('./payment-alerts');
-const { packageAccessGrantSpecs } = require('./package-entitlements');
+const { packageAccessGrantSpecs } = require('../learning/package-entitlements');
 
 const TERMINAL_STATUSES = new Set(['SUCCESS', 'FAILED', 'EXPIRED']);
 const VALID_PROVIDER_STATUSES = new Set(['SUCCESS', 'FAILED', 'PENDING']);
@@ -274,11 +274,11 @@ function notifyPaymentSuccess({ db, payment, grantId, source }) {
 
     // Email is fire-and-forget; failures must not affect the response.
     try {
-        const { isEnabled: isFeatureEnabled } = require('./feature-flags');
+        const { isEnabled: isFeatureEnabled } = require('../config/feature-flags');
         if (!isFeatureEnabled('PAYMENT_SUCCESS_EMAIL')) return;
         const user = db.prepare('SELECT id, email, display_name FROM users WHERE id = ?').get(canonical.user_id);
         if (!user || !user.email) return;
-        const mailer = require('./mailer');
+        const mailer = require('../notifications/mailer');
         if (!mailer || (typeof mailer.sendMail !== 'function' && typeof mailer.send !== 'function')) {
             return;
         }
@@ -288,7 +288,7 @@ function notifyPaymentSuccess({ db, payment, grantId, source }) {
         setTimeout(() => {
             (async () => {
                 try {
-                    const emailTpl = require('./email-templates');
+                    const emailTpl = require('../notifications/email-templates');
                     const rendered = emailTpl.renderPaymentSuccess
                         ? emailTpl.renderPaymentSuccess({ user, payment: canonical })
                         : null;

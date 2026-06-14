@@ -96,7 +96,7 @@ Baseline produksi terukur pada 12 Juni 2026:
 
 **File baru (2):**
 - `package.json` — tambah `"web-vitals": "^4.2.4"` di dependencies
-- `routes/performance-rum.js` — endpoint + table SQLite untuk RUM
+- `server/routes/performance-rum.js` — endpoint + table SQLite untuk RUM
 
 **File diubah (3):**
 - `src/performance-vitals.js` — replace custom observer dengan official `web-vitals` attribution build:
@@ -276,13 +276,13 @@ async function getToken() {
 - User click `Masuk`/`Daftar`/Google login
 - Logged-in user panggil API yang butuh auth
 
-**Effort:** 1-2 jam. **Risk:** MEDIUM (perlu verify tidak ada endpoint publik yang ternyata butuh Clerk token — audit `routes/` untuk pastikan backend pakai `req.session` atau Clerk Bearer sesuai konteks). **Rollback:** revert `isLoggedIn()` check.
+**Effort:** 1-2 jam. **Risk:** MEDIUM (perlu verify tidak ada endpoint publik yang ternyata butuh Clerk token — audit `server/routes/` untuk pastikan backend pakai `req.session` atau Clerk Bearer sesuai konteks). **Rollback:** revert `isLoggedIn()` check.
 
 ### 4.5 Auth-Aware `/` Boot
 
 **Perubahan routing (existing):**
 - `server.js:1075` — `app.get(['/', '/index.html', '/MAFIKING.html'], ...)` sudah ada.
-- Server `req.session.userId` di middleware auth (lihat `middleware/clerk-auth.js`) — bisa dipakai untuk initial redirect.
+- Server `req.session.userId` di middleware auth (lihat `server/middleware/clerk-auth.js`) — bisa dipakai untuk initial redirect.
 
 **Strategi optimal (hybrid):**
 - **Server-side redirect** (preferred): tambahkan logic di `server.js:1075`:

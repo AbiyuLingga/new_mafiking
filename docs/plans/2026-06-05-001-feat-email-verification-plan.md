@@ -34,10 +34,10 @@ Mafiking's local email/password signup (`POST /api/auth/register`) immediately s
 - Schema additions: 4 new columns on `users` (`email_verified_at`, `email_verification_token_hash`, `email_verification_expires_at`, `email_verification_last_sent_at`).
 - Server-side migrations: extend `server.js` migration array to add the columns to existing databases.
 - New helpers:
-  - `lib/mailer.js` — nodemailer wrapper with Gmail SMTP config, pool, retry, dry-run mode.
-  - `lib/email-templates.js` — HTML + plain-text verification email template, Mafiking brand.
-  - `lib/email-verification.js` — token generation, hashing, cooldown logic.
-- Route changes in `routes/auth.js`:
+  - `server/notifications/mailer.js` — nodemailer wrapper with Gmail SMTP config, pool, retry, dry-run mode.
+  - `server/notifications/email-templates.js` — HTML + plain-text verification email template, Mafiking brand.
+  - `server/auth/email-verification.js` — token generation, hashing, cooldown logic.
+- Route changes in `server/routes/auth.js`:
   - `POST /api/auth/register` — generate token, save hash, send email, **do not** set session. Return `requiresVerification`.
   - `POST /api/auth/login` — after password check, block local unverified users and trigger a resend. Skip block for admin, Clerk, and linked users.
   - `POST /api/auth/resend-verification` (NEW) — generate new token, send email, return cooldown.
@@ -65,10 +65,10 @@ Mafiking's local email/password signup (`POST /api/auth/register`) immediately s
 |------|--------|---------|
 | `db/schema.sql` | Modify | Add 4 `ALTER TABLE users` columns for verification state |
 | `server.js` | Modify | Extend migration array; auto-verify pre-seeded admin |
-| `lib/mailer.js` | New | Nodemailer wrapper for Gmail SMTP, with dry-run + retry |
-| `lib/email-templates.js` | New | HTML + plain-text email template (Mafiking branded) |
-| `lib/email-verification.js` | New | Token generation, SHA-256 hashing, cooldown helpers |
-| `routes/auth.js` | Modify | Add resend, verify-email endpoints; gate register + login |
+| `server/notifications/mailer.js` | New | Nodemailer wrapper for Gmail SMTP, with dry-run + retry |
+| `server/notifications/email-templates.js` | New | HTML + plain-text email template (Mafiking branded) |
+| `server/auth/email-verification.js` | New | Token generation, SHA-256 hashing, cooldown helpers |
+| `server/routes/auth.js` | Modify | Add resend, verify-email endpoints; gate register + login |
 | `src/lobby.jsx` | Modify | New `AuthScreen` mode `verify-email` with resend + cooldown UI |
 | `src/app.jsx` | Modify | Parse `#verify-email?token=...` from URL hash |
 | `.env.example` | Modify | Document `SMTP_*`, `MAIL_FROM_NAME`, `PUBLIC_BASE_URL` |
@@ -136,7 +136,7 @@ This keeps the new check from interfering with the existing Clerk Google sign-in
 
 ### 6. Rate Limiting
 
-- `register`: 5 per IP per 10 minutes (in-memory map, mirroring the existing `loginAttempts` pattern at `routes/auth.js` lines 85-94).
+- `register`: 5 per IP per 10 minutes (in-memory map, mirroring the existing `loginAttempts` pattern at `server/routes/auth.js` lines 85-94).
 - `resend-verification`: 3 per IP per 10 minutes + 60 s cooldown per user.
 - `verify-email`: 10 per IP per 10 minutes (a user may click the link several times if the SPA re-mounts).
 
@@ -174,7 +174,7 @@ ALTER TABLE users ADD COLUMN email_verification_last_sent_at DATETIME;
 db.prepare('UPDATE users SET email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP) WHERE username = ? AND role = ?').run('123', 'admin');
 ```
 
-### 3. `lib/email-verification.js` (NEW)
+### 3. `server/auth/email-verification.js` (NEW)
 
 Exports:
 
@@ -245,7 +245,7 @@ module.exports = {
 };
 ```
 
-### 4. `lib/email-templates.js` (NEW)
+### 4. `server/notifications/email-templates.js` (NEW)
 
 Exports:
 
@@ -297,7 +297,7 @@ function renderVerifyEmail({ displayName, verifyUrl, appUrl }) {
 module.exports = { renderVerifyEmail };
 ```
 
-### 5. `lib/mailer.js` (NEW)
+### 5. `server/notifications/mailer.js` (NEW)
 
 Exports:
 
@@ -380,20 +380,20 @@ async function sendMail(args) {
 module.exports = { sendMail, maskEmail, getConfig };
 ```
 
-### 6. `routes/auth.js`
+### 6. `server/routes/auth.js`
 
 #### 6.1 Imports (top of file)
 
 Add:
 
 ```js
-const { sendMail } = require('../lib/mailer');
-const { renderVerifyEmail } = require('../lib/email-templates');
+const { sendMail } = require('../server/notifications/mailer');
+const { renderVerifyEmail } = require('../server/notifications/email-templates');
 const {
   generateVerificationToken, hashVerificationToken, canResend,
   createOrRefreshVerification, consumeVerificationToken,
   RESEND_COOLDOWN_MS,
-} = require('../lib/email-verification');
+} = require('../server/auth/email-verification');
 ```
 
 #### 6.2 Helper: sendVerificationEmail (above route handlers)
@@ -661,7 +661,7 @@ Append a new section under "Security Notes (Phase 0-4, ASVS L2)" or as a new sec
 - Verification is enforced via `users.email_verified_at`. Bypassed for `role = 'admin'`, `auth_provider IN ('clerk','linked')`, and Clerk auto-seeded users.
 - The verification link is single-use, 24h expiry, and only its SHA-256 hash is stored in the database.
 - Resend cooldown is 60 s per user; the endpoint returns generic success to avoid user enumeration.
-- Outbound email is sent via `lib/mailer.js` (Gmail SMTP) using `mafikingsolusitpb@gmail.com`. Requires a Gmail **App Password** (set 2FA on the Google account first).
+- Outbound email is sent via `server/notifications/mailer.js` (Gmail SMTP) using `mafikingsolusitpb@gmail.com`. Requires a Gmail **App Password** (set 2FA on the Google account first).
 - The verification landing page is a SPA route: `https://mafiking.com/#verify-email?token=...`.
 ```
 
@@ -744,7 +744,7 @@ The test file should be self-contained: it can create a fresh SQLite database in
 | Email arrives late (queued on server) | 24h expiry + resend. User can request a new token after 60s. |
 | User changes email after signup | Out of scope; treat as future work. |
 | Pre-seeded admin blocked by verification | `ensureFixedAdminUser` sets `email_verified_at` immediately. |
-| Clerk user re-uses email address of a local-unverified user | `lib/clerk-user-sync.js` already promotes the user to `auth_provider = 'clerk'`. We also set `email_verified_at = CURRENT_TIMESTAMP` in that branch (small additional patch in clerk-user-sync.js) so the user can log in. |
+| Clerk user re-uses email address of a local-unverified user | `server/auth/clerk-user-sync.js` already promotes the user to `auth_provider = 'clerk'`. We also set `email_verified_at = CURRENT_TIMESTAMP` in that branch (small additional patch in clerk-user-sync.js) so the user can log in. |
 
 ---
 
@@ -761,10 +761,10 @@ The test file should be self-contained: it can create a fresh SQLite database in
 ## Implementation Order
 
 1. `db/schema.sql` + `server.js` migrations + admin auto-verify.
-2. `lib/email-verification.js` + unit tests.
-3. `lib/email-templates.js`.
-4. `lib/mailer.js` + unit tests.
-5. `routes/auth.js` — register, login, resend, verify-email.
+2. `server/auth/email-verification.js` + unit tests.
+3. `server/notifications/email-templates.js`.
+4. `server/notifications/mailer.js` + unit tests.
+5. `server/routes/auth.js` — register, login, resend, verify-email.
 6. `.env.example`.
 7. `src/lobby.jsx` — `AuthScreen` `verify-email` mode + resend UI.
 8. `src/app.jsx` — `parseAppLocation` for `#verify-email?token=...`.

@@ -100,7 +100,7 @@ asyncTest('bulk mark-paid processes multiple valid items', () => {
             VALUES (1, ?, 29000, 'Trial 7 Hari', 's@test.com', 'QRIS-bulk-${i}', 'PENDING')
         `).run(orderId);
     }
-    const { markPaymentPaid } = require('../../lib/payment-reconciler');
+    const { markPaymentPaid } = require('../../server/payments/payment-reconciler');
     const results = [];
     const errors = [];
     for (let i = 0; i < 3; i += 1) {
@@ -131,7 +131,7 @@ asyncTest('bulk mark-paid handles partial failures', () => {
         INSERT INTO payments (user_id, merchant_order_id, amount, product_details, email, reference, status)
         VALUES (1, 'MFK-1-bulk-ok-1', 29000, 'Trial 7 Hari', 's@test.com', 'Q', 'PENDING')
     `).run();
-    const { markPaymentPaid } = require('../../lib/payment-reconciler');
+    const { markPaymentPaid } = require('../../server/payments/payment-reconciler');
     const results = [];
     const errors = [];
     const items = [
@@ -168,17 +168,17 @@ asyncTest('bulk mark-paid handles partial failures', () => {
 
 // 6. Feature flag BULK_ADMIN respected
 asyncTest('bulk mark-paid returns 503 when BULK_ADMIN flag is off', () => {
-    const { isEnabled: isFeatureEnabled } = require('../../lib/feature-flags');
+    const { isEnabled: isFeatureEnabled } = require('../../server/config/feature-flags');
     const original = isFeatureEnabled('BULK_ADMIN');
     // Force off
     process.env.BULK_ADMIN = 'false';
     // Reload module to pick up
-    delete require.cache[require.resolve('../../lib/feature-flags')];
-    const { isEnabled: isFeatureEnabledReload } = require('../../lib/feature-flags');
+    delete require.cache[require.resolve('../../server/config/feature-flags')];
+    const { isEnabled: isFeatureEnabledReload } = require('../../server/config/feature-flags');
     assert.strictEqual(isFeatureEnabledReload('BULK_ADMIN'), false);
     // Restore
     delete process.env.BULK_ADMIN;
-    delete require.cache[require.resolve('../../lib/feature-flags')];
+    delete require.cache[require.resolve('../../server/config/feature-flags')];
     assert.strictEqual(original !== undefined, true);
 });
 

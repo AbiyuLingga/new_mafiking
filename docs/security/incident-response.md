@@ -192,12 +192,12 @@ Commit it. Discuss in the next engineering review.
 Symptoms: `audit_log` shows `/api/correction` returning evaluation content
 that mentions system instructions or other users.
 
-1. Check `lib/text-sanitize.js` is loaded (look for "sanitizeForPrompt" in
+1. Check `server/security/text-sanitize.js` is loaded (look for "sanitizeForPrompt" in
    the route logs).
 2. Verify the input length cap: input should never exceed 4000 chars.
 3. Pull the offending input from `audit_log: "event":"llm_call"` and
    reproduce in a sandbox.
-4. Add the pattern to `lib/text-sanitize.js` deny list.
+4. Add the pattern to `server/security/text-sanitize.js` deny list.
 5. Notify the model provider if the exploit is reproducible.
 
 ### 5.2 — Payment callback replay

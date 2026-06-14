@@ -228,7 +228,7 @@
           "name": "Gemini OCR / evaluate",
           "sourceId": "vps_node",
           "destinationId": "gemini",
-          "description": "User text sanitized via lib/text-sanitize.js before send. LaTeX preserved, control chars stripped.",
+          "description": "User text sanitized via server/security/text-sanitize.js before send. LaTeX preserved, control chars stripped.",
           "order": 9,
           "reason": "AI processing",
           "hasOpenThreats": true
@@ -350,8 +350,8 @@
         "impact": "Medium",
         "risk": "Medium",
         "mitigations": [
-          "lib/text-sanitize.js — 4000 char cap, control/bidi/zero-width strip, LaTeX preserved",
-          "Applied to all Gemini-bound fields in routes/correction.js"
+          "server/security/text-sanitize.js — 4000 char cap, control/bidi/zero-width strip, LaTeX preserved",
+          "Applied to all Gemini-bound fields in server/routes/correction.js"
         ]
       },
       {
@@ -433,12 +433,12 @@
         "title": "Privilege escalation via /api/admin/*",
         "type": ["Elevation of Privilege"],
         "status": "Verified",
-        "description": "Audit confirms middleware/admin.js checks req.session.role === 'admin' on every admin route.",
+        "description": "Audit confirms server/middleware/admin.js checks req.session.role === 'admin' on every admin route.",
         "likelihood": "Low",
         "impact": "Critical",
         "risk": "Medium",
         "mitigations": [
-          "middleware/admin.js + middleware/auth.js on every admin route",
+          "server/middleware/admin.js + server/middleware/auth.js on every admin route",
           "api-inventory.md: 40+ admin routes catalogued with role check"
         ]
       },

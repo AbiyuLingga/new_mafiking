@@ -11,7 +11,7 @@
 // Usage:
 //   node scripts/security/csp-migration-check.js
 
-const { buildDirectives, isReportOnly, helmetCspOptions } = require('../../lib/csp');
+const { buildDirectives, isReportOnly, helmetCspOptions } = require('../../server/security/csp');
 const fs = require('fs');
 const path = require('path');
 

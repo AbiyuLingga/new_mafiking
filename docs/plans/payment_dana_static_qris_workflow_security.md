@@ -222,7 +222,7 @@ payment-web/
 │  │  ├─ src/
 │  │  │  ├─ main.ts
 │  │  │  ├─ config.ts
-│  │  │  ├─ routes/
+│  │  │  ├─ server/routes/
 │  │  │  │  ├─ orders.routes.ts
 │  │  │  │  ├─ payments.routes.ts
 │  │  │  │  ├─ mutations.routes.ts

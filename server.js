@@ -8,18 +8,26 @@ const rateLimit = require('express-rate-limit');
 const Database = require('better-sqlite3');
 const dotenv = require('dotenv');
 const bcrypt = require('bcrypt');
+const {
+  ASSETS_DIR,
+  DB_DIR,
+  DB_PATH,
+  DIST_DIR,
+  PROJECT_ROOT,
+  PUBLIC_DIR,
+  SRC_DIR,
+} = require('./server/project-paths');
 
 // --- One-shot backup mode (npm run backup:now) ---
 if (process.argv.includes('--backup-now')) {
-  const dbPath = path.join(__dirname, 'db', 'database.sqlite');
-  const db = new Database(dbPath);
+  const db = new Database(DB_PATH);
   db.pragma('journal_mode = WAL');
-  const { runBackupNow } = require('./lib/auto-backup');
+  const { runBackupNow } = require('./server/storage/auto-backup');
   runBackupNow(db).then(() => { db.close(); process.exit(0); }).catch(() => { db.close(); process.exit(1); });
 }
 
 function loadEnvFile(fileName) {
-  const envResult = dotenv.config({ path: path.join(__dirname, fileName), quiet: true });
+  const envResult = dotenv.config({ path: path.join(PROJECT_ROOT, fileName), quiet: true });
   if (envResult.parsed) {
     for (const [key, value] of Object.entries(envResult.parsed)) {
       if (process.env[key] === undefined || String(process.env[key]).trim() === '') {
@@ -44,9 +52,9 @@ try {
 }
 
 const app = express();
-const webhookRoutes = require('./routes/webhooks');
-const { isLocalAdminMode } = require('./middleware/admin');
-const { isRegisteredUser } = require('./middleware/auth');
+const webhookRoutes = require('./server/routes/webhooks');
+const { isLocalAdminMode } = require('./server/middleware/admin');
+const { isRegisteredUser } = require('./server/middleware/auth');
 const {
   createPerformanceStore,
   normalizeClientErrorPayload,
@@ -56,41 +64,41 @@ const {
   setPublicApiCache,
   shouldLogRequestTiming,
   summarizeVitalsFromDb,
-} = require('./lib/performance');
-const { createRequestGuard } = require('./lib/request-guard');
-const { helmetCspOptions } = require('./lib/csp');
-const { createCsrfProtection } = require('./lib/csrf-protection');
-const { SQLiteSessionStore } = require('./lib/sqlite-session-store');
-const { createCanaryMiddleware } = require('./lib/canary');
-const { startExpirySweeper } = require('./lib/payment-expiry-sweeper');
-const { startAutoBackup } = require('./lib/auto-backup');
+} = require('./server/observability/performance');
+const { createRequestGuard } = require('./server/security/request-guard');
+const { helmetCspOptions } = require('./server/security/csp');
+const { createCsrfProtection } = require('./server/security/csrf-protection');
+const { SQLiteSessionStore } = require('./server/storage/sqlite-session-store');
+const { createCanaryMiddleware } = require('./server/security/canary');
+const { startExpirySweeper } = require('./server/payments/payment-expiry-sweeper');
+const { startAutoBackup } = require('./server/storage/auto-backup');
 const {
   DEFAULT_PACKAGE_ACCESS_FEATURES,
   packageAccessGrantSpecs,
-} = require('./lib/package-entitlements');
+} = require('./server/learning/package-entitlements');
 const {
   areTryoutPackagesEnabled,
   ensureDefaultAppSettings,
-} = require('./lib/app-settings');
-const auditLog = require('./lib/audit-log');
-const { getProfileMediaDir } = require('./lib/profile-media');
-const { securityHeaders } = require('./lib/security-headers');
+} = require('./server/config/app-settings');
+const auditLog = require('./server/security/audit-log');
+const { getProfileMediaDir } = require('./server/storage/profile-media');
+const { securityHeaders } = require('./server/security/security-headers');
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 const sessionMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
-const distDir = path.join(__dirname, 'dist');
+const distDir = DIST_DIR;
 const distIndexPath = path.join(distDir, 'index.html');
-const legacyAppHtmlPath = path.join(__dirname, 'MAFIKING.html');
+const legacyAppHtmlPath = path.join(PROJECT_ROOT, 'MAFIKING.html');
 const oneDaySeconds = 60 * 60 * 24;
 const oneWeekSeconds = oneDaySeconds * 7;
 const oneYearSeconds = oneDaySeconds * 365;
 
-const dbDir = path.join(__dirname, 'db');
+const dbDir = DB_DIR;
 fs.mkdirSync(dbDir, { recursive: true });
 const profileMediaDir = getProfileMediaDir();
 fs.mkdirSync(path.join(profileMediaDir, 'avatars'), { recursive: true });
 
-const dbPath = path.join(dbDir, 'database.sqlite');
+const dbPath = DB_PATH;
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
@@ -538,10 +546,10 @@ startAutoBackup(db);
 
 // --- Internal heartbeat endpoint for the self-healing collector ---
 // Always mounted (even when the in-process collector is OFF) so an
-// out-of-process collector started via `scripts/collector.js` can still
+// out-of-process collector started via `server/workers/collector.js` can still
 // report health. Validated by the `INTERNAL_API_SECRET` env var; the
 // endpoint returns 503 if the secret is not configured.
-app.use('/api/internal', require('./routes/internal'));
+app.use('/api/internal', require('./server/routes/internal'));
 
 // --- Auto-verification collector ---
 const MUTATION_COLLECTOR_ENABLED = ['1', 'true', 'yes', 'on'].includes(
@@ -552,12 +560,12 @@ const SELF_HEALING_COLLECTOR_FLAG = !['false', '0', 'no', 'off'].includes(
 );
 
 if (MUTATION_COLLECTOR_ENABLED) {
-    const { startMutationCollector } = require('./lib/mutation-collector');
+    const { startMutationCollector } = require('./server/payments/mutation-collector');
     const providerName = String(process.env.MUTATION_PROVIDER || 'mock').toLowerCase();
 
     let provider;
     if (providerName === 'qris_merchant') {
-        const { QrisMutasiProvider } = require('./lib/providers/QrisMutasiProvider');
+        const { QrisMutasiProvider } = require('./server/payments/providers/QrisMutasiProvider');
         provider = new QrisMutasiProvider({
             email: process.env.QRIS_MERCHANT_EMAIL,
             password: process.env.QRIS_MERCHANT_PASSWORD,
@@ -570,7 +578,7 @@ if (MUTATION_COLLECTOR_ENABLED) {
             ),
         });
     } else {
-        const { MockMutationProvider } = require('./lib/providers/MockMutationProvider');
+        const { MockMutationProvider } = require('./server/payments/providers/MockMutationProvider');
         provider = new MockMutationProvider();
     }
 
@@ -638,7 +646,7 @@ const { csrfProtection, csrfTokenRoute } = createCsrfProtection();
 if (clerkMiddleware && process.env.CLERK_SECRET_KEY) {
   app.use(clerkMiddleware());
 }
-app.use(require('./middleware/clerk-auth').clerkAuthMiddleware);
+app.use(require('./server/middleware/clerk-auth').clerkAuthMiddleware);
 app.use(apiRequestTiming);
 app.use(createRequestGuard());
 app.use(createCanaryMiddleware());
@@ -879,9 +887,9 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/quiz', require('./routes/quiz'));
-app.use('/api/tryouts', require('./routes/tryouts'));
+app.use('/api/auth', require('./server/routes/auth'));
+app.use('/api/quiz', require('./server/routes/quiz'));
+app.use('/api/tryouts', require('./server/routes/tryouts'));
 
 function currentJakartaDate() {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -1163,13 +1171,13 @@ app.get('/api/landing-media', (_req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-app.use('/api/progress', require('./routes/progress'));
-app.use('/api/admin/import', require('./routes/admin-import'));
-app.use('/api/admin', require('./routes/admin'));
-app.use('/api/admin/payments', require('./routes/admin-payments'));
-app.use('/api/payment', require('./routes/payment'));
-app.use('/api/correction', require('./routes/correction'));
-app.use(require('./routes/auth-popup'));
+app.use('/api/progress', require('./server/routes/progress'));
+app.use('/api/admin/import', require('./server/routes/admin-import'));
+app.use('/api/admin', require('./server/routes/admin'));
+app.use('/api/admin/payments', require('./server/routes/admin-payments'));
+app.use('/api/payment', require('./server/routes/payment'));
+app.use('/api/correction', require('./server/routes/correction'));
+app.use(require('./server/routes/auth-popup'));
 
 function hasBuiltClient() {
   return fs.existsSync(distIndexPath);
@@ -1230,7 +1238,7 @@ const devSourceCache = {
   }
 };
 
-const devSourceStatic = express.static(path.join(__dirname, 'src'), devSourceCache);
+const devSourceStatic = express.static(SRC_DIR, devSourceCache);
 
 function findLatestDistAsset(prefix, extension) {
   try {
@@ -1250,7 +1258,7 @@ function findLatestDistAsset(prefix, extension) {
 
 app.use('/assets', setStaticCacheHint);
 app.use('/assets', express.static(path.join(distDir, 'assets'), distAssetCache));
-app.use('/assets', express.static(path.join(__dirname, 'assets'), staticCache));
+app.use('/assets', express.static(ASSETS_DIR, staticCache));
 app.get(/^\/assets\/(index|generated-admin|vendor-react)-[^/]+\.(js|css)$/, (req, res, next) => {
   const fallbackAsset = findLatestDistAsset(req.params[0], `.${req.params[1]}`);
   if (!fallbackAsset) return next();
@@ -1258,7 +1266,7 @@ app.get(/^\/assets\/(index|generated-admin|vendor-react)-[^/]+\.(js|css)$/, (req
   return res.sendFile(fallbackAsset);
 });
 app.use('/video', setStaticCacheHint);
-app.use('/video', express.static(path.join(__dirname, 'assets'), staticCache));
+app.use('/video', express.static(ASSETS_DIR, staticCache));
 app.use('/profile-media', setStaticCacheHint);
 app.use('/profile-media', express.static(profileMediaDir, staticCache));
 app.use('/profile-media', (_req, res) => {
@@ -1272,17 +1280,17 @@ app.get('/SOP-DEEPSEEK-IMPORT-SOAL.md', (req, res) => {
   if (!req.session?.role || req.session.role !== 'admin') {
     return res.status(403).send('Forbidden');
   }
-  res.type('text/markdown; charset=utf-8').sendFile(path.join(__dirname, 'docs', 'sop', 'SOP-DEEPSEEK-IMPORT-SOAL.md'));
+  res.type('text/markdown; charset=utf-8').sendFile(path.join(PROJECT_ROOT, 'docs', 'sop', 'SOP-DEEPSEEK-IMPORT-SOAL.md'));
 });
 app.get('/tweaks-panel.jsx', (_req, res) => {
   if (canServeLegacySource()) {
-    res.type('text/babel').sendFile(path.join(__dirname, 'tweaks-panel.jsx'));
+    res.type('text/babel').sendFile(path.join(PROJECT_ROOT, 'tweaks-panel.jsx'));
     return;
   }
   res.status(404).type('text/plain; charset=utf-8').send('Not found');
 });
 app.get(['/syarat-ketentuan.html', '/terms.html', '/tnc.html'], (_req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'legal', 'syarat-ketentuan.html'));
+  res.sendFile(path.join(PUBLIC_DIR, 'legal', 'syarat-ketentuan.html'));
 });
 app.get('/robots.txt', (_req, res) => {
   res

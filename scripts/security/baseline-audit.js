@@ -110,13 +110,13 @@ info('--- File integrity baseline ---');
 const criticalFiles = [
     'server.js',
     'db/schema.sql',
-    'lib/payment-reconciler.js',
-    'lib/mutation-matcher.js',
-    'lib/payment-rate-limiter.js',
-    'lib/payment-alerts.js',
-    'lib/ip-allowlist.js',
-    'routes/payment.js',
-    'routes/admin-payments.js',
+    'server/payments/payment-reconciler.js',
+    'server/payments/mutation-matcher.js',
+    'server/payments/payment-rate-limiter.js',
+    'server/payments/payment-alerts.js',
+    'server/security/ip-allowlist.js',
+    'server/routes/payment.js',
+    'server/routes/admin-payments.js',
 ];
 for (const f of criticalFiles) {
     const full = path.join(ROOT, f);

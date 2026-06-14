@@ -2,7 +2,7 @@
 
 const assert = require('assert');
 
-const { _correctionInternals } = require('../../routes/correction');
+const { _correctionInternals } = require('../../server/routes/correction');
 const { parsePositiveId } = _correctionInternals;
 
 function assertParse(label, input, expected) {

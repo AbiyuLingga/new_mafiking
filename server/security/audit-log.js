@@ -6,8 +6,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const { LOG_DIR } = require('../project-paths');
 
-const LOG_DIR = path.join(__dirname, '..', 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'audit.log');
 const CSP_LOG_FILE = path.join(LOG_DIR, 'csp-reports.log');
 const MAX_LINE_BYTES = 16 * 1024;

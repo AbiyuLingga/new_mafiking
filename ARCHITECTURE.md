@@ -228,7 +228,7 @@ Payment status URLs preserve their order query:
 - The top app nav uses `Beranda` for `belajar`, `Misi Harian` for `misi`, `Paket` for `tryout`, and `Peringkat` for `leaderboard`; there is no separate `Belajar` nav link.
 - The app route shell uses a small vertical fade/slide transition. `src/shared.jsx` measures nav and segmented-control buttons so the active oval moves instead of teleporting. `src/belajar.jsx` separately measures the active mapel tab so its underline slides between `Try Out`, `Matematika`, `Fisika`, and `Kimia`; the `Try Out` underline uses the ink accent.
 - Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and locked access gates use shared `.app-page-bg` variants from `src/styles.css` for the soft grid/glow background while keeping page-specific content/layout components unchanged.
-- The leaderboard consumes overall, weekly, and per-Try-Out ranking APIs from `routes/progress.js`.
+- The leaderboard consumes overall, weekly, and per-Try-Out ranking APIs from `server/routes/progress.js`.
 - Logged-out users can open the free Try Out confirmation and start the free 15-question / 30-minute session.
 - Free Try Out review paths outside the session and protected subject chapters route through login/sign-up with an auth redirect back to the intended route.
 - Try Out packages are backed by `tryout_packages.tryout_id` plus per-package rows in `tryout_questions` and `tryout_question_steps`. The Belajar Try Out tab shows both free and premium entries; premium opens only when admin role, paid product title, subscription title, or manual `user_access_grants` value matches the package. The exam route loads `/api/tryouts/:tryoutId/full`; after a registered user submits, `/api/progress/tryout-attempts` stores answers and a review snapshot. Reopening the same Try Out reads `/api/progress/tryout-attempts/latest` and shows history/review instead of a timer. Admin reset deletes only the specific `tryout_attempts` row so the user can retake that Try Out.
@@ -313,13 +313,13 @@ Backend is a single Express application with route modules.
 
 ```text
 server.js
-  |-- routes/webhooks.js
-  |-- routes/auth.js
-  |-- routes/quiz.js
-  |-- routes/progress.js
-  |-- routes/correction.js
-  |-- routes/admin.js
-  `-- routes/payment.js
+  |-- server/routes/webhooks.js
+  |-- server/routes/auth.js
+  |-- server/routes/quiz.js
+  |-- server/routes/progress.js
+  |-- server/routes/correction.js
+  |-- server/routes/admin.js
+  `-- server/routes/payment.js
 ```
 
 ### Middleware and Cross-Cutting Behavior
@@ -331,17 +331,17 @@ server.js
 | Security headers | `server.js` | Helmet with CSP that allows required CDN scripts/styles. |
 | Body limits | `server.js` | JSON limit `12mb`; URL encoded limit `100kb`. |
 | Sessions | `server.js` | `express-session`, 7-day cookie, `sameSite: strict`. |
-| Clerk auth | `server.js` + `middleware/clerk-auth.js` + `src/clerk-auth.jsx` | `@clerk/express` verifies Clerk sessions; frontend sends Bearer token when Clerk is signed in, then middleware maps Clerk users to local SQLite users. |
-| Email verification | `routes/auth.js` + `lib/email-verification.js` + `lib/mailer.js` | Local email/password signups store only a SHA-256 verification-token hash, send a Gmail SMTP verification link, and hard-block login until `users.email_verified_at` is set. When `SMTP_HOST=smtp.gmail.com`, the mailer forces `MAIL_FROM` to match `SMTP_USER` so Gmail does not send spoof-like From headers. |
+| Clerk auth | `server.js` + `server/middleware/clerk-auth.js` + `src/clerk-auth.jsx` | `@clerk/express` verifies Clerk sessions; frontend sends Bearer token when Clerk is signed in, then middleware maps Clerk users to local SQLite users. |
+| Email verification | `server/routes/auth.js` + `server/auth/email-verification.js` + `server/notifications/mailer.js` | Local email/password signups store only a SHA-256 verification-token hash, send a Gmail SMTP verification link, and hard-block login until `users.email_verified_at` is set. When `SMTP_HOST=smtp.gmail.com`, the mailer forces `MAIL_FROM` to match `SMTP_USER` so Gmail does not send spoof-like From headers. |
 | Rate limits | `server.js` | Login, register, and correction route limits. |
-| Auth guard | `middleware/auth.js` | Requires either `req.userId` from Clerk or `req.session.userId`. |
-| Admin guard | `middleware/admin.js` | Requires admin role from either Clerk-mapped request state or session. |
+| Auth guard | `server/middleware/auth.js` | Requires either `req.userId` from Clerk or `req.session.userId`. |
+| Admin guard | `server/middleware/admin.js` | Requires admin role from either Clerk-mapped request state or session. |
 | Auto guest | `server.js` | Creates a guest user for most API requests without a session. |
 | Error handler | `server.js` | JSON errors; hides details in production. |
 
 ### API Route Responsibilities
 
-#### `routes/auth.js`
+#### `server/routes/auth.js`
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
@@ -355,13 +355,13 @@ Uses bcrypt for passwords, XSS sanitization for registration fields, route-level
 
 Clerk-signed requests are synced before this route runs. `GET /api/auth/me` still returns the local SQLite user because the rest of the app keys progress, XP, role, and payments by local `users.id`. `POST /api/auth/clerk-onboard` remains for legacy display-name completion and guest merge. New first-login profile completion uses `POST /api/auth/profile-onboarding`, which validates optional phone, semester, faculty/major, and subject priorities before marking `users.onboarding_completed_at`. `POST /api/auth/phone-number` updates only `users.phone_number` for the optional phone prompt and bimbel checkout path.
 
-#### `routes/webhooks.js`
+#### `server/routes/webhooks.js`
 
 - `POST /api/webhooks/clerk`
 
 The route receives a raw JSON body before the normal Express JSON parser, verifies Clerk signatures with `svix` and `CLERK_WEBHOOK_SIGNING_SECRET`, and currently handles `user.created` by creating or linking a local SQLite user. It is skipped by auto-guest creation and does not expose env secrets.
 
-#### `routes/quiz.js`
+#### `server/routes/quiz.js`
 
 - `GET /api/quiz/chapters`
 - `GET /api/quiz/chapters/:id/subtopics`
@@ -373,7 +373,7 @@ The route receives a raw JSON body before the normal Express JSON parser, verifi
 
 `/api/quiz/init` is the lightweight bootstrap call used by `src/practice.jsx` to discover available chapters, subtopics, and problem counts.
 
-#### `routes/progress.js`
+#### `server/routes/progress.js`
 
 - `POST /api/progress/submit`
 - `GET /api/progress/me`
@@ -383,7 +383,7 @@ The route receives a raw JSON body before the normal Express JSON parser, verifi
 
 Computes XP, penalties, level, badge tier, streaks, solved counts, mastery, and leaderboards. `/api/progress/stats` is the source of truth for gamified UI chips: it returns real `xp`, `level`, `streak_days`, `highest_streak`, `level_progress`, and next-level XP metadata from SQLite.
 
-#### `routes/correction.js`
+#### `server/routes/correction.js`
 
 - `GET /api/correction/attempts`
 - `POST /api/correction/transcribe`
@@ -394,7 +394,7 @@ Computes XP, penalties, level, badge tier, streaks, solved counts, mastery, and 
 Core responsibilities:
 
 - Validate image MIME type and size.
-- Route OCR/evaluation through `lib/multi-provider-pool.js` when enabled.
+- Route OCR/evaluation through `server/ai/multi-provider-pool.js` when enabled.
 - Use up to 20 Gemini API keys for Gemini/Gemma calls and an optional `GROQ_API_KEY` for Groq vision calls.
 - Try configured OCR/evaluation models plus the Gemini 3.1 Flash Lite default on the direct Gemini fallback path.
 - Retry only retryable provider overload/rate-limit errors.
@@ -408,7 +408,7 @@ Core responsibilities:
 - Rate-limit AI profile narrative refreshes to once per hour for normal users; admin `123`/`135` bypasses the cooldown.
 - Include summarized multiple-choice mistakes from `practice_attempts` as profile narrative evidence, without letting AI choose final catalog refs.
 
-#### `routes/admin.js`
+#### `server/routes/admin.js`
 
 Admin-only CRUD for:
 
@@ -427,7 +427,7 @@ This route requires both session auth and admin role.
 
 The backend dashboard endpoint is present at `GET /api/admin/dashboard-data`. The richer monitoring UI lives in `src/admin-monitoring.jsx`, exports `window.AdminMonitoringPanel`, and is loaded before `src/admin.jsx` in `MAFIKING.html`.
 
-#### `routes/payment.js`
+#### `server/routes/payment.js`
 
 QRIS-first payment integration with legacy Duitku fallback:
 
@@ -613,7 +613,7 @@ need_score =
 
 `data/recommendation-catalog.json` owns official skill aliases, prerequisites, scoring weights, and difficulty gating. `docs/purcell-inspired-question-bank.md` owns the original Purcell-aligned question references used by the recommendation engine.
 
-Runtime recommendation selection must stay deterministic: Gemma can contribute `overallSummary` text, but `recommendedItems`, `recommendedQuestions`, and `skillNeedScores` are merged from `lib/recommendation-engine.js` so profile recommendations point at real catalog refs instead of invented items.
+Runtime recommendation selection must stay deterministic: Gemma can contribute `overallSummary` text, but `recommendedItems`, `recommendedQuestions`, and `skillNeedScores` are merged from `server/learning/recommendation-engine.js` so profile recommendations point at real catalog refs instead of invented items.
 
 The local engine enriches selected DB-backed recommendations with half-life review signals, BKT-lite per-skill mastery, KST-style frontier versus review tags, recall-slot interleaving, and recent multiple-choice evidence. High mastery reduces recency-error pressure, very low mastery increases prerequisite-gap weight, and the frontend receives `evidence`, `frontier`, `kind`, `halfLifeDays`, and `evidenceAt` metadata for each selected item while AI remains prose-only.
 
@@ -621,7 +621,7 @@ The profile endpoint intentionally uses two attempt windows: `PROFILE_RECOMMENDA
 
 AI narrative refreshes are recorded in `profile_ai_refreshes`. Normal users can refresh AI narrative text once per hour; admin account `123`/`135` bypasses the cooldown for testing and operations. When cooldown blocks the AI call or Gemma fails, the endpoint still returns the deterministic local profile summary.
 
-Profile narrative calls must read `SOP-PROFILE-SUMMARY.md` through `routes/correction.js` before producing summary JSON. This SOP is the source of truth for what Gemma may infer and what it must leave to the deterministic recommendation engine.
+Profile narrative calls must read `server/ai/prompts/SOP-PROFILE-SUMMARY.md` through `server/routes/correction.js` before producing summary JSON. This SOP is the source of truth for what Gemma may infer and what it must leave to the deterministic recommendation engine.
 
 ### Question Bank Export/Import Flow
 
@@ -718,7 +718,7 @@ Important: `npm run build` validates the built Vite path, but it does not valida
 
 ### Add New API Route
 
-1. Create or update `routes/<name>.js`.
+1. Create or update `server/routes/<name>.js`.
 2. Mount it in `server.js`.
 3. Add auth/rate limiting if needed.
 4. Document the endpoint in `README.md`.

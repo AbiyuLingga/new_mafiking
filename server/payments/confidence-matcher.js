@@ -2,7 +2,7 @@
 // Confidence-scored matching for incoming QRIS mutations.
 // Replaces exact-match-only logic with a 0-230 score; >= 180 → auto-match.
 
-const { isEnabled: isFeatureEnabled } = require('./feature-flags');
+const { isEnabled: isFeatureEnabled } = require('../config/feature-flags');
 
 const THRESHOLDS = {
     AMOUNT_MATCH: 100,

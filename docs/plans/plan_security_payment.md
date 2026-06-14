@@ -3,7 +3,7 @@
 ## Ringkasan
 Tujuan utamanya: mencegah payment palsu mengaktifkan akses, mencegah pencurian kredensial QRIS/DANA/merchant, membatasi risiko library open-source, dan memastikan setiap perubahan status pembayaran bisa diaudit serta dipulihkan.
 
-Plan ini berbasis inspeksi lokal terhadap `server.js`, `routes/payment.js`, `lib/payment-reconciler.js`, `lib/reconcilers/mutasiku.js`, `lib/providers/QrisMutasiProvider.js`, `lib/qris-dynamic.js`, `db/schema.sql`, `docs/security/*`, serta riset dari OWASP ASVS/API Top 10, Express security best practices, webhook security, npm provenance, Bank Indonesia QRIS, EMVCo QR, Duitku docs, dan paket `@prasetya/qris` / `qris-mutasi`.
+Plan ini berbasis inspeksi lokal terhadap `server.js`, `server/routes/payment.js`, `server/payments/payment-reconciler.js`, `lib/reconcilers/mutasiku.js`, `server/payments/providers/QrisMutasiProvider.js`, `server/payments/qris-dynamic.js`, `db/schema.sql`, `docs/security/*`, serta riset dari OWASP ASVS/API Top 10, Express security best practices, webhook security, npm provenance, Bank Indonesia QRIS, EMVCo QR, Duitku docs, dan paket `@prasetya/qris` / `qris-mutasi`.
 
 ## Temuan Kritis
 - **P0: Reconciliation harus fail-closed.** Uang tidak boleh dianggap masuk hanya karena ada nominal cocok; match harus unik, belum expired, status mutasi valid, source event belum pernah diproses, dan amount persis.
@@ -121,10 +121,10 @@ Semua phase di plan ini sudah diimplementasikan (kode + tests). Ringkasan:
 | 1 Ledger Invariants | DONE | `payment_webhook_events`, `payment_idempotency_keys`, unique constraint, canonical amount, expired-resurrection guard |
 | 2 Webhook & Reconciliation | DONE | `checkAndRecordWebhookEvent`, `validateProviderStatus`, strict match, raw-body HMAC for collector |
 | 3 Supply Chain | DONE | `@prasetya/qris@0.2.1` & `qris-mutasi@2.0.0` exact pins, `scripts/security/audit-supply-chain.js`, `scripts/security/build-sbom.js`, `docs/security/sbom.json`, `tests/payment/test-qris-security-regression.js` (20 tests) |
-| 4 Isolated Collector | DONE | `scripts/collector.js`, `lib/providers/QrisMutasiProvider.js` (cookie dir chdir + 0600 + egress allowlist), `POST /api/payment/reconcile/mutation-batch` signed endpoint |
-| 5 AppSec Web & Admin | DONE | `lib/ip-allowlist.js` + `ADMIN_IP_ALLOWLIST` / `COLLECTOR_IP_ALLOWLIST`, per-action rate limit, `scripts/security/csp-migration-check.js` |
-| 6 Server & Operational | DONE | `lib/payment-alerts.js`, `scripts/security/rotate-secrets.js`, `docs/security/secret-rotation.md`, audit log immutability triggers (`005_audit_immutability.sql`) |
-| 7 Monitoring & IR | DONE | `lib/payment-alerts.js` thresholds, `docs/security/payment-runbook.md`, `GET /api/admin/payments/dashboard` |
+| 4 Isolated Collector | DONE | `server/workers/collector.js`, `server/payments/providers/QrisMutasiProvider.js` (cookie dir chdir + 0600 + egress allowlist), `POST /api/payment/reconcile/mutation-batch` signed endpoint |
+| 5 AppSec Web & Admin | DONE | `server/security/ip-allowlist.js` + `ADMIN_IP_ALLOWLIST` / `COLLECTOR_IP_ALLOWLIST`, per-action rate limit, `scripts/security/csp-migration-check.js` |
+| 6 Server & Operational | DONE | `server/payments/payment-alerts.js`, `scripts/security/rotate-secrets.js`, `docs/security/secret-rotation.md`, audit log immutability triggers (`005_audit_immutability.sql`) |
+| 7 Monitoring & IR | DONE | `server/payments/payment-alerts.js` thresholds, `docs/security/payment-runbook.md`, `GET /api/admin/payments/dashboard` |
 
 Tests baru:
 - `test:qris-security-regression` (20 tests) — parse/convert/CRC, amount validation

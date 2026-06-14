@@ -23,9 +23,9 @@ target_estimate: 3-4 hari kerja (parallel)
 | 1: Ledger invariants | ✅ DONE | `payment_webhook_events`, `payment_idempotency_keys`, unique constraints |
 | 2: Webhook & reconciliation | ✅ DONE | `checkAndRecordWebhookEvent`, `validateProviderStatus`, strict match |
 | 3: Supply chain | ✅ DONE | `@prasetya/qris@0.2.1` & `qris-mutasi@2.0.0` exact pin, SBOM, audit |
-| 4: Isolated collector | ✅ DONE | `scripts/collector.js`, `POST /api/payment/reconcile/mutation-batch` signed |
-| 5: AppSec web & admin | ✅ DONE | `lib/ip-allowlist.js`, per-action rate limit, CSP migration check |
-| 6: Server & operational | ✅ DONE | `lib/payment-alerts.js`, `scripts/security/rotate-secrets.js`, audit immutability |
+| 4: Isolated collector | ✅ DONE | `server/workers/collector.js`, `POST /api/payment/reconcile/mutation-batch` signed |
+| 5: AppSec web & admin | ✅ DONE | `server/security/ip-allowlist.js`, per-action rate limit, CSP migration check |
+| 6: Server & operational | ✅ DONE | `server/payments/payment-alerts.js`, `scripts/security/rotate-secrets.js`, audit immutability |
 | 7: Monitoring & IR | ✅ DONE | `docs/security/payment-runbook.md`, `GET /api/admin/payments/dashboard` |
 
 47 test baru sudah ada.
@@ -48,7 +48,7 @@ target_estimate: 3-4 hari kerja (parallel)
 
 ### Minus #1 — Default `MUTATION_COLLECTOR_ENABLED=false` ⇒ 100% manual
 
-**Evidence:** `server.js:443-481`, `scripts/security/baseline-audit.js:67-72`, `lib/mutation-collector.js:80`
+**Evidence:** `server.js:443-481`, `scripts/security/baseline-audit.js:67-72`, `server/payments/mutation-collector.js:80`
 
 **Dampak:** Setiap user bayar QRIS → admin harus standby, klik mark-paid manual. Untuk 50 transaksi/hari, admin butuh ~30-60 menit/hari.
 
@@ -60,7 +60,7 @@ target_estimate: 3-4 hari kerja (parallel)
 
 ### Minus #3 — Cookie management rapuh (chdir hack)
 
-**Evidence (`lib/providers/QrisMutasiProvider.js:22-25, 60-75`):**
+**Evidence (`server/payments/providers/QrisMutasiProvider.js:22-25, 60-75`):**
 - `process.chdir(this.cookieDir)` — TIDAK di-restore
 - Library ignore `cookieDir` param, hard-code path relatif ke `process.cwd()`
 
@@ -68,39 +68,39 @@ target_estimate: 3-4 hari kerja (parallel)
 
 ### Minus #4 — Tidak ada auto re-login saat sesi expired
 
-**Evidence (`lib/providers/QrisMutasiProvider.js:60-75`):** `_ensureClient()` hanya cek `this.qris == null`, tidak deteksi 401/login form.
+**Evidence (`server/payments/providers/QrisMutasiProvider.js:60-75`):** `_ensureClient()` hanya cek `this.qris == null`, tidak deteksi 401/login form.
 
 **Dampak:** Setelah cookie expired, collector diam-diam 0 matched/jam. Admin restart manual.
 
 ### Minus #5 — Client polling 5s + server collector 15s = 20s latency
 
-**Evidence:** `src/payment.jsx:182-204` (5s), `lib/mutation-collector.js:4` (15s). Worst case 20-22s.
+**Evidence:** `src/payment.jsx:182-204` (5s), `server/payments/mutation-collector.js:4` (15s). Worst case 20-22s.
 
 **Dampak:** User bingung setelah bayar karena UI masih "Menunggu".
 
 ### Minus #6 — Matching ambigu pada nominal kecil
 
-**Evidence (`lib/mutation-matcher.js:39-79`):** Exact amount only, multiple match → ambiguous queue.
+**Evidence (`server/payments/mutation-matcher.js:39-79`):** Exact amount only, multiple match → ambiguous queue.
 
 **Dampak:** 2 user checkout paket sama di menit sama → salah satu bayar → admin handle.
 
 ### Minus #7 — Dead code Mutasiku/Duitku/Midtrans
 
-**Evidence:** `routes/payment.js:36-44, 350-389, 672-712, 885-929`, `lib/reconcilers/mutasiku.js` (205 baris).
+**Evidence:** `server/routes/payment.js:36-44, 350-389, 672-712, 885-929`, `lib/reconcilers/mutasiku.js` (205 baris).
 
 **Dampak:** Cognitive load, security audit surface luas.
 
 ### Minus #8 — Tidak ada email notifikasi saat auto-verify sukses
 
-**Evidence:** `lib/mailer.js` ada tapi `markPaymentPaid` tidak panggil mailer.
+**Evidence:** `server/notifications/mailer.js` ada tapi `markPaymentPaid` tidak panggil mailer.
 
 ### Minus #9 — Admin dashboard tidak bisa bulk + tidak ada ambiguous resolver UI
 
-**Evidence (`routes/admin-payments.js:102-115, 18-25`):** Endpoint mark-paid single, rate limit 10/5min.
+**Evidence (`server/routes/admin-payments.js:102-115, 18-25`):** Endpoint mark-paid single, rate limit 10/5min.
 
 ### Minus #10 — Tidak ada real-time collector health di admin
 
-**Evidence:** `lib/mutation-collector.js:85-92` `getStats()` ada tapi tidak real-time.
+**Evidence:** `server/payments/mutation-collector.js:85-92` `getStats()` ada tapi tidak real-time.
 
 ## 3. Target Outcomes (Metrik Konkret)
 
@@ -151,7 +151,7 @@ target_estimate: 3-4 hari kerja (parallel)
 └────────────────────┼────────────────────────────────────────────┘
                      │
 ┌────────────────────▼────────────────────────────────────────────┐
-│  Isolated Collector Process (scripts/collector.js)              │
+│  Isolated Collector Process (server/workers/collector.js)              │
 │  ┌────────────────────────────────────────┐                     │
 │  │  SelfHealingCollector                  │                     │
 │  │   ├─ circuit breaker (3-state)         │                     │
@@ -205,19 +205,19 @@ Edit `server.js:440`:
 - startMutasikuPoller(db);
 ```
 
-Edit `routes/payment.js:25`:
+Edit `server/routes/payment.js:25`:
 ```diff
 - const { handleMutasikuWebhook } = require('../lib/reconcilers/mutasiku');
 ```
 
-Edit `routes/payment.js:986-1018` (entire `/reconcile/mutasiku-webhook` route):
+Edit `server/routes/payment.js:986-1018` (entire `/reconcile/mutasiku-webhook` route):
 ```diff
 - // POST /api/payment/reconcile/mutasiku-webhook — Mutasiku signed webhook.
 - router.post('/reconcile/mutasiku-webhook', (req, res) => { ... });
 ```
 
 #### A.2 Hapus Duitku code path
-Edit `routes/payment.js`:
+Edit `server/routes/payment.js`:
 - L36-44 (DUITKU_* constants) — hapus
 - L65-78 (createDuitkuSignature, safeSignatureCompare, verifyCallbackSignature) — hapus
 - L80-89 (hasDuitkuCredentials) — hapus
@@ -228,7 +228,7 @@ Edit `routes/payment.js`:
 - L885-929 (Duitku callback route): hapus
 
 #### A.3 Lock provider ke `qris`
-Edit `routes/payment.js:91-94`:
+Edit `server/routes/payment.js:91-94`:
 ```js
 function normalizePaymentProvider(env = process.env) {
     const provider = String(env.PAYMENT_PROVIDER || 'qris').trim().toLowerCase();
@@ -248,11 +248,11 @@ Hapus: `test:mutasiku-reconciler`.
 
 Test cases:
 1. `mutasiku.js` file tidak ada di `lib/reconcilers/`
-2. `lib/payment-reconciler.js` tidak import mutasiku
-3. `routes/payment.js` tidak ada string `duitku`, `Duitku`, `DUITKU_`
-4. `routes/payment.js` tidak ada route `/callback` (Duitku callback)
+2. `server/payments/payment-reconciler.js` tidak import mutasiku
+3. `server/routes/payment.js` tidak ada string `duitku`, `Duitku`, `DUITKU_`
+4. `server/routes/payment.js` tidak ada route `/callback` (Duitku callback)
 5. `.env.example` tidak ada `DUITKU_*`, `MUTASIKU_*`
-6. `grep -r "midtrans" src/ routes/ lib/ scripts/ --include="*.js" --include="*.jsx"` returns 0 matches
+6. `grep -r "midtrans" src/ server/routes/ lib/ scripts/ --include="*.js" --include="*.jsx"` returns 0 matches
 
 ### 6.3 Validasi Phase A
 - `npm run check` exit 0
@@ -273,7 +273,7 @@ Collector tidak boleh mati diam-diam, harus recover otomatis dari cookie/sesi ex
 State machine: CLOSED → OPEN (failure threshold) → HALF_OPEN (recovery probe) → CLOSED (success) atau OPEN (failure).
 
 ```js
-// lib/self-healing-collector.js
+// server/payments/self-healing-collector.js
 class CircuitBreaker {
     constructor({ failureThreshold = 3, recoveryTimeoutMs = 300000 }) {
         this.state = 'CLOSED';
@@ -322,7 +322,7 @@ function getAdaptiveInterval({ pendingCount, lastActivityAt }) {
 #### B.3 Session-Expired Detection
 
 ```js
-// lib/providers/QrisMutasiProvider.js
+// server/payments/providers/QrisMutasiProvider.js
 function isSessionExpiredError(error, responseHtml) {
     const errMsg = String(error?.message || '').toLowerCase();
     if (errMsg.includes('login') || errMsg.includes('session') || errMsg.includes('unauthorized')) return true;
@@ -358,10 +358,10 @@ Collector emit heartbeat setiap 30 detik ke main app via `POST /api/internal/col
 
 | File | Action |
 |---|---|
-| `lib/self-healing-collector.js` | NEW |
-| `lib/mutation-collector.js` | deprecated, wrap ke self-healing |
-| `lib/providers/QrisMutasiProvider.js` | atomic cookie, session detection |
-| `routes/admin-payments.js` | add heartbeat endpoint |
+| `server/payments/self-healing-collector.js` | NEW |
+| `server/payments/mutation-collector.js` | deprecated, wrap ke self-healing |
+| `server/payments/providers/QrisMutasiProvider.js` | atomic cookie, session detection |
+| `server/routes/admin-payments.js` | add heartbeat endpoint |
 | `server.js` | wire self-healing collector |
 | `tests/payment/test-self-healing-collector.js` | NEW — 10 test cases |
 
@@ -464,7 +464,7 @@ CREATE INDEX idx_ambiguous_unresolved
 ### 9.1 PaymentBroadcaster (in-memory pub/sub)
 
 ```js
-// lib/payment-broadcaster.js
+// server/payments/payment-broadcaster.js
 const { EventEmitter } = require('events');
 
 class PaymentBroadcaster extends EventEmitter {
@@ -602,7 +602,7 @@ useEffect(() => {
 ### 9.5 Email Template
 
 ```js
-// lib/email-templates.js
+// server/notifications/email-templates.js
 function paymentSuccess({ user, payment }) {
     return {
         subject: 'Pembayaran Mafiking Berhasil',
@@ -710,7 +710,7 @@ router.get('/metrics', (req, res) => {
 ### 11.2 Feature Flags
 
 ```js
-// lib/feature-flags.js
+// server/config/feature-flags.js
 const flags = {
     SSE_PAYMENT_PUSH: process.env.SSE_PAYMENT_PUSH !== 'false',
     ADAPTIVE_POLLING: process.env.ADAPTIVE_POLLING !== 'false',
@@ -784,9 +784,9 @@ module.exports = { isEnabled, flags };
 ## 16. File Impact Summary
 
 ### File Baru (12)
-- `lib/self-healing-collector.js`
-- `lib/payment-broadcaster.js`
-- `lib/feature-flags.js`
+- `server/payments/self-healing-collector.js`
+- `server/payments/payment-broadcaster.js`
+- `server/config/feature-flags.js`
 - `lib/user-activity-tracker.js`
 - `db/migrations/006_ambiguous_queue.sql`
 - `tests/payment/test-cleanup-deps.js`
@@ -799,13 +799,13 @@ module.exports = { isEnabled, flags };
 
 ### File Diubah (12)
 - `server.js`
-- `routes/payment.js`
-- `routes/admin-payments.js`
-- `lib/payment-reconciler.js`
-- `lib/mutation-matcher.js`
-- `lib/mutation-collector.js`
-- `lib/providers/QrisMutasiProvider.js`
-- `lib/email-templates.js`
+- `server/routes/payment.js`
+- `server/routes/admin-payments.js`
+- `server/payments/payment-reconciler.js`
+- `server/payments/mutation-matcher.js`
+- `server/payments/mutation-collector.js`
+- `server/payments/providers/QrisMutasiProvider.js`
+- `server/notifications/email-templates.js`
 - `src/payment.jsx`
 - `src/admin.jsx`
 - `src/generated-admin.jsx`

@@ -46,11 +46,11 @@ system after the Phase 0–7 hardening rollout.
 ### Collector failure
 
 1. Confirm scope: `curl -s http://127.0.0.1:3000/api/health`
-2. Inspect the running isolated collector process (`scripts/collector.js`)
+2. Inspect the running isolated collector process (`server/workers/collector.js`)
    via the process supervisor (systemd / pm2 / docker logs).
 3. If merchant dashboard is reachable but the collector keeps failing:
    - The cookie file may be locked, expired, or corrupted.
-   - Stop the collector: `pkill -f "node scripts/collector.js"`.
+   - Stop the collector: `pkill -f "node server/workers/collector.js"`.
    - Delete the cookie file in `QRIS_COOKIE_DIR`.
    - Restart the collector; the library will re-login.
 4. If `MUTATION_COLLECTOR_ENABLED=false` is required, set it in `.env` and

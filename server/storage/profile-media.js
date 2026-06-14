@@ -1,13 +1,11 @@
 const fs = require('fs');
 const path = require('path');
+const { resolveProfileMediaDir } = require('../project-paths');
 
 const AVATAR_URL_PREFIX = '/profile-media/avatars/';
 
 function getProfileMediaDir() {
-  const configured = String(process.env.PROFILE_MEDIA_DIR || '').trim();
-  return configured
-    ? path.resolve(configured)
-    : path.join(__dirname, '..', 'profile-media');
+  return resolveProfileMediaDir();
 }
 
 function getAvatarDir() {

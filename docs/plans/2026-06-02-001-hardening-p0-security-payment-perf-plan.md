@@ -23,12 +23,12 @@ Defer to follow-up plans (per user prioritization): trust/copy alignment, free-t
 - **No architecture migration.** Project `AGENTS.md` rules: `Do not introduce module imports inside static src/*.jsx files without changing the whole load architecture` and `Keep the frontend load model as globals loaded by MAFIKING.html unless the task explicitly asks for an architecture migration.` Code splitting will be implemented as **route-aware script loading** inside `MAFIKING.html` (per agreement), preserving the global model.
 - **UI preserved.** All changes are surgical. No redesign of lobby, belajar, practice, payment, or admin UI beyond the explicitly required "Pembayaran sedang aktivasi" banner.
 - **No new dependencies unless justified.** Project `AGENTS.md`: `Add new dependencies for simple static frontend behavior` is forbidden. For backend, prefer local helpers (e.g. custom session store on `better-sqlite3`) over new packages.
-- **Keep Clerk compatibility.** Existing dual-auth (session + Clerk) flow in `middleware/clerk-auth.js` must continue to work.
+- **Keep Clerk compatibility.** Existing dual-auth (session + Clerk) flow in `server/middleware/clerk-auth.js` must continue to work.
 - **Production env requirements.** `SESSION_SECRET`, `CSRF_SECRET`, `BOOTSTRAP_ADMIN_USERNAME`, `BOOTSTRAP_ADMIN_PASSWORD` must all be present in production. Server must throw on boot if any are missing in `NODE_ENV=production`.
 
 ### Provider Naming Note
 
-The user-supplied plan referenced "Midtrans" but the codebase uses **Duitku** (`routes/payment.js`, `DUITKU_BASE_URL = 'https://api-sandbox.duitku.com/api'`). All user-facing copy and doc updates will say "payment provider" generically, with Duitku as the concrete instance.
+The user-supplied plan referenced "Midtrans" but the codebase uses **Duitku** (`server/routes/payment.js`, `DUITKU_BASE_URL = 'https://api-sandbox.duitku.com/api'`). All user-facing copy and doc updates will say "payment provider" generically, with Duitku as the concrete instance.
 
 ---
 
@@ -57,7 +57,7 @@ The user-supplied plan referenced "Midtrans" but the codebase uses **Duitku** (`
 ### Remaining Assumptions
 
 - The session store migration is acceptable to perform during a single boot (no in-flight sessions at the time of deploy).
-- Duitku will remain the payment provider. If the user later switches to Midtrans, only the API integration in `routes/payment.js` changes; the UX work in this plan is provider-agnostic.
+- Duitku will remain the payment provider. If the user later switches to Midtrans, only the API integration in `server/routes/payment.js` changes; the UX work in this plan is provider-agnostic.
 - The 7-day free tryout data structure (`tryout_attempts` table, added in `server.js:106`) is sufficient to derive "topik lemah" for the result page (deferred). It already records `score`, `correct_count`, `total_questions`, `duration_seconds`, `completed_at`, plus `tryout_id` and `tryout_title`.
 
 ### Research Gaps
@@ -84,13 +84,13 @@ The user-supplied plan referenced "Midtrans" but the codebase uses **Duitku** (`
   - `frame-src 'self' https://*.duitku.com https://api-sandbox.duitku.com https://api-prod.duitku.com`
   - `font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net`
 - Add `report-uri /api/csp-report` and `report-to csp-endpoint` and add a `Reporting-Endpoints` header.
-- Ship in `reportOnly: true` first, watch for 7 days via logs, then flip to `false`. The `reportOnly` flag is wired in `lib/csp.js` (new) so flipping is one config change.
+- Ship in `reportOnly: true` first, watch for 7 days via logs, then flip to `false`. The `reportOnly` flag is wired in `server/security/csp.js` (new) so flipping is one config change.
 
 **Why this ordering:** the current `https:` allowlist effectively disables CSP for XSS. Removing it will break the app if any third-party resource is missed. The report-only phase catches misses without downtime.
 
 #### 1.2 CSRF protection
 
-**Files:** `server.js` (mount middleware), `middleware/csrf.js` (new), `lib/csrf-secret.js` (new), `src/backend-api.jsx` (attach token to state-changing requests), `src/app.jsx` (expose token to globals).
+**Files:** `server.js` (mount middleware), `server/middleware/csrf.js` (new), `server/security/csrf-secret.js` (new), `src/backend-api.jsx` (attach token to state-changing requests), `src/app.jsx` (expose token to globals).
 
 - Add `csrf-csrf@^4.0.0` dependency.
 - Initialize with `getSecret: () => process.env.CSRF_SECRET` and a `cookieName: 'mafiking_csrf'` (NOT `__Host-` — double-submit cookie must be readable by JS).
@@ -128,17 +128,17 @@ The user-supplied plan referenced "Midtrans" but the codebase uses **Duitku** (`
 
 #### 1.5 Audit log foundation (small, lays groundwork for full observability)
 
-**File:** `lib/audit-log.js` (new), `routes/admin.js`, `routes/payment.js`, `routes/quiz.js`, `routes/correction.js` (add call sites).
+**File:** `server/security/audit-log.js` (new), `server/routes/admin.js`, `server/routes/payment.js`, `server/routes/quiz.js`, `server/routes/correction.js` (add call sites).
 
 - Single helper: `audit.log({ action, userId, actor, target, request, result, metadata })`.
 - Append-only log to `logs/audit.log` (NDJSON). File rotation is deferred.
 - `console.info` mirror so dev sees the same line.
 - Initial actions: `admin.user.delete`, `admin.user.reset_password`, `admin.import.questions`, `payment.callback`, `payment.create`, `tryout.submit`, `ai.correction.evaluated`.
-- Extend `npm run check` with `node --check lib/audit-log.js` and a smoke test that asserts each action produces a structured line.
+- Extend `npm run check` with `node --check server/security/audit-log.js` and a smoke test that asserts each action produces a structured line.
 
 ### Phase 2 — Payment UX
 
-**File:** `src/payment.jsx`, `routes/payment.js` (extend `/api/payment/config` with `waitlistUrl`).
+**File:** `src/payment.jsx`, `server/routes/payment.js` (extend `/api/payment/config` with `waitlistUrl`).
 
 - When `gatewayConfig.active === false`, render a top-of-form banner before the email/name inputs:
   - Title: `Pembayaran sedang aktivasi`
@@ -193,15 +193,15 @@ The user-supplied plan referenced "Midtrans" but the codebase uses **Duitku** (`
 | `.env.example` | Add `CSRF_SECRET`, `BOOTSTRAP_ADMIN_USERNAME`, `BOOTSTRAP_ADMIN_PASSWORD`, `WA_CONTACT_NUMBER`, `CSP_REPORT_URI` |
 | `db/schema.sql` | Add `sessions`, `payment_waitlist` tables |
 | `lib/session-store.js` | NEW — custom SQLite session store |
-| `lib/csp.js` | NEW — CSP config factory (so dev/prod can be toggled) |
-| `lib/audit-log.js` | NEW — structured audit log helper |
-| `lib/csrf-secret.js` | NEW — CSRF_SECRET env validation |
-| `middleware/csrf.js` | NEW — CSRF middleware mount (wraps `csrf-csrf`) |
-| `routes/payment.js` | `/api/payment/waitlist`, `/api/payment/config` adds `waitlistUrl` |
-| `routes/admin.js` | Audit log calls on delete/reset/role/grant |
-| `routes/admin-import.js` | Audit log on import |
-| `routes/quiz.js` | Audit log on tryout submit |
-| `routes/correction.js` | Audit log on evaluation |
+| `server/security/csp.js` | NEW — CSP config factory (so dev/prod can be toggled) |
+| `server/security/audit-log.js` | NEW — structured audit log helper |
+| `server/security/csrf-secret.js` | NEW — CSRF_SECRET env validation |
+| `server/middleware/csrf.js` | NEW — CSRF middleware mount (wraps `csrf-csrf`) |
+| `server/routes/payment.js` | `/api/payment/waitlist`, `/api/payment/config` adds `waitlistUrl` |
+| `server/routes/admin.js` | Audit log calls on delete/reset/role/grant |
+| `server/routes/admin-import.js` | Audit log on import |
+| `server/routes/quiz.js` | Audit log on tryout submit |
+| `server/routes/correction.js` | Audit log on evaluation |
 | `MAFIKING.html` | Route-grouped script tags |
 | `src/app.jsx` | Initial route read; dynamic script injection on route change |
 | `src/backend-api.jsx` | Attach `X-CSRF-Token` to non-GET; fetch token on boot |
@@ -259,7 +259,7 @@ Total disk saving if all confirmed: ~9.9 MB.
 ## Migration Strategy
 
 - Session lifetime change forces a re-login for all users on deploy. Acceptable for a small user base; documented in CHANGELOG.
-- CSP starts in `reportOnly: true`. After 7 days, if no false-positive reports, flip to enforced. The flag lives in `lib/csp.js`.
+- CSP starts in `reportOnly: true`. After 7 days, if no false-positive reports, flip to enforced. The flag lives in `server/security/csp.js`.
 - No data migrations; all new tables are additive.
 - The hardcoded `123` admin still exists in the database for users who already logged in. Removing the code does not retroactively remove the row. The user must `DELETE FROM users WHERE username = '123'` manually if desired. This is documented in the README.
 
@@ -268,7 +268,7 @@ Total disk saving if all confirmed: ~9.9 MB.
 - All changes are behind env flags (`NODE_ENV`, `CSP_REPORT_ONLY`, `WAITLIST_ENABLED`).
 - `git revert` of the merge commit restores the previous behavior.
 - New `sessions` table is harmless if unused.
-- `csrf-csrf` can be disabled in dev by setting `CSRF_DISABLED=1` (added in `lib/csrf-secret.js`).
+- `csrf-csrf` can be disabled in dev by setting `CSRF_DISABLED=1` (added in `server/security/csrf-secret.js`).
 
 ---
 
@@ -328,7 +328,7 @@ This plan touches security, session management, payment UX, performance, and obs
 
 When you say "go", I will:
 
-1. Read `lib/performance.js`, `middleware/clerk-auth.js`, and `lib/request-guard.js` to confirm the planned integration points.
+1. Read `server/observability/performance.js`, `server/middleware/clerk-auth.js`, and `server/security/request-guard.js` to confirm the planned integration points.
 2. Implement Phase 1.1 (CSP report-only) first; commit; move to 1.2 (CSRF), 1.3 (session store), 1.4 (admin bootstrap), 1.5 (audit log) in order.
 3. Phase 2 (payment UX).
 4. Phase 3 (performance) — last because it depends on the build pipeline being stable.

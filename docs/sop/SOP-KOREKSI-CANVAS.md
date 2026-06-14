@@ -74,7 +74,7 @@ Validasi awal di frontend:
 
 ## 4. Validasi Server
 
-**File:** `routes/correction.js` → `validateImagePayload()`
+**File:** `server/routes/correction.js` → `validateImagePayload()`
 
 Pemeriksaan yang dilakukan:
 1. Strip prefix `data:image/png;base64,` → ambil konten base64 murni
@@ -120,7 +120,7 @@ Jika siswa juga mengirim teks (bukan canvas), bagian terakhir diganti dengan tek
 
 ## 6. Model & Key Management
 
-**File:** `routes/correction.js` → `getGeminiModels()`, `getGeminiKeys()`
+**File:** `server/routes/correction.js` → `getGeminiModels()`, `getGeminiKeys()`
 
 ### Model
 
@@ -358,7 +358,7 @@ Membuat raport belajar dari riwayat koreksi user. Backend memakai dua window: ma
 }
 ```
 
-Pemilihan item rekomendasi tidak diserahkan bebas ke AI. Backend menggabungkan ringkasan AI dengan output deterministik dari `lib/recommendation-engine.js`, berdasarkan `data/recommendation-catalog.json` dan `docs/purcell-inspired-question-bank.md`. `recommendedQuestions` tetap ada untuk kompatibilitas lama, sedangkan UI profil memakai `recommendedItems` saat tersedia.
+Pemilihan item rekomendasi tidak diserahkan bebas ke AI. Backend menggabungkan ringkasan AI dengan output deterministik dari `server/learning/recommendation-engine.js`, berdasarkan `data/recommendation-catalog.json` dan `docs/purcell-inspired-question-bank.md`. `recommendedQuestions` tetap ada untuk kompatibilitas lama, sedangkan UI profil memakai `recommendedItems` saat tersedia.
 
 Jika tidak ada API key aktif → fallback memakai engine lokal yang menghitung kebutuhan skill dan memilih soal katalog tanpa memanggil AI.
 
