@@ -2835,7 +2835,7 @@ button:focus-visible, a:focus-visible {
 }
 
 .canvas-coach-skip {
-  background: rgba(255, 255, 255, 0.95);
+  background: #fff34d;
   border: 1px solid rgba(226, 232, 240, 0.9);
   border-radius: 999px;
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
@@ -2851,6 +2851,18 @@ button:focus-visible, a:focus-visible {
   z-index: 92;
 }
 
+.canvas-coach-skip:disabled {
+  animation: canvas-coach-continue-fill 2s linear forwards;
+  background-color: rgba(255, 255, 255, 0.72);
+  background-image: linear-gradient(90deg, #fff34d, #fff34d);
+  background-position: left center;
+  background-repeat: no-repeat;
+  background-size: 0% 100%;
+  box-shadow: none;
+  color: rgba(11, 19, 38, 0.42);
+  cursor: wait;
+}
+
 .canvas-coach-skip-board {
   top: 84px;
 }
@@ -2861,6 +2873,15 @@ button:focus-visible, a:focus-visible {
   }
   50% {
     filter: brightness(1.08);
+  }
+}
+
+@keyframes canvas-coach-continue-fill {
+  from {
+    background-size: 0% 100%;
+  }
+  to {
+    background-size: 100% 100%;
   }
 }
 
@@ -3712,6 +3733,11 @@ button:focus-visible, a:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .canvas-coach-skip:disabled {
+    animation: none;
+    background: rgba(255, 243, 77, 0.45);
+  }
+
   .canvas-coach-target,
   .canvas-board-coach-hint {
     animation: none;

@@ -4,6 +4,7 @@ const CANVAS_DEMO_VIDEO_SRC = "/assets/saas_demo_video_popup.mp4";
 const CANVAS_INTRO_LAST_SHOWN_KEY = "mafiking:canvasIntroLastShownAt";
 const CANVAS_INTRO_COOLDOWN_MS = 15 * 60 * 1000;
 const CANVAS_INTRO_PLAYBACK_RATE = 1.75;
+const CANVAS_COACH_CONTINUE_DELAY_MS = 2000;
 
 function slugifyPracticePath(value, fallback = "latihan") {
   const slug = String(value || "")
@@ -84,6 +85,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   const [canvasProcessSlow, setCanvasProcessSlow] = useState(false);
   const [canvasDepsReady, setCanvasDepsReady] = useState(() => areCanvasDependenciesReady());
   const [canvasCoachStep, setCanvasCoachStep] = useState(null);
+  const [canvasCoachContinueReady, setCanvasCoachContinueReady] = useState(false);
 
   // Phase 1.3: Lazy-load KaTeX the first time the Practice page mounts so the
   // marketing/belajar routes do not pay the cost of math CSS+JS.
@@ -105,7 +107,14 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   const canAdminEditProblems = isAdmin && !isMissionPractice;
 
   function dismissCanvasIntro() { setShowCanvasIntro(false); }
-  function skipCanvasCoach() { setCanvasCoachStep(null); }
+  function continueCanvasCoach() {
+    if (!canvasCoachContinueReady) return;
+    if (canvasCoachStep === "mode-button") {
+      switchModeWithCoach("canvas");
+      return;
+    }
+    setCanvasCoachStep(null);
+  }
   function startCanvasCoachAfterIntro() {
     if (context?.disableCanvasMode) {
       dismissCanvasIntro();
@@ -202,6 +211,15 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
   useEffect(() => {
     if (showCanvasIntro) markCanvasIntroShown();
   }, [showCanvasIntro]);
+
+  useEffect(() => {
+    setCanvasCoachContinueReady(false);
+    if (!canvasCoachStep) return undefined;
+    const timer = window.setTimeout(() => {
+      setCanvasCoachContinueReady(true);
+    }, CANVAS_COACH_CONTINUE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [canvasCoachStep]);
 
   useEffect(() => {
     if (!isTimedTryout) return undefined;
@@ -695,6 +713,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
         boardRef={boardRef}
         canvasProcess={canvasProcess}
         canvasProcessSlow={canvasProcessSlow}
+        canvasCoachContinueReady={canvasCoachContinueReady}
         canvasCoachStep={canvasCoachStep}
         error={error}
         focusMode={focusMode}
@@ -716,7 +735,7 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
         onCloseResult={() => setShowResultModal(false)}
         subtopicTitle={session?.subtopic?.title}
         setRoute={setRoute}
-        onSkipCanvasCoach={skipCanvasCoach}
+        onContinueCanvasCoach={continueCanvasCoach}
       />
     );
   }
@@ -768,8 +787,9 @@ const Practice = ({ context, setRoute, isAdmin, isLoggedIn = false, isAuthentica
         showCanvasIntro={showCanvasIntro}
         onDismissCanvasIntro={startCanvasCoachAfterIntro}
         onOpenCanvasFromIntro={openCanvasFromIntro}
+        canvasCoachContinueReady={canvasCoachContinueReady}
         canvasCoachStep={canvasCoachStep}
-        onSkipCanvasCoach={skipCanvasCoach}
+        onContinueCanvasCoach={continueCanvasCoach}
         isCanvasModeDisabled={Boolean(context?.disableCanvasMode)}
         isTimedTryout={isTimedTryout}
         timeExpired={timeExpired}
@@ -1351,7 +1371,7 @@ const ChoiceView = ({
   problems, onProblemSelect, showHint, totalProblems, subtopicTitle, currentChapter, availableChapters,
   onChapterSelect, getChoices, getCorrectChoiceIndex,
   showCanvasIntro, onDismissCanvasIntro, onOpenCanvasFromIntro,
-  canvasCoachStep, onSkipCanvasCoach,
+  canvasCoachContinueReady, canvasCoachStep, onContinueCanvasCoach,
   isCanvasModeDisabled, isTimedTryout, timeExpired, timeLeftSeconds,
 }) => {
   const rawChoices = getChoices(problem);
@@ -1430,8 +1450,8 @@ const ChoiceView = ({
           <div id="canvas-coach-note" className="canvas-coach-note" role="status">
             Tekan Kanvas untuk mulai menulis jawaban.
           </div>
-          <button className="canvas-coach-skip" onClick={onSkipCanvasCoach} type="button">
-            Lewati
+          <button className="canvas-coach-skip" disabled={!canvasCoachContinueReady} onClick={onContinueCanvasCoach} type="button">
+            Lanjutkan
           </button>
         </>
       )}
@@ -1968,11 +1988,11 @@ const CanvasProcessOverlay = ({ phase, slow }) => {
 };
 
 const CanvasView = ({
-  attempt, boardDirty, boardRef, canvasCoachStep, canvasProcess, canvasProcessSlow, error, focusMode, isAdmin, onBackToChoice, onSwitchMode,
+  attempt, boardDirty, boardRef, canvasCoachContinueReady, canvasCoachStep, canvasProcess, canvasProcessSlow, error, focusMode, isAdmin, onBackToChoice, onSwitchMode,
   onBoardDirtyChange, onFocusModeToggle, onMoveProblem, onProblemSelect,
   onReloadSession, onSubmit, problem,
   problemIndex, problems, showResultModal, submitting, totalProblems, onCloseResult,
-  subtopicTitle, setRoute, onSkipCanvasCoach,
+  subtopicTitle, setRoute, onContinueCanvasCoach,
 }) => {
   const AnswerBoard = window.AnswerBoard;
 
@@ -2030,8 +2050,8 @@ const CanvasView = ({
     <div className={`mafiking-practice mafiking-canvas-practice ${focusMode ? "is-focus-mode" : ""}`}>
       <CanvasProcessOverlay phase={canvasProcess} slow={canvasProcessSlow} />
       {showCanvasCoachHint && (
-        <button className="canvas-coach-skip canvas-coach-skip-board" onClick={onSkipCanvasCoach} type="button">
-          Lewati
+        <button className="canvas-coach-skip canvas-coach-skip-board" disabled={!canvasCoachContinueReady} onClick={onContinueCanvasCoach} type="button">
+          Lanjutkan
         </button>
       )}
       {!focusMode ? (
