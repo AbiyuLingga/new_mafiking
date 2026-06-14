@@ -1,7 +1,6 @@
 node_modules/
 dist/
-src/generated-app.jsx
-src/generated-admin.jsx
+src/generated/
 .vite/
 .env
 .env*

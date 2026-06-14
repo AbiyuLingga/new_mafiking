@@ -4,16 +4,16 @@
 // separate chunk. The legacy runtime has already loaded every route as a
 // classic script, so loadRoute resolves from window.* without importing JSX.
 const ROUTE_LOADERS = {
-  lobby: { globalName: "Lobby", load: () => import("./lobby.jsx") },
-  landing: { globalName: "Lobby", load: () => import("./lobby.jsx") },
-  belajar: { globalName: "Belajar", load: () => import("./belajar.jsx") },
-  misi: { globalName: "Misi", load: () => import("./misi.jsx") },
-  tryout: { globalName: "Tryout", load: () => import("./tryout.jsx") },
-  practice: { globalName: "Practice", load: () => import("./practice.jsx") },
-  payment: { globalName: "Payment", load: () => import("./payment.jsx") },
-  profile: { globalName: "Profile", load: () => import("./profile.jsx") },
-  invoices: { globalName: "Invoices", load: () => import("./invoices.jsx") },
-  leaderboard: { globalName: "Leaderboard", load: () => import("./leaderboard.jsx") },
+  lobby: { globalName: "Lobby", load: () => import("../pages/lobby.jsx") },
+  landing: { globalName: "Lobby", load: () => import("../pages/lobby.jsx") },
+  belajar: { globalName: "Belajar", load: () => import("../pages/belajar.jsx") },
+  misi: { globalName: "Misi", load: () => import("../pages/misi.jsx") },
+  tryout: { globalName: "Tryout", load: () => import("../pages/tryout.jsx") },
+  practice: { globalName: "Practice", load: () => import("../features/practice/practice.jsx") },
+  payment: { globalName: "Payment", load: () => import("../pages/payment.jsx") },
+  profile: { globalName: "Profile", load: () => import("../pages/profile.jsx") },
+  invoices: { globalName: "Invoices", load: () => import("../pages/invoices.jsx") },
+  leaderboard: { globalName: "Leaderboard", load: () => import("../pages/leaderboard.jsx") },
 };
 
 const ROUTE_PREFETCHES = {

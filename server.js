@@ -1284,7 +1284,7 @@ app.get('/SOP-DEEPSEEK-IMPORT-SOAL.md', (req, res) => {
 });
 app.get('/tweaks-panel.jsx', (_req, res) => {
   if (canServeLegacySource()) {
-    res.type('text/babel').sendFile(path.join(PROJECT_ROOT, 'tweaks-panel.jsx'));
+    res.type('text/babel').sendFile(path.join(SRC_DIR, 'core', 'tweaks-panel.jsx'));
     return;
   }
   res.status(404).type('text/plain; charset=utf-8').send('Not found');

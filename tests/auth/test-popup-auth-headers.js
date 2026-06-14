@@ -92,11 +92,11 @@ function waitForServer(child, port) {
 }
 
 (async () => {
-  const clerkBridge = fs.readFileSync(path.join(projectRoot, 'src', 'clerk-auth.jsx'), 'utf8');
-  const lobbySource = fs.readFileSync(path.join(projectRoot, 'src', 'lobby.jsx'), 'utf8');
-  const appSource = fs.readFileSync(path.join(projectRoot, 'src', 'app.jsx'), 'utf8');
-  const profileSource = fs.readFileSync(path.join(projectRoot, 'src', 'profile.jsx'), 'utf8');
-  const sharedSource = fs.readFileSync(path.join(projectRoot, 'src', 'shared.jsx'), 'utf8');
+  const clerkBridge = fs.readFileSync(path.join(projectRoot, 'src', 'core', 'clerk-auth.jsx'), 'utf8');
+  const lobbySource = fs.readFileSync(path.join(projectRoot, 'src', 'pages', 'lobby.jsx'), 'utf8');
+  const appSource = fs.readFileSync(path.join(projectRoot, 'src', 'core', 'app.jsx'), 'utf8');
+  const profileSource = fs.readFileSync(path.join(projectRoot, 'src', 'pages', 'profile.jsx'), 'utf8');
+  const sharedSource = fs.readFileSync(path.join(projectRoot, 'src', 'core', 'shared.jsx'), 'utf8');
   assert.match(clerkBridge, /window\.localStorage/, 'popup result fallback must use cross-window localStorage');
   assert.match(clerkBridge, /recoverClosedPopupSession/, 'closed popup must attempt session recovery');
   assert.match(clerkBridge, /readRegisteredServerUser/, 'closed popup recovery must check the shared server session');

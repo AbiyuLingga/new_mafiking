@@ -4,10 +4,10 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
-const routePrefetchPath = path.join(PROJECT_ROOT, 'src', 'route-prefetch.js');
+const routePrefetchPath = path.join(PROJECT_ROOT, 'src', 'core', 'route-prefetch.js');
 const routePrefetchSource = fs.readFileSync(routePrefetchPath, 'utf8');
-const appSource = fs.readFileSync(path.join(PROJECT_ROOT, 'src', 'app.jsx'), 'utf8');
-const sharedSource = fs.readFileSync(path.join(PROJECT_ROOT, 'src', 'shared.jsx'), 'utf8');
+const appSource = fs.readFileSync(path.join(PROJECT_ROOT, 'src', 'core', 'app.jsx'), 'utf8');
+const sharedSource = fs.readFileSync(path.join(PROJECT_ROOT, 'src', 'core', 'shared.jsx'), 'utf8');
 
 function createHarness(connection = {}) {
     const loadCalls = [];
@@ -59,7 +59,7 @@ function createHarness(connection = {}) {
     const runnableSource = routePrefetchSource
         .replace(/export\s+function\s+/g, 'function ')
         .replace(/export\s+const\s+/g, 'const ')
-        .replace(/\(\)\s*=>\s*import\("\.\/([^"]+)\.jsx"\)/g, '() => window.__loadRoute("$1")');
+        .replace(/\(\)\s*=>\s*import\("[^"]*\/([^"/]+)\.jsx"\)/g, '() => window.__loadRoute("$1")');
 
     vm.runInNewContext(runnableSource, context, { filename: routePrefetchPath });
     return {
@@ -77,7 +77,7 @@ async function flushPromises() {
 }
 
 async function run() {
-    assert.match(routePrefetchSource, /misi:\s*\{\s*globalName:\s*"Misi",\s*load:\s*\(\)\s*=>\s*import\("\.\/misi\.jsx"\)/);
+    assert.match(routePrefetchSource, /misi:\s*\{\s*globalName:\s*"Misi",\s*load:\s*\(\)\s*=>\s*import\("\.\.\/pages\/misi\.jsx"\)/);
     assert.doesNotMatch(routePrefetchSource, /@vite-ignore/);
     assert.doesNotMatch(routePrefetchSource, /if\s*\(\/\\\.jsx/);
     assert.match(appSource, /loadAppRoute\("leaderboard",\s*"Leaderboard"/);

@@ -621,7 +621,7 @@ const App = () => {
     }
     let cancelled = false;
     try {
-      const loader = loadAppRoute("lobby", "Lobby", () => import("./lobby.jsx"));
+      const loader = loadAppRoute("lobby", "Lobby", () => import("../pages/lobby.jsx"));
       if (loader && typeof loader.then === "function") {
         loader
           .then((m) => {
@@ -649,7 +649,7 @@ const App = () => {
     if (window.Belajar) { setBelajarComp(() => window.Belajar); return undefined; }
     let cancelled = false;
     try {
-      const p = loadAppRoute("belajar", "Belajar", () => import("./belajar.jsx"));
+      const p = loadAppRoute("belajar", "Belajar", () => import("../pages/belajar.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -665,7 +665,7 @@ const App = () => {
     if (window.Misi) { setMisiComp(() => window.Misi); return undefined; }
     let cancelled = false;
     try {
-      const p = loadAppRoute("misi", "Misi", () => import("./misi.jsx"));
+      const p = loadAppRoute("misi", "Misi", () => import("../pages/misi.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -681,7 +681,7 @@ const App = () => {
     if (window.Tryout) { setTryoutComp(() => window.Tryout); return undefined; }
     let cancelled = false;
     try {
-      const p = loadAppRoute("tryout", "Tryout", () => import("./tryout.jsx"));
+      const p = loadAppRoute("tryout", "Tryout", () => import("../pages/tryout.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -697,7 +697,7 @@ const App = () => {
     if (window.Practice) { setPracticeComp(() => window.Practice); return undefined; }
     let cancelled = false;
     try {
-      const p = loadAppRoute("practice", "Practice", () => import("./practice.jsx"));
+      const p = loadAppRoute("practice", "Practice", () => import("../features/practice/practice.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -713,7 +713,7 @@ const App = () => {
     if (window.Payment) { setPaymentComp(() => window.Payment); return undefined; }
     let cancelled = false;
     try {
-      const p = loadAppRoute("payment", "Payment", () => import("./payment.jsx"));
+      const p = loadAppRoute("payment", "Payment", () => import("../pages/payment.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -729,7 +729,7 @@ const App = () => {
     if (window.Profile) { setProfileComp(() => window.Profile); return undefined; }
     let cancelled = false;
     try {
-      const p = loadAppRoute("profile", "Profile", () => import("./profile.jsx"));
+      const p = loadAppRoute("profile", "Profile", () => import("../pages/profile.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -745,7 +745,7 @@ const App = () => {
     if (window.Leaderboard) { setLeaderboardComp(() => window.Leaderboard); return undefined; }
     let cancelled = false;
     try {
-      const p = loadAppRoute("leaderboard", "Leaderboard", () => import("./leaderboard.jsx"));
+      const p = loadAppRoute("leaderboard", "Leaderboard", () => import("../pages/leaderboard.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -761,7 +761,7 @@ const App = () => {
     if (window.Invoices) { setInvoicesComp(() => window.Invoices); return undefined; }
     let cancelled = false;
     try {
-      const p = loadAppRoute("invoices", "Invoices", () => import("./invoices.jsx"));
+      const p = loadAppRoute("invoices", "Invoices", () => import("../pages/invoices.jsx"));
       if (p && typeof p.then === "function") {
         p.then((m) => {
           if (cancelled) return;
@@ -793,7 +793,7 @@ const App = () => {
     if (route !== "admin" || !isAdminAccount || !isAdmin || window.AdminPage) return undefined;
     let cancelled = false;
     setAdminChunkStatus("loading");
-    const adminChunkPromise = window.__mafikingAdminChunkPromise || import("./generated-admin.jsx");
+    const adminChunkPromise = window.__mafikingAdminChunkPromise || import("../generated/generated-admin.jsx");
     window.__mafikingAdminChunkPromise = adminChunkPromise;
     adminChunkPromise
       .then(() => {

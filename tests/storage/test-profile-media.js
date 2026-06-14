@@ -136,7 +136,7 @@ async function readJson(baseUrl, requestPath) {
     assert.equal(fs.existsSync(reconcileReport.backup), true, 'apply mode must back up the database');
     assert.equal(db.prepare('SELECT avatar_url FROM users WHERE id = 1').get().avatar_url, '');
 
-    const leaderboardSource = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'leaderboard.jsx'), 'utf8');
+    const leaderboardSource = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'pages', 'leaderboard.jsx'), 'utf8');
     assert.match(leaderboardSource, /event\.currentTarget\.remove\(\)/, 'broken images must be removed before showing initials');
 
     console.log('Profile media integration tests passed');

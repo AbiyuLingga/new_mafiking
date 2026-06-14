@@ -61,15 +61,15 @@ async function ensureReactRuntime() {
 
 async function bootstrap() {
   await ensureReactRuntime();
-  await import('./performance-vitals.js');
-  await import('../tweaks-panel.jsx');
-  await import('./clerk-auth.jsx');
-  await import('./math-loader.js');
-  await import('./backend-api.jsx');
-  await import('./shared.jsx');
-  await import('./onboarding.jsx');
-  await import('./route-prefetch.js');
-  await import('./app.jsx');
+  await import('./core/performance-vitals.js');
+  await import('./core/tweaks-panel.jsx');
+  await import('./core/clerk-auth.jsx');
+  await import('./core/math-loader.js');
+  await import('./core/backend-api.jsx');
+  await import('./core/shared.jsx');
+  await import('./core/onboarding.jsx');
+  await import('./core/route-prefetch.js');
+  await import('./core/app.jsx');
 }
 
 function renderBootstrapError(error) {

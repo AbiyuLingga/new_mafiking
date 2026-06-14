@@ -34,7 +34,7 @@ function mafikingResponsiveImagesPlugin() {
 // every top-level `window.Y = ...;` assignment, so the route can be split
 // per Phase 2.1 of the mobile perf plan. The Babel-standalone path is
 // unaffected because that runtime reads the unmodified source file.
-const ROUTE_FILE_RE = /[\\/](src|lobby\.jsx|src\/(lobby|belajar|practice|misi|tryout|leaderboard|payment|profile|invoices|drawing-canvas|answer-board|toolbar))\.jsx$/;
+const ROUTE_FILE_RE = /[\\/]src[\\/](?:pages[\\/](?:lobby|belajar|misi|tryout|leaderboard|payment|profile|invoices)|features[\\/](?:practice[\\/](?:practice|drawing-canvas|answer-board|toolbar)|admin[\\/](?:admin|admin-monitoring)))\.jsx$/;
 function mafikingRouteExportPlugin() {
   return {
     name: 'mafiking-route-export',
