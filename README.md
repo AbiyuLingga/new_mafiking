@@ -8,11 +8,11 @@ The active browser entry point is served by `server.js`. When `dist/index.html` 
 
 - UI shell: copied Mafiking static UI with tweaks panel + full UX improvements.
 - Practice UI: segmented control (Pilgan | Kanvas), Submit always visible in focus mode, ResultModal with wrong-step visualization, XP toast on correct answers.
-- Lobby: `/` always opens the marketing landing page. `Coba Gratis` enters the app at `Belajar -> Try Out`, while login/sign up can redirect back into the intended app route.
+- Lobby: `/` opens marketing for guests and redirects registered sessions to `/belajar`; `/landing` always opens marketing. `Coba Gratis` enters the app at `Belajar -> Try Out`, while login/sign up can redirect back into the intended app route.
 - Onboarding: after first login/sign-up, non-admin users with incomplete profile data get a mandatory centered profile modal for name, optional phone, semester, faculty/major, and subject priorities. It cannot be skipped and saves through `/api/auth/profile-onboarding`. Registered users who already completed onboarding but still have no phone number get a one-time dismissible phone prompt; packages with the `bimbel` access feature require a phone number at checkout.
 - Belajar: mapel selector now includes `Try Out`, `Matematika`, `Fisika`, and `Kimia`. The tabs selector uses a moving underline, with `Try Out` using the ink accent. Free users can start the free 15-question / 30-minute Try Out after a confirmation screen. The Try Out tab also shows the premium Try Out card, but only users with an active package/manual grant can open it. Submitted Try Out sessions reopen as a history/review view with the user's selected answers and the saved solution snapshot.
 - Shared: global toast system (`showToast`), `Skeleton` loading states, `OfflineBanner`.
-- Peringkat: app nav includes a `Peringkat` route with an isolated-scroll leaderboard, static table header, and `Semua` / `Top Mingguan` segmented point views.
+- Peringkat: app nav includes a live `Peringkat` route with overall, weekly, and per-Try-Out rankings from `/api/progress/leaderboard*`.
 - Motion polish: app route transitions, the top-nav active pill, Belajar mapel underline, shared segmented controls, landing reveal effects, testimonial marquee, and mission carousel motion use local CSS/JS motion; no new frontend runtime dependency is required.
 - App backgrounds: Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and their locked access gates share a soft grid/glow page background with per-page color variants from `src/styles.css`.
 - Paket: `Semua Paket` and `Paket Saya` render the same `PackageCard` layout; accessible packages show `Mulai`, while locked packages route through login or open the checkout popup directly. Payment flow is `Beli` → checkout popup → `POST /api/payment/create` → QRIS/manual payment popup in `src/payment.jsx`; `/payment?merchantOrderId=...` reopens the status popup without the global app nav.
@@ -192,7 +192,7 @@ The admin mode toggle is visible only to users whose `role` is `admin`.
 - Local development bypass: in non-production, `/api/admin/*` accepts localhost requests even when the current session is only an auto-guest. Set `LOCAL_ADMIN_MODE=false` to force real admin login again.
 - `Users & Token Monitoring` is implemented by `src/admin-monitoring.jsx` and reads backend data from `/api/admin/dashboard-data`.
 - `Bab & Subtopik` starts with a content selector: `Try Out`, `Matematika`, `Fisika`, or `Kimia`. Try Out opens package CRUD; the subject options open chapter/subtopic CRUD.
-- The public landing no longer exposes inline `Ganti gambar` / `Ganti video` controls to admins. Landing media still loads from `/api/landing-media`, but media replacement is intentionally not part of the current admin UI.
+- The old `Landing Page` tab is removed from Admin Panel. Admin mode can still replace landing media inline through `Ganti gambar` / `Ganti video`, backed by `/api/landing-media` and `/api/admin/landing-media`.
 
 **What changes in admin mode:**
 
@@ -488,12 +488,12 @@ owner), F-10 / F-11 / F-12 LLM-side follow-ups.
 - Preserve the copied UI unless a task explicitly asks for UI changes.
 - Do not convert route/component `src/*.jsx` files to normal module-import architecture casually. The built path uses `src/main.jsx` as a compatibility bootstrap, while the source files still rely on globals and legacy load order.
 - **Do not use IIFE `(function(){...})()`** in `src/*.jsx` files — variables inside are scoped and invisible to other scripts. Define components at top level.
-- Clerk auth is integrated through a static-Babel bridge in `src/clerk-auth.jsx`, not `@clerk/react` components. The CLI may install `@clerk/react`, but the live `MAFIKING.html` runtime uses Clerk's browser scripts dynamically.
+- Clerk auth is integrated through the browser-global bridge in `src/clerk-auth.jsx`, not `@clerk/react` components. Both the Vite-built app and legacy fallback load Clerk's browser scripts dynamically.
 - `src/app.jsx` owns route state, tweaks defaults, and `isAdmin` toggle.
 - `src/app.jsx` intentionally does not render the global `Nav` while `route === "practice"` or while `/payment?merchantOrderId=...` is showing payment status.
 - `src/shared.jsx` owns the sliding top-nav active pill and reusable `SlidingSegmented` control used by Paket and Peringkat.
 - `src/styles.css` owns the shared `.app-page-bg` grid/glow background variants used by Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and locked access gates.
-- `src/leaderboard.jsx` is currently frontend-static data only; use backend leaderboard APIs before treating it as live ranking data.
+- `src/leaderboard.jsx` reads live overall, weekly, and per-Try-Out ranking data from `/api/progress/leaderboard*`.
 - `src/belajar.jsx` loads chapter data from `/api/quiz/init` on mount and maps DB rows to display cards. `window.chapterData` is set here for use by practice.jsx. Static fallback is used while loading.
 - Admin mode in `belajar.jsx` shows `AdminBelajarView` — API-wired CRUD that persists to DB. Admin mode in `practice.jsx` enables inline click-to-edit on question cards and a compact admin question control for add/delete/reorder; `AdminPracticeBar` (separate bar) has been removed.
 - `server.js` applies SQLite schema on startup and includes inline migrations for older local DBs.

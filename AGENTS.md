@@ -10,21 +10,21 @@ This project is `new_mafiking`, located at:
 /home/abiyulinx/computing/king/new_mafiking
 ```
 
-It is a copied Mafiking web UI with added backend features. The active runtime is:
+It is a copied Mafiking web UI with added backend features. The production runtime is:
 
 ```text
-Express server -> MAFIKING.html -> React UMD + Babel runtime JSX files
+Express server -> dist/index.html -> Vite-built React route chunks
 ```
 
-Do not assume this is a conventional bundled React/Vite app. Vite is present as a build/check tool and `index.html` mirror, but `server.js` serves `MAFIKING.html` for the real app.
+The source still uses browser globals for compatibility. In non-production, `MAFIKING.html` remains a Babel-standalone fallback when `dist/index.html` is unavailable.
 
 ## Highest-Priority Local Rules
 
 1. Preserve the UI unless the user explicitly asks for UI changes.
 2. Treat `MAFIKING.html`, `src/styles.css`, and the copied static UI files as reference-sensitive.
 3. Add backend/features surgically around the current UI instead of redesigning pages.
-4. Keep the frontend load model as globals loaded by `MAFIKING.html` unless the task explicitly asks for an architecture migration.
-5. Verify runtime behavior through the Express server, not only through Vite build output.
+4. Preserve the shared `window.*` component contract across both the Vite build and legacy fallback unless the task explicitly asks for an architecture migration.
+5. Run `npm run build`, then verify runtime behavior through the Express server.
 6. Do not delete or reset local SQLite data unless the user explicitly asks.
 7. Never revert user changes. If the worktree is dirty, inspect and work around unrelated edits.
 
@@ -73,8 +73,9 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 ## Runtime Facts
 
 - `server.js` binds to `0.0.0.0` and defaults to `PORT=3000`.
-- `/`, `/index.html`, `/MAFIKING.html`, and non-API fallbacks serve `MAFIKING.html`.
-- `MAFIKING.html` loads Tailwind CDN, React UMD, ReactDOM UMD, Babel standalone, then `type="text/babel"` scripts.
+- `server.js` serves `dist/index.html` for app routes when the built client exists. `MAFIKING.html` is a non-production fallback.
+- The Vite entry is `index.html -> src/main.jsx`; route chunks load through `src/route-prefetch.js`.
+- The fallback `MAFIKING.html` loads Tailwind CDN, React UMD, ReactDOM UMD, Babel standalone, then `type="text/babel"` scripts.
 - `src/*.jsx` files use global symbols and assign components to `window.*`.
 - `src/app.jsx` owns route state and tweaks defaults.
 - `src/app.jsx` must preserve `/payment?merchantOrderId=...` when syncing route state to browser history. Do not normalize payment status URLs down to `/payment`, or refresh/deep-link QRIS status will break.
@@ -85,16 +86,16 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - `src/onboarding.jsx` owns the mandatory non-admin profile-completion modal. It must load after `src/shared.jsx` and before `src/app.jsx`.
 - `middleware/clerk-auth.js` maps verified Clerk Bearer tokens to local SQLite users before API routes run.
 - `lib/clerk-user-sync.js` owns Clerk-to-local linking and guest-to-Google merge behavior.
-- `/` intentionally opens the public landing page for guests and logged-in users. The Mafiking logo returns to that landing page from app routes.
+- `/` opens the public landing for guests and redirects registered sessions to `/belajar`; `/landing` is the explicit marketing route for logged-in users.
 - `Coba Gratis` routes into `Belajar` with the `Try Out` section selected.
 - The `Belajar` mapel tabs use a measured sliding underline; keep `Try Out` on the ink underline color (`rgb(11 19 38)`) and subject tabs on their mapel accent colors.
 - The app top nav labels are `Beranda`, `Misi Harian`, `Paket`, and `Peringkat`; `Beranda` maps to the `belajar` route, `Paket` maps to `tryout`, and `Peringkat` maps to `leaderboard`.
 - `Belajar` sections are `Try Out`, `Matematika`, `Fisika`, and `Kimia`. The `Try Out` section is the free entry point.
-- `src/leaderboard.jsx` owns the current Peringkat page. It is frontend-static data for now and uses an inner-scroll table body; do not present it as live backend ranking until it is wired to `/api/progress/leaderboard`.
+- `src/leaderboard.jsx` owns the live Peringkat page and reads overall, weekly, and per-Try-Out rankings from `/api/progress/leaderboard*`.
 - `src/shared.jsx` owns the sliding top-nav active pill and reusable `SlidingSegmented` control. Keep those globals loaded before pages that use them.
 - `src/admin.jsx` owns the admin page. The monitoring tab is implemented by `src/admin-monitoring.jsx`, which must load before `src/admin.jsx` in `MAFIKING.html`.
 - `src/styles.css` owns shared `.app-page-bg` variants for Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and locked access gates. Keep those as background layers; do not change page flow just to alter glow colors.
-- Landing media is stored in `landing_media` and served through `GET /api/landing-media`. The public landing should not expose inline `Ganti gambar` / `Ganti video` controls to admins.
+- Landing media is stored in `landing_media` and served through `GET /api/landing-media`. Admin mode can replace media inline through `/api/admin/landing-media`; do not restore the removed Admin Panel `Landing Page` tab unless requested.
 - Profile avatar uploads are resized in the browser to 256x256 WebP (PNG fallback) before upload. `profile-media/` is runtime state protected from `deploy.sh --delete`; do not remove that protection.
 - Treat `db/database.sqlite` and `profile-media/` as a recovery pair. Run `npm run audit:profile-media` before using `-- --apply`; apply mode backs up the DB and clears only local avatar references whose files are missing.
 - The startup `Cek Payment` package seed may create the package or repair its missing `tryout_id`, but must not overwrite admin-managed fields such as `price`.
@@ -109,8 +110,8 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 
 Do:
 
-- Keep route names consistent with `src/app.jsx`: `lobby`, `belajar`, `misi`, `tryout`, `leaderboard`, `admin`, `profile`, `practice`.
-- Keep script order in `MAFIKING.html` valid when adding frontend files.
+- Keep route names consistent with `src/app.jsx`: `lobby`, `belajar`, `misi`, `tryout`, `leaderboard`, `admin`, `profile`, `invoices`, `payment`, `practice`.
+- Keep Vite route-loader registration and fallback script order valid when adding frontend files.
 - Export browser components/functions on `window` when they must be used by later scripts.
 - Use existing utility classes, card styles, icon globals, and layout patterns.
 - Keep the `practice` route free of the global top navigation unless the user explicitly asks to restore it.
@@ -125,8 +126,8 @@ Do:
 
 Do not:
 
-- Introduce module imports inside static `src/*.jsx` files without changing the whole load architecture.
-- Replace `MAFIKING.html` with the Vite bundle by accident.
+- Break the shared global exports that let the same route components work in Vite and the Babel fallback.
+- Add route components to the initial Vite shell when they can remain dynamically loaded.
 - Redesign the lobby, belajar cards, mission cards, profile, or practice UI unless requested.
 - Add large instructional text inside the UI just to explain features.
 - Add new dependencies for simple static frontend behavior.
@@ -179,7 +180,13 @@ routes/quiz.js
 routes/progress.js
 routes/correction.js
 routes/admin.js
+routes/admin-import.js
+routes/admin-payments.js
 routes/payment.js
+routes/tryouts.js
+routes/internal.js
+routes/auth-popup.js
+routes/webhooks.js
 ```
 
 Rules:
@@ -233,7 +240,7 @@ Rules:
 - `server.js` creates a guest user for API requests that lack a session, except `/api/health`, `/api/config/clerk`, `/api/payment/callback`, `/api/landing-media`, and `/api/webhooks/clerk`.
 - Admin routes require both `isAuthenticated` and `isAdmin`.
 - Admin monitoring/users uses `GET /api/admin/dashboard-data`, `POST /api/admin/users/:id/reset-password`, `POST /api/admin/users/:id/grant-access`, `POST /api/admin/users/:id/role`, and `DELETE /api/admin/users/:id`. Keep those endpoints admin-only, validate user IDs/access payloads, and never allow deleting the current admin account from the panel.
-- Landing media is read by the public landing through `GET /api/landing-media`; do not re-enable admin-facing landing media replacement unless the user explicitly asks for that workflow again.
+- Landing media is read through `GET /api/landing-media` and admin-only inline replacement posts to `/api/admin/landing-media`; keep the removed Admin Panel `Landing Page` tab out unless requested.
 - Admin content management starts with a `Try Out` / `Matematika` / `Fisika` / `Kimia` selector in the `Bab & Subtopik` tab. `Try Out` opens package CRUD; subject options open chapter/subtopic CRUD filtered by `chapters.mapel`.
 - The admin shield is frontend-visible only for `currentUser.role === "admin"`; do not expose it to every user. Admin mode adds an `Admin Panel` button to the top nav, and that button navigates to the dedicated `admin` route/page.
 - Logout and return-to-landing confirmation dialogs are centered modals with Mafiking yellow/ink styling, not browser confirms or blue theme popups.
@@ -246,7 +253,7 @@ Rules:
 
 ## Performance & Quality Invariants (mobile perf plan, applied 2026-06-12)
 
-These invariants prevent mobile performance regressions and ensure image / KaTeX / Clerk / auth / route-splitting quality is preserved. Measured baseline 2026-06-12 (Lighthouse 76/77, LCP 5,16s/5,22s, transfer 7,43MB landing / 750KB `/belajar`, JS ~175KB gzip). Post-Phase-1 bundle: 171 KB initial JS gzip. **Post-Phase-2: 24.24 KB initial JS gzip** (main entry + vendor-react) — 86% reduction vs baseline.
+These invariants prevent mobile performance regressions and ensure image / KaTeX / Clerk / auth / route-splitting quality is preserved. Measured baseline 2026-06-12 (Lighthouse 76/77, LCP 5,16s/5,22s, transfer 7,43MB landing / 750KB `/belajar`, JS ~175KB gzip). The current performance contract reports a 1.8 KB gzip initial JS entry with 9 route chunks.
 
 ### Image Optimization
 - Hero images (above-fold, LCP candidates): AVIF q=70, WebP q=85.
@@ -276,7 +283,7 @@ These invariants prevent mobile performance regressions and ensure image / KaTeX
 - Mentor image and landing image: `<picture>` with `loading="lazy"` + responsive srcSet. The PNG fallback stays so legacy browsers and Safari < 16 still render.
 
 ### Performance Budgets (CI gate)
-- Bundle initial: ≤175KB gzip after Phase 1, ≤120KB gzip after Phase 2 incremental splitting. **Current: 24.24 KB gz** (main entry + vendor-react) — well under budget.
+- Bundle initial: ≤175KB gzip after Phase 1, ≤120KB gzip after Phase 2 incremental splitting. **Current contract result: 1.8 KB gzip initial JS entry with 9 route chunks** — well under budget.
 - LCP element: ≤100KB transferred for mobile viewport (mentor image AVIF 640w = 33KB passes).
 - Total page weight (landing): ≤1.2MB.
 - Main thread TBT: ≤100ms median.

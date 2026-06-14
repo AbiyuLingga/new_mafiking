@@ -1,6 +1,6 @@
 ---
 name: architecture-mafiking
-description: "MAFIKING technical architecture - runtime, load order, globals, current constraints"
+description: "MAFIKING technical architecture - runtime, route loading, backend modules, and current constraints"
 metadata:
   node_type: memory
   type: project
@@ -12,231 +12,163 @@ metadata:
 ## Runtime
 
 - Backend: Express 5 + `better-sqlite3`, default port `3000`.
-- Frontend: `MAFIKING.html` loads React 18 UMD, ReactDOM UMD, Babel standalone, then static `src/*.jsx`.
-- This is not a conventional Vite SPA at runtime. `index.html` and Vite are build/check mirrors.
-- `npm run dev` runs `node --watch server.js`.
-- `npm run check` runs Node syntax checks plus focused test scripts.
-
-## Script Load Order
-
-Current `MAFIKING.html` script order:
+- Production frontend: `server.js` serves Vite-built `dist/index.html`.
+- Non-production fallback: `MAFIKING.html` loads React UMD, Babel standalone, and global JSX files when no built client exists.
+- Source components preserve `window.*` exports so Vite route chunks and the fallback share one component contract.
+- `npm run build` is the frontend validation gate; `npm run check` runs syntax, contract, and security checks.
 
 ```text
-tweaks-panel.jsx
-src/clerk-auth.jsx
-src/backend-api.jsx
-src/shared.jsx
-src/lobby.jsx
-src/belajar.jsx
-src/profile.jsx
-src/toolbar.jsx
-src/drawing-canvas.jsx
-src/answer-board.jsx
-src/practice.jsx
-src/misi.jsx
-src/tryout.jsx
-src/payment.jsx
-src/admin.jsx
-src/app.jsx
+Browser
+  -> Express server.js
+  -> dist/index.html
+  -> src/main.jsx shell
+  -> dynamic route chunk via src/route-prefetch.js
+  -> same-origin /api/*
+  -> SQLite and optional external providers
 ```
 
-`src/app.jsx` mounts the root and must stay last. There is no `src/admin-monitoring.jsx` file in the current tree; admin monitoring UI must either live in `src/admin.jsx` or a new script must be added before `src/admin.jsx`.
+## Frontend Shell And Routes
 
-## Global Scope Pattern
+`src/main.jsx` loads the small shared shell. `src/app.jsx` owns route state and requests route chunks through `window.MafikingRoutePrefetch.loadRoute()`. The loader caches import promises and applies network-aware prefetch rules.
 
-- Babel standalone evaluates the JSX files in browser global scope.
-- Do not wrap files in IIFEs if later scripts need their components.
-- Use `window.*` for components that must be consumed by later files.
-- `src/backend-api.jsx` exposes `MafikingAPI`.
-- `src/clerk-auth.jsx` exposes `window.MafikingClerk`.
-- `src/shared.jsx` exposes shared UI helpers such as `Icon`, `Skeleton`, `showToast`, `ToastContainer`, and `OfflineBanner`.
-- `src/belajar.jsx` exposes `window.chapterData` for practice route chapter switching.
-
-## Route Model
-
-`src/app.jsx` owns route state:
+Current route names:
 
 ```text
 lobby
 belajar
 misi
 tryout
+leaderboard
 admin
 profile
-practice
+invoices
 payment
+practice
 ```
 
-Important route behavior:
+Important route contracts:
 
-- `/` renders the public landing page for guests and logged-in users.
-- Mafiking logo returns to the public landing page.
-- Landing `Coba Gratis` routes to `Belajar -> Try Out`.
-- Global app nav is hidden on `lobby`, `practice`, and `/payment?merchantOrderId=...`.
-- App nav labels are `Beranda`, `Misi Harian`, and `Paket`; `Beranda` maps to `belajar`, `Paket` maps to `tryout`.
-- Payment package selection uses the app shell, but payment status is a popup overlay rendered through a React portal into `document.body`. `appStateToPath()` must preserve `merchantOrderId` in `/payment?merchantOrderId=...` so deep links and refreshes reopen the order status instead of falling back to package selection.
-- Admin role users see the shield. Turning it on adds an `Admin Panel` nav entry that routes to `admin`.
-- Logout and return-to-landing confirmations are centered modals using the Mafiking yellow/ink theme.
-- Auth supports both local username/password and Clerk Google sign-in. Clerk browser scripts are loaded dynamically from the publishable key, and backend requests include a Clerk Bearer token when signed in.
+- Registered sessions opening `/` are redirected server-side to `/belajar`.
+- `/landing` always opens marketing, including for logged-in users.
+- Normal purchases open `PaymentCheckoutModal`; `/payment?merchantOrderId=...` reopens status.
+- Practice and full-screen Try Out own their navigation chrome.
+- `invoices` is authenticated and maps back to Profil in the top-nav state.
+- Free Try Out is 15 questions / 30 minutes. Premium duration comes from package data.
 
-## Landing Page
+## Frontend Ownership
 
-`src/lobby.jsx` owns:
+| File | Responsibility |
+| --- | --- |
+| `src/app.jsx` | Routing, auth state, onboarding/phone prompts, dynamic route rendering. |
+| `src/shared.jsx` | Navigation, shared UI, icons, toasts. |
+| `src/backend-api.jsx` | Same-origin API and Clerk/CSRF headers. |
+| `src/clerk-auth.jsx` | Lazy Clerk browser bridge and popup auth flow. |
+| `src/route-prefetch.js` | Cached route imports and mobile intent prefetch. |
+| `src/belajar.jsx` | Subject/Try Out entry cards. |
+| `src/tryout.jsx` | Timed session, autosave, submit, and review. |
+| `src/practice.jsx` | Multiple-choice/canvas practice. |
+| `src/leaderboard.jsx` | Live overall, weekly, and Try-Out rankings. |
+| `src/profile.jsx` | Profile editing, avatar upload, stats, recommendations. |
+| `src/payment.jsx` | Checkout, QRIS/manual status, SSE, polling fallback. |
+| `src/invoices.jsx` | Current-user transaction history and print view. |
+| `src/admin.jsx` | Admin content, users, payments, imports, and tabs. |
+| `src/admin-monitoring.jsx` | Monitoring panel consumed by `src/admin.jsx`. |
 
-- Google AI Studio-inspired marketing landing.
-- Scroll and click reveal animations implemented with local CSS/JS, not a bundled Framer Motion dependency.
-- Login and sign-up shells.
-- Clerk Google sign-in/sign-up controls inside the auth shell.
-- Inline admin media editing when admin mode is active.
+Landing media is read through `GET /api/landing-media`. Admin mode can replace media inline through `/api/admin/landing-media`, while the old `Landing Page` Admin Panel tab remains removed.
 
-Landing media flow:
+## Backend Modules
+
+Mounted route modules:
 
 ```text
-GET /api/landing-media
-  -> reads landing_media slots
-Admin Landing Page tab or inline edit
-  -> POST /api/admin/landing-media
-  -> stores uploaded file under assets/landing/
+routes/auth.js
+routes/auth-popup.js
+routes/webhooks.js
+routes/quiz.js
+routes/tryouts.js
+routes/progress.js
+routes/correction.js
+routes/payment.js
+routes/admin.js
+routes/admin-import.js
+routes/admin-payments.js
+routes/internal.js
 ```
 
-The video demo section intentionally has no background grid after the latest UI correction.
+Key backend boundaries:
 
-## Belajar And Practice
+- `middleware/clerk-auth.js` verifies Clerk Bearer sessions and maps them to local users.
+- `middleware/auth.js` and `middleware/admin.js` enforce registered/admin access.
+- `lib/security-headers.js`, `lib/csp.js`, `lib/csrf-protection.js`, and `lib/request-guard.js` own HTTP hardening.
+- `lib/sqlite-session-store.js` persists sessions.
+- `lib/profile-media.js` validates profile files; `scripts/reconcile-profile-media.js` audits missing files.
+- `lib/recommendation-engine.js` chooses deterministic catalog-backed recommendations.
+- `lib/multi-provider-pool.js` coordinates Gemini, Groq, and optional OpenRouter for canvas evaluation.
 
-`src/belajar.jsx` has four sections:
+## Payment Architecture
+
+QRIS is the default provider; Duitku remains legacy/fallback.
 
 ```text
-Try Out
-Matematika
-Fisika
-Kimia
+create/reopen order
+  -> QRIS/manual status modal
+  -> SSE /api/payment/stream/:merchantOrderId
+  -> polling fallback
+  -> reconciler markPaymentPaid()
+  -> access grant + email + audit log
 ```
 
-- The free Try Out entry opens a confirmation screen before the 15-question / 15-minute session.
-- Free Try Out review paths outside the session and protected subject chapters route through login/sign-up.
-- The mapel tab underline slides between sections; `Try Out` uses the ink accent while subject tabs use their mapel accent colors.
-- The heading copy is split/highlighted as `Selamat datang` plus `pejuang IP 4.0`.
-- Unsupported subject chapters show an empty state instead of falling back to Integral.
+Payment v3 adds:
 
-`src/practice.jsx` starts in multiple-choice mode and supports optional canvas mode through `Try Canvas`.
+- pending-order reuse and unique QRIS suffix allocation;
+- signed reconciliation endpoints and collector ingestion;
+- confidence matching and ambiguous-payment queue;
+- admin manual/bulk resolution and audit history;
+- payment broadcaster SSE with connection limits;
+- self-healing collector heartbeat/circuit breaker;
+- current-user invoices with printable detail.
 
 ## Admin Architecture
 
-Admin is role-gated:
-
-- Frontend shield visibility depends on `currentUser.role === "admin"`.
-- Backend admin routes require `isAuthenticated` and `isAdmin`.
-- Local development still has a localhost admin API bypass unless `LOCAL_ADMIN_MODE=false`.
-
-Admin page tabs in `src/admin.jsx`:
+Admin is role-gated in both frontend and backend. Current tabs:
 
 ```text
 Bab & Subtopik
 Soal
 Import AI
-Landing Page
 Pengguna
+Pembayaran
 Users & Token Monitoring
 ```
 
-Current implementation notes:
+The `Pembayaran` tab uses `/api/admin/payments/*` for pending, ambiguous, manual, bulk, audit, email-resend, and metrics workflows. Content CRUD and Try Out management remain under `/api/admin/*`.
 
-- `Bab & Subtopik` starts with a content selector: `Try Out`, `Matematika`, `Fisika`, `Kimia`.
-- `Try Out` uses `/api/admin/tryout-packages`.
-- Subject options use chapter/subtopic/problem CRUD.
-- `Landing Page` manages promo image, feature images, and demo video media slots.
-- `Pengguna` manages users and roles.
-- `Users & Token Monitoring` has backend data at `/api/admin/dashboard-data`. `src/admin-monitoring.jsx` exports `window.AdminMonitoringPanel` and is loaded before `src/admin.jsx` in `MAFIKING.html`.
+## Database And Runtime State
 
-## Backend Routes
-
-Core route modules:
+Primary source/runtime files:
 
 ```text
-routes/auth.js
-routes/quiz.js
-routes/progress.js
-routes/correction.js
-routes/admin.js
-routes/payment.js
-routes/admin-import.js
+db/schema.sql
+db/database.sqlite
+db/question-bank.json
+db/tryout-bank.json
+db/daily-missions.json
+profile-media/
 ```
 
-Important admin endpoints:
+Important state groups:
 
-```text
-GET/POST/PUT/DELETE /api/admin/chapters
-GET/POST/PUT/DELETE /api/admin/subtopics
-GET/POST/PUT/DELETE /api/admin/problems
-GET/POST/PUT/DELETE /api/admin/problems/:id/steps
-GET/POST/DELETE     /api/admin/landing-media
-GET/POST/PUT/DELETE /api/admin/tryout-packages
-GET                 /api/admin/users
-PUT                 /api/admin/users/:id/password
-GET                 /api/admin/dashboard-data
-POST                /api/admin/users/:id/reset-password
-POST                /api/admin/users/:id/grant-access
-POST                /api/admin/users/:id/role
-POST                /api/admin/import/draft
-POST                /api/admin/import/commit
-```
+- User/auth/profile: `users`, sessions, verification tokens, onboarding fields, `avatar_url`.
+- Learning: chapters, subtopics, problems, attempts, Try Out sessions/attempts, missions.
+- AI/reporting: correction attempts, token usage, recommendation evidence, latency.
+- Payment: payments, grants, suffix locks, reconciliation/audit/ambiguous rows, collector state.
 
-Public frontend data endpoints:
+`db/database.sqlite` and `profile-media/` are one recovery pair. Deploy and backup workflows preserve both.
 
-```text
-GET /api/config/clerk
-GET /api/landing-media
-GET /api/tryout-packages
-```
+## Current Constraints
 
-Clerk webhook endpoint:
-
-```text
-POST /api/webhooks/clerk
-```
-
-The webhook uses raw request body parsing and `svix` signature verification with `CLERK_WEBHOOK_SIGNING_SECRET`.
-
-## Database
-
-Runtime DB: `db/database.sqlite`.
-
-Schema source: `db/schema.sql`.
-
-Important tables:
-
-```text
-users
-chapters
-subtopics
-problems
-problem_steps
-payments
-user_progress
-correction_attempts
-practice_attempts
-profile_ai_refreshes
-tryout_packages
-user_access_grants
-ai_token_usage
-landing_media
-```
-
-Clerk integration adds `users.clerk_id`, `users.email`, and `users.auth_provider`. Clerk users are linked by `clerk_id` first, then by email/username match, so existing local progress can be preserved. First-time Google users can complete onboarding through `POST /api/auth/clerk-onboard`, which also supports merging auto-guest data into the linked account.
-
-`server.js` executes `db/schema.sql` on startup and applies compatibility migrations for older local DBs.
-
-## AI And Recommendations
-
-- Canvas OCR/evaluation uses Gemini 3.1 Flash Lite with key fallback from `GEMINI_KEY_1` through `GEMINI_KEY_20`.
-- Successful AI usage is logged in `ai_token_usage` through `lib/log-token-usage.js`; logging must not break user requests.
-- Profile recommendations are deterministic and catalog-backed through `lib/recommendation-engine.js`.
-- Gemma 4 31B writes profile narrative text by default, but should not select final recommendation refs.
-
-## Known Constraints
-
-- Browser runtime still uses Babel in the browser and CDN UMD scripts (legacy fallback path).
-- Vite built path (`dist/index.html`) is the production runtime when `dist/` exists.
-- Only Integral has real imported question data today.
-- Monitoring quota values are estimates from configured limits, not live Google quota reads.
-- QRIS is the default payment provider. Duitku remains legacy/fallback code and uses the sandbox base URL unless deliberately configured.
+- Browser globals remain part of the frontend compatibility contract.
+- `MAFIKING.html` must remain functional as a development fallback, but it is not the production entry when `dist/` exists.
+- Static chapter cards still outnumber real imported practice problems.
+- There is no versioned migration framework; startup applies schema and compatibility migrations.
+- Some security/posture documents are dated snapshots and should not be rewritten as current-state guides.

@@ -129,7 +129,7 @@ src/app.jsx
 
 ## Frontend Architecture
 
-The frontend is not module-based. Components are defined in browser global scope and exported as needed through `window.*`.
+The production frontend is Vite-built, while components preserve browser-global exports through `window.*` so the same source remains compatible with the legacy fallback.
 
 ### Main Files
 
@@ -217,10 +217,10 @@ Payment status URLs preserve their order query:
 
 ### Public Landing And Access Gates
 
-- `/` always renders the public landing page, even when the user already has a logged-in session.
+- `/` renders marketing for guests and redirects registered sessions to `/belajar`; `/landing` always renders marketing.
 - Clicking the Mafiking logo from app routes returns to the public landing.
 - The landing `Coba Gratis` CTA routes to `Belajar -> Try Out`.
-- Landing media slots are loaded from `GET /api/landing-media`; the public landing no longer exposes inline media replacement controls to admins.
+- Landing media slots are loaded from `GET /api/landing-media`; admin mode can replace them inline through `/api/admin/landing-media`, while the old Admin Panel `Landing Page` tab remains removed.
 - The landing page uses local reveal/pop animations in `src/lobby.jsx` and `src/styles.css`; it does not rely on a bundled Framer Motion runtime in this static-Babel app.
 - The demo video section intentionally has no grid background after the latest landing UI correction.
 - Login/sign-up screens expose the local email/password flow and Clerk Google auth. New local email/password accounts must verify their email via a single-use verification link before login is allowed. Clerk browser scripts are loaded dynamically by `src/clerk-auth.jsx`.
@@ -228,7 +228,7 @@ Payment status URLs preserve their order query:
 - The top app nav uses `Beranda` for `belajar`, `Misi Harian` for `misi`, `Paket` for `tryout`, and `Peringkat` for `leaderboard`; there is no separate `Belajar` nav link.
 - The app route shell uses a small vertical fade/slide transition. `src/shared.jsx` measures nav and segmented-control buttons so the active oval moves instead of teleporting. `src/belajar.jsx` separately measures the active mapel tab so its underline slides between `Try Out`, `Matematika`, `Fisika`, and `Kimia`; the `Try Out` underline uses the ink accent.
 - Belajar, Misi Harian, Paket, Peringkat, Profil, Admin Panel, and locked access gates use shared `.app-page-bg` variants from `src/styles.css` for the soft grid/glow background while keeping page-specific content/layout components unchanged.
-- The leaderboard is currently frontend-static display data; `routes/progress.js` already exposes leaderboard APIs but this first page does not consume them yet.
+- The leaderboard consumes overall, weekly, and per-Try-Out ranking APIs from `routes/progress.js`.
 - Logged-out users can open the free Try Out confirmation and start the free 15-question / 30-minute session.
 - Free Try Out review paths outside the session and protected subject chapters route through login/sign-up with an auth redirect back to the intended route.
 - Try Out packages are backed by `tryout_packages.tryout_id` plus per-package rows in `tryout_questions` and `tryout_question_steps`. The Belajar Try Out tab shows both free and premium entries; premium opens only when admin role, paid product title, subscription title, or manual `user_access_grants` value matches the package. The exam route loads `/api/tryouts/:tryoutId/full`; after a registered user submits, `/api/progress/tryout-attempts` stores answers and a review snapshot. Reopening the same Try Out reads `/api/progress/tryout-attempts/latest` and shows history/review instead of a timer. Admin reset deletes only the specific `tryout_attempts` row so the user can retake that Try Out.

@@ -8,15 +8,16 @@ hardening + Nevacloud VPS hardening).
 **Status:** Phase 4 — applied to production VPS at `202.155.94.210` (mafiking.com).
 **Branch:** `main` (merged from `security/p4-vps-hardening`, commit `7b90be2`).
 **Target posture:** OWASP ASVS Level 2.
-**Last verified:** 2026-06-03 — `npm run check` green (22 contract tests + 8
-scanners); VPS Phase 4 applied via `ops/apply-all.sh`; see
+**Last verified:** 2026-06-14 — `npm run check` green, including 130/130 shadow
+routes and 35/35 CSRF coverage; VPS Phase 4 was applied via `ops/apply-all.sh`; see
 `docs/security/phase4-summary-2026-06-03.txt` for the full VPS post-state.
 
 ## Runtime identity
 
 - Server: Express, binds `0.0.0.0:PORT` (default 3000).
-- Static app: `MAFIKING.html` + React UMD + Babel runtime + `src/*.jsx` (per
-  AGENTS.md rule 4 — do not migrate the load model without an explicit ask).
+- Static app: production serves the Vite-built `dist/index.html`; the source
+  keeps a browser-global component contract, and `MAFIKING.html` remains a
+  non-production Babel-standalone fallback.
 - Auth: Clerk Bearer (verified with `@clerk/express`) plus a server-side
   `express-session` for first-time/guest users. Guest users are created on
   demand for any `/api/*` request that lacks a session, except the public
@@ -78,9 +79,9 @@ scanners); VPS Phase 4 applied via `ops/apply-all.sh`; see
   - `frame-src 'self' + ClerkFrontendApi`
   - `worker-src 'self' blob:`
   - `base-uri 'self'`, `form-action 'self'`
-- `'unsafe-inline'` is intentional for now (Tailwind CDN runtime styles and
-  Babel inline `<script type="text/babel">`). A nonce migration is tracked
-  as a follow-up; it requires changing the static-Babel load model.
+- `'unsafe-inline'` remains for compatibility with current inline styles and
+  the non-production Babel fallback. A nonce migration is tracked as a
+  follow-up.
 - Report endpoint: `reportingEndpoints: { csp: '/api/csp-report' }` and a
   matching `report-uri` / `report-to` directive. Reports are written to
   `logs/csp-reports.log` as NDJSON.
@@ -119,26 +120,30 @@ isolate origins; COOP and the rest of Helmet's defaults are active.
 
 ## Test coverage (npm run check)
 
-12 contract tests wired into `npm run check`:
+`npm run check` runs syntax checks plus the focused contract tests and
+security scanners declared in `package.json`, including:
 
 1. `node --check` for every entry file and route handler (catches syntax).
 2. `test:admin-import` — admin import flow.
 3. `test:recommendations` — recommendation engine.
 4. `test:profile-summary` — profile summary window.
-5. `test:ai-profile` — AI profile provider.
-6. `test:auth-registered-user` — registered-user auth.
-7. `test:admin-local-mode` — local admin mode.
-8. `test:payment-contract` — payment router contract.
-9. `test:performance-contract` — performance contract.
-10. `test:request-guard` — Origin / Sec-Fetch-Site guard.
-11. `test:tryout-ranking` — tryout ranking.
-12. `test:tryout-session` — tryout session.
-13. `test:csp-report` — CSP report endpoint + report-only header.
-14. `test:csrf-protection` — double-submit CSRF.
-15. `test:session-store` — SQLite session store.
+5. `test:profile-media` — avatar storage and reconciliation contract.
+6. Registered-user auth, email verification, and mailer tests.
+7. Payment contract, QRIS security regression, and payment limiter checks.
+8. Performance contract and route-prefetch tests.
+9. Request guard, security headers, CSRF, CORS, and popup-auth checks.
+10. Try Out ranking and session tests.
+11. Shadow-route, XSS-pattern, npm-typosquat, audit, and webhook replay scanners.
 
-Baseline run: all green. Any new file referenced by `npm run check` must
+Any new file referenced by `npm run check` must
 appear in both the syntax-check list and the test runner.
+
+Latest verified scanner totals:
+
+- Shadow-route inventory: 130 routes across 13 files, all documented.
+- CSRF coverage: 35/35 routes behave as expected.
+- Dependency typosquat scan: 36 packages checked, no near-matches.
+- XSS pattern scan: 8 known-safe-helper hits across 22 files, no unsafe hit.
 
 ## How to operate the security knobs
 
