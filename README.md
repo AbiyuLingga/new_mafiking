@@ -20,7 +20,7 @@ The active browser entry point is served by `server.js`. When `dist/index.html` 
 - Admin mode: role-gated shield toggle button (bottom-right corner). Pressing shield enables admin mode; the top nav then shows an `Admin Panel` entry that opens the full admin page. The admin page can manage Try Out packages, per-package Try Out questions/import/results, Matematika/Fisika/Kimia chapters and subtopics, users/access, and Gemini usage backend data. The Users tab has quick manual grants for premium Try Out and daily missions. On Practice page, clicking any question card in admin mode opens the inline `AdminProblemModal` to edit/delete.
 - SOP: `docs/sop/SOP-AI-INPUT-SOAL.md` documents the general AI question-entry guide. `docs/sop/SOP-DEEPSEEK-IMPORT-SOAL.md` is the stricter prompt contract for admin file import via DeepSeek.
 - Backend: Express 5, SQLite through `better-sqlite3`, session auth, API routes.
-- Question bank: exported from `../Mafiking/db/database.sqlite` into `db/question-bank.json`.
+- Question bank: exported from `../Mafiking/db/database.sqlite` into `db/seeds/question-bank.json`.
 - Imported question data at time of writing: 2 chapters, 4 subtopics, 23 problems, 86 problem steps.
 - Available real practice bank: Integral only. The static Belajar UI has more chapter cards, but only `Teknik Integrasi` currently maps to real backend problems.
 - Canvas correction: one submit sends a compressed JPEG canvas image to `/api/correction/evaluate-stream` with `/api/correction/evaluate` fallback. OCR + evaluation can route through the multi-provider pool (Gemini + Groq + optional OpenRouter), or direct Gemini fallback when the pool is disabled. Wrong-answer redline data is preserved through `wrongSteps` and `redlineTargets` so the result modal can redraw the user's canvas with incorrect strokes marked red. Profile summary has a local fallback when keys are missing.
@@ -122,10 +122,10 @@ GEMMA_PROFILE_MODEL=gemma-4-31b-it
 | `npm run test:admin-import` | Run focused tests for admin file-import validation helpers. |
 | `npm run test:recommendations` | Run focused tests for skill mapping, need-score formula, Purcell-inspired parsing, and recommendation difficulty gating. |
 | `npm run test:profile-summary` | Run focused tests for profile-summary attempt window splitting. |
-| `npm run export:questions` | Export question tables from the old Mafiking SQLite database into `db/question-bank.json`. |
-| `npm run import:questions` | Import `db/question-bank.json` into `db/database.sqlite`. |
+| `npm run export:questions` | Export question tables from the old Mafiking SQLite database into `db/seeds/question-bank.json`. |
+| `npm run import:questions` | Import `db/seeds/question-bank.json` into `db/database.sqlite`. |
 | `npm run import:questions -- --force` | Replace question tables even if existing progress/correction rows reference old problems. |
-| `npm run export:tryouts` | Export local Try Out packages/questions/steps into `db/tryout-bank.json`. |
+| `npm run export:tryouts` | Export local Try Out packages/questions/steps into `db/seeds/tryout-bank.json`. |
 | `npm run import:tryouts` | Import bundled Try Out data into SQLite; skips replacing a Try Out when user attempts already exist. |
 
 ## Production Deployment
@@ -157,7 +157,7 @@ After PM2 starts, deploy waits up to roughly one minute for `/api/health`
 instead of assuming the app is ready after two seconds. Override this with
 `HEALTHCHECK_ATTEMPTS` and `HEALTHCHECK_INTERVAL` when a server needs longer.
 Use `DEPLOY_IMPORTS=1 ./deploy.sh <ip> <user>` only when intentionally syncing
-`db/tryout-bank.json`, `db/question-bank.json`, and `db/daily-missions.json`
+`db/seeds/tryout-bank.json`, `db/seeds/question-bank.json`, and `db/seeds/daily-missions.json`
 into production. Fresh database bootstrap and `DEPLOY_DB=1` still run imports
 once to populate the initial content. Use `FORCE_IMPORT=1 npm run import:tryouts`
 only when intentionally accepting replacement of Try Out questions with existing
@@ -227,13 +227,13 @@ Default export source:
 Export from another database:
 
 ```bash
-SOURCE_DB=/path/to/database.sqlite OUTPUT=db/question-bank.json npm run export:questions
+SOURCE_DB=/path/to/database.sqlite OUTPUT=db/seeds/question-bank.json npm run export:questions
 ```
 
 Import into another target database:
 
 ```bash
-INPUT=db/question-bank.json TARGET_DB=db/database.sqlite npm run import:questions
+INPUT=db/seeds/question-bank.json TARGET_DB=db/database.sqlite npm run import:questions
 ```
 
 The import script refuses to replace question tables when user progress or correction attempts reference existing problems. Use `--force` only when intentionally resetting those references.
@@ -453,9 +453,9 @@ posture is the result of Phases 0–4 of a structured hardening roadmap:
   production, custom SQLite session store with `__Host-mafiking.sid`
   cookies, NDJSON audit log, and `express-rate-limit` on auth,
   correction, performance, and payment endpoints.
-- **Frontend scan:** `scripts/scan-xss-patterns.js` (8 hits, all routed
-  through known-safe helpers), `scripts/discover-shadow-routes.js`
-  (93/93 reconciled), `scripts/scan-npm-typosquats.js` (28 deps clean).
+- **Frontend scan:** `scripts/security/scan-xss-patterns.js` (8 hits, all routed
+  through known-safe helpers), `scripts/security/discover-shadow-routes.js`
+  (93/93 reconciled), `scripts/security/scan-npm-typosquats.js` (28 deps clean).
 - **CI:** `.github/workflows/security.yml` (npm-audit, CycloneDX SBOM,
   semgrep, TruffleHog, contract tests) on push to `main`, every PR, and
   weekly Sunday 02:00 UTC. `.github/workflows/dast.yml` runs a weekly

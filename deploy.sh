@@ -308,25 +308,25 @@ if [ "$RUN_CONTENT_IMPORTS" = "1" ]; then
     echo "Database baru/overwrite terdeteksi, mengimpor konten bundled awal."
   fi
 
-  if [ -f db/tryout-bank.json ]; then
+  if [ -f db/seeds/tryout-bank.json ]; then
     echo "Mengimpor bank Try Out bundled secara aman..."
     run_app npm run import:tryouts
   else
-    echo "db/tryout-bank.json tidak ada, skip import Try Out bundled."
+    echo "db/seeds/tryout-bank.json tidak ada, skip import Try Out bundled."
   fi
 
-  if [ -f db/question-bank.json ]; then
+  if [ -f db/seeds/question-bank.json ]; then
     echo "Mengimpor bank latihan bundled secara merge aman..."
     run_app npm run import:questions -- --merge
   else
-    echo "db/question-bank.json tidak ada, skip import latihan bundled."
+    echo "db/seeds/question-bank.json tidak ada, skip import latihan bundled."
   fi
 
-  if [ -f db/daily-missions.json ]; then
+  if [ -f db/seeds/daily-missions.json ]; then
     echo "Mengimpor misi harian bundled..."
     run_app npm run import:missions
   else
-    echo "db/daily-missions.json tidak ada, skip import misi harian bundled."
+    echo "db/seeds/daily-missions.json tidak ada, skip import misi harian bundled."
   fi
 else
   echo "Database server sudah ada dan DEPLOY_IMPORTS!=1, skip import konten bundled."

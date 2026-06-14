@@ -175,7 +175,7 @@ Baseline produksi terukur pada 12 Juni 2026:
 
 **Logic:** Karena CSS sembunyikan mentor image di mobile, browser tidak akan lazy-load selama tidak di-scroll ke viewport. Tambahan `loading="lazy"` + `decoding="async"` untuk defensive measure.
 
-**File baru (1):** `scripts/optimize-images.js` — Sharp pipeline:
+**File baru (1):** `scripts/build/optimize-images.js` — Sharp pipeline:
 - Input: `assets/landing_mentors_20260607.png` (6,2MB), `assets/landing_page.png` (5,8MB), `assets/landing/*.jpg` (sudah kecil)
 - Output: 3 size variants × 2 format (WebP + AVIF) per asset
 - Skip if `<size>` lebih kecil dari original (no double-encoding)
@@ -540,7 +540,7 @@ Optimalkan **hanya** leak/long task yang terbukti:
 - **Visual regression** — Playwright snapshot per route, diff threshold < 1% pixel
 - **E2E happy path** — Playwright (atau curl-based) untuk routing
 - **Bundle size** — `scripts/check-bundle-budget.js` (CI fail jika > budget)
-- **Performance contract** — `scripts/test-performance-contract.js` (existing, extend untuk baseline assertion)
+- **Performance contract** — `tests/frontend/test-performance-contract.js` (existing, extend untuk baseline assertion)
 
 ### 10.4 Quality Safeguards (3, bukan 5)
 

@@ -19,13 +19,13 @@ target_estimate: 3-4 hari kerja (parallel)
 
 | Phase | Status | Bukti |
 |---|---|---|
-| 0: Baseline & freeze | ✅ DONE | `MUTATION_COLLECTOR_ENABLED=false` default, `scripts/baseline-audit.js` |
+| 0: Baseline & freeze | ✅ DONE | `MUTATION_COLLECTOR_ENABLED=false` default, `scripts/security/baseline-audit.js` |
 | 1: Ledger invariants | ✅ DONE | `payment_webhook_events`, `payment_idempotency_keys`, unique constraints |
 | 2: Webhook & reconciliation | ✅ DONE | `checkAndRecordWebhookEvent`, `validateProviderStatus`, strict match |
 | 3: Supply chain | ✅ DONE | `@prasetya/qris@0.2.1` & `qris-mutasi@2.0.0` exact pin, SBOM, audit |
 | 4: Isolated collector | ✅ DONE | `scripts/collector.js`, `POST /api/payment/reconcile/mutation-batch` signed |
 | 5: AppSec web & admin | ✅ DONE | `lib/ip-allowlist.js`, per-action rate limit, CSP migration check |
-| 6: Server & operational | ✅ DONE | `lib/payment-alerts.js`, `scripts/rotate-secrets.js`, audit immutability |
+| 6: Server & operational | ✅ DONE | `lib/payment-alerts.js`, `scripts/security/rotate-secrets.js`, audit immutability |
 | 7: Monitoring & IR | ✅ DONE | `docs/security/payment-runbook.md`, `GET /api/admin/payments/dashboard` |
 
 47 test baru sudah ada.
@@ -48,7 +48,7 @@ target_estimate: 3-4 hari kerja (parallel)
 
 ### Minus #1 — Default `MUTATION_COLLECTOR_ENABLED=false` ⇒ 100% manual
 
-**Evidence:** `server.js:443-481`, `scripts/baseline-audit.js:67-72`, `lib/mutation-collector.js:80`
+**Evidence:** `server.js:443-481`, `scripts/security/baseline-audit.js:67-72`, `lib/mutation-collector.js:80`
 
 **Dampak:** Setiap user bayar QRIS → admin harus standby, klik mark-paid manual. Untuk 50 transaksi/hari, admin butuh ~30-60 menit/hari.
 
@@ -244,7 +244,7 @@ Tambah: `MUTATION_COLLECTOR_ENABLED=true` (default), `MUTATION_POLL_INTERVAL_MS=
 Hapus: `test:mutasiku-reconciler`.
 
 #### A.6 Tests
-**File baru:** `scripts/test-cleanup-deps.js`
+**File baru:** `tests/payment/test-cleanup-deps.js`
 
 Test cases:
 1. `mutasiku.js` file tidak ada di `lib/reconcilers/`
@@ -363,7 +363,7 @@ Collector emit heartbeat setiap 30 detik ke main app via `POST /api/internal/col
 | `lib/providers/QrisMutasiProvider.js` | atomic cookie, session detection |
 | `routes/admin-payments.js` | add heartbeat endpoint |
 | `server.js` | wire self-healing collector |
-| `scripts/test-self-healing-collector.js` | NEW — 10 test cases |
+| `tests/payment/test-self-healing-collector.js` | NEW — 10 test cases |
 
 ### 7.4 Test Cases
 
@@ -441,7 +441,7 @@ CREATE INDEX idx_ambiguous_unresolved
     WHERE resolved_at IS NULL;
 ```
 
-### 8.3 Test Cases (`scripts/test-confidence-matching.js`)
+### 8.3 Test Cases (`tests/learning/test-confidence-matching.js`)
 
 1. Single pending, exact amount, recent → score 230 → auto-match
 2. Single pending, exact amount, no recent activity → 200 → auto-match
@@ -615,7 +615,7 @@ function paymentSuccess({ user, payment }) {
 }
 ```
 
-### 9.6 Test Cases (`scripts/test-payment-broadcaster.js`)
+### 9.6 Test Cases (`tests/payment/test-payment-broadcaster.js`)
 
 1. Broadcaster: publish ke subscriber match merchantOrderId
 2. Subscriber lain tidak terima event
@@ -672,7 +672,7 @@ router.get('/metrics', (req, res) => { /* ... */ });
 - **Bulk Actions** checkbox per row
 - **Collector Health Widget** auto-refresh 30s
 
-### 10.3 Test Cases (`scripts/test-admin-ambiguous-resolver.js`)
+### 10.3 Test Cases (`tests/admin/test-admin-ambiguous-resolver.js`)
 
 1. Ambiguous list: 5 unresolved, 2 resolved → return 5
 2. Resolve ambiguous: choose orderId → queue resolved, PAID
@@ -724,7 +724,7 @@ function isEnabled(flag) { return Boolean(flags[flag]); }
 module.exports = { isEnabled, flags };
 ```
 
-### 11.3 Test Cases (`scripts/test-feature-flags.js`)
+### 11.3 Test Cases (`tests/payment/test-feature-flags.js`)
 
 1. Default flags: all ON
 2. `SSE_PAYMENT_PUSH=false` env → flag is false
@@ -789,12 +789,12 @@ module.exports = { isEnabled, flags };
 - `lib/feature-flags.js`
 - `lib/user-activity-tracker.js`
 - `db/migrations/006_ambiguous_queue.sql`
-- `scripts/test-cleanup-deps.js`
-- `scripts/test-self-healing-collector.js`
-- `scripts/test-confidence-matching.js`
-- `scripts/test-payment-broadcaster.js`
-- `scripts/test-admin-ambiguous-resolver.js`
-- `scripts/test-feature-flags.js`
+- `tests/payment/test-cleanup-deps.js`
+- `tests/payment/test-self-healing-collector.js`
+- `tests/learning/test-confidence-matching.js`
+- `tests/payment/test-payment-broadcaster.js`
+- `tests/admin/test-admin-ambiguous-resolver.js`
+- `tests/payment/test-feature-flags.js`
 - `docs/plans/pay_self_healing_v3.md` (this file)
 
 ### File Diubah (12)
@@ -817,7 +817,7 @@ module.exports = { isEnabled, flags };
 - `lib/reconcilers/mutasiku.js`
 - `docs/plans/auto-verification-collector-matching-engine.md` (setelah merge)
 - `scripts/test-mutasiku-reconciler.js`
-- `scripts/test-qris-payment-route.js` (jika test Duitku-only)
+- `tests/payment/test-qris-payment-route.js` (jika test Duitku-only)
 
 ## 17. Effort Estimate (Revisi)
 

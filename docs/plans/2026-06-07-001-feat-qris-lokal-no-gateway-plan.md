@@ -136,7 +136,7 @@ Owner memiliki **QRIS statis pribadi** (mis. dari GoPay Merchant, DANA Bisnis, a
 
 ### Phase 1: Library Install + Round-Trip Test (Foundation)
 
-**File: `scripts/test-qris-roundtrip.js` (NEW)**
+**File: `tests/payment/test-qris-roundtrip.js` (NEW)**
 
 - `npm install @prasetya/qris qrcode`
 - Buat script standalone yang:
@@ -1566,7 +1566,7 @@ node -e "require('qrcode')"
 node -e "const {validateQRIS} = require('@prasetya/qris'); const r = validateQRIS(process.env.QRIS_STATIC_STRING); if (!r.valid) { console.error(r.errors); process.exit(1); } console.log('OK');"
 
 # 3. Round-trip test (WAJIB scan HP dulu)
-node scripts/test-qris-roundtrip.js
+node tests/payment/test-qris-roundtrip.js
 
 # 4. Syntax check
 npm run check

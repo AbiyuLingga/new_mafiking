@@ -47,7 +47,7 @@ Mafiking's local email/password signup (`POST /api/auth/register`) immediately s
   - `src/app.jsx` — extend `parseAppLocation` to handle `#verify-email?token=...` deep links; pass `authMode="verify-email"` to Lobby.
 - Auto-verify pre-seeded admin (`123`/`135`) in `server.js`.
 - Env var docs in `.env.example`.
-- Tests in `scripts/test-email-verification.js` and `scripts/test-mailer.js`.
+- Tests in `tests/auth/test-email-verification.js` and `tests/auth/test-mailer.js`.
 
 ### Out of Scope
 
@@ -73,8 +73,8 @@ Mafiking's local email/password signup (`POST /api/auth/register`) immediately s
 | `src/app.jsx` | Modify | Parse `#verify-email?token=...` from URL hash |
 | `.env.example` | Modify | Document `SMTP_*`, `MAIL_FROM_NAME`, `PUBLIC_BASE_URL` |
 | `AGENTS.md` | Modify | Add note about email verification policy + Gmail App Password |
-| `scripts/test-email-verification.js` | New | Unit tests for token gen, hash, expiry, cooldown, route behaviors |
-| `scripts/test-mailer.js` | New | Tests for mailer config, dry-run mode, retry behavior |
+| `tests/auth/test-email-verification.js` | New | Unit tests for token gen, hash, expiry, cooldown, route behaviors |
+| `tests/auth/test-mailer.js` | New | Tests for mailer config, dry-run mode, retry behavior |
 | `docs/plans/2026-06-05-001-feat-email-verification-plan.md` | New | This plan file |
 
 ---
@@ -667,7 +667,7 @@ Append a new section under "Security Notes (Phase 0-4, ASVS L2)" or as a new sec
 
 ### 11. Tests
 
-#### `scripts/test-email-verification.js`
+#### `tests/auth/test-email-verification.js`
 
 Pure unit tests (no HTTP):
 
@@ -685,7 +685,7 @@ Pure unit tests (no HTTP):
 
 Each test inserts a fixture user, runs the assertion, and cleans up.
 
-#### `scripts/test-mailer.js`
+#### `tests/auth/test-mailer.js`
 
 - With `MAIL_DRY_RUN=true`, `sendMail` does not open any transport; logs `[mailer:dry-run] ...` to console.
 - With `MAIL_DRY_RUN=false` and missing SMTP config, `sendMail` throws with the right error message.
@@ -710,8 +710,8 @@ The test file should be self-contained: it can create a fresh SQLite database in
 ## Validation Plan
 
 1. `npm run check` — must pass (no syntax errors in the new files, all existing tests pass).
-2. `node scripts/test-email-verification.js` — must print "N assertions passed".
-3. `node scripts/test-mailer.js` — must print "ok".
+2. `node tests/auth/test-email-verification.js` — must print "N assertions passed".
+3. `node tests/auth/test-mailer.js` — must print "ok".
 4. Manual smoke:
    1. Start the dev server: `npm start`.
    2. Open `http://localhost:3000` in a private browser.

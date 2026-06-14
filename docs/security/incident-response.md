@@ -69,9 +69,9 @@ ssh root@mafiking.com 'df -h /'
 
 ```bash
 bash ops/cis-hardening.sh --audit-only
-cd /opt/mafiking && node scripts/analyze-audit-log.js
-cd /opt/mafiking && node scripts/discover-shadow-routes.js
-cd /opt/mafiking && node scripts/scan-xss-patterns.js
+cd /opt/mafiking && node scripts/security/analyze-audit-log.js
+cd /opt/mafiking && node scripts/security/discover-shadow-routes.js
+cd /opt/mafiking && node scripts/security/scan-xss-patterns.js
 ssh root@mafiking.com 'tail -200 /var/log/modsecurity/audit.log | jq ".transaction.messages"'
 ssh root@mafiking.com 'rclone ls b2crypt: | wc -l'
 ```

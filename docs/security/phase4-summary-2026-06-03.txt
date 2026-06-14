@@ -78,7 +78,7 @@ User: root (uid=0)
   SHELL=/bin/bash
   PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   MAILTO=root
-  0 4 * * *  mafiking  cd /opt/mafiking && /usr/bin/node scripts/analyze-audit-log.js >> /var/log/mafiking-audit-summary.log 2>&1
+  0 4 * * *  mafiking  cd /opt/mafiking && /usr/bin/node scripts/security/analyze-audit-log.js >> /var/log/mafiking-audit-summary.log 2>&1
   --- /etc/cron.d/mafiking-backup ---
   # /etc/cron.d/mafiking-backup
   # Daily 03:00 UTC. Adjust if B2 egress costs spike.
@@ -120,4 +120,4 @@ User: root (uid=0)
   tail /opt/mafiking/logs/audit.log
   fail2ban-client status
   /opt/mafiking-ops/backup.sh  (cron 03:00 UTC)
-  cd /opt/mafiking && /usr/bin/node scripts/analyze-audit-log.js  (cron 04:00 UTC)
+  cd /opt/mafiking && /usr/bin/node scripts/security/analyze-audit-log.js  (cron 04:00 UTC)

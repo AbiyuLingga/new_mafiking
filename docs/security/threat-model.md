@@ -40,7 +40,7 @@ candidate threat source.
    `__Host-mafiking.sid` and impersonate the user.
    *Control:* tightened CSP allowlist (no broad `https:`), report-only mode,
    audit log on auth events, XSS-pattern scanner wired into `npm run check`.
-   *Verification:* `scripts/scan-xss-patterns.js` (0 new). F-1, F-2 fixed in
+   *Verification:* `scripts/security/scan-xss-patterns.js` (0 new). F-1, F-2 fixed in
    commit `1092c92`. *Follow-up:* nonce migration tracked in `posture.md`.
 
 2. **Tampering — payment callback spoofing** *(Mitigated)*

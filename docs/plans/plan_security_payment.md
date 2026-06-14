@@ -117,13 +117,13 @@ Semua phase di plan ini sudah diimplementasikan (kode + tests). Ringkasan:
 
 | Phase | Status | Artefak |
 |---|---|---|
-| 0 Baseline & Freeze | DONE | `scripts/baseline-audit.js`, `MUTATION_COLLECTOR_ENABLED=false` default |
+| 0 Baseline & Freeze | DONE | `scripts/security/baseline-audit.js`, `MUTATION_COLLECTOR_ENABLED=false` default |
 | 1 Ledger Invariants | DONE | `payment_webhook_events`, `payment_idempotency_keys`, unique constraint, canonical amount, expired-resurrection guard |
 | 2 Webhook & Reconciliation | DONE | `checkAndRecordWebhookEvent`, `validateProviderStatus`, strict match, raw-body HMAC for collector |
-| 3 Supply Chain | DONE | `@prasetya/qris@0.2.1` & `qris-mutasi@2.0.0` exact pins, `scripts/audit-supply-chain.js`, `scripts/build-sbom.js`, `docs/security/sbom.json`, `scripts/test-qris-security-regression.js` (20 tests) |
+| 3 Supply Chain | DONE | `@prasetya/qris@0.2.1` & `qris-mutasi@2.0.0` exact pins, `scripts/security/audit-supply-chain.js`, `scripts/security/build-sbom.js`, `docs/security/sbom.json`, `tests/payment/test-qris-security-regression.js` (20 tests) |
 | 4 Isolated Collector | DONE | `scripts/collector.js`, `lib/providers/QrisMutasiProvider.js` (cookie dir chdir + 0600 + egress allowlist), `POST /api/payment/reconcile/mutation-batch` signed endpoint |
-| 5 AppSec Web & Admin | DONE | `lib/ip-allowlist.js` + `ADMIN_IP_ALLOWLIST` / `COLLECTOR_IP_ALLOWLIST`, per-action rate limit, `scripts/csp-migration-check.js` |
-| 6 Server & Operational | DONE | `lib/payment-alerts.js`, `scripts/rotate-secrets.js`, `docs/security/secret-rotation.md`, audit log immutability triggers (`005_audit_immutability.sql`) |
+| 5 AppSec Web & Admin | DONE | `lib/ip-allowlist.js` + `ADMIN_IP_ALLOWLIST` / `COLLECTOR_IP_ALLOWLIST`, per-action rate limit, `scripts/security/csp-migration-check.js` |
+| 6 Server & Operational | DONE | `lib/payment-alerts.js`, `scripts/security/rotate-secrets.js`, `docs/security/secret-rotation.md`, audit log immutability triggers (`005_audit_immutability.sql`) |
 | 7 Monitoring & IR | DONE | `lib/payment-alerts.js` thresholds, `docs/security/payment-runbook.md`, `GET /api/admin/payments/dashboard` |
 
 Tests baru:

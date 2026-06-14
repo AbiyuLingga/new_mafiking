@@ -207,9 +207,9 @@ The user-supplied plan referenced "Midtrans" but the codebase uses **Duitku** (`
 | `src/backend-api.jsx` | Attach `X-CSRF-Token` to non-GET; fetch token on boot |
 | `src/payment.jsx` | "Pembayaran sedang aktivasi" banner; waitlist/WhatsApp CTAs |
 | `scripts/test-csrf.js` | NEW — verifies CSRF enforcement and allowlisted routes |
-| `scripts/test-session-store.js` | NEW — verifies SQLite session store round-trip + sweep |
+| `tests/storage/test-session-store.js` | NEW — verifies SQLite session store round-trip + sweep |
 | `scripts/test-admin-bootstrap.js` | NEW — verifies env-based admin bootstrap |
-| `scripts/test-csp-report.js` | NEW — verifies CSP report endpoint accepts violations |
+| `tests/security/test-csp-report.js` | NEW — verifies CSP report endpoint accepts violations |
 | `scripts/test-payment-waitlist.js` | NEW — verifies waitlist endpoint |
 | `vite.config.js` | Vendor chunk split for KaTeX |
 | `README.md`, `ARCHITECTURE.md`, `AGENTS.md` | Update security + payment UX + observability sections |
@@ -277,9 +277,9 @@ Total disk saving if all confirmed: ~9.9 MB.
 ### Unit / contract tests (extend `npm run check`)
 
 - `scripts/test-csrf.js`: request without token → 403; request with valid token → 200; allowlisted webhook/callback bypass CSRF; cross-origin Origin header → 403.
-- `scripts/test-session-store.js`: write/read/destroy session, sweep deletes expired rows, custom `maxAge` honored.
+- `tests/storage/test-session-store.js`: write/read/destroy session, sweep deletes expired rows, custom `maxAge` honored.
 - `scripts/test-admin-bootstrap.js`: env-based creation, idempotence (don't recreate), production skip.
-- `scripts/test-csp-report.js`: report endpoint accepts, logs, returns 204; rejects oversized payloads.
+- `tests/security/test-csp-report.js`: report endpoint accepts, logs, returns 204; rejects oversized payloads.
 - `scripts/test-payment-waitlist.js`: bad email → 400, duplicate → 409, rate-limit → 429, valid → 204.
 
 ### Smoke tests (manual, after `npm start`)
@@ -316,7 +316,7 @@ Total disk saving if all confirmed: ~9.9 MB.
 
 ### Regression risks
 
-- Breaking the Clerk dual-auth path. Mitigation: integration smoke test in `scripts/test-auth-registered-user.js` (already in `npm run check`).
+- Breaking the Clerk dual-auth path. Mitigation: integration smoke test in `tests/auth/test-auth-registered-user.js` (already in `npm run check`).
 - Forcing re-login on deploy due to cookie rename. Mitigation: clear `Set-Cookie` documentation in CHANGELOG; auto-recovery via guest session.
 - CSP tightening breaking a third-party widget I didn't enumerate. Mitigation: report-only phase catches it.
 

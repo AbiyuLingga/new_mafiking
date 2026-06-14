@@ -295,7 +295,7 @@ Riset: [web.dev — Adaptive Serving](https://web.dev/articles/adaptive-serving-
 **File diubah (3):**
 - `server.js` — env guard + warning log kalau serve legacy
 - `vite.config.js` — `cssCodeSplit: true`, `target: 'es2020'`, `cssMinify: 'lightningcss'`
-- `scripts/build-legacy-entry.js` — refactor emit multiple chunks (Fase 2)
+- `scripts/build/build-legacy-entry.js` — refactor emit multiple chunks (Fase 2)
 
 **Detail perubahan `server.js`:** `sendAppHtml()` (line 1053-1065) tetap, tapi tambah env guard.
 - Tambah `MAFIKING_FORCE_BUILD=1` env var: jika set, server REFUSE start kalau `dist/index.html` tidak ada (mencegah accidental fallback ke MAFIKING.html di production).
@@ -339,7 +339,7 @@ build: {
 
 **Tujuan:** Lobby tidak di-download kalau user sudah login. Admin (152KB) tidak di-download kecuali user buka `/admin`. Drawing canvas (60KB) tidak di-download kecuali user klik "Try Canvas".
 
-**Strategi:** Refactor `scripts/build-legacy-entry.js` agar generate MULTIPLE bundle files, bukan satu mega bundle.
+**Strategi:** Refactor `scripts/build/build-legacy-entry.js` agar generate MULTIPLE bundle files, bukan satu mega bundle.
 
 **Pemecahan chunk yang direkomendasikan:**
 
@@ -384,7 +384,7 @@ const ROUTE_ASPECTS = {
 - INP < 200ms (S2)
 - Code coverage: route-belajar + app-shell + vendor-react = < 350KB gzipped initial
 
-**File baru (1):** `src/components/RouteSkeleton.jsx`. **File diubah (3):** `scripts/build-legacy-entry.js`, `src/app.jsx`, `src/main.jsx` (entry). **Risk:** MEDIUM. **Rollback:** Revert build script ke single-bundle mode.
+**File baru (1):** `src/components/RouteSkeleton.jsx`. **File diubah (3):** `scripts/build/build-legacy-entry.js`, `src/app.jsx`, `src/main.jsx` (entry). **Risk:** MEDIUM. **Rollback:** Revert build script ke single-bundle mode.
 
 ---
 
@@ -409,7 +409,7 @@ const ROUTE_ASPECTS = {
 - **Preload LCP hint** di `<head>` dengan `fetchpriority="high"`
 - **`<picture>` dengan `<source type="image/avif">` + `<source type="image/webp">` + `<img>` JPEG fallback**
 
-**Pipeline (di `scripts/optimize-images.js`, run via `prebuild`):**
+**Pipeline (di `scripts/build/optimize-images.js`, run via `prebuild`):**
 1. Install Sharp (devDependency — image generation di build time, output static, runtime VPS tidak butuh Sharp):
    ```json
    "devDependencies": { "sharp": "^0.33.5" }
@@ -441,7 +441,7 @@ const ROUTE_ASPECTS = {
 - `card-fisika.png` (753KB), `card-kimia.png` (716KB), `card-matematika.png` (751KB) — sama, > 700KB tapi `.webp` (4-6KB) sudah ada.
 - `20f1fadc-a331-4841-9834-4f5cc4cb3ea7.jpg` (70KB) — investigasi referensi.
 
-**File baru (2):** `scripts/optimize-images.js`, `docs/perf/image-quality-review.md`. **File diubah (2-4):** `package.json`, `src/lobby.jsx`. **Risk:** LOW. **Rollback:** Gunakan `.png` original.
+**File baru (2):** `scripts/build/optimize-images.js`, `docs/perf/image-quality-review.md`. **File diubah (2-4):** `package.json`, `src/lobby.jsx`. **Risk:** LOW. **Rollback:** Gunakan `.png` original.
 
 **Quality gate (S1 + S2):**
 - Butteraugli score < 1.0 untuk setiap image (S1)
@@ -764,7 +764,7 @@ Tiap fase deploy ke staging dulu, validate Core Web Vitals, baru lanjut.
 
 - Visual regression: simpan screenshot baseline tiap route, compare after.
 - E2E: scripted Playwright (atau curl-based) yang verify routing happy path.
-- Existing `scripts/test-performance-contract.js` — extend untuk include bundle size assertion.
+- Existing `tests/frontend/test-performance-contract.js` — extend untuk include bundle size assertion.
 
 ---
 
@@ -830,7 +830,7 @@ Tiap fase deploy ke staging dulu, validate Core Web Vitals, baru lanjut.
 - [ ] Lighthouse Performance ≥ 90 di mobile
 
 **Fase 2 (Code Splitting):**
-- [ ] `scripts/build-legacy-entry.js` emit ≥10 chunks
+- [ ] `scripts/build/build-legacy-entry.js` emit ≥10 chunks
 - [ ] `src/app.jsx` pakai `React.lazy` + `<Suspense>` per route
 - [ ] `src/components/RouteSkeleton.jsx` mencegah CLS dengan aspect-ratio
 - [ ] Network tab: buka `/` → tidak load `route-admin.js`, `route-tryout.js`, `route-practice.js`
@@ -839,7 +839,7 @@ Tiap fase deploy ke staging dulu, validate Core Web Vitals, baru lanjut.
 
 **Fase 3 (Image Pipeline):**
 - [ ] `docs/perf/image-quality-review.md` ada dengan hasil Butteraugli calibration
-- [ ] `scripts/optimize-images.js` generate AVIF + WebP variants (3 sizes)
+- [ ] `scripts/build/optimize-images.js` generate AVIF + WebP variants (3 sizes)
 - [ ] `src/lobby.jsx` pakai `<picture>` dengan srcset
 - [ ] LCP image < 100KB transferred di mobile viewport
 - [ ] Video preload="none", poster only di slow connection

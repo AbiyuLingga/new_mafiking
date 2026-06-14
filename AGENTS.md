@@ -53,9 +53,9 @@ ARCHITECTURE.md
 For question-bank tasks, also inspect:
 
 ```text
-scripts/export-question-bank.js
-scripts/import-question-bank.js
-db/question-bank.json
+scripts/data/export-question-bank.js
+scripts/data/import-question-bank.js
+db/seeds/question-bank.json
 ```
 
 For profile recommendation tasks, also inspect:
@@ -64,7 +64,7 @@ For profile recommendation tasks, also inspect:
 data/recommendation-catalog.json
 docs/purcell-inspired-question-bank.md
 lib/recommendation-engine.js
-scripts/test-recommendation-engine.js
+tests/learning/test-recommendation-engine.js
 SOP-PROFILE-SUMMARY.md
 ```
 
@@ -104,7 +104,7 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - The global `Nav` is intentionally not rendered on the `practice` route; practice owns its own compact session bars/toolbars.
 - The global `Nav` is also intentionally not rendered for `/payment?merchantOrderId=...`; QRIS/manual status owns a full-viewport popup overlay.
 - `db/database.sqlite` is generated local runtime state.
-- `db/question-bank.json` is the portable seeded question-bank source.
+- `db/seeds/question-bank.json` is the portable seeded question-bank source.
 
 ## Frontend Rules
 
@@ -220,14 +220,14 @@ db/database.sqlite
 Portable question bank:
 
 ```text
-db/question-bank.json
+db/seeds/question-bank.json
 ```
 
 Rules:
 
 - Do not edit `db/database.sqlite` directly as source code.
 - Use `db/schema.sql` for schema changes.
-- If changing seeded question content, update/export `db/question-bank.json`.
+- If changing seeded question content, update/export `db/seeds/question-bank.json`.
 - Preserve foreign key behavior and WAL mode.
 - The current question bank only has real problems for Integral.
 - Be careful with `npm run import:questions -- --force`; it can reset question references for existing progress/correction rows.

@@ -945,7 +945,7 @@ CREATE INDEX IF NOT EXISTS idx_mutations_received
 
 ### Step 10: Test Script
 
-**File: `scripts/test-auto-verification.js`**
+**File: `tests/payment/test-auto-verification.js`**
 
 Integration test dengan in-memory SQLite.
 
@@ -1021,7 +1021,7 @@ Test cases:
 | 9 | `lib/providers/QrisMutasiProvider.js` | Step 1, 4 | 20 min |
 | 10 | `server.js` (wire) | Step 8 | 5 min |
 | 11 | `.env.example` (append) | Step 10 | 3 min |
-| 12 | `scripts/test-auto-verification.js` | Step 5-8 | 30 min |
+| 12 | `tests/payment/test-auto-verification.js` | Step 5-8 | 30 min |
 | 13 | Run tests + verify | Step 12 | 15 min |
 | 14 | `npm run check` | Step 13 | 2 min |
 

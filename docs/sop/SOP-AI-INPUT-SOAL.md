@@ -257,7 +257,7 @@ Perhatikan: `why` berisi alasan strategis, `intuition` berisi analogi/gambaran, 
 3. `POST /api/admin/problems` — semua field di bagian 5
 4. `POST /api/admin/problems/:id/steps` — `{ step_order, title, content, why, intuition, mistakes, mistake_result }`, dipanggil sekali per langkah.
 
-### Jalur A — Bulk `db/question-bank.json` (HANYA untuk seeding awal / rebuild penuh)
+### Jalur A — Bulk `db/seeds/question-bank.json` (HANYA untuk seeding awal / rebuild penuh)
 
 `npm run import:questions` **menghapus seluruh tabel soal lalu mengisi ulang dari JSON**. Maka file JSON harus memuat **seluruh bank** (lama + baru), bukan soal baru saja.
 
@@ -266,7 +266,7 @@ Perhatikan: `why` berisi alasan strategis, `intuition` berisi analogi/gambaran, 
 - `acceptable_answers` & `mc_options` di JSON adalah **string berisi JSON** (escaping ganda).
 - Jika DB sudah punya progress/koreksi siswa, import biasa **ditolak**; `npm run import:questions -- --force` hanya bila admin sadar mereset referensi soal.
 
-Struktur file: `{ exportedAt, source, chapters[], subtopics[], problems[], problem_steps[] }` — lihat `db/question-bank.json` yang ada sebagai acuan.
+Struktur file: `{ exportedAt, source, chapters[], subtopics[], problems[], problem_steps[] }` — lihat `db/seeds/question-bank.json` yang ada sebagai acuan.
 
 > Untuk kasus "admin mengunggah PDF berisi soal tambahan", **gunakan Jalur B**. Jalur A hanya untuk membangun ulang bank dari nol.
 

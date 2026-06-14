@@ -101,7 +101,7 @@ Key backend boundaries:
 - `middleware/auth.js` and `middleware/admin.js` enforce registered/admin access.
 - `lib/security-headers.js`, `lib/csp.js`, `lib/csrf-protection.js`, and `lib/request-guard.js` own HTTP hardening.
 - `lib/sqlite-session-store.js` persists sessions.
-- `lib/profile-media.js` validates profile files; `scripts/reconcile-profile-media.js` audits missing files.
+- `lib/profile-media.js` validates profile files; `scripts/maintenance/reconcile-profile-media.js` audits missing files.
 - `lib/recommendation-engine.js` chooses deterministic catalog-backed recommendations.
 - `lib/multi-provider-pool.js` coordinates Gemini, Groq, and optional OpenRouter for canvas evaluation.
 
@@ -150,9 +150,9 @@ Primary source/runtime files:
 ```text
 db/schema.sql
 db/database.sqlite
-db/question-bank.json
-db/tryout-bank.json
-db/daily-missions.json
+db/seeds/question-bank.json
+db/seeds/tryout-bank.json
+db/seeds/daily-missions.json
 profile-media/
 ```
 

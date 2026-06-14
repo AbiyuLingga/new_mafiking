@@ -28,7 +28,7 @@ applied to both `questionId` and `problemId` at the top of the
 `/evaluate` handler; the validated integer (or `null`) is the only
 value interpolated into the Gemini prompt. A 400 is returned when the
 caller supplies a non-positive-integer ID, and a separate
-`scripts/test-f10-id-coercion.js` (16 assertions) is wired into
+`tests/security/test-f10-id-coercion.js` (16 assertions) is wired into
 `npm run check` to prevent regression. Exported as
 `module.exports._correctionInternals.parsePositiveId` for direct test
 access.
@@ -60,7 +60,7 @@ machine but rotating users would evade it entirely.
 - Behavior: caps at `DEFAULT_MAX_CHARS = 4000`; strips null bytes,
   zero-width characters, bidi-override characters, and ASCII control
   characters except `\n \t \r`. Preserves LaTeX (`\frac`, `\int`, etc.).
-- Test: `scripts/test-text-sanitize.js` (11 assertions).
+- Test: `tests/learning/test-text-sanitize.js` (11 assertions).
 - Applied to:
   - `routes/correction.js:920` `/transcribe` — `questionText`.
   - `routes/correction.js:954` `/evaluate` — `questionText`,

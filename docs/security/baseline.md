@@ -239,7 +239,7 @@ applied with `ops/apply-all.sh`. Verified state as of 2026-06-03:
   tar/zstd to `/var/backups/mafiking/`, optional rclone crypt to B2.
 - `/etc/cron.d/mafiking-backup` runs 03:00 UTC.
 - `/etc/cron.d/mafiking-audit-analyze` runs 04:00 UTC,
-  `node scripts/analyze-audit-log.js` as `mafiking`.
+  `node scripts/security/analyze-audit-log.js` as `mafiking`.
 - `/etc/logrotate.d/mafiking`: 6mo rotation for app logs, 12mo for
   audit-summary, 4wk for ModSecurity.
 

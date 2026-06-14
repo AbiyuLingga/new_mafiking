@@ -54,11 +54,11 @@
 | Check | Command | Expected | Actual |
 |---|---|---|---|
 | `npm run check` | local | 22 contract tests + 8 scanners green | Green (last verified 2026-06-03) |
-| Shadow routes reconciled | `node scripts/discover-shadow-routes.js` | 93/93 | 93/93 |
-| XSS patterns clean | `node scripts/scan-xss-patterns.js` | 0 new | 0 new (8 hits, all SAFE_HELPERS) |
-| Typosquats clean | `node scripts/scan-npm-typosquats.js` | 0 | 0 (28 deps clean) |
-| CSRF coverage | `node scripts/test-csrf-coverage.js` | 25/25 | 25/25 |
-| CORS regression | `node scripts/test-cors-regression.js` | 0 echo | 0 echo |
+| Shadow routes reconciled | `node scripts/security/discover-shadow-routes.js` | 93/93 | 93/93 |
+| XSS patterns clean | `node scripts/security/scan-xss-patterns.js` | 0 new | 0 new (8 hits, all SAFE_HELPERS) |
+| Typosquats clean | `node scripts/security/scan-npm-typosquats.js` | 0 | 0 (28 deps clean) |
+| CSRF coverage | `node tests/security/test-csrf-coverage.js` | 25/25 | 25/25 |
+| CORS regression | `node tests/security/test-cors-regression.js` | 0 echo | 0 echo |
 | Audit log rotates | `ls -lh /opt/mafiking/logs/audit.log*` | NDJSON, 16 KB cap | NDJSON, 16 KB cap; logrotate.d/mafiking (6mo) |
 | Audit analyzer runs | `tail /var/log/mafiking-audit-summary.log` | Daily 04:00 UTC | cron.d/mafiking-audit-analyze installed |
 

@@ -237,7 +237,7 @@ clarity and to map cleanly into the threat-model.json nodes).
 |------|--------|------|
 | 4.1.1 | Pin `qris-mutasi` to exact version `"2.0.0"` in `package.json` (no `^` or `~`) | `package.json` |
 | 4.1.2 | Add `qris-mutasi` to `npm audit` job allowlist (currently audited via global `npm audit --audit-level=high`) | `.github/workflows/security.yml` |
-| 4.1.3 | Run `node scripts/scan-npm-typosquats.js` to confirm `qris-mutasi` is not a typosquat of `qr-mutasi`, `qris-mutation`, etc. | local check |
+| 4.1.3 | Run `node scripts/security/scan-npm-typosquats.js` to confirm `qris-mutasi` is not a typosquat of `qr-mutasi`, `qris-mutation`, etc. | local check |
 | 4.1.4 | CycloneDX SBOM job (already in `security.yml`) automatically includes the new dep | n/a |
 | 4.1.5 | Run `npm view qris-mutasi time maintainers repository.url` and capture in `docs/security/llm-inventory.md` (new entry: 3rd-party payment evidence source) | `docs/security/llm-inventory.md` |
 | 4.1.6 | Add `qris-mutasi` to the DAST allowlist reasoning in `.zap/rules.tsv` if it shows up in scan | `.zap/rules.tsv` |
@@ -284,7 +284,7 @@ clarity and to map cleanly into the threat-model.json nodes).
 | 4.5.2 | New admin endpoint `GET /api/admin/auto-verify/stats` returning `{ enabled, provider, lastPollAt, consecutiveErrors, totalChecked, totalMatched, backoffMs }` — guarded by `isAdmin` | `routes/admin.js` |
 | 4.5.3 | New admin endpoint `GET /api/admin/auto-verify/unmatched?limit=50` returning the most recent unmatched `incoming_mutations` rows — guarded by `isAdmin` | `routes/admin.js` |
 | 4.5.4 | Extend `GET /api/health` to include `autoVerify: { enabled, provider, lastPollAt, consecutiveErrors }` (no PII) | `server.js` |
-| 4.5.5 | Wire the new events into `scripts/analyze-audit-log.js` so the daily summary rollup includes auto-verify counts | `scripts/analyze-audit-log.js` |
+| 4.5.5 | Wire the new events into `scripts/security/analyze-audit-log.js` so the daily summary rollup includes auto-verify counts | `scripts/security/analyze-audit-log.js` |
 
 ### 4.6 Detection Engineering (DE-AV-1..6)
 
@@ -504,7 +504,7 @@ review.
 | 7 | `lib/audit-log.js` (new event types) | — | 15 min |
 | 8 | `routes/admin.js` (`/auto-verify/stats`, `/auto-verify/unmatched`) | 7 | 30 min |
 | 9 | `server.js` (`/api/health` extension) | — | 10 min |
-| 10 | `scripts/analyze-audit-log.js` (DE-AV-1..6 rules) | 7 | 30 min |
+| 10 | `scripts/security/analyze-audit-log.js` (DE-AV-1..6 rules) | 7 | 30 min |
 | 11 | `scripts/test-auto-verification-security.js` (15 test cases) | 2, 3, 4, 5, 6, 7, 8 | 90 min |
 | 12 | `scripts/test-secret-leak.js` (greps log files for password/pepper) | — | 15 min |
 | 13 | `package.json` (add `test:auto-verify-security` and `test:secret-leak` scripts) | 11, 12 | 5 min |
@@ -531,9 +531,9 @@ Before claiming Phase 3 complete, all of the following must be true.
 - [ ] `npm run check` is green (existing 22 contract tests + 8 scanners + new `test:auto-verify-security` 15 tests + new `test:secret-leak` = 38+ green)
 - [ ] `npm audit --audit-level=high` shows 0 high/critical
 - [ ] `node -e "JSON.parse(require('fs').readFileSync('docs/security/threat-model.json'))"` exits 0
-- [ ] `scripts/scan-xss-patterns.js` still 0 new (regression guard)
-- [ ] `scripts/scan-npm-typosquats.js` still 0 hits
-- [ ] `scripts/test-csrf-coverage.js` still 25/25
+- [ ] `scripts/security/scan-xss-patterns.js` still 0 new (regression guard)
+- [ ] `scripts/security/scan-npm-typosquats.js` still 0 hits
+- [ ] `tests/security/test-csrf-coverage.js` still 25/25
 
 ### 9.2 Manual
 
@@ -544,7 +544,7 @@ Before claiming Phase 3 complete, all of the following must be true.
 - [ ] `/api/admin/auto-verify/stats` returns 200 with admin session, 403 without
 - [ ] `/api/admin/auto-verify/unmatched` returns 200 with admin session, 403 without
 - [ ] `/api/health` includes `autoVerify` field
-- [ ] `scripts/analyze-audit-log.js` produces DE-AV-1..6 entries when fed a synthetic log fixture
+- [ ] `scripts/security/analyze-audit-log.js` produces DE-AV-1..6 entries when fed a synthetic log fixture
 
 ### 9.3 Documentation
 
@@ -618,5 +618,5 @@ Before claiming Phase 3 complete, all of the following must be true.
 - `lib/payment-reconciler.js` — `markPaymentPaid` (called by matcher)
 - `lib/audit-log.js` — NDJSON audit writer
 - `routes/admin.js` — admin endpoints (extend with `/auto-verify/*`)
-- `scripts/analyze-audit-log.js` — daily analyzer (extend with DE-AV rules)
+- `scripts/security/analyze-audit-log.js` — daily analyzer (extend with DE-AV rules)
 - `scripts/test-*.js` — existing test suite

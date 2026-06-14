@@ -21,7 +21,7 @@ the new_mafiking payment system, post Phase 6 hardening.
 
 ## Auto-rotation
 
-The `scripts/rotate-secrets.js` script generates cryptographically strong
+The `scripts/security/rotate-secrets.js` script generates cryptographically strong
 random secrets for the keys it can manage. It does NOT auto-modify
 `.env` — the operator must paste the output manually.
 

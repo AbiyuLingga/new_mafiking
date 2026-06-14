@@ -1,7 +1,7 @@
 # Lighthouse CI setup (S2 safeguard)
 
 This project enforces the mobile perf plan's quality budgets via Lighthouse.
-The local `scripts/perf-audit.js` is a thin wrapper around the `lighthouse`
+The local `scripts/performance/perf-audit.js` is a thin wrapper around the `lighthouse`
 core package; CI uses the same thresholds via a GitHub Actions workflow.
 
 ## Local usage
@@ -41,4 +41,4 @@ npx lighthouse http://127.0.0.1:3001/landing --view
 
 `.github/workflows/perf-audit.yml` runs both desktop and mobile audits on
 every PR. Reports are uploaded as artifacts. Adjust thresholds in
-`scripts/perf-audit.js` if the plan is amended.
+`scripts/performance/perf-audit.js` if the plan is amended.

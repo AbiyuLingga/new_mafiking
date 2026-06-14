@@ -464,7 +464,7 @@ db/database.sqlite
 Portable seed/source data:
 
 ```text
-db/question-bank.json
+db/seeds/question-bank.json
 ```
 
 Recommendation metadata:
@@ -627,9 +627,9 @@ Profile narrative calls must read `SOP-PROFILE-SUMMARY.md` through `routes/corre
 
 ```text
 Old Mafiking SQLite DB
-  -> scripts/export-question-bank.js
-  -> db/question-bank.json
-  -> scripts/import-question-bank.js
+  -> scripts/data/export-question-bank.js
+  -> db/seeds/question-bank.json
+  -> scripts/data/import-question-bank.js
   -> db/database.sqlite
 ```
 
@@ -648,9 +648,9 @@ Import script replaces those four tables in a transaction after checking whether
 
 ```text
 Local db/database.sqlite
-  -> scripts/export-tryout-bank.js
-  -> db/tryout-bank.json
-  -> scripts/import-tryout-bank.js
+  -> scripts/data/export-tryout-bank.js
+  -> db/seeds/tryout-bank.json
+  -> scripts/data/import-tryout-bank.js
   -> db/database.sqlite or production DB
 ```
 
@@ -689,9 +689,9 @@ Important: `npm run build` validates the built Vite path, but it does not valida
 - There is no automated unit/integration test suite yet.
 - There is no versioned database migration system yet.
 - Static Belajar chapter cards outnumber imported backend question data.
-- Try Out content is portable through `db/tryout-bank.json`; SQLite runtime files remain ignored and are not the source of truth for deployment.
+- Try Out content is portable through `db/seeds/tryout-bank.json`; SQLite runtime files remain ignored and are not the source of truth for deployment.
 - The profile UI normalizes avatar uploads to 256x256 WebP (with PNG fallback) before sending them to `profile-media/avatars/`. This runtime directory is preserved by `deploy.sh` and is not replaced by application source deploys.
-- `users.avatar_url` and `profile-media/` form one runtime-data unit. Deploy snapshots and counts avatar files before/after sync, `ops/backup.sh` archives the database together with profile media, and `scripts/reconcile-profile-media.js` can report or clear only local avatar references whose files are missing.
+- `users.avatar_url` and `profile-media/` form one runtime-data unit. Deploy snapshots and counts avatar files before/after sync, `ops/backup.sh` archives the database together with profile media, and `scripts/maintenance/reconcile-profile-media.js` can report or clear only local avatar references whose files are missing.
 - Practice is multiple-choice-first; canvas correction is still available but no longer the default entry mode.
 - Auto-guest users can accumulate during browser/API testing.
 - Payment route uses sandbox URL by default in code.
@@ -703,7 +703,7 @@ Important: `npm run build` validates the built Vite path, but it does not valida
 ### Add New Question Banks
 
 1. Export or create rows for `chapters`, `subtopics`, `problems`, and `problem_steps`.
-2. Update `db/question-bank.json`.
+2. Update `db/seeds/question-bank.json`.
 3. Import into local DB.
 4. Update `src/practice.jsx` mapping if the new static chapter title should open the new backend data.
 5. Smoke-test the chapter in browser.
