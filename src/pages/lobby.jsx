@@ -43,7 +43,7 @@ const DevScreen = ({ unlockCount, onUnlockAttempt }) => {
       cursor: 'pointer',
     }}>
       <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', padding: '0 24px' }}>
-        <img src="/assets/logo.png" alt="Mafiking" style={{ width: 56, height: 56, objectFit: 'contain', marginBottom: 24, opacity: 0.9 }} />
+        <img src="/assets/logo-icon.webp" alt="Mafiking" style={{ width: 56, height: 56, objectFit: 'contain', marginBottom: 24, opacity: 0.9 }} />
         <h1 style={{
           color: '#0b1326',
           fontSize: 'clamp(28px, 6vw, 52px)',
@@ -96,13 +96,25 @@ const EyeIcon = ({ size = 18, hidden = false }) => (
 const EMAIL_VERIFIED_EVENT_KEY = "mafiking:email-verified";
 const AUTH_SCREEN_BACK_PATH_STORAGE_KEY = "mafiking:last-non-auth-path";
 
+async function ensureLobbyClerkBridge() {
+  if (window.MafikingClerk) return window.MafikingClerk;
+  if (typeof window.__mafikingLoadClerkBridge !== "function") return null;
+  try {
+    await window.__mafikingLoadClerkBridge();
+  } catch (error) {
+    console.warn("[clerk-bridge] lazy load failed:", error);
+    return null;
+  }
+  return window.MafikingClerk || null;
+}
+
 const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authState = null, setRoute, onSuccess, currentUser = null, initialClerkUser = null }) => {
   const { useState } = React;
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [displayName, setDisplayName] = useState(initialClerkUser?.suggested_display_name || initialClerkUser?.display_name || '');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(authState?.error || '');
   const [loading, setLoading] = useState(false);
   const [clerkLoading, setClerkLoading] = useState(false);
   const [clerkEnabled, setClerkEnabled] = useState(false);
@@ -117,6 +129,7 @@ const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authSta
   const isGuestUser = currentUser && currentUser.display_name?.startsWith('Tamu_');
   const verificationSyncRef = React.useRef(false);
   const verifyTokenSubmitRef = React.useRef(false);
+  const clerkPreloadAttemptedRef = React.useRef(false);
   const isSafeBackPath = (path) => {
     const clean = String(path || '').split('?')[0].replace(/\/+$/, '') || '/';
     return Boolean(path && path.startsWith('/') && clean !== '/login' && clean !== '/signup' && clean !== '/profil' && clean !== '/profile');
@@ -150,8 +163,11 @@ const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authSta
 
   React.useEffect(() => {
     let alive = true;
-    if (!window.MafikingClerk || typeof window.MafikingClerk.isEnabled !== 'function') return undefined;
-    window.MafikingClerk.isEnabled()
+    ensureLobbyClerkBridge()
+      .then((bridge) => {
+        if (!alive || !bridge || typeof bridge.isEnabled !== 'function') return false;
+        return bridge.isEnabled();
+      })
       .then((enabled) => {
         if (alive) setClerkEnabled(Boolean(enabled));
       })
@@ -171,6 +187,7 @@ const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authSta
     if (!authState) return;
     setVerifyState(authState);
     setCooldown(Number(authState.cooldownSeconds || 0));
+    if (authState.error) setError(String(authState.error));
   }, [authState]);
 
   const confirmEmailVerification = React.useCallback(async () => {
@@ -343,44 +360,112 @@ const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authSta
     }
   };
 
+  const shouldEagerPreloadGoogleAuth = () => {
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection || null;
+    const effectiveType = connection && connection.effectiveType ? String(connection.effectiveType).toLowerCase() : '';
+    if (connection && connection.saveData) return false;
+    if (effectiveType === 'slow-2g' || effectiveType === '2g') return false;
+    return true;
+  };
+
+  const markGoogleAuthTiming = (step) => {
+    try {
+      const markName = 'mafiking-google-auth:' + step;
+      if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
+        performance.mark(markName);
+      }
+      window.__mafikingGoogleAuthTiming = window.__mafikingGoogleAuthTiming || [];
+      window.__mafikingGoogleAuthTiming.push({
+        at: typeof performance !== 'undefined' && typeof performance.now === 'function' ? Math.round(performance.now()) : Date.now(),
+        mode: isSignup ? 'signup' : 'login',
+        mobile: prefersFullPageGoogleAuth(),
+        step,
+      });
+    } catch (_) {}
+  };
+
+  React.useEffect(() => {
+    if (!clerkEnabled || isVerifyEmail || isVerifyToken || clerkPreloadAttemptedRef.current) return undefined;
+    let cancelled = false;
+    let idleId = 0;
+    let timeoutId = 0;
+    const prewarm = async () => {
+      if (cancelled || clerkPreloadAttemptedRef.current) return;
+      clerkPreloadAttemptedRef.current = true;
+      try {
+        const bridge = await ensureLobbyClerkBridge();
+        if (cancelled || !bridge) return;
+        if (typeof bridge.warmup === 'function') {
+          await bridge.warmup();
+        }
+        if (cancelled || !shouldEagerPreloadGoogleAuth()) return;
+        if (typeof bridge.preload === 'function') {
+          await bridge.preload();
+        }
+      } catch (error) {
+        clerkPreloadAttemptedRef.current = false;
+        console.warn('[clerk-preload] failed:', error && error.message ? error.message : error);
+      }
+    };
+
+    if (prefersFullPageGoogleAuth()) {
+      timeoutId = window.setTimeout(prewarm, 120);
+    } else if (typeof window.requestIdleCallback === 'function') {
+      idleId = window.requestIdleCallback(prewarm, { timeout: 2500 });
+    } else {
+      timeoutId = window.setTimeout(prewarm, 900);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleId && typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleId);
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, [clerkEnabled, isVerifyEmail, isVerifyToken]);
+
+  const getGoogleAuthTimeoutMs = () => {
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection || null;
+    const effectiveType = connection && connection.effectiveType ? String(connection.effectiveType).toLowerCase() : '';
+    if ((connection && connection.saveData) || effectiveType === 'slow-2g' || effectiveType === '2g') return 45000;
+    if (prefersFullPageGoogleAuth()) return 30000;
+    return 15000;
+  };
+
+  const withGoogleAuthTimeout = (promise) => {
+    let timeoutId = 0;
+    const timeout = new Promise((_, reject) => {
+      timeoutId = window.setTimeout(() => {
+        reject(new Error('Google belum merespons. Periksa koneksi lalu coba lagi.'));
+      }, getGoogleAuthTimeoutMs());
+    });
+    return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
+  };
+
   const handleClerkAuth = async () => {
+    markGoogleAuthTiming('click');
     setClerkLoading(true);
     setError('');
     try {
-      if (!window.MafikingClerk) {
+      const clerkBridge = await ensureLobbyClerkBridge();
+      markGoogleAuthTiming('bridge-ready');
+      if (!clerkBridge) {
         throw new Error('Login Google belum siap dimuat.');
       }
 
-      if (
-        prefersFullPageGoogleAuth()
-        && typeof window.MafikingClerk.openAuth === 'function'
-      ) {
-        await window.MafikingClerk.openAuth(isSignup ? 'signup' : 'login', {
+      if (typeof clerkBridge.openAuth === 'function') {
+        markGoogleAuthTiming('redirect-start');
+        const result = await withGoogleAuthTimeout(clerkBridge.openAuth(isSignup ? 'signup' : 'login', {
           provider: 'google',
           redirect,
-        });
+        }));
+        if (result && result.user) {
+          if (typeof onSuccess === 'function') onSuccess(result.user, result.redirect || redirect);
+          else setRoute(result.redirect || redirect || { route: "belajar", section: "Try Out" });
+        }
         return;
       }
 
-      if (typeof window.MafikingClerk.openGooglePopup !== 'function') {
-        if (typeof window.MafikingClerk.openAuth === 'function') {
-          await window.MafikingClerk.openAuth(isSignup ? 'signup' : 'login', {
-            provider: 'google',
-            redirect,
-          });
-          return;
-        }
-        throw new Error('Login Google belum siap dimuat.');
-      }
-
-      const result = await window.MafikingClerk.openGooglePopup(isSignup ? 'signup' : 'login', {
-        redirect,
-      });
-      const user = result && result.user ? result.user : null;
-      if (!user) throw new Error('Login Google belum selesai.');
-      const resolvedRedirect = normalizeRedirectValue(result.redirect) || normalizeRedirectValue(redirect);
-      if (typeof onSuccess === 'function') onSuccess(user, resolvedRedirect);
-      else setRoute(resolvedRedirect || { route: "belajar", section: "Try Out" });
+      throw new Error('Login Google belum siap dimuat.');
     } catch (err) {
       setError(err.message || 'Login Google gagal.');
     } finally {
@@ -429,7 +514,7 @@ const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authSta
           width: '100%',
         }}>
           <div style={{ textAlign: 'center', marginBottom: 26 }}>
-            <img src="/assets/logo.png" alt="Mafiking" style={{ width: 56, height: 56, objectFit: 'contain', marginBottom: 10 }} />
+            <img src="/assets/logo-icon.webp" alt="Mafiking" style={{ width: 56, height: 56, objectFit: 'contain', marginBottom: 10 }} />
             <h1 style={{ color: '#0b1326', fontSize: 26, fontWeight: 800, margin: 0 }}>Pilih nama tampilan</h1>
             <p style={{ color: 'rgba(11,19,38,0.55)', fontSize: 14, lineHeight: 1.6, marginTop: 8 }}>
               Nama ini yang akan muncul di akun Mafiking kamu.
@@ -632,7 +717,7 @@ const AuthScreen = ({ mode = "login", redirect = null, backRoute = null, authSta
       }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <img src="/assets/logo.png" alt="Mafiking" style={{ width: 60, height: 60, objectFit: 'contain', marginBottom: 10 }} />
+          <img src="/assets/logo-icon.webp" alt="Mafiking" style={{ width: 60, height: 60, objectFit: 'contain', marginBottom: 10 }} />
           <h1 style={{ fontSize: 28, color: '#0b1326', letterSpacing: '-0.01em', fontWeight: 700, margin: 0 }}>
             {isSignup ? 'Sign Up Mafiking' : 'Masuk Mafiking'}
           </h1>
@@ -1095,8 +1180,9 @@ const LandingUploadIcon = ({ className = "h-4 w-4" }) => (
   </svg>
 );
 
-const LandingMediaImage = ({ src, alt, fit = "contain", objectPosition = "50% 50%", imageClassName = "" }) => {
+const LandingMediaImage = ({ src, alt, fit = "contain", objectPosition = "50% 50%", imageClassName = "", sizes = "(max-width: 768px) 300px, (max-width: 1280px) 50vw, 760px" }) => {
   const [transformOrigin, setTransformOrigin] = React.useState("50% 50%");
+  const responsiveVariants = LANDING_RESPONSIVE_IMAGE_VARIANTS[normalizeLandingAssetPath(src)];
 
   const handlePointerMove = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -1105,7 +1191,7 @@ const LandingMediaImage = ({ src, alt, fit = "contain", objectPosition = "50% 50
     setTransformOrigin(`${Math.max(0, Math.min(100, x)).toFixed(1)}% ${Math.max(0, Math.min(100, y)).toFixed(1)}%`);
   };
 
-  return (
+  const image = (
     <img
       src={src}
       alt={alt}
@@ -1116,6 +1202,16 @@ const LandingMediaImage = ({ src, alt, fit = "contain", objectPosition = "50% 50
       className={`absolute inset-0 h-full w-full ${fit === "cover" ? "object-cover" : "object-contain"} opacity-90 transition-transform duration-500 ease-out hover:scale-[1.28] ${imageClassName}`}
       style={{ objectPosition, transformOrigin }}
     />
+  );
+
+  if (!responsiveVariants) return image;
+
+  return (
+    <picture>
+      <source type="image/avif" srcSet={responsiveVariants.avif} sizes={sizes} />
+      <source type="image/webp" srcSet={responsiveVariants.webp} sizes={sizes} />
+      {image}
+    </picture>
   );
 };
 
@@ -1159,6 +1255,21 @@ function normalizeLandingAssetPath(url) {
     return String(url || "").split("?")[0];
   }
 }
+
+const LANDING_RESPONSIVE_IMAGE_VARIANTS = {
+  "/assets/landing/rekomendasi-latihan.jpg": {
+    avif: "/assets/landing/rekomendasi-latihan-mobile.avif 640w, /assets/landing/rekomendasi-latihan-tablet.avif 960w, /assets/landing/rekomendasi-latihan-desktop.avif 1280w",
+    webp: "/assets/landing/rekomendasi-latihan-mobile.webp 640w, /assets/landing/rekomendasi-latihan-tablet.webp 960w, /assets/landing/rekomendasi-latihan-desktop.webp 1280w",
+  },
+  "/assets/landing/history-kesalahan.jpg": {
+    avif: "/assets/landing/history-kesalahan-mobile.avif 640w, /assets/landing/history-kesalahan-tablet.avif 960w, /assets/landing/history-kesalahan-desktop.avif 1280w",
+    webp: "/assets/landing/history-kesalahan-mobile.webp 640w, /assets/landing/history-kesalahan-tablet.webp 960w, /assets/landing/history-kesalahan-desktop.webp 1280w",
+  },
+  "/assets/landing/simulasi-tryout.jpg": {
+    avif: "/assets/landing/simulasi-tryout-mobile.avif 640w, /assets/landing/simulasi-tryout-tablet.avif 960w, /assets/landing/simulasi-tryout-desktop.avif 1280w",
+    webp: "/assets/landing/simulasi-tryout-mobile.webp 640w, /assets/landing/simulasi-tryout-tablet.webp 960w, /assets/landing/simulasi-tryout-desktop.webp 1280w",
+  },
+};
 
 function resolveLandingDemoVideo(url) {
   const assetPath = normalizeLandingAssetPath(url);
@@ -1618,13 +1729,16 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
                   <div className="absolute inset-x-0 sm:inset-x-2 bottom-4 sm:bottom-10 top-10 sm:top-20 z-10 flex flex-col overflow-hidden rounded-[1.5rem] sm:rounded-[2.5rem] bg-white shadow-sm">
                     <div className="flex h-10 sm:h-14 items-center gap-1.5 sm:gap-2 border-b border-slate-100 bg-slate-50/50 px-3 sm:px-6"><div className="h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-slate-200" /><div className="h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-slate-200" /><div className="h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-slate-200" /></div>
                     <div className="relative flex-grow overflow-hidden bg-slate-50">
+                      {!isTeacherMobileMode && (
                       <picture>
                         <source
+                          media="(min-width: 640px)"
                           type="image/avif"
                           srcSet="/assets/landing_mentors_20260607-mobile.avif 640w, /assets/landing_mentors_20260607-tablet.avif 960w, /assets/landing_mentors_20260607-desktop.avif 1280w"
                           sizes="(max-width: 768px) 640px, (max-width: 1280px) 50vw, 1280px"
                         />
                         <source
+                          media="(min-width: 640px)"
                           type="image/webp"
                           srcSet="/assets/landing_mentors_20260607-mobile.webp 640w, /assets/landing_mentors_20260607-tablet.webp 960w, /assets/landing_mentors_20260607-desktop.webp 1280w"
                           sizes="(max-width: 768px) 640px, (max-width: 1280px) 50vw, 1280px"
@@ -1637,6 +1751,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
                           src="/assets/landing_mentors_20260607.png"
                         />
                       </picture>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2018,7 +2133,7 @@ const Landing = ({ setRoute, tweaks, isAdmin = false, currentUser = null, showTr
             <button onClick={startFree} className="mb-6 sm:mb-8 flex items-center justify-center gap-2 rounded-full bg-[#FFF44F] px-6 py-3 sm:px-8 sm:py-4 text-sm sm:text-lg font-bold text-slate-900 transition-all hover:bg-[#FFF44F]/90 active:scale-95" type="button">Coba Gratis <Icon.Arrow className="ml-1 h-4 w-4 sm:h-5 sm:w-5" /></button>
             <div className="mb-6 sm:mb-10 mt-8 sm:mt-16 h-px w-full bg-slate-800/80" />
             <div className="grid w-full items-center gap-8 text-sm font-medium text-slate-500 lg:grid-cols-[1fr_auto_1fr]">
-              <div className="flex items-center justify-center gap-3 lg:justify-start"><img src="/assets/logo.png" alt="MAFIKING" className="h-8 w-auto brightness-0 invert" /><span className="text-xl font-extrabold tracking-tight text-white">MAFIKING</span></div>
+              <div className="flex items-center justify-center gap-3 lg:justify-start"><img src="/assets/logo-icon.webp" alt="MAFIKING" className="h-8 w-auto brightness-0 invert" loading="lazy" decoding="async" /><span className="text-xl font-extrabold tracking-tight text-white">MAFIKING</span></div>
               <div className="flex flex-col items-center gap-4">
                 <div className="flex items-center justify-center gap-3">
                   <a className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-white/[0.03] text-slate-300 transition-colors hover:border-emerald-400 hover:bg-emerald-400/10 hover:text-emerald-300" href="https://wa.me/6281246049951" target="_blank" rel="noreferrer" aria-label="WhatsApp Mafiking">

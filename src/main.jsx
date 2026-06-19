@@ -7,11 +7,11 @@ import './main.css';
 const REACT_RUNTIME_SCRIPTS = [
   {
     globalName: 'React',
-    src: 'https://unpkg.com/react@18.3.1/umd/react.production.min.js',
+    src: '/assets/vendor/react-18.3.1.production.min.js?v=18.3.1',
   },
   {
     globalName: 'ReactDOM',
-    src: 'https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js',
+    src: '/assets/vendor/react-dom-18.3.1.production.min.js?v=18.3.1',
   },
 ];
 
@@ -59,21 +59,64 @@ async function ensureReactRuntime() {
   });
 }
 
+function normalizeBootstrapPath() {
+  return String(window.location.pathname || "/").replace(/\/+$/, "") || "/";
+}
+
+function shouldWarmAuthRoute(path = normalizeBootstrapPath()) {
+  return path === '/login' || path === '/signup';
+}
+
+function defineDeferredLoaders() {
+  window.__mafikingLoadClerkBridge = () => import('./core/clerk-auth.jsx');
+  window.__mafikingLoadOnboarding = () => import('./core/onboarding.jsx');
+  window.__mafikingLoadTweaksPanel = () => import('./core/tweaks-panel.jsx');
+}
+
+function warmAuthRouteEarly(path = normalizeBootstrapPath()) {
+  if (!shouldWarmAuthRoute(path)) return;
+
+  window.__mafikingLoadClerkBridge()
+    .then((bridge) => {
+      if (bridge && typeof bridge.warmup === 'function') return bridge.warmup();
+      return null;
+    })
+    .catch((error) => {
+      console.warn('[mafiking-bootstrap] auth warmup failed:', error && error.message ? error.message : error);
+    });
+}
+
 async function bootstrap() {
   await ensureReactRuntime();
-  await import('./core/performance-vitals.js');
-  await import('./core/tweaks-panel.jsx');
-  await import('./core/clerk-auth.jsx');
-  await import('./core/math-loader.js');
-  await import('./core/backend-api.jsx');
+  defineDeferredLoaders();
+  const bootstrapPath = normalizeBootstrapPath();
+  warmAuthRouteEarly(bootstrapPath);
+
+  const vitalsReady = import('./core/performance-vitals.js').catch((error) => {
+    console.warn('[mafiking-bootstrap] performance vitals failed:', error);
+  });
+
+  await Promise.all([
+    import('./core/tweaks-core.jsx'),
+    import('./core/math-loader.js'),
+    import('./core/backend-api.jsx'),
+  ]);
+
+  if (bootstrapPath === '/sso-callback') {
+    await window.__mafikingLoadClerkBridge();
+  }
+
   await import('./core/shared.jsx');
-  await import('./core/onboarding.jsx');
   await import('./core/route-prefetch.js');
   await import('./core/app.jsx');
+  await vitalsReady;
 }
 
 function renderBootstrapError(error) {
   console.error('[mafiking-bootstrap] failed:', error);
+  document.documentElement.classList.add('mafiking-react-ready');
+  const staticShell = document.getElementById('mafiking-static-landing');
+  if (staticShell) staticShell.setAttribute('aria-hidden', 'true');
   const root = document.getElementById('root');
   if (!root) return;
 

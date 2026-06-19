@@ -27,7 +27,7 @@ Express server.js
   v
 Vite-built shell
   |
-  | src/main.jsx exposes React globals and bootstraps legacy-global modules
+  | src/main.jsx exposes React globals and bootstraps first-paint modules
   v
 Static React app in browser
   |
@@ -80,9 +80,11 @@ index.html -> src/main.jsx -> dist/index.html
 Responsibilities:
 
 - Load fonts and `src/main.jsx` as the Vite module entry.
-- Load React 18 UMD and expose `window.React` / `window.ReactDOM` for existing global-style JSX files.
-- Load shell dependencies in legacy order before `src/core/app.jsx`.
+- For `/`, `/landing`, and `/index.html`, ship a small static landing shell in `index.html` so the navbar/hero can paint before the lobby route chunk runs.
+- Preload and load React 18 UMD from same-origin `assets/vendor/` files, then expose `window.React` / `window.ReactDOM` for existing global-style JSX files.
+- Load only first-paint shell dependencies before `src/core/app.jsx`; Clerk, onboarding, and the edit-mode tweaks panel are exposed as lazy loaders and imported when the auth/onboarding/edit paths need them.
 - Keep route files out of the main chunk; `src/core/app.jsx` dynamic-imports route chunks.
+- Serve built text assets from precompressed Brotli/gzip siblings when the client supports them.
 
 Legacy fallback file:
 
@@ -101,7 +103,8 @@ Responsibilities:
 Script load order matters:
 
 ```text
-/tweaks-panel.jsx -> src/core/tweaks-panel.jsx
+src/core/tweaks-core.jsx
+src/core/tweaks-panel.jsx
 src/core/clerk-auth.jsx
 src/core/math-loader.js
 src/core/backend-api.jsx
@@ -138,8 +141,8 @@ The production frontend is Vite-built, while components preserve browser-global 
 | `src/core/app.jsx` | Route state, tweaks defaults, root render. |
 | `src/core/shared.jsx` | Navigation, footer, icons, shared components. |
 | `src/core/backend-api.jsx` | Same-origin `fetch` helper. |
-| `src/core/clerk-auth.jsx` | Static-Babel Clerk bridge: loads Clerk browser scripts, opens sign-in/sign-up, and syncs Clerk users to local sessions. |
-| `src/core/onboarding.jsx` | Mandatory profile completion modal for non-admin users whose local profile fields are incomplete. |
+| `src/core/clerk-auth.jsx` | Static-Babel Clerk bridge: lazy-loaded in the built path for auth actions/OAuth callback; loads Clerk browser scripts, opens sign-in/sign-up, and syncs Clerk users to local sessions. |
+| `src/core/onboarding.jsx` | Mandatory profile completion modal for non-admin users whose local profile fields are incomplete; lazy-loaded in the built path once the app knows a registered user needs it. |
 | `src/core/route-prefetch.js` | Shared Vite route-loader registry, adaptive idle prefetch, mobile intent prefetch, and route timing marks. |
 | `src/pages/lobby.jsx` | Public marketing landing plus login/sign-up screen. |
 | `src/pages/belajar.jsx` | Free Try Out tab, static chapter cards, animated mapel selector, chapter-to-practice navigation. |
@@ -155,7 +158,8 @@ The production frontend is Vite-built, while components preserve browser-global 
 | `src/pages/invoices.jsx` | Authenticated user payment-history page, pending-status reopen action, and printable invoice view. |
 | `src/features/admin/admin.jsx` | Admin page/modal shell, subject/Try Out content CRUD, import tab, users tab, and monitoring tab shell. |
 | `src/styles.css` | Local custom CSS and appended feature styles. |
-| `src/core/tweaks-panel.jsx` | Tweaks panel and persisted tweak state. |
+| `src/core/tweaks-core.jsx` | Tiny first-paint `useTweaks` hook used by the app before the edit panel is loaded. |
+| `src/core/tweaks-panel.jsx` | Idle-loaded edit-mode tweaks panel and controls. |
 
 ### Route Model
 
@@ -218,6 +222,7 @@ Payment status URLs preserve their order query:
 ### Public Landing And Access Gates
 
 - `/` renders marketing for guests and redirects registered sessions to `/belajar`; `/landing` always renders marketing.
+- In the built path, `index.html` includes a static first-paint version of the landing navbar/hero/stats for `/` and `/landing`. `src/core/app.jsx` marks `html.mafiking-react-ready` once the active route chunk is ready, which hides the static shell and reveals the React route.
 - Clicking the Mafiking logo from app routes returns to the public landing.
 - The landing `Coba Gratis` CTA routes to `Belajar -> Try Out`.
 - Landing media slots are loaded from `GET /api/landing-media`; admin mode can replace them inline through `/api/admin/landing-media`, while the old Admin Panel `Landing Page` tab remains removed.
@@ -236,7 +241,7 @@ Payment status URLs preserve their order query:
 
 ### Tweaks
 
-Tweaks are controlled by `src/core/app.jsx` defaults and `src/core/tweaks-panel.jsx`.
+Tweaks are controlled by `src/core/app.jsx` defaults, `src/core/tweaks-core.jsx`, and the idle-loaded `src/core/tweaks-panel.jsx`.
 
 Current defaults:
 

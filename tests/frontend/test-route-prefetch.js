@@ -7,7 +7,10 @@ const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 const routePrefetchPath = path.join(PROJECT_ROOT, 'src', 'core', 'route-prefetch.js');
 const routePrefetchSource = fs.readFileSync(routePrefetchPath, 'utf8');
 const appSource = fs.readFileSync(path.join(PROJECT_ROOT, 'src', 'core', 'app.jsx'), 'utf8');
+const belajarSource = fs.readFileSync(path.join(PROJECT_ROOT, 'src', 'pages', 'belajar.jsx'), 'utf8');
 const sharedSource = fs.readFileSync(path.join(PROJECT_ROOT, 'src', 'core', 'shared.jsx'), 'utf8');
+const premiumChapterOpenMatch = belajarSource.match(/function openPremiumChapterPractice[\s\S]*?\n\}/);
+const premiumChapterOpenSource = premiumChapterOpenMatch ? premiumChapterOpenMatch[0] : '';
 
 function createHarness(connection = {}) {
     const loadCalls = [];
@@ -82,6 +85,9 @@ async function run() {
     assert.doesNotMatch(routePrefetchSource, /if\s*\(\/\\\.jsx/);
     assert.match(appSource, /loadAppRoute\("leaderboard",\s*"Leaderboard"/);
     assert.match(appSource, /!routeChunkReady\s*&&\s*<RouteChunkFallback/);
+    assert.match(appSource, /Latihan Soal Premium Terkunci/, 'locked premium practice must show an access gate before package navigation');
+    assert.match(premiumChapterOpenSource, /setRoute\(\{ route: "practice", practice: buildChapterPracticeContext\(chapter, mapel\) \}\);/, 'premium chapter cards must open the practice gate route');
+    assert.doesNotMatch(premiumChapterOpenSource, /setRoute\("tryout"\)/, 'premium chapter cards must not jump directly to the Paket page');
     assert.match(sharedSource, /data-route=\{item\.id\}/);
     assert.match(sharedSource, /data-route=\{l\.id\}/);
 
@@ -111,11 +117,26 @@ async function run() {
         normalHarness.idleCallbacks.shift()();
         await flushPromises();
     }
+    assert.deepStrictEqual(normalHarness.loadCalls, [], 'adjacent routes must wait until the first route has rendered');
+    normalHarness.api.markRouteRendered('belajar');
+    while (normalHarness.idleCallbacks.length) {
+        normalHarness.idleCallbacks.shift()();
+        await flushPromises();
+    }
     assert.deepStrictEqual(
         normalHarness.loadCalls,
         ['misi', 'tryout', 'leaderboard'],
         'adjacent primary tabs must prefetch sequentially and remain capped'
     );
+
+    const lobbyHarness = createHarness({ saveData: false, effectiveType: '4g' });
+    lobbyHarness.api.markRouteRendered('lobby');
+    lobbyHarness.api.prefetchAdjacentRoutes('lobby');
+    while (lobbyHarness.idleCallbacks.length) {
+        lobbyHarness.idleCallbacks.shift()();
+        await flushPromises();
+    }
+    assert.deepStrictEqual(lobbyHarness.loadCalls, [], 'landing routes must not speculative-prefetch adjacent app chunks');
 
     const pointerHarness = createHarness({ saveData: true, effectiveType: '2g' });
     pointerHarness.api.attachIntentPrefetch();

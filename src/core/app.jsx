@@ -95,8 +95,24 @@ const AUTH_BACK_ROUTE_STORAGE_KEY = "mafiking:last-non-auth-route";
 const AUTH_BACK_PATH_STORAGE_KEY = "mafiking:last-non-auth-path";
 const CLERK_OAUTH_CALLBACK_PATH = "/sso-callback";
 
+function isRegisteredAppUser(user) {
+  return Boolean(user && !String(user.display_name || "").startsWith("Tamu_"));
+}
+
 function isClerkOAuthCallbackPath() {
   return normalizeAppPath(window.location.pathname) === CLERK_OAUTH_CALLBACK_PATH;
+}
+
+async function ensureMafikingClerkBridge() {
+  if (window.MafikingClerk) return window.MafikingClerk;
+  if (typeof window.__mafikingLoadClerkBridge !== "function") return null;
+  try {
+    await window.__mafikingLoadClerkBridge();
+  } catch (error) {
+    console.warn("[clerk-bridge] lazy load failed:", error);
+    return null;
+  }
+  return window.MafikingClerk || null;
 }
 
 function readStoredAuthBackRoute() {
@@ -158,6 +174,8 @@ const App = () => {
   const [activePackages, setActivePackages] = React.useState([]);
   const [confirmAction, setConfirmAction] = React.useState(null);
   const [adminChunkStatus, setAdminChunkStatus] = React.useState(() => window.AdminPage ? "ready" : "idle");
+  const [onboardingModuleReady, setOnboardingModuleReady] = React.useState(() => Boolean(window.ProfileOnboardingModal && window.PhoneNumberPromptModal));
+  const [tweaksPanelReady, setTweaksPanelReady] = React.useState(() => Boolean(window.TweaksPanel));
   // Phase 2.1: lazy-loaded Lobby component. The Vite build emits lobby.jsx
   // as its own chunk (see vite.config.js `mafikingRouteExportPlugin`); the
   // Babel-standalone path already loaded lobby.jsx as a classic <script> and
@@ -175,29 +193,35 @@ const App = () => {
   const [profileComp, setProfileComp] = React.useState(null);
   const [leaderboardComp, setLeaderboardComp] = React.useState(null);
   const [invoicesComp, setInvoicesComp] = React.useState(null);
-  const isGuest = currentUser && currentUser.display_name?.startsWith("Tamu_");
-  const isLoggedIn = currentUser && !isGuest;
+  const isGuest = currentUser && !isRegisteredAppUser(currentUser);
+  const isLoggedIn = isRegisteredAppUser(currentUser);
   const isAdminAccount = currentUser?.role === "admin";
   const canSeeTryoutPage = true;
   const canEditInlineAsAdmin = isAdmin || isAdminAccount;
   const activePackageSet = React.useMemo(() => new Set(Array.isArray(activePackages) ? activePackages.map(item => String(item || '').trim()).filter(Boolean) : []), [activePackages]);
   const hasMissionAccess = isAdminAccount
     || activePackageSet.has("daily-missions")
-    || activePackageSet.has("misi-harian")
-    || activePackageSet.size > 0;
+    || activePackageSet.has("misi-harian");
   const hasPremiumAccess = isAdminAccount
     || activePackageSet.has("special-practice")
-    || activePackageSet.has("latihan-khusus")
-    || activePackageSet.size > 0;
+    || activePackageSet.has("latihan-khusus");
+  const hasDailyMissionPracticeAccess = hasMissionAccess || hasPremiumAccess;
+  const practiceRequiresDailyMissionAccess = Boolean(practiceContext?.isMissionPractice || practiceContext?.isMissionBank);
+  const practiceRequiresSpecialPracticeAccess = Boolean(practiceContext?.requiresSpecialPractice);
+  const hasCurrentPracticeAccess = practiceRequiresDailyMissionAccess ? hasDailyMissionPracticeAccess : hasPremiumAccess;
 
   const refreshCurrentUser = React.useCallback(async () => {
     const user = await MafikingAPI.get("/api/auth/me");
     setCurrentUser(user);
-    try {
-      const packages = await MafikingAPI.get("/api/payment/active-packages");
-      setActivePackages(Array.isArray(packages) ? packages : []);
-    } catch (_) {
+    if (!isRegisteredAppUser(user)) {
       setActivePackages([]);
+    } else {
+      try {
+        const packages = await MafikingAPI.get("/api/payment/active-packages");
+        setActivePackages(Array.isArray(packages) ? packages : []);
+      } catch (_) {
+        setActivePackages([]);
+      }
     }
     return user;
   }, []);
@@ -439,8 +463,9 @@ const App = () => {
         try {
           await MafikingAPI.post("/api/auth/logout", {});
         } catch (_) {}
-        if (window.MafikingClerk && typeof window.MafikingClerk.signOut === "function") {
-          await window.MafikingClerk.signOut();
+        const clerkBridge = await ensureMafikingClerkBridge();
+        if (clerkBridge && typeof clerkBridge.signOut === "function") {
+          await clerkBridge.signOut();
         }
         window.location.assign("/");
       },
@@ -451,8 +476,9 @@ const App = () => {
     try {
       await MafikingAPI.post("/api/auth/logout", {});
     } catch (_) {}
-    if (window.MafikingClerk && typeof window.MafikingClerk.signOut === "function") {
-      await window.MafikingClerk.signOut();
+    const clerkBridge = await ensureMafikingClerkBridge();
+    if (clerkBridge && typeof clerkBridge.signOut === "function") {
+      await clerkBridge.signOut();
     }
     setCurrentUser(null);
     setActivePackages([]);
@@ -477,12 +503,28 @@ const App = () => {
     setAuthReady(true);
     setCurrentUser(user);
     setPendingClerkUser(null);
-    MafikingAPI.get("/api/payment/active-packages")
-      .then((packages) => setActivePackages(Array.isArray(packages) ? packages : []))
-      .catch(() => setActivePackages([]));
+    if (isRegisteredAppUser(user)) {
+      MafikingAPI.get("/api/payment/active-packages")
+        .then((packages) => setActivePackages(Array.isArray(packages) ? packages : []))
+        .catch(() => setActivePackages([]));
+    } else {
+      setActivePackages([]);
+    }
     setAuthMode(null);
     setAuthRedirect(null);
     navigate({ route: "belajar", section: "Try Out" });
+  }, [navigate]);
+
+  const routeAuthSyncFailure = React.useCallback((message = "Login Google berhasil dibuka, tetapi akun belum bisa disinkronkan. Coba login ulang.") => {
+    setAuthReady(true);
+    setPendingClerkUser(null);
+    setAuthCallbackLoading(false);
+    navigate({
+      route: "lobby",
+      authMode: "login",
+      authRedirect: { route: "belajar", section: "Try Out" },
+      authState: { error: message },
+    });
   }, [navigate]);
 
   React.useEffect(() => { window.__mafikingNavigate = navigate; }, [navigate]);
@@ -497,6 +539,7 @@ const App = () => {
       const retry = () => setClerkCallbackReadyTick((tick) => tick + 1);
       window.addEventListener("clerk-ready", retry);
       const retryTimer = window.setTimeout(retry, 250);
+      ensureMafikingClerkBridge().then(retry).catch(() => {});
       const hardStopTimer = window.setTimeout(() => {
         if (!isClerkOAuthCallbackPath()) {
           setAuthCallbackLoading(false);
@@ -506,8 +549,11 @@ const App = () => {
         window.history.replaceState({ route: "lobby" }, document.title, "/");
         setAuthCallbackLoading(false);
         refreshCurrentUser()
-          .then((user) => handleAuthSuccess(user, null))
-          .catch(() => navigate({ route: "lobby", publicLanding: true }));
+          .then((user) => {
+            if (isRegisteredAppUser(user)) handleAuthSuccess(user, null);
+            else routeAuthSyncFailure("Login Google belum selesai tersambung. Coba klik Masuk dengan Google sekali lagi.");
+          })
+          .catch(() => routeAuthSyncFailure());
       }, 9000);
       return () => {
         window.removeEventListener("clerk-ready", retry);
@@ -543,11 +589,15 @@ const App = () => {
       refreshCurrentUser()
         .then((user) => {
           if (cancelled) return;
-          handleAuthSuccess(user, null);
+          if (isRegisteredAppUser(user)) {
+            handleAuthSuccess(user, null);
+          } else {
+            routeAuthSyncFailure();
+          }
         })
         .catch(() => {
           if (cancelled) return;
-          navigate({ route: "lobby", publicLanding: true });
+          routeAuthSyncFailure();
         });
     };
     const fallbackTimer = window.setTimeout(() => {
@@ -573,7 +623,10 @@ const App = () => {
 
     window.MafikingClerk.completeRedirectAuth()
       .then((result) => {
-        if (!result || !result.user) return;
+        if (!result || !result.user) {
+          leaveCallback();
+          return;
+        }
         finishAuthSuccess(result.user, result.redirect);
       })
       .catch((err) => {
@@ -593,7 +646,7 @@ const App = () => {
       window.clearTimeout(fallbackTimer);
       window.clearTimeout(hardStopTimer);
     };
-  }, [authCallbackLoading, clerkCallbackReadyTick, handleAuthSuccess, navigate, refreshCurrentUser]);
+  }, [authCallbackLoading, clerkCallbackReadyTick, handleAuthSuccess, navigate, refreshCurrentUser, routeAuthSyncFailure]);
 
   React.useEffect(() => {
     if (!isAdminAccount) {
@@ -866,7 +919,57 @@ const App = () => {
     if (routePrefetch && typeof routePrefetch.markRouteRendered === "function") {
       routePrefetch.markRouteRendered(route);
     }
+    document.documentElement.classList.add("mafiking-react-ready");
+    const staticShell = document.getElementById("mafiking-static-landing");
+    if (staticShell) staticShell.setAttribute("aria-hidden", "true");
   }, [route, routeChunkReady]);
+
+  React.useEffect(() => {
+    if (!routeChunkReady || tweaksPanelReady || typeof window.__mafikingLoadTweaksPanel !== "function") return undefined;
+    let cancelled = false;
+    const loadPanel = () => {
+      window.__mafikingLoadTweaksPanel()
+        .then(() => { if (!cancelled) setTweaksPanelReady(Boolean(window.TweaksPanel)); })
+        .catch((error) => console.warn("[tweaks-panel] lazy load failed:", error));
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const idleId = window.requestIdleCallback(loadPanel, { timeout: 4500 });
+      return () => {
+        cancelled = true;
+        if (typeof window.cancelIdleCallback === "function") window.cancelIdleCallback(idleId);
+      };
+    }
+    const timeoutId = window.setTimeout(loadPanel, 1800);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [routeChunkReady, tweaksPanelReady]);
+
+  React.useEffect(() => {
+    const needsProfileOnboarding = Boolean(isLoggedIn && !isAdminAccount && currentUser?.profile_needs_completion);
+    const needsPhonePrompt = Boolean(
+      isLoggedIn
+      && !isAdminAccount
+      && currentUser
+      && !currentUser.profile_needs_completion
+      && !String(currentUser.phone_number || "").trim()
+      && !phonePromptDismissed
+    );
+    if (!needsProfileOnboarding && !needsPhonePrompt) return undefined;
+    if (window.ProfileOnboardingModal && window.PhoneNumberPromptModal) {
+      if (!onboardingModuleReady) setOnboardingModuleReady(true);
+      return undefined;
+    }
+    if (typeof window.__mafikingLoadOnboarding !== "function") return undefined;
+    let cancelled = false;
+    window.__mafikingLoadOnboarding()
+      .then(() => {
+        if (!cancelled) setOnboardingModuleReady(Boolean(window.ProfileOnboardingModal && window.PhoneNumberPromptModal));
+      })
+      .catch((error) => console.warn("[onboarding] lazy load failed:", error));
+    return () => { cancelled = true; };
+  }, [currentUser, isAdminAccount, isLoggedIn, onboardingModuleReady, phonePromptDismissed]);
 
   if (authCallbackLoading) {
     return (
@@ -895,6 +998,18 @@ const App = () => {
   const hasAppShellNav = route !== "practice" && route !== "lobby" && !isTryoutFullscreenRoute && !isPaymentStatusRoute;
   const showTryoutPage = route === "tryout" && canSeeTryoutPage;
   const showBelajarPage = route === "belajar" || (route === "tryout" && !canSeeTryoutPage);
+  const TweaksPanelComponent = tweaksPanelReady ? window.TweaksPanel : null;
+  const TweakSectionComponent = tweaksPanelReady ? window.TweakSection : null;
+  const TweakSelectComponent = tweaksPanelReady ? window.TweakSelect : null;
+  const TweakRadioComponent = tweaksPanelReady ? window.TweakRadio : null;
+  const TweakColorComponent = tweaksPanelReady ? window.TweakColor : null;
+  const showTweaksPanel = Boolean(
+    TweaksPanelComponent
+    && TweakSectionComponent
+    && TweakSelectComponent
+    && TweakRadioComponent
+    && TweakColorComponent
+  );
 
   return (
     <div className={`min-h-screen flex flex-col bg-paper text-ink ${hasAppShellNav ? "pb-24 md:pb-0" : ""}`}>
@@ -952,9 +1067,9 @@ const App = () => {
           {route === "payment" && (paymentComp || window.Payment) && React.createElement(paymentComp || window.Payment, { setRoute: navigate, currentUser, context: paymentContext, onAccessChanged: refreshCurrentUser })}
           {route === "practice" && (practiceComp || window.Practice) && (
             <ScreenErrorBoundary>
-              {practiceContext?.isMissionPractice && !hasPremiumAccess
-                ? (authReady ? <AccessGate setRoute={navigate} title="Akses Paket" message="Beli paket untuk membuka latihan soal premium dari Misi Harian." variant="misi" showFreeTryout={false} hideKicker /> : null)
-                : React.createElement(practiceComp || window.Practice, { setRoute: navigate, context: practiceContext, isAdmin: canEditInlineAsAdmin, isLoggedIn, isAuthenticated: Boolean(currentUser), hasPremiumAccess })}
+              {((practiceRequiresDailyMissionAccess && !hasDailyMissionPracticeAccess) || (practiceRequiresSpecialPracticeAccess && !hasPremiumAccess))
+                ? (authReady ? <AccessGate setRoute={navigate} title="Latihan Soal Premium Terkunci" message="Untuk mengerjakan latihan soal khusus ini, kamu perlu membeli paket yang mencakup latihan premium terlebih dahulu." variant="misi" showFreeTryout={false} hideKicker /> : null)
+                : React.createElement(practiceComp || window.Practice, { setRoute: navigate, context: practiceContext, isAdmin: canEditInlineAsAdmin, isLoggedIn, isAuthenticated: Boolean(currentUser), hasPremiumAccess: hasCurrentPracticeAccess })}
             </ScreenErrorBoundary>
           )}
         </div>
@@ -1079,8 +1194,9 @@ const App = () => {
         </button>
       )}
 
-      <TweaksPanel title="Tweaks">
-        <TweakSection label="Navigasi cepat">
+      {showTweaksPanel && (
+      <TweaksPanelComponent title="Tweaks">
+        <TweakSectionComponent label="Navigasi cepat">
           <div className="grid grid-cols-2 gap-1.5">
             {[
               ["lobby", "Beranda"],
@@ -1097,10 +1213,10 @@ const App = () => {
               </button>
             ))}
           </div>
-        </TweakSection>
+        </TweakSectionComponent>
 
-        <TweakSection label="Tata letak">
-          <TweakSelect
+        <TweakSectionComponent label="Tata letak">
+          <TweakSelectComponent
             label="Hero (Beranda)"
             value={tweaks.heroLayout}
             onChange={(v) => setTweak("heroLayout", v)}
@@ -1110,7 +1226,7 @@ const App = () => {
               { label: "Marquee (judul + stat ticker)", value: "marquee" },
             ]}
           />
-          <TweakRadio
+          <TweakRadioComponent
             label="Densitas"
             value={tweaks.density}
             onChange={(v) => setTweak("density", v)}
@@ -1120,10 +1236,10 @@ const App = () => {
               { label: "Spacious", value: "spacious" },
             ]}
           />
-        </TweakSection>
+        </TweakSectionComponent>
 
-        <TweakSection label="Komponen (Belajar)">
-          <TweakSelect
+        <TweakSectionComponent label="Komponen (Belajar)">
+          <TweakSelectComponent
             label="Mapel selector"
             value={tweaks.mapelSelector}
             onChange={(v) => setTweak("mapelSelector", v)}
@@ -1133,7 +1249,7 @@ const App = () => {
               { label: "Dropdown (compact select)", value: "dropdown" },
             ]}
           />
-          <TweakSelect
+          <TweakSelectComponent
             label="Chapter card"
             value={tweaks.chapterCard}
             onChange={(v) => setTweak("chapterCard", v)}
@@ -1143,10 +1259,10 @@ const App = () => {
               { label: "Magazine (horizontal scroll)", value: "magazine" },
             ]}
           />
-        </TweakSection>
+        </TweakSectionComponent>
 
-        <TweakSection label="Komponen (Misi)">
-          <TweakSelect
+        <TweakSectionComponent label="Komponen (Misi)">
+          <TweakSelectComponent
             label="Mission card"
             value={tweaks.missionCard}
             onChange={(v) => setTweak("missionCard", v)}
@@ -1157,16 +1273,16 @@ const App = () => {
               { label: "Compact (tabel 5 hari)", value: "compact" },
             ]}
           />
-        </TweakSection>
+        </TweakSectionComponent>
 
-        <TweakSection label="Warna & bentuk">
-          <TweakColor
+        <TweakSectionComponent label="Warna & bentuk">
+          <TweakColorComponent
             label="Warna aksen"
             value={tweaks.accentColor}
             onChange={(v) => setTweak("accentColor", v)}
             options={["#FFF44F", "#FFBF00", "#A8FF3E", "#00F5D4"]}
           />
-          <TweakSelect
+          <TweakSelectComponent
             label="Sudut kartu"
             value={tweaks.cardRadius}
             onChange={(v) => setTweak("cardRadius", v)}
@@ -1176,10 +1292,10 @@ const App = () => {
               { label: "Halus (friendly)", value: "smooth" },
             ]}
           />
-        </TweakSection>
+        </TweakSectionComponent>
 
-        <TweakSection label="Navigasi & beranda">
-          <TweakSelect
+        <TweakSectionComponent label="Navigasi & beranda">
+          <TweakSelectComponent
             label="Gaya nav"
             value={tweaks.navStyle}
             onChange={(v) => setTweak("navStyle", v)}
@@ -1189,7 +1305,7 @@ const App = () => {
               { label: "Selalu gelap (ink)", value: "ink" },
             ]}
           />
-          <TweakSelect
+          <TweakSelectComponent
             label="Stats strip"
             value={tweaks.statsStyle}
             onChange={(v) => setTweak("statsStyle", v)}
@@ -1199,7 +1315,7 @@ const App = () => {
               { label: "Angka besar (bold)", value: "bold" },
             ]}
           />
-          <TweakSelect
+          <TweakSelectComponent
             label="CTA block"
             value={tweaks.ctaStyle}
             onChange={(v) => setTweak("ctaStyle", v)}
@@ -1209,8 +1325,9 @@ const App = () => {
               { label: "Outline (minimal)", value: "outline" },
             ]}
           />
-        </TweakSection>
-      </TweaksPanel>
+        </TweakSectionComponent>
+      </TweaksPanelComponent>
+      )}
     </div>
   );
 };
@@ -1376,6 +1493,7 @@ function parseAppLocation() {
         initialMode: retryPracticeMatch[3] === "canvas" ? "canvas" : "choice",
         initialProblemId: Number(retryPracticeMatch[4]),
         retryProblemOnly: true,
+        requiresSpecialPractice: true,
         disableCanvasIntro: retryPracticeMatch[3] === "canvas",
       },
     };
@@ -1389,6 +1507,7 @@ function parseAppLocation() {
         ...findPracticeChapterFromPath(chapterPracticeMatch[1], chapterPracticeMatch[2]),
         initialMode: chapterPracticeMatch[3] === "canvas" ? "canvas" : "choice",
         initialProblemNumber: Number.isInteger(questionNumber) && questionNumber > 0 ? questionNumber : null,
+        requiresSpecialPractice: true,
       },
     };
   }

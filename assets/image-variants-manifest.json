@@ -1,8 +1,10 @@
 {
-  "generatedAt": "2026-06-12T03:32:15.488Z",
+  "generatedAt": "2026-06-14T10:25:43.291Z",
   "assets": [
     {
       "name": "landing_mentors_20260607",
+      "dir": "",
+      "kind": "responsive",
       "status": "processed",
       "variants": [
         {
@@ -27,6 +29,8 @@
     },
     {
       "name": "landing_page",
+      "dir": "",
+      "kind": "responsive",
       "status": "processed",
       "variants": [
         {
@@ -46,6 +50,154 @@
           "width": 1280,
           "webpBytes": 57692,
           "avifBytes": 53649
+        }
+      ]
+    },
+    {
+      "name": "rekomendasi-latihan",
+      "dir": "landing",
+      "kind": "responsive",
+      "status": "processed",
+      "variants": [
+        {
+          "size": "mobile",
+          "width": 640,
+          "webpBytes": 11774,
+          "avifBytes": 11392
+        },
+        {
+          "size": "tablet",
+          "width": 960,
+          "webpBytes": 20988,
+          "avifBytes": 19873
+        },
+        {
+          "size": "desktop",
+          "width": 1280,
+          "webpBytes": 30222,
+          "avifBytes": 23771
+        }
+      ]
+    },
+    {
+      "name": "history-kesalahan",
+      "dir": "landing",
+      "kind": "responsive",
+      "status": "processed",
+      "variants": [
+        {
+          "size": "mobile",
+          "width": 640,
+          "webpBytes": 9872,
+          "avifBytes": 9838
+        },
+        {
+          "size": "tablet",
+          "width": 960,
+          "webpBytes": 18806,
+          "avifBytes": 18032
+        },
+        {
+          "size": "desktop",
+          "width": 1280,
+          "webpBytes": 24158,
+          "avifBytes": 18821
+        }
+      ]
+    },
+    {
+      "name": "simulasi-tryout",
+      "dir": "landing",
+      "kind": "responsive",
+      "status": "processed",
+      "variants": [
+        {
+          "size": "mobile",
+          "width": 640,
+          "webpBytes": 4584,
+          "avifBytes": 4577
+        },
+        {
+          "size": "tablet",
+          "width": 960,
+          "webpBytes": 8032,
+          "avifBytes": 7765
+        },
+        {
+          "size": "desktop",
+          "width": 1280,
+          "webpBytes": 11850,
+          "avifBytes": 10890
+        }
+      ]
+    },
+    {
+      "name": "logo",
+      "dir": "",
+      "kind": "icon",
+      "status": "processed",
+      "variants": [
+        {
+          "size": "icon",
+          "width": 160,
+          "webpBytes": 5346,
+          "pngBytes": 11497
+        }
+      ]
+    },
+    {
+      "name": "favicon",
+      "dir": "",
+      "kind": "icon",
+      "status": "processed",
+      "variants": [
+        {
+          "size": "icon",
+          "width": 96,
+          "webpBytes": 2760,
+          "pngBytes": 5524
+        }
+      ]
+    },
+    {
+      "name": "Book",
+      "dir": "",
+      "kind": "icon",
+      "status": "processed",
+      "variants": [
+        {
+          "size": "icon",
+          "width": 64,
+          "webpBytes": 964,
+          "pngBytes": 1302
+        }
+      ]
+    },
+    {
+      "name": "crown",
+      "dir": "",
+      "kind": "icon",
+      "status": "processed",
+      "variants": [
+        {
+          "size": "icon",
+          "width": 64,
+          "webpBytes": 914,
+          "pngBytes": 1275
+        }
+      ]
+    },
+    {
+      "name": "leaderboard",
+      "dir": "",
+      "kind": "icon",
+      "status": "processed",
+      "variants": [
+        {
+          "size": "icon",
+          "width": 64,
+          "webpBytes": 584,
+          "pngBytes": 839
         }
       ]
     }

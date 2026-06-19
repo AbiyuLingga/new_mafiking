@@ -27,7 +27,7 @@ of truth when the model set changes.
 - **Risk class:** AML.T0051 (LLM Prompt Injection: Direct). Mitigated
   by: input sanitization, strict system prompt, JSON-schema response,
   server-side schema validation (`safeTranscriptionParse`).
-- **Cost control:** `correctionLimiter` (12 req / 60 sec / IP) and the
+- **Cost control:** `correctionLimiter` (20 req / 60 sec / user, session, or IP fallback) and the
   per-user `MAX_OUTPUT_TOKENS` cap.
 - **Audit:** logged in `ai_token_usage` (server/ai/log-token-usage.js) and
   surfaced to admin via `/api/admin/...` dashboards.

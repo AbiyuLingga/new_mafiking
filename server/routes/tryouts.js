@@ -160,6 +160,9 @@ router.get('/:tryoutId/full', (req, res) => {
       WHERE tryout_id = ?
       ORDER BY sort_order, id
     `).all(tryoutId);
+    if (!questions.length) {
+      return res.status(404).json({ error: 'Belum ada soal untuk Try Out ini.' });
+    }
     const timeLimitSeconds = parseDurationSeconds(
       tryout.duration,
       tryoutId === FREE_MATH_TRYOUT_ID ? FREE_MATH_TIME_LIMIT_SECONDS : 90 * 60

@@ -199,16 +199,27 @@ const MAPEL_META = {
   Kimia: { code: "KIM", icon: Icon.Flask, color: "rose" },
 };
 
+const SMALL_ASSETS = {
+  logo: "/assets/logo-icon.webp",
+  book: "/assets/Book-icon.webp",
+  crown: "/assets/crown-icon.webp",
+  leaderboard: "/assets/leaderboard-icon.webp",
+};
+
 const pad2 = (n) => String(n).padStart(2, "0");
 
 // ─── Logo lockup ──────────────────────────────────────────────────────────
 const Logo = ({ size = 32, inverted = false }) => (
   <div className="flex items-center gap-2.5">
     <img
-      src="/assets/logo.png"
+      src={SMALL_ASSETS.logo}
       alt="MAFIKING"
       style={{ height: size, width: "auto", filter: inverted ? "invert(1) brightness(2)" : "none" }}
       className="object-contain"
+      onError={(event) => {
+        event.currentTarget.onerror = null;
+        event.currentTarget.src = "/assets/logo.png";
+      }}
     />
     <span
       className="font-display font-bold tracking-[-0.03em]"
@@ -349,10 +360,10 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
     { id: "leaderboard", label: "Peringkat" },
   ].filter((item) => showTryoutLink || item.id !== "tryout");
   const mobilePrimaryLinks = [
-    { id: "belajar", label: "Belajar", iconSrc: "/assets/Book.png" },
+    { id: "belajar", label: "Belajar", iconSrc: SMALL_ASSETS.book, fallbackIconSrc: "/assets/Book.png" },
     { id: "misi", label: "Misi", IconC: Icon.Calendar },
-    { id: "tryout", label: "Paket", iconSrc: "/assets/crown.png" },
-    { id: "leaderboard", label: "Peringkat", iconSrc: "/assets/leaderboard.png" },
+    { id: "tryout", label: "Paket", iconSrc: SMALL_ASSETS.crown, fallbackIconSrc: "/assets/crown.png" },
+    { id: "leaderboard", label: "Peringkat", iconSrc: SMALL_ASSETS.leaderboard, fallbackIconSrc: "/assets/leaderboard.png" },
   ].filter((item) => showTryoutLink || item.id !== "tryout");
 
   const activeLinkId = route !== "lobby" && links.some((item) => item.id === route) ? route : "";
@@ -597,6 +608,11 @@ const Nav = ({ route, setRoute, navStyle = "ghost", gamified = false, isLoggedIn
                   alt=""
                   aria-hidden="true"
                   className="mafiking-mobile-bottom-nav-icon h-5 w-5 object-contain"
+                  onError={(event) => {
+                    if (!item.fallbackIconSrc) return;
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = item.fallbackIconSrc;
+                  }}
                 />
               ) : (
                 <item.IconC className="mafiking-mobile-bottom-nav-icon h-5 w-5" />

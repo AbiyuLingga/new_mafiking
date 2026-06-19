@@ -157,23 +157,23 @@ const __TWEAKS_STYLE = `
 `;
 
 // ── useTweaks ───────────────────────────────────────────────────────────────
-// Single source of truth for tweak values. setTweak persists via the host
-// (__edit_mode_set_keys → host rewrites the EDITMODE block on disk).
-function useTweaks(defaults) {
-  const [values, setValues] = React.useState(defaults);
-  // Accepts either setTweak('key', value) or setTweak({ key: value, ... }) so a
-  // useState-style call doesn't write a "[object Object]" key into the persisted
-  // JSON block.
-  const setTweak = React.useCallback((keyOrEdits, val) => {
-    const edits = typeof keyOrEdits === 'object' && keyOrEdits !== null
-      ? keyOrEdits : { [keyOrEdits]: val };
-    setValues((prev) => ({ ...prev, ...edits }));
-    window.parent.postMessage({ type: '__edit_mode_set_keys', edits }, '*');
-    // Same-window signal so in-page listeners (deck-stage rail thumbnails)
-    // can react — the parent message only reaches the host, not peers.
-    window.dispatchEvent(new CustomEvent('tweakchange', { detail: edits }));
-  }, []);
-  return [values, setTweak];
+// Production loads the tiny hook from tweaks-core.jsx on the critical path and
+// delays this heavier edit-mode UI until idle. Keep a direct fallback so this
+// file still works if it is opened standalone in the legacy Babel runtime.
+if (!window.useTweaks) {
+  window.useTweaks = function useTweaks(defaults) {
+    const [values, setValues] = React.useState(defaults);
+    const setTweak = React.useCallback((keyOrEdits, val) => {
+      const edits = typeof keyOrEdits === 'object' && keyOrEdits !== null
+        ? keyOrEdits : { [keyOrEdits]: val };
+      setValues((prev) => ({ ...prev, ...edits }));
+      try {
+        window.parent.postMessage({ type: '__edit_mode_set_keys', edits }, '*');
+      } catch (_) {}
+      window.dispatchEvent(new CustomEvent('tweakchange', { detail: edits }));
+    }, []);
+    return [values, setTweak];
+  };
 }
 
 // ── TweaksPanel ─────────────────────────────────────────────────────────────
@@ -562,7 +562,7 @@ function TweakButton({ label, onClick, secondary = false }) {
 }
 
 Object.assign(window, {
-  useTweaks, TweaksPanel, TweakSection, TweakRow,
+  useTweaks: window.useTweaks, TweaksPanel, TweakSection, TweakRow,
   TweakSlider, TweakToggle, TweakRadio, TweakSelect,
   TweakText, TweakNumber, TweakColor, TweakButton,
 });

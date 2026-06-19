@@ -76,6 +76,9 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - `server.js` binds to `0.0.0.0` and defaults to `PORT=3000`.
 - `server.js` serves `dist/index.html` for app routes when the built client exists. `MAFIKING.html` is a non-production fallback.
 - The Vite entry is `index.html -> src/main.jsx`; route chunks load through `src/core/route-prefetch.js`.
+- `index.html` contains a small static first-paint landing shell for `/`, `/landing`, and `/index.html`; `src/core/app.jsx` hides it only after the active route chunk is ready. Do not remove it without replacing the LCP strategy.
+- The Vite entry preloads and loads React 18 UMD from same-origin `assets/vendor/` files before exposing `window.React` and `window.ReactDOM`; do not restore `unpkg` for the built runtime.
+- `vite.config.js` writes Brotli/gzip variants for text assets under `dist/assets/`, and `server.js` serves those variants when the browser sends `Accept-Encoding`; do not remove this without replacing it with equivalent proxy compression.
 - The fallback `MAFIKING.html` loads Tailwind CDN, React UMD, ReactDOM UMD, Babel standalone, then `type="text/babel"` scripts.
 - Frontend JSX files use global symbols and assign shared components to `window.*`.
 - `src/core/app.jsx` owns route state and tweaks defaults.
@@ -83,8 +86,8 @@ For visual/UI tasks, inspect the actual rendered page in a browser after changes
 - Normal package purchase must open `PaymentCheckoutModal` from `src/pages/payment.jsx` over the current page when user presses `Beli`; do not restore the old full-page checkout at `/payment`.
 - If a user closes a pending QRIS/manual payment and clicks `Beli` for the same package again before expiry, reuse the existing order through `POST /api/payment/pending` instead of creating a duplicate QR/unique-code order.
 - `src/core/backend-api.jsx` is the same-origin API helper.
-- `src/core/clerk-auth.jsx` is the static-Babel Clerk bridge. It fetches only the public publishable key from `/api/config/clerk`, loads Clerk browser scripts, and exposes `window.MafikingClerk`.
-- `src/core/onboarding.jsx` owns the mandatory non-admin profile-completion modal. It must load after `src/core/shared.jsx` and before `src/core/app.jsx`.
+- `src/core/clerk-auth.jsx` is the static-Babel Clerk bridge. It fetches only the public publishable key from `/api/config/clerk`, loads Clerk browser scripts, and exposes `window.MafikingClerk`. In the Vite-built path it is lazy-loaded through `window.__mafikingLoadClerkBridge` for auth actions and `/sso-callback`, not awaited on the guest landing critical path.
+- `src/core/onboarding.jsx` owns the mandatory non-admin profile-completion modal. In the Vite-built path it is lazy-loaded through `window.__mafikingLoadOnboarding` once app state proves a registered non-admin needs onboarding/phone prompt.
 - `server/middleware/clerk-auth.js` maps verified Clerk Bearer tokens to local SQLite users before API routes run.
 - `server/auth/clerk-user-sync.js` owns Clerk-to-local linking and guest-to-Google merge behavior.
 - `/` opens the public landing for guests and redirects registered sessions to `/belajar`; `/landing` is the explicit marketing route for logged-in users.
@@ -254,7 +257,7 @@ Rules:
 
 ## Performance & Quality Invariants (mobile perf plan, applied 2026-06-12)
 
-These invariants prevent mobile performance regressions and ensure image / KaTeX / Clerk / auth / route-splitting quality is preserved. Measured baseline 2026-06-12 (Lighthouse 76/77, LCP 5,16s/5,22s, transfer 7,43MB landing / 750KB `/belajar`, JS ~175KB gzip). The current performance contract reports a 1.8 KB gzip initial JS entry with 9 route chunks.
+These invariants prevent mobile performance regressions and ensure image / KaTeX / Clerk / auth / route-splitting quality is preserved. Measured baseline 2026-06-12 (Lighthouse 76/77, LCP 5,16s/5,22s, transfer 7,43MB landing / 750KB `/belajar`, JS ~175KB gzip). The current performance contract reports a 2.1 KB gzip initial JS entry with 9 route chunks, plus Brotli/gzip precompressed dist assets.
 
 ### Image Optimization
 - Hero images (above-fold, LCP candidates): AVIF q=70, WebP q=85.
@@ -267,7 +270,7 @@ These invariants prevent mobile performance regressions and ensure image / KaTeX
 - Responsive variants are committed to `assets/` and copied to `dist/assets/` by the `mafiking-responsive-images` Vite plugin.
 
 ### Route Splitting (Phase 2)
-- **Vite path**: `src/main.jsx` statically imports only the shell (`shared.jsx`, `backend-api.jsx`, `math-loader.js`, `onboarding.jsx`, `clerk-auth.jsx`, `app.jsx`). Each route (`lobby` / `belajar` / `practice` / `misi` / `tryout` / `leaderboard` / `payment` / `profile` / `invoices`) is dynamic-imported as its own chunk.
+- **Vite path**: `src/main.jsx` statically imports only the first-paint shell (`tweaks-core.jsx`, `backend-api.jsx`, `math-loader.js`, `shared.jsx`, `route-prefetch.js`, `app.jsx`). Clerk, onboarding, and the edit-mode tweaks panel are lazy-loaded by global loader functions. Each route (`lobby` / `belajar` / `practice` / `misi` / `tryout` / `leaderboard` / `payment` / `profile` / `invoices`) is dynamic-imported as its own chunk.
 - **Babel-standalone path** (`MAFIKING.html`): each route.jsx is loaded as a classic `<script>` and exposes `window.<Name>` at the end. The same `app.jsx` works because the lazy load falls back to `window.<Name>` when the dynamic import is not available.
 - **`vite.config.js` `mafikingRouteExportPlugin`** appends `export { X };` to every route file (skipping `generated-*` and files that already export) so Vite sees them as proper ESM modules. Do NOT remove this plugin — the dynamic imports will fail without it.
 - **Route prefetch**: `src/core/route-prefetch.js` owns the explicit route loader registry and cached import Promises. `src/core/app.jsx` must load routes through `window.MafikingRoutePrefetch.loadRoute()` so prefetched chunks are reused.
@@ -276,15 +279,19 @@ These invariants prevent mobile performance regressions and ensure image / KaTeX
 - **Removing a route**: just delete the file and its `useState`/`useEffect` in `src/core/app.jsx`. The plugin's regex matches by name so it auto-skips.
 - **Adding a non-route component to a route**: do NOT add it to `src/main.jsx` (it would defeat the split). If the new component is shared, put it in `src/core/shared.jsx`; if route-specific, put it next to the route file and dynamic-import it from there.
 - Per-asset quality — no universal q value. Faces need q=65-70; illustrations can drop to q=50-55.
-- Responsive variants are committed to `assets/` and copied to `dist/assets/` by the `mafiking-responsive-images` Vite plugin. Do not remove the variants when removing the source PNG — the `<picture>` element still references them.
+- Responsive variants are committed to `assets/` and nested `assets/landing/` and copied to `dist/assets/` by the `mafiking-responsive-images` Vite plugin. Do not remove the variants when removing the source PNG/JPG — the `<picture>` element still references them.
 
 ### Lazy Resource Loading
 - KaTeX CSS+JS: lazy-loaded on first math component (`src/core/math-loader.js`). NOT eager in MAFIKING.html/index.html/dist/index.html. The `useKatexReady()` hook fires `mafiking:katex-ready` when the load resolves; `Eq` and `MissionQuestionText` re-render on that event.
 - Clerk SDK+UI: lazy-loaded on first auth action (login click, OAuth callback, getToken for auth endpoint). NOT auto-loaded for guest public API calls. `clerkAuthHeaders()` in `src/core/backend-api.jsx` short-circuits when `window.MafikingAppState.isLoggedIn === false`.
+- Onboarding and phone prompt UI: lazy-loaded only after `/api/auth/me` identifies a registered non-admin user who needs it.
+- Tweaks panel UI: idle-loaded after the first route chunk is ready; only the tiny `useTweaks` hook remains on the critical path.
 - Mentor image and landing image: `<picture>` with `loading="lazy"` + responsive srcSet. The PNG fallback stays so legacy browsers and Safari < 16 still render.
+- React UMD runtime is same-origin and preloaded from `assets/vendor/`; the preload URL and runtime URL must stay identical so the browser reuses the request.
 
 ### Performance Budgets (CI gate)
-- Bundle initial: ≤175KB gzip after Phase 1, ≤120KB gzip after Phase 2 incremental splitting. **Current contract result: 1.8 KB gzip initial JS entry with 9 route chunks** — well under budget.
+- Bundle initial: ≤175KB gzip after Phase 1, ≤120KB gzip after Phase 2 incremental splitting. **Current contract result: 2.1 KB gzip initial JS entry with 9 route chunks** — well under budget.
+- Express-served dist text assets must have precompressed `.br` and `.gz` siblings; `tests/frontend/test-performance-contract.js` guards CSS and React vendor compression.
 - LCP element: ≤100KB transferred for mobile viewport (mentor image AVIF 640w = 33KB passes).
 - Total page weight (landing): ≤1.2MB.
 - Main thread TBT: ≤100ms median.

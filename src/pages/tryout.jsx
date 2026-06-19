@@ -11,6 +11,38 @@ const DEFAULT_PACKAGE_ACCESS_FEATURES = ["tryout-access", "daily-missions", "spe
 
 const BLANK_PKG = { tryout_id: '', title: '', description: '', price: 'Gratis', original_price: '', badge: '', duration: '60 mnt', questions: 30, features: '', access_features: DEFAULT_PACKAGE_ACCESS_FEATURES, tone: 'default', sort_order: 0 };
 
+function escapeTryoutHtml(value) {
+  return String(value || "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  }[char]));
+}
+
+function renderTryoutMathHTML(value) {
+  const text = String(value || "");
+  return window.renderMafikingMathHTML
+    ? window.renderMafikingMathHTML(text)
+    : escapeTryoutHtml(text).replace(/\n/g, "<br>");
+}
+
+function Eq({ value }) {
+  const katexReady = (window.MafikingMathLoader && window.MafikingMathLoader.useKatexReady)
+    ? window.MafikingMathLoader.useKatexReady()
+    : true;
+  useEffect(() => {
+    if (window.MafikingMathLoader && typeof window.MafikingMathLoader.loadKatex === "function") {
+      window.MafikingMathLoader.loadKatex();
+    }
+  }, []);
+  return React.createElement("span", {
+    className: "eq-katex",
+    dangerouslySetInnerHTML: { __html: renderTryoutMathHTML(value || "") },
+  });
+}
+
 const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context, currentUser }) => {
   const mode = String(context?.mode || "");
   const canEditPackages = Boolean(isAdminMode);
@@ -33,7 +65,7 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context, c
 
   useEffect(() => {
     if (!isTryoutSessionMode(mode)) loadPackages();
-  }, [mode]);
+  }, [mode, isLoggedIn, isAdmin, canEditPackages]);
 
   if (mode === "tryout-review") {
     return (
@@ -91,8 +123,12 @@ const Tryout = ({ setRoute, isAdmin, isAdminMode = false, isLoggedIn, context, c
       const data = await MafikingAPI.get('/api/tryout-packages');
       setPackages(data.map(p => ({ ...p, features: parseFeatures(p.features), access_features: parsePackageAccessFeatures(p.access_features) })));
       
-      const activeData = await MafikingAPI.get('/api/payment/active-packages');
-      setActivePackages(activeData || []);
+      if (isLoggedIn || isAdmin || canEditPackages) {
+        const activeData = await MafikingAPI.get('/api/payment/active-packages');
+        setActivePackages(activeData || []);
+      } else {
+        setActivePackages([]);
+      }
     } catch (_) {
       setPackagesLocked(false);
     }
@@ -552,6 +588,8 @@ const AdminEditablePackageField = ({ pkg, field, rows, isAdmin, adminEdit, child
 // ─── Package card ─────────────────────────────────────────────────────────────
 const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, hasAccess, onStartPackage, isDevUser, onToggleAccess }) => {
   const feature = pkg.tone === "feature";
+  const questionCount = Number(pkg.question_count ?? pkg.questionCount ?? NaN);
+  const hasKnownEmptyTryout = Number.isFinite(questionCount) && questionCount <= 0 && Boolean(getPackageTryoutId(pkg));
   const featureList = Array.isArray(pkg.features)
     ? pkg.features
     : (typeof pkg.features === 'string' ? pkg.features.split('\n').filter(Boolean) : []);
@@ -561,7 +599,6 @@ const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, 
   const mutedTextClass = feature ? "text-white/62" : "text-ink/60";
   const subtleTextClass = feature ? "text-white/50" : "text-ink/50";
   const dividerClass = feature ? "border-white/12" : "hairline";
-  const extraFeatureCount = Math.max(0, featureList.length - 2);
 
   return (
     <article className={`rounded-2xl md:rounded-3xl p-4 md:p-7 flex flex-col ${cardClass}`}>
@@ -590,16 +627,11 @@ const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, 
       <AdminEditablePackageField pkg={pkg} field="features" rows={4} isAdmin={isAdmin} adminEdit={adminEdit}>
         <ul className="space-y-1.5 md:space-y-2.5 mt-3 md:mt-5 mb-4 md:mb-7 flex-1">
           {featureList.map((f, i) => (
-            <li key={i} className={`items-start gap-1.5 md:gap-2 text-xs md:text-sm leading-snug md:leading-normal ${i > 1 ? "hidden md:flex" : "flex"} ${feature ? "text-white/78" : "text-ink/75"}`}>
+            <li key={i} className={`flex items-start gap-1.5 md:gap-2 text-xs md:text-sm leading-snug md:leading-normal ${feature ? "text-white/78" : "text-ink/75"}`}>
               <Icon.Check className={`w-3.5 h-3.5 md:w-4 md:h-4 mt-0.5 shrink-0 ${feature ? "text-yel" : ""}`} />
               <span>{f}</span>
             </li>
           ))}
-          {extraFeatureCount > 0 && (
-            <li className={`md:hidden text-[11px] leading-tight ${feature ? "text-white/50" : "text-ink/45"}`}>
-              +{extraFeatureCount} fitur lain
-            </li>
-          )}
         </ul>
       </AdminEditablePackageField>
 
@@ -616,6 +648,10 @@ const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, 
         </div>
         <button
           onClick={() => {
+            if (hasKnownEmptyTryout && hasAccess) {
+              showToast("Paket ini belum punya soal tryout.", "error");
+              return;
+            }
             if (hasAccess) {
               onStartPackage(pkg);
             } else if (!isLoggedIn) {
@@ -630,7 +666,7 @@ const PackageCard = ({ pkg, setRoute, isAdmin, isLoggedIn, adminEdit, onDelete, 
           }}
           className={feature ? "btn-yel !py-2 !px-3 md:!py-3 md:!px-5 text-xs md:text-sm shrink-0" : "btn-ink !py-2 !px-3 md:!py-3 md:!px-5 text-xs md:text-sm shrink-0"}
         >
-          {hasAccess ? "Mulai" : "Beli"} <Icon.Arrow className="w-3 h-3 md:w-3.5 md:h-3.5" />
+          {hasKnownEmptyTryout && hasAccess ? "Belum ada soal" : (hasAccess ? "Mulai" : "Beli")} <Icon.Arrow className="w-3 h-3 md:w-3.5 md:h-3.5" />
         </button>
       </div>
 

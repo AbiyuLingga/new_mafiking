@@ -58,7 +58,7 @@ Recommended: Path B, then Path A as defense-in-depth for non-CF paths.
 - **helmet** security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options)
 - **csrf-csrf** double-submit token on all 25 state-changing routes
 - **express-rate-limit** per route (login 15/15min, register 5/15min,
-  correction 12/60s, payment 8/60s, performance 120/60s)
+  correction 20/60s, payment 8/60s, performance 120/60s)
 - **fail2ban** 4 jails: sshd, nginx-botsearch, nginx-http-flood, mafiking-auth
 - **nginx hardened config** with HSTS preload, TLS 1.2/1.3, OCSP, rate limits
 - **auditd** 29 rules, syscall + file auditing

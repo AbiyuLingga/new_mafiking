@@ -163,6 +163,8 @@ rsync -az --delete --human-readable --info=progress2,stats2 \
   --exclude ".pm2" \
   --exclude ".npm" \
   --exclude "node_modules" \
+  --exclude ".opencode" \
+  --exclude ".codegraph" \
   --exclude ".env*" \
   --exclude "env" \
   --exclude ".deploy-deps.sha" \
@@ -172,6 +174,7 @@ rsync -az --delete --human-readable --info=progress2,stats2 \
   --exclude "db/*.sqlite-shm" \
   --exclude "db/*.sqlite-wal" \
   --exclude "db/*.backup-*" \
+  --exclude "db/backups/***" \
   ./ "$SSH_TARGET:$REMOTE_DIR/"
 
 REMOTE_AVATAR_COUNT_AFTER="$(

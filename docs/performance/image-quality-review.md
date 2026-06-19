@@ -10,6 +10,9 @@ or quality settings change.
 |---|---:|---|
 | `assets/landing_mentors_20260607.png` | 6,2 MB | `src/pages/lobby.jsx` mentor preview card |
 | `assets/landing_page.png` | 5,8 MB | legacy |
+| `assets/landing/rekomendasi-latihan.jpg` | 108 KB | landing feature card |
+| `assets/landing/history-kesalahan.jpg` | 71 KB | landing feature card |
+| `assets/landing/simulasi-tryout.jpg` | 64 KB | landing feature card |
 
 **Variants generated 2026-06-12:**
 
@@ -28,12 +31,37 @@ or quality settings change.
 | `landing_page.png` | `desktop` 1280w | AVIF | 53 KB | -99.1% |
 | `landing_page.png` | `desktop` 1280w | WebP | 57 KB | -99.0% |
 
+**Feature screenshot variants generated 2026-06-14:**
+
+| Source | Variant | Format | Bytes | Notes |
+|---|---|---|---:|---|
+| `landing/rekomendasi-latihan.jpg` | `mobile` 640w | AVIF | 11 KB | below-fold feature card |
+| `landing/rekomendasi-latihan.jpg` | `mobile` 640w | WebP | 12 KB | below-fold feature card |
+| `landing/history-kesalahan.jpg` | `mobile` 640w | AVIF | 10 KB | below-fold feature card |
+| `landing/history-kesalahan.jpg` | `mobile` 640w | WebP | 10 KB | below-fold feature card |
+| `landing/simulasi-tryout.jpg` | `mobile` 640w | AVIF | 5 KB | below-fold feature card |
+| `landing/simulasi-tryout.jpg` | `mobile` 640w | WebP | 5 KB | below-fold feature card |
+
+**Small UI variants generated 2026-06-14:**
+
+| Source | Variant | Format | Bytes | Used in |
+|---|---|---|---:|---|
+| `logo.png` | `icon` 160w | WebP | 5.2 KB | app nav, landing auth, payment |
+| `logo.png` | `icon` 160w | PNG | 11.2 KB | fallback / static legal |
+| `favicon.png` | `icon` 96w | PNG | 5.4 KB | `index.html` favicon |
+| `Book.png` | `icon` 64w | WebP | 0.9 KB | mobile bottom nav |
+| `crown.png` | `icon` 64w | WebP | 0.9 KB | mobile bottom nav |
+| `leaderboard.png` | `icon` 64w | WebP | 0.6 KB | mobile bottom nav |
+
 **Quality setting used (per-asset, not universal):**
 
 | Asset | AVIF quality | WebP quality | Notes |
 |---|---:|---:|---|
 | `landing_mentors_20260607` | 70 | 85 | Mentor photo; faces require accurate skin tone |
 | `landing_page` | 65 | 80 | Background / illustrative |
+| `landing/rekomendasi-latihan` | 60 | 76 | UI screenshot; text remains legible at mobile size |
+| `landing/history-kesalahan` | 60 | 76 | UI screenshot; small redline details preserved enough for landing preview |
+| `landing/simulasi-tryout` | 60 | 76 | UI screenshot with large shapes; compresses aggressively |
 
 **Why per-asset (not a single universal q value):** The original plan
 (`docs/plans/2026-06-12-001-…`) locked everyone onto a single quality
@@ -51,6 +79,7 @@ on physical low-end Android per the plan's validation protocol.)
 ```bash
 node scripts/build/optimize-images.js                  # all tracked assets
 node scripts/build/optimize-images.js --asset=landing_mentors_20260607
+node scripts/build/optimize-images.js --asset=logo
 ```
 
 The script is a dev/CI tool only. Variants are committed to the repo so the

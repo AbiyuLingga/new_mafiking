@@ -2,7 +2,7 @@
 
 `new_mafiking` is a local Mafiking web app that keeps the copied MAFIKING UI intact while adding a working Express + SQLite backend for question practice, canvas answer correction, profile reports, progress, admin data management, and payment hooks.
 
-The active browser entry point is served by `server.js`. When `dist/index.html` exists, the server serves the Vite-built shell; otherwise, non-production falls back to `MAFIKING.html` and static JSX through React UMD + Babel. The source `src/*.jsx` files still rely on browser globals and load order, so route/components should keep the current global contract unless the frontend architecture is intentionally migrated.
+The active browser entry point is served by `server.js`. When `dist/index.html` exists, the server serves the Vite-built shell; otherwise, non-production falls back to `MAFIKING.html` and static JSX through React UMD + Babel. The built `/` and `/landing` HTML includes a small static first-paint landing shell that React replaces after the lobby route chunk is ready. The source `src/*.jsx` files still rely on browser globals and load order, so route/components should keep the current global contract unless the frontend architecture is intentionally migrated.
 
 ## Current Status
 
@@ -114,7 +114,7 @@ GEMMA_PROFILE_MODEL=gemma-4-31b-it
 | `PORT=3001 npm start` | Start on port 3001, useful when port 3000 is occupied. |
 | `PORT=3001 MUTATION_COLLECTOR_ENABLED=false PAYMENT_LOCAL_GUEST_CHECKOUT=false MAIL_DRY_RUN=true npm start` | Debug-safe local server: no collector side effects, stricter checkout gating, and dry-run mail. |
 | `npm run dev` | Start Express with `node --watch`. |
-| `npm run build` | Build the Vite shell into `dist/`; when `dist/index.html` exists, `server.js` serves this shell. |
+| `npm run build` | Build the Vite shell into `dist/`; when `dist/index.html` exists, `server.js` serves this shell with the static landing first-paint markup. |
 | `npm run perf:audit` | Run the local Lighthouse wrapper. Pass URL/output path explicitly for targeted audits. |
 | `npm run perf:mobile-nav` | Benchmark cold/warm mobile tab transitions against a running server. |
 | `npm run test:route-prefetch` | Verify route loader deduplication, network guards, and mobile intent prefetch. |
@@ -149,6 +149,10 @@ Treat `db/database.sqlite` and `profile-media/` as one recovery pair. Use
 before clearing broken local avatar references.
 Server startup also preserves admin edits to the built-in `Cek Payment` package;
 it only creates that package when missing or repairs a legacy missing ID.
+It also backfills questions for the production premium package
+`bimbel-persiapan-pretest-tpb` only when that package exists with zero questions,
+copying the bundled `tryout-premium-tpb-prep` bank without replacing admin-entered
+questions.
 It also skips OS bootstrap and `npm ci` when the server tooling and production
 dependency hash have not changed. Dependency installs reuse the server npm cache.
 Use `FORCE_NPM_CI=1 ./deploy.sh <ip> <user>` only when intentionally rebuilding
@@ -296,7 +300,7 @@ The import script refuses to replace question tables when user progress or corre
 
 1. Browser opens `/`.
 2. `server.js` sends `dist/index.html` when the built client exists, or `MAFIKING.html` as a non-production fallback.
-3. In the built path, `src/main.jsx` exposes `window.React` / `window.ReactDOM` and loads the global shell modules in legacy order before `src/core/app.jsx` mounts.
+3. In the built path, `src/main.jsx` exposes `window.React` / `window.ReactDOM`, loads only first-paint shell modules before `src/core/app.jsx`, and exposes lazy loaders for Clerk, onboarding, and the edit-mode tweaks panel.
 4. In the fallback path, `MAFIKING.html` loads Tailwind CDN, React UMD, Babel standalone, then JSX files from `src/` in order.
 
 ### Lobby / Home
@@ -305,7 +309,7 @@ The import script refuses to replace question tables when user progress or corre
 - The Mafiking logo returns to this landing page from app routes.
 - `Coba Gratis` opens `Belajar` with the `Try Out` tab selected. If the user is already logged in, the same button continues into their account context.
 - The login screen uses the existing auth UI. Email/password sign up asks for email and password, then requires the user to click a verification link sent by email before login is allowed.
-- The auth screen also includes Clerk Google login/sign-up controls. Clerk is loaded through `src/core/clerk-auth.jsx`, using `/api/config/clerk` to fetch only the publishable key.
+- The auth screen also includes Clerk Google login/sign-up controls. The built path lazy-loads `src/core/clerk-auth.jsx` only for auth actions or `/sso-callback`, using `/api/config/clerk` to fetch only the publishable key.
 - Clerk users are synced into local SQLite users on API requests through `@clerk/express`; the local `users.id` remains the source of truth for progress, XP, admin role, and payments.
 - First-time Google users are synced into the local account model, then incomplete non-admin profiles are completed through the mandatory modal in `src/core/onboarding.jsx`.
 - The profile modal stores draft progress in localStorage, stays fixed in the center of the viewport, and saves through `POST /api/auth/profile-onboarding`. Admin users are exempt.
@@ -524,7 +528,8 @@ Browser checks:
 ## Known Gotchas
 
 - Active runtime is Express serving `dist/index.html` when it exists, with `MAFIKING.html` as the non-production fallback.
-- Both delivery paths use React 18 UMD globals before the legacy-style JSX modules run; the built path loads them from `src/main.jsx` before bootstrapping route modules. Check which shell the server is serving before debugging frontend runtime issues.
+- Both delivery paths use React 18 UMD globals before the legacy-style JSX modules run; the built path preloads and loads same-origin copies from `assets/vendor/` through `src/main.jsx` before bootstrapping route modules. `/` and `/landing` also ship static first-paint markup in `index.html`; do not remove it without replacing the LCP strategy. Check which shell the server is serving before debugging frontend runtime issues.
+- `npm run build` writes `.br` and `.gz` siblings for dist JS/CSS/vendor text assets; `server.js` serves them for browsers with `Accept-Encoding`. If deployment proxy compression changes, keep this behavior equivalent.
 - Clerk secret values live in ignored env files. Do not print or commit `.env`, `.env.local`, or `env`.
 - Auto-guest sessions create users for API requests. Guest names start with `Tamu_`.
 - Only Integral question data is currently imported. Static chapter cards for other subjects are placeholders.

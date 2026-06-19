@@ -7,6 +7,7 @@ const outputPath = path.join(generatedDir, 'generated-app.jsx');
 const adminOutputPath = path.join(generatedDir, 'generated-admin.jsx');
 
 const legacyAppScripts = [
+  'src/core/tweaks-core.jsx',
   'src/core/tweaks-panel.jsx',
   'src/core/clerk-auth.jsx',
   'src/core/math-loader.js',

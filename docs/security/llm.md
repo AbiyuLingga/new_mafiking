@@ -17,7 +17,7 @@ import path. Out of scope: any future browser-side LLM.
 | AML.T0048 | Erode ML Model Integrity | Low — the model is only used for transcription, evaluation, and summary. No model-fine-tuning surface. | Not applicable today. Tracked if Mafiking ever hosts a fine-tuned model. |
 | AML.T0024 | Exfiltration via Cyber Means | Low — the model has no tool calls, no network access, and no persistent storage of its own. | N/A. |
 | AML.T0040 | ML Model Inference | Not applicable — Mafiking does not deploy a model. | N/A. |
-| AML.T0029 | Denial of ML Service | **Medium** at `/api/correction/evaluate` (expensive Gemini calls). | `correctionLimiter` (12 req / 60 sec), per-user `MAX_OUTPUT_TOKENS`. F-12 proposes per-user adaptive throttle. |
+| AML.T0029 | Denial of ML Service | **Medium** at `/api/correction/evaluate` (expensive Gemini calls). | `correctionLimiter` (20 req / 60 sec), per-user `MAX_OUTPUT_TOKENS`. F-12 proposes per-user adaptive throttle. |
 | AML.T0019 | Publish Poisoned Datasets | Low — admin can only inject data via the DeepSeek import path, and only as a **draft**; admin review is required. | Admin-only path; draft/commit split; admin review before publish. |
 
 ## Findings
@@ -46,11 +46,12 @@ we can size the install against the rest of the Nevacloud hardening.
 
 ### F-12 [Medium] No per-user adaptive rate limit on correction
 **Status:** Tracked. F-8-style follow-up.
-**Description:** `correctionLimiter` is per-IP. A single user behind a
-NAT with many devices would share a budget. A script running on one
-machine but rotating users would evade it entirely.
-**Remediation:** Replace with a token-bucket keyed on
-`req.session.userId`. Express-rate-limit supports custom `keyGenerator`.
+**Description:** `correctionLimiter` uses a fixed window keyed by local user ID,
+then session ID, then IP as a fallback. This avoids making registered users
+behind one NAT share the application-layer budget, but a script rotating
+accounts or sessions can still evade the per-identity limit.
+**Remediation:** Replace the fixed limit with an adaptive token bucket that
+combines user/session identity, IP reputation, and recent AI cost.
 
 ## Controls added in Phase 2
 

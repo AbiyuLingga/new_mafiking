@@ -65,7 +65,7 @@ candidate threat source.
 5. **Denial of service — expensive Gemini calls on the correction path** *(Mitigated, partial)*
    `POST /api/correction/evaluate` triggers OCR and LLM calls per request.
    An attacker could amplify this into a cost attack.
-   *Control:* `express-rate-limit` (`correctionLimiter` 12/60s, nginx
+   *Control:* `express-rate-limit` (`correctionLimiter` 20/60s, nginx
    `mafiking_correction` 20r/m), CSP report endpoint throttling, payment
    limiter 8/60s. *Follow-up:* per-user adaptive throttle (F-12).
 

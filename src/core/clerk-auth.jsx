@@ -8,6 +8,10 @@ const MafikingClerk = (() => {
   const POPUP_POSTMESSAGE_TYPE = "mafiking:clerk-popup-result";
   const POPUP_RESULT_STORAGE_KEY = "mafiking.clerk.popupResult";
   const POPUP_RESULT_TTL_MS = 10 * 60 * 1000;
+  const POPUP_CLOSED_RECOVERY_MS = 30000;
+  const POPUP_SYNC_WAIT_MS = 3000;
+  const CLERK_SCRIPT_LOAD_TIMEOUT_MS = 30000;
+  const CLERK_JS_VERSION = "6.16.1";
 
   function buildPopupFeatures(overrides) {
     const width = 480;
@@ -37,13 +41,41 @@ const MafikingClerk = (() => {
       return existing.dataset.loaded === "true"
         ? Promise.resolve()
         : new Promise((resolve, reject) => {
-          existing.addEventListener("load", resolve, { once: true });
-          existing.addEventListener("error", reject, { once: true });
+          let timer = 0;
+          const cleanup = () => {
+            window.clearTimeout(timer);
+            existing.removeEventListener("load", onLoad);
+            existing.removeEventListener("error", onError);
+          };
+          const onLoad = () => {
+            cleanup();
+            existing.dataset.loaded = "true";
+            resolve();
+          };
+          const onError = () => {
+            cleanup();
+            reject(new Error("Gagal memuat Clerk."));
+          };
+          timer = window.setTimeout(() => {
+            cleanup();
+            if (existing.dataset.loaded !== "true" && existing.parentNode) {
+              existing.parentNode.removeChild(existing);
+            }
+            reject(new Error("Memuat Google terlalu lama. Periksa koneksi lalu coba lagi."));
+          }, CLERK_SCRIPT_LOAD_TIMEOUT_MS);
+          existing.addEventListener("load", onLoad, { once: true });
+          existing.addEventListener("error", onError, { once: true });
         });
     }
 
     return new Promise((resolve, reject) => {
       const script = document.createElement("script");
+      let timer = 0;
+      const cleanup = () => {
+        window.clearTimeout(timer);
+        script.onload = null;
+        script.onerror = null;
+      };
       script.src = src;
       script.async = true;
       script.defer = true;
@@ -52,12 +84,36 @@ const MafikingClerk = (() => {
         if (value !== undefined && value !== null) script.setAttribute(key, value);
       });
       script.onload = () => {
+        cleanup();
         script.dataset.loaded = "true";
         resolve();
       };
-      script.onerror = () => reject(new Error("Gagal memuat Clerk."));
+      script.onerror = () => {
+        cleanup();
+        reject(new Error("Gagal memuat Clerk."));
+      };
+      timer = window.setTimeout(() => {
+        cleanup();
+        if (script.dataset.loaded !== "true" && script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+        reject(new Error("Memuat Google terlalu lama. Periksa koneksi lalu coba lagi."));
+      }, CLERK_SCRIPT_LOAD_TIMEOUT_MS);
       document.head.appendChild(script);
     });
+  }
+
+  function preconnectTo(origin) {
+    if (!origin) return;
+    try {
+      const exists = Array.from(document.querySelectorAll("link[rel='preconnect']")).some((link) => link.href === origin || link.href === `${origin}/`);
+      if (exists) return;
+      const link = document.createElement("link");
+      link.rel = "preconnect";
+      link.href = origin;
+      link.crossOrigin = "anonymous";
+      document.head.appendChild(link);
+    } catch (_) {}
   }
 
   async function readConfig() {
@@ -82,6 +138,15 @@ const MafikingClerk = (() => {
     }
   }
 
+  async function warmupNetwork() {
+    const config = await readConfig();
+    if (!config.enabled || !config.publishableKey) return false;
+    const frontendApi = frontendApiFromPublishableKey(config.publishableKey);
+    if (!frontendApi) return false;
+    preconnectTo(`https://${frontendApi}`);
+    return true;
+  }
+
   async function isEnabled() {
     const config = await readConfig();
     return Boolean(config.enabled && config.publishableKey);
@@ -98,15 +163,13 @@ const MafikingClerk = (() => {
       const frontendApi = frontendApiFromPublishableKey(config.publishableKey);
       if (!frontendApi) throw new Error("Publishable key Clerk tidak valid.");
 
-      await loadScript(`https://${frontendApi}/npm/@clerk/ui@1/dist/ui.browser.js`);
-      await loadScript(`https://${frontendApi}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`, {
+      preconnectTo(`https://${frontendApi}`);
+      await loadScript(`https://${frontendApi}/npm/@clerk/clerk-js@${CLERK_JS_VERSION}/dist/clerk.browser.js`, {
         "data-clerk-publishable-key": config.publishableKey,
       });
 
       if (!window.Clerk) throw new Error("Clerk gagal dimuat.");
-      if (!window.__internal_ClerkUICtor) throw new Error("UI Clerk gagal dimuat.");
       await window.Clerk.load({
-        ui: { ClerkUI: window.__internal_ClerkUICtor },
         appearance: {
           variables: {
             colorPrimary: "#0b1326",
@@ -117,7 +180,10 @@ const MafikingClerk = (() => {
       });
       window.dispatchEvent(new Event("clerk-ready"));
       return window.Clerk;
-    })();
+    })().catch((error) => {
+      readyPromise = null;
+      throw error;
+    });
     return readyPromise;
   }
 
@@ -142,6 +208,11 @@ const MafikingClerk = (() => {
       },
     });
     return window.parseApiResponse(response);
+  }
+
+  async function syncSessionWhenReady(timeoutMs = POPUP_SYNC_WAIT_MS) {
+    await waitForSignedIn(timeoutMs);
+    return syncSession();
   }
 
   function readPendingOAuth() {
@@ -176,8 +247,12 @@ const MafikingClerk = (() => {
     } catch (_) {}
   }
 
+  function normalizeCallbackPath(pathname) {
+    return String(pathname || "/").replace(/\/+$/, "") || "/";
+  }
+
   function isRedirectCallback() {
-    return window.location.pathname === OAUTH_CALLBACK_PATH;
+    return normalizeCallbackPath(window.location.pathname) === OAUTH_CALLBACK_PATH;
   }
 
   function isPopupCallback() {
@@ -242,6 +317,85 @@ const MafikingClerk = (() => {
     return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer));
   }
 
+  function getClerkSignIn(clerk) {
+    return (clerk && (clerk.signIn || clerk.client?.signIn)) || null;
+  }
+
+  function getClerkSignUp(clerk) {
+    return (clerk && (clerk.signUp || clerk.client?.signUp)) || null;
+  }
+
+  function getSessionIdFromClerkResource(resource) {
+    if (!resource) return "";
+    return String(
+      resource.createdSessionId
+        || resource.created_session_id
+        || resource.existingSession?.sessionId
+        || resource.existing_session?.session_id
+        || ""
+    ).trim();
+  }
+
+  async function finalizeClerkOAuthResource(clerk, resource) {
+    if (!clerk || !resource) return false;
+
+    if (resource.status === "complete" && typeof resource.finalize === "function") {
+      await resource.finalize({ navigate: async () => {} });
+      return true;
+    }
+
+    const sessionId = getSessionIdFromClerkResource(resource);
+    if (sessionId && typeof clerk.setActive === "function") {
+      await clerk.setActive({ session: sessionId, navigate: async () => {} });
+      return true;
+    }
+
+    return false;
+  }
+
+  function describeIncompleteOAuthResource(signIn, signUp) {
+    const signUpStatus = String(signUp?.status || "");
+    const signInStatus = String(signIn?.status || "");
+    const missingFields = Array.isArray(signUp?.missingFields) ? signUp.missingFields : [];
+    if (signUpStatus === "missing_requirements") {
+      return `Akun Google belum bisa dibuat karena Clerk masih meminta data tambahan${missingFields.length ? `: ${missingFields.join(", ")}` : ""}.`;
+    }
+    if (signInStatus === "needs_second_factor") return "Login Google membutuhkan verifikasi tambahan.";
+    if (signInStatus === "needs_new_password") return "Akun Google membutuhkan pengaturan password baru.";
+    if (signInStatus === "needs_first_factor") return "Login Google belum lengkap. Coba daftar dengan Google lagi.";
+    return "Login Google belum membuat sesi aktif.";
+  }
+
+  async function finalizeOAuthCallbackFlow(clerk) {
+    const signIn = getClerkSignIn(clerk);
+    const signUp = getClerkSignUp(clerk);
+
+    if (await finalizeClerkOAuthResource(clerk, signIn)) return true;
+    if (await finalizeClerkOAuthResource(clerk, signUp)) return true;
+
+    if (signUp?.isTransferable && signIn && typeof signIn.create === "function") {
+      await signIn.create({ transfer: true });
+      if (await finalizeClerkOAuthResource(clerk, signIn)) return true;
+    }
+
+    if (signIn?.isTransferable && signUp && typeof signUp.create === "function") {
+      await signUp.create({ transfer: true });
+      if (await finalizeClerkOAuthResource(clerk, signUp)) return true;
+    }
+
+    const existingSessionId = getSessionIdFromClerkResource(signIn) || getSessionIdFromClerkResource(signUp);
+    if (existingSessionId && typeof clerk.setActive === "function") {
+      await clerk.setActive({ session: existingSessionId, navigate: async () => {} });
+      return true;
+    }
+
+    if (signIn?.status || signUp?.status) {
+      throw new Error(describeIncompleteOAuthResource(signIn, signUp));
+    }
+
+    return false;
+  }
+
   async function waitForSignedIn(timeoutMs = 180000) {
     const clerk = await load();
     const startedAt = Date.now();
@@ -256,9 +410,20 @@ const MafikingClerk = (() => {
     const clerk = await load();
     const pendingRedirect = options && options.redirect ? options.redirect : null;
     const callbackUrl = `${window.location.origin}${OAUTH_CALLBACK_PATH}`;
+
+    if (clerk.isSignedIn && clerk.session) {
+      return {
+        user: await syncSession(),
+        redirect: pendingRedirect,
+        mode,
+      };
+    }
+
+    const signIn = getClerkSignIn(clerk);
+    const signUp = getClerkSignUp(clerk);
     const target = mode === "signup"
-      ? (clerk.signUp || clerk.client?.signUp)
-      : (clerk.signIn || clerk.client?.signIn);
+      ? (signUp || signIn)
+      : (signIn || signUp);
 
     writePendingOAuth(mode, pendingRedirect);
 
@@ -292,15 +457,7 @@ const MafikingClerk = (() => {
 
     if (typeof clerk.handleRedirectCallback === "function") {
       try {
-        await withTimeout(clerk.handleRedirectCallback({
-          continueSignUpUrl: "/",
-          signInUrl: "/",
-          signUpUrl: "/",
-          signInForceRedirectUrl: "/",
-          signUpForceRedirectUrl: "/",
-          signInFallbackRedirectUrl: "/",
-          signUpFallbackRedirectUrl: "/",
-        }, async () => {}), 8000, "Callback Google terlalu lama.");
+        await withTimeout(clerk.handleRedirectCallback({}, async () => {}), 8000, "Callback Google terlalu lama.");
       } catch (error) {
         console.warn("[clerk-callback] continuing after callback timeout", error && error.message);
       }
@@ -308,6 +465,7 @@ const MafikingClerk = (() => {
 
     let user = null;
     try {
+      await finalizeOAuthCallbackFlow(clerk);
       await waitForSignedIn(15000);
       user = await syncSession();
     } catch (error) {
@@ -447,7 +605,8 @@ const MafikingClerk = (() => {
         if (closedRecoveryStarted || settled) return;
         closedRecoveryStarted = true;
         const startedAt = Date.now();
-        while (!settled && Date.now() - startedAt < 10000) {
+        let lastSyncError = null;
+        while (!settled && Date.now() - startedAt < POPUP_CLOSED_RECOVERY_MS) {
           const stored = readPopupResultFromStorage();
           if (stored) {
             settle(stored);
@@ -457,9 +616,11 @@ const MafikingClerk = (() => {
           let user = await readRegisteredServerUser();
           if (!user) {
             try {
-              const clerk = await load();
-              if (clerk.isSignedIn && clerk.session) user = await syncSession();
-            } catch (_) {}
+              user = await syncSessionWhenReady();
+              lastSyncError = null;
+            } catch (error) {
+              lastSyncError = error;
+            }
           }
 
           if (user) {
@@ -475,7 +636,10 @@ const MafikingClerk = (() => {
           }
           await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
         }
-        settle({ ok: false, error: "Login Google berhasil, tetapi sesi Mafiking belum tersinkron. Silakan coba lagi." });
+        const message = lastSyncError && lastSyncError.message
+          ? `Login Google berhasil, tetapi sesi Mafiking belum tersinkron: ${lastSyncError.message}`
+          : "Login Google berhasil, tetapi sesi Mafiking belum tersinkron. Silakan coba lagi.";
+        settle({ ok: false, error: message });
       };
 
       const intervalId = window.setInterval(() => {
@@ -500,7 +664,7 @@ const MafikingClerk = (() => {
     } catch (_) {}
   }
 
-  return { completeRedirectAuth, getToken, isEnabled, isRedirectCallback, load, openAuth, openGooglePopup, signOut, syncSession };
+  return { completeRedirectAuth, getToken, isEnabled, isRedirectCallback, load, openAuth, openGooglePopup, preload: load, signOut, syncSession, warmup: warmupNetwork };
 })();
 
 window.MafikingClerk = MafikingClerk;

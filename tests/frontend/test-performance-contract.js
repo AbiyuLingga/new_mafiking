@@ -56,6 +56,7 @@ assert.strictEqual(store.summary().requestsCount, 2);
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 const DIST = path.join(PROJECT_ROOT, 'dist');
 const stylesSource = fs.readFileSync(path.join(PROJECT_ROOT, 'src', 'styles.css'), 'utf8');
+const mainSource = fs.readFileSync(path.join(PROJECT_ROOT, 'src', 'main.jsx'), 'utf8');
 
 assert.match(
     stylesSource,
@@ -76,6 +77,7 @@ if (fs.existsSync(DIST)) {
 
     const distAssetsDir = path.join(DIST, 'assets');
     const distAssets = fs.existsSync(distAssetsDir) ? fs.readdirSync(distAssetsDir) : [];
+    const sourceAssetsDir = path.join(PROJECT_ROOT, 'assets');
 
     // Initial JS gzipped (entry + vendor-react). Plan target: <= 30 KB gz.
     // Post-Phase-2: ~24 KB gz.
@@ -91,13 +93,111 @@ if (fs.existsSync(DIST)) {
     const distHtml = fs.readFileSync(path.join(DIST, 'index.html'), 'utf8');
     const katexRefs = (distHtml.match(/katex/gi) || []).length;
     assert.strictEqual(katexRefs, 0, `dist/index.html has ${katexRefs} KaTeX references (should be 0 — lazy via math-loader)`);
+    assert.doesNotMatch(mainSource, /https:\/\/unpkg\.com\/react/i, 'src/main.jsx must load React from same-origin static assets, not unpkg');
+    assert.match(
+        distHtml,
+        /id="mafiking-static-landing"/,
+        'dist/index.html must include the static landing first-paint shell'
+    );
+    assert.match(
+        distHtml,
+        /data-mafiking-static-shell/,
+        'dist/index.html must enable the static shell only for landing routes'
+    );
+    assert.match(
+        mainSource,
+        /__mafikingLoadClerkBridge\s*=\s*\(\)\s*=>\s*import\('\.\/core\/clerk-auth\.jsx'\)/,
+        'src/main.jsx must expose a lazy Clerk bridge loader'
+    );
+    assert.match(
+        mainSource,
+        /__mafikingLoadOnboarding\s*=\s*\(\)\s*=>\s*import\('\.\/core\/onboarding\.jsx'\)/,
+        'src/main.jsx must expose a lazy onboarding loader'
+    );
+    assert.doesNotMatch(
+        mainSource,
+        /Promise\.all\(\[[\s\S]*import\('\.\/core\/clerk-auth\.jsx'\)/,
+        'Clerk bridge must not be awaited in the first-paint bootstrap Promise.all'
+    );
+    assert.ok(
+        mainSource.includes("function shouldWarmAuthRoute(path = normalizeBootstrapPath())") &&
+            mainSource.includes("return path === '/login' || path === '/signup';"),
+        'auth routes must be identified for early Clerk warmup'
+    );
+    assert.match(
+        mainSource,
+        /function warmAuthRouteEarly\(path = normalizeBootstrapPath\(\)\)[\s\S]*?__mafikingLoadClerkBridge\(\)[\s\S]*?\.warmup\(\)/,
+        'login/signup must start non-blocking Clerk warmup from bootstrap'
+    );
+    assert.match(
+        mainSource,
+        /const bootstrapPath = normalizeBootstrapPath\(\);[\s\S]*?warmAuthRouteEarly\(bootstrapPath\);/,
+        'bootstrap must start auth warmup before route app import'
+    );
+    assert.match(
+        distHtml,
+        /rel="preload"\s+as="script"\s+href="\/assets\/vendor\/react-18\.3\.1\.production\.min\.js\?v=18\.3\.1"/,
+        'dist/index.html must preload same-origin React UMD'
+    );
+    assert.match(
+        distHtml,
+        /rel="preload"\s+as="script"\s+href="\/assets\/vendor\/react-dom-18\.3\.1\.production\.min\.js\?v=18\.3\.1"/,
+        'dist/index.html must preload same-origin ReactDOM UMD'
+    );
+    for (const fileName of ['react-18.3.1.production.min.js', 'react-dom-18.3.1.production.min.js']) {
+        assert.ok(
+            fs.existsSync(path.join(sourceAssetsDir, 'vendor', fileName)),
+            `Missing same-origin React vendor asset: assets/vendor/${fileName}`
+        );
+        assert.ok(
+            fs.existsSync(path.join(distAssetsDir, 'vendor', fileName)),
+            `Missing built React vendor asset: dist/assets/vendor/${fileName}`
+        );
+    }
+    const mainCss = distAssets.find((f) => /^index-.*\.css$/.test(f));
+    const compressedCriticalAssets = [
+        mainCss && path.join(distAssetsDir, mainCss),
+        path.join(distAssetsDir, 'vendor', 'react-18.3.1.production.min.js'),
+        path.join(distAssetsDir, 'vendor', 'react-dom-18.3.1.production.min.js'),
+    ].filter(Boolean);
+    for (const filePath of compressedCriticalAssets) {
+        assert.ok(fs.existsSync(`${filePath}.br`), `Missing Brotli asset: ${path.relative(PROJECT_ROOT, filePath)}.br`);
+        assert.ok(fs.existsSync(`${filePath}.gz`), `Missing gzip asset: ${path.relative(PROJECT_ROOT, filePath)}.gz`);
+    }
 
     // Image variants in dist (per-asset responsive). Plan §1.2.
     const imageVariants = distAssets.filter((f) => /-(mobile|tablet|desktop)\.(webp|avif)$/.test(f));
     assert.ok(
-        imageVariants.length >= 6,
-        `dist/assets has only ${imageVariants.length} image variants (expected >= 6 from mentor + landing_page)`
+        imageVariants.length >= 12,
+        `dist/assets has only ${imageVariants.length} top-level image variants (expected >= 12 from mentor + landing_page)`
     );
+    for (const fileName of [
+        'rekomendasi-latihan-mobile.avif',
+        'history-kesalahan-mobile.avif',
+        'simulasi-tryout-mobile.avif',
+        'rekomendasi-latihan-mobile.webp',
+        'history-kesalahan-mobile.webp',
+        'simulasi-tryout-mobile.webp',
+    ]) {
+        const sourcePath = path.join(sourceAssetsDir, 'landing', fileName);
+        const distPath = path.join(distAssetsDir, 'landing', fileName);
+        assert.ok(fs.existsSync(sourcePath), `Missing landing feature image variant: assets/landing/${fileName}`);
+        assert.ok(fs.existsSync(distPath), `Missing built landing feature image variant: dist/assets/landing/${fileName}`);
+        assert.ok(
+            fs.statSync(sourcePath).size <= 20 * 1024,
+            `Landing mobile feature image ${fileName} exceeds 20 KB`
+        );
+    }
+    for (const fileName of ['logo-icon.webp', 'favicon-icon.png', 'Book-icon.webp', 'crown-icon.webp', 'leaderboard-icon.webp']) {
+        const sourcePath = path.join(sourceAssetsDir, fileName);
+        const distPath = path.join(distAssetsDir, fileName);
+        assert.ok(fs.existsSync(sourcePath), `Missing critical small asset: assets/${fileName}`);
+        assert.ok(fs.existsSync(distPath), `Missing built critical small asset: dist/assets/${fileName}`);
+        assert.ok(
+            fs.statSync(sourcePath).size <= 25 * 1024,
+            `Critical small asset ${fileName} exceeds 25 KB`
+        );
+    }
 
     // Font weights: drop unused. Plan §3.1.
     const manropeWeights = (distHtml.match(/Manrope[^"]*wght@(\d+(?:;\d+)*)/) || []);

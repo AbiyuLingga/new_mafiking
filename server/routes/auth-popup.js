@@ -33,6 +33,7 @@ const POPUP_HTML = `<!DOCTYPE html>
       var STORAGE_KEY = 'mafiking.clerk.pendingOAuth';
       var POPUP_RESULT_KEY = 'mafiking.clerk.popupResult';
       var POPUP_MESSAGE_TYPE = 'mafiking:clerk-popup-result';
+      var CLERK_SCRIPT_LOAD_TIMEOUT_MS = 12000;
       var params = new URLSearchParams(window.location.search);
       var mode = params.get('mode') === 'signup' ? 'signup' : 'login';
       var rawRedirect = params.get('redirect');
@@ -99,6 +100,12 @@ const POPUP_HTML = `<!DOCTYPE html>
       function loadScript(src, attrs) {
         return new Promise(function (resolve, reject) {
           var script = document.createElement('script');
+          var timer = 0;
+          function cleanup() {
+            clearTimeout(timer);
+            script.onload = null;
+            script.onerror = null;
+          }
           script.src = src;
           script.async = true;
           script.defer = true;
@@ -109,8 +116,19 @@ const POPUP_HTML = `<!DOCTYPE html>
               if (value !== undefined && value !== null) script.setAttribute(key, value);
             });
           }
-          script.onload = function () { resolve(); };
-          script.onerror = function () { reject(new Error('Gagal memuat ' + src)); };
+          script.onload = function () {
+            cleanup();
+            resolve();
+          };
+          script.onerror = function () {
+            cleanup();
+            reject(new Error('Gagal memuat ' + src));
+          };
+          timer = setTimeout(function () {
+            cleanup();
+            if (script.parentNode) script.parentNode.removeChild(script);
+            reject(new Error('Memuat Google terlalu lama. Periksa koneksi lalu coba lagi.'));
+          }, CLERK_SCRIPT_LOAD_TIMEOUT_MS);
           document.head.appendChild(script);
         });
       }
@@ -138,7 +156,6 @@ const POPUP_HTML = `<!DOCTYPE html>
 
         writePendingOAuth();
 
-        await loadScript('https://' + frontendApi + '/npm/@clerk/ui@1/dist/ui.browser.js');
         await loadScript('https://' + frontendApi + '/npm/@clerk/clerk-js@6/dist/clerk.browser.js', {
           'data-clerk-publishable-key': config.publishableKey
         });
@@ -147,9 +164,8 @@ const POPUP_HTML = `<!DOCTYPE html>
 
         await window.Clerk.load();
 
-        var target = mode === 'signup'
-          ? (window.Clerk.signUp || (window.Clerk.client && window.Clerk.client.signUp))
-          : (window.Clerk.signIn || (window.Clerk.client && window.Clerk.client.signIn));
+        var target = (window.Clerk.signIn || (window.Clerk.client && window.Clerk.client.signIn))
+          || (mode === 'signup' ? (window.Clerk.signUp || (window.Clerk.client && window.Clerk.client.signUp)) : null);
         var callbackUrl = window.location.origin + '/sso-callback?popup=1';
 
         if (target && typeof target.sso === 'function') {

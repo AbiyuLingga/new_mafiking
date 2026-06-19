@@ -1,6 +1,7 @@
 // MAFIKING Payment - checkout package, create manual order, show status.
 
 const QRIS_LOGO_SRC = "/assets/qris-logo.svg?v=20260612";
+const MAFIKING_ADMIN_WHATSAPP = "6281246049951";
 
 const PAKET_LIST = [
   { id: "cek-payment", label: "Cek Payment", price: 500, desc: "Paket khusus untuk mengetes alur pembayaran web.", access: "Test" },
@@ -57,6 +58,37 @@ function parseAccessFeatures(value) {
     }
   }
   return [];
+}
+
+function isBimbelPayment(payment) {
+  return Boolean(payment?.requiresBimbelCommunity || parseAccessFeatures(payment?.accessFeatures).includes("bimbel"));
+}
+
+function isTryoutProduct(productDetails) {
+  return !["Trial 7 Hari", "Bulanan", "Semester"].includes(String(productDetails || ""));
+}
+
+function paymentSuccessButtonLabel(payment, productDetails) {
+  if (isBimbelPayment(payment)) return "Selanjutnya";
+  return isTryoutProduct(productDetails) ? "Ke Halaman Tryout" : "Mulai Belajar";
+}
+
+function buildBimbelCommunityWhatsappUrl(payment, adminWhatsapp) {
+  const whatsappNumber = MAFIKING_ADMIN_WHATSAPP;
+  if (!whatsappNumber) return "";
+  const name = String(payment?.buyerName || payment?.name || "-").trim() || "-";
+  const email = String(payment?.email || "-").trim() || "-";
+  const productDetails = String(payment?.productDetails || "Paket Mafiking").trim();
+  const message = [
+    "Halo kakk, saya ingin konfirmasi setelah membeli paket bimbel nihh.",
+    "",
+    `Nama: ${name}`,
+    `Email Akun: ${email}`,
+    `Paket: ${productDetails}`,
+    "",
+    `Saya konfirmasi telah mendaftar paket ${productDetails}.`,
+  ].join("\n");
+  return `https://api.whatsapp.com/send/?phone=${whatsappNumber}&text=${encodeURIComponent(message)}&type=phone_number&app_absent=0`;
 }
 
 function isPaymentExpiredStatus(statusValue) {
@@ -565,28 +597,69 @@ const TrustNote = () => (
   </div>
 );
 
+const BimbelCommunityModal = ({ payment, adminWhatsapp, onClose, onDone }) => {
+  const whatsappUrl = buildBimbelCommunityWhatsappUrl(payment, adminWhatsapp);
+  const productDetails = payment?.productDetails || "paket ini";
+  return (
+    <div className="checkout-modal-backdrop" onClick={(e) => { e.stopPropagation(); onClose(); }}>
+      <div className="checkout-modal max-w-md" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Masuk ke grup komunitas">
+        <div className="checkout-modal-main !w-full">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-yel/60 text-ink">
+            <Icon.CheckCircle className="h-6 w-6" />
+          </div>
+          <h2 className="font-display text-2xl font-bold tracking-tight text-center">Terima kasih telah membeli</h2>
+          <p className="mt-3 text-center text-sm leading-6 text-ink/60">
+            Pembayaran {productDetails} sudah terverifikasi. Silakan chat admin Mafiking untuk konfirmasi dan masuk ke grup komunitas.
+          </p>
+          <div className="mt-6 grid gap-3 w-full">
+            {whatsappUrl ? (
+              <a
+                className="checkout-pay-btn justify-center"
+                href={whatsappUrl}
+                rel="noopener"
+                target="_blank"
+                onClick={() => {
+                  if (typeof onDone === "function") window.setTimeout(onDone, 250);
+                }}
+              >
+                Chat admin Mafiking <Icon.Arrow className="w-5 h-5" />
+              </a>
+            ) : (
+              <button className="checkout-pay-btn justify-center" disabled type="button">
+                Nomor admin belum tersedia
+              </button>
+            )}
+            <button className="btn-ghost justify-center" onClick={onClose} type="button">
+              Nanti saja
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PaymentManualView = ({ payment, countdown, status, adminWhatsapp, onCancel, onCheckStatus, checkingStatus, setRoute }) => {
   const { useState } = React;
   const [copied, setCopied] = useState("");
+  const [showCommunityModal, setShowCommunityModal] = useState(false);
   const statusValue = status?.status || payment.status || "PENDING";
   const expired = isPaymentExpiredStatus(statusValue);
   const productDetails = payment.productDetails || "Pesanan Mafiking";
   const baseAmount = Number(payment.baseAmount || 0);
   const uniqueCode = Number(payment.suffix || 0);
   const fullAmount = Number(payment.fullAmount || payment.amount || 0);
-  const isTryout = !["Trial 7 Hari", "Bulanan", "Semester"].includes(productDetails);
+  const isTryout = isTryoutProduct(productDetails);
   const whatsappNumber = String(adminWhatsapp || "").replace(/[^0-9]/g, "");
   const buyerEmail = String(payment.email || "-").trim() || "-";
   const waMessage = encodeURIComponent(
     [
-      "Halo admin Mafiking, saya ingin konfirmasi pembayaran.",
+      "Halo kakk, saya ingin konfirmasi pembayaran nihh.",
       "",
       `ID Payment: ${payment.merchantOrderId}`,
       `Nominal: ${formatRupiah(fullAmount)}`,
       `Email Akun: ${buyerEmail}`,
       `Paket: ${productDetails}`,
-      "",
-      "Saya akan kirim bukti pembayaran setelah pesan ini.",
     ].join("\n")
   );
 
@@ -600,8 +673,24 @@ const PaymentManualView = ({ payment, countdown, status, adminWhatsapp, onCancel
     }
   }
 
+  const successAction = () => {
+    if (isBimbelPayment(payment)) {
+      setShowCommunityModal(true);
+      return;
+    }
+    setRoute("belajar");
+  };
+
   return (
     <div className="checkout-modal-backdrop" onClick={onCancel}>
+      {showCommunityModal ? (
+        <BimbelCommunityModal
+          adminWhatsapp={adminWhatsapp}
+          onClose={() => setShowCommunityModal(false)}
+          onDone={() => setRoute("belajar")}
+          payment={payment}
+        />
+      ) : null}
       <div className="checkout-modal manual-desktop-modal" onClick={(e) => e.stopPropagation()}>
         <div className="checkout-modal-main">
           <div className="flex items-center justify-between mb-6">
@@ -678,8 +767,8 @@ const PaymentManualView = ({ payment, countdown, status, adminWhatsapp, onCancel
           </div>
 
           {statusValue === "SUCCESS" ? (
-            <button className="checkout-pay-btn" onClick={() => setRoute("belajar")} type="button">
-              {isTryout ? "Ke Halaman Tryout" : "Mulai Belajar"} <Icon.Arrow className="w-5 h-5" />
+            <button className="checkout-pay-btn" onClick={successAction} type="button">
+              {paymentSuccessButtonLabel(payment, productDetails)} <Icon.Arrow className="w-5 h-5" />
             </button>
           ) : (
             <div className="manual-action-btns">
@@ -709,13 +798,13 @@ const PaymentManualView = ({ payment, countdown, status, adminWhatsapp, onCancel
 };
 
 const PaymentQrisView = ({ payment, countdown, status, onCancel, onCheckStatus, checkingStatus, setRoute }) => {
+  const { useState } = React;
+  const [copied, setCopied] = useState("");
+  const [showCommunityModal, setShowCommunityModal] = useState(false);
   const statusValue = status?.status || payment.status || "PENDING";
   const expired = isPaymentExpiredStatus(statusValue);
   const productDetails = payment.productDetails || "Pesanan Mafiking";
   const fullAmount = Number(payment.fullAmount || payment.amount || 0);
-  const isTryout = !["Trial 7 Hari", "Bulanan", "Semester"].includes(productDetails);
-  const { useState } = React;
-  const [copied, setCopied] = useState("");
 
   async function copyAmount() {
     try {
@@ -737,10 +826,26 @@ const PaymentQrisView = ({ payment, countdown, status, onCancel, onCheckStatus, 
     document.body.removeChild(link);
   }
 
+  const successAction = () => {
+    if (isBimbelPayment(payment)) {
+      setShowCommunityModal(true);
+      return;
+    }
+    setRoute("belajar");
+  };
+
   return (
     <div className="qris-mobile-page md:hidden">
+      {showCommunityModal ? (
+        <BimbelCommunityModal
+          adminWhatsapp={payment.adminWhatsapp}
+          onClose={() => setShowCommunityModal(false)}
+          onDone={() => setRoute("belajar")}
+          payment={payment}
+        />
+      ) : null}
       <div className="qris-mobile-logo">
-        <img src="/assets/logo.png" alt="MAFIKING" />
+        <img src="/assets/logo-icon.webp" alt="MAFIKING" />
       </div>
       <div className="qris-mobile-brand">Mafiking</div>
 
@@ -784,8 +889,8 @@ const PaymentQrisView = ({ payment, countdown, status, onCancel, onCheckStatus, 
 
       {statusValue === "SUCCESS" ? (
         <div style={{ margin: "0 16px 16px" }}>
-          <button className="checkout-pay-btn" onClick={() => setRoute("belajar")} type="button">
-            {isTryout ? "Ke Halaman Tryout" : "Mulai Belajar"} <Icon.Arrow className="w-5 h-5" />
+          <button className="checkout-pay-btn" onClick={successAction} type="button">
+            {paymentSuccessButtonLabel(payment, productDetails)} <Icon.Arrow className="w-5 h-5" />
           </button>
         </div>
       ) : null}
@@ -809,15 +914,15 @@ const PaymentQrisView = ({ payment, countdown, status, onCancel, onCheckStatus, 
 };
 
 const PaymentQrisViewDesktop = ({ payment, countdown, status, onCancel, onCheckStatus, checkingStatus, setRoute }) => {
+  const { useState } = React;
+  const [copied, setCopied] = useState("");
+  const [showCommunityModal, setShowCommunityModal] = useState(false);
   const statusValue = status?.status || payment.status || "PENDING";
   const expired = isPaymentExpiredStatus(statusValue);
   const productDetails = payment.productDetails || "Pesanan Mafiking";
   const fullAmount = Number(payment.fullAmount || payment.amount || 0);
   const baseAmount = Number(payment.baseAmount || 0);
   const uniqueCode = Number(payment.suffix || 0);
-  const isTryout = !["Trial 7 Hari", "Bulanan", "Semester"].includes(productDetails);
-  const { useState } = React;
-  const [copied, setCopied] = useState("");
 
   async function copyAmount() {
     try {
@@ -839,8 +944,24 @@ const PaymentQrisViewDesktop = ({ payment, countdown, status, onCancel, onCheckS
     document.body.removeChild(link);
   }
 
+  const successAction = () => {
+    if (isBimbelPayment(payment)) {
+      setShowCommunityModal(true);
+      return;
+    }
+    setRoute("belajar");
+  };
+
   return (
     <div className="checkout-modal-backdrop qris-modal-backdrop" onClick={onCancel}>
+      {showCommunityModal ? (
+        <BimbelCommunityModal
+          adminWhatsapp={payment.adminWhatsapp}
+          onClose={() => setShowCommunityModal(false)}
+          onDone={() => setRoute("belajar")}
+          payment={payment}
+        />
+      ) : null}
       <div className="checkout-modal qris-desktop-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Pembayaran QRIS">
         <div className="checkout-modal-main">
           <div className="qris-desktop-header">
@@ -930,12 +1051,12 @@ const PaymentQrisViewDesktop = ({ payment, countdown, status, onCancel, onCheckS
           <button
             className="checkout-pay-btn"
             disabled={statusValue !== "SUCCESS" && checkingStatus}
-            onClick={statusValue === "SUCCESS" ? () => setRoute("belajar") : onCheckStatus}
+            onClick={statusValue === "SUCCESS" ? successAction : onCheckStatus}
             type="button"
           >
             {statusValue === "SUCCESS" ? (
               <>
-                {isTryout ? "Ke Halaman Tryout" : "Mulai Belajar"} <Icon.Arrow className="w-5 h-5" />
+                {paymentSuccessButtonLabel(payment, productDetails)} <Icon.Arrow className="w-5 h-5" />
               </>
             ) : (
               <>
@@ -958,6 +1079,7 @@ const PaymentStatus = ({ merchantOrderId, setRoute, onAccessChanged }) => {
   const [errorMessage, setErrorMessage] = useState("");
   const [countdown, setCountdown] = useState(0);
   const [checkingStatus, setCheckingStatus] = useState(false);
+  const [showCommunityModal, setShowCommunityModal] = useState(false);
   const accessRefreshDoneRef = useRef(false);
 
   function notifyAccessChangedOnce() {
@@ -1040,7 +1162,14 @@ const PaymentStatus = ({ merchantOrderId, setRoute, onAccessChanged }) => {
 
   const productDetails = payment.productDetails || "Pesanan Mafiking";
   const amount = payment.amount ? formatRupiah(payment.amount) : "";
-  const isTryout = !["Trial 7 Hari", "Bulanan", "Semester"].includes(productDetails);
+  const isTryout = isTryoutProduct(productDetails);
+  const successAction = () => {
+    if (isBimbelPayment(payment)) {
+      setShowCommunityModal(true);
+      return;
+    }
+    leaveStatus("belajar");
+  };
 
   if (status === "pending") {
     if (payment.provider === "manual") {
@@ -1085,14 +1214,24 @@ const PaymentStatus = ({ merchantOrderId, setRoute, onAccessChanged }) => {
 
   if (status === "success") {
     return (
-      <PaymentStatusShell tone="success" icon={<Icon.CheckCircle className="w-6 h-6 text-ink" />}>
-        <h2 className="font-display font-bold text-2xl mb-2">Pembayaran Berhasil</h2>
-        <p className="text-ink/60 text-sm mb-5">Akses sudah aktif untuk pesanan ini.</p>
-        <StatusDetail productDetails={productDetails} amount={amount} merchantOrderId={merchantOrderId} />
-        <button className="payment-success-button group mt-6" onClick={() => leaveStatus("belajar")} type="button">
-          {isTryout ? "Ke Halaman Tryout" : "Mulai Belajar"} <Icon.Arrow className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-        </button>
-      </PaymentStatusShell>
+      <React.Fragment>
+        {showCommunityModal ? (
+          <BimbelCommunityModal
+            adminWhatsapp={payment.adminWhatsapp}
+            onClose={() => setShowCommunityModal(false)}
+            onDone={() => leaveStatus("belajar")}
+            payment={payment}
+          />
+        ) : null}
+        <PaymentStatusShell tone="success" icon={<Icon.CheckCircle className="w-6 h-6 text-ink" />}>
+          <h2 className="font-display font-bold text-2xl mb-2">Pembayaran Berhasil</h2>
+          <p className="text-ink/60 text-sm mb-5">Akses sudah aktif untuk pesanan ini.</p>
+          <StatusDetail productDetails={productDetails} amount={amount} merchantOrderId={merchantOrderId} />
+          <button className="payment-success-button group mt-6" onClick={successAction} type="button">
+            {paymentSuccessButtonLabel(payment, productDetails)} <Icon.Arrow className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+          </button>
+        </PaymentStatusShell>
+      </React.Fragment>
     );
   }
 

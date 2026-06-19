@@ -534,6 +534,7 @@ ensurePaymentTestTryoutPackage(db);
 ensureTryoutPackageIds(db);
 seedInitialTryoutQuestions(db);
 ensurePaymentTestTryoutQuestions(db);
+ensureProductionPremiumTryoutQuestions(db);
 ensureDefaultAppSettings(db);
 
 ensureFixedAdminUser(db);
@@ -667,7 +668,7 @@ const registerLimiter = rateLimit({
 });
 const correctionLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 12,
+  max: 20,
   keyGenerator: (req) => `correction:${req.session?.userId || req.userId || rateLimit.ipKeyGenerator(req.ip)}`,
   message: { error: 'Terlalu banyak request koreksi. Coba lagi sebentar.' },
   standardHeaders: true,
@@ -1140,7 +1141,16 @@ app.get('/api/tryout-packages', (req, res) => {
     }
     setPublicApiCache(res, 30, 120);
     const isAdmin = canReadLockedTryoutPackages(req);
-    const rows = db.prepare('SELECT * FROM tryout_packages ORDER BY sort_order, id').all();
+    const rows = db.prepare(`
+      SELECT tp.*, COALESCE(q.question_count, 0) AS question_count
+      FROM tryout_packages tp
+      LEFT JOIN (
+        SELECT tryout_id, COUNT(*) AS question_count
+        FROM tryout_questions
+        GROUP BY tryout_id
+      ) q ON q.tryout_id = tp.tryout_id
+      ORDER BY tp.sort_order, tp.id
+    `).all();
     res.json(isAdmin ? rows : rows.filter((p) => !p.is_hidden));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1239,25 +1249,65 @@ const devSourceCache = {
 };
 
 const devSourceStatic = express.static(SRC_DIR, devSourceCache);
+const distAssetsDir = path.join(distDir, 'assets');
+
+function safeAssetRelativePath(urlPath) {
+  let decoded = '';
+  try {
+    decoded = decodeURIComponent(String(urlPath || ''));
+  } catch (_) {
+    return null;
+  }
+  const normalized = path.posix.normalize(decoded).replace(/^\/+/, '');
+  if (!normalized || normalized.startsWith('../') || normalized.includes('/../') || normalized.includes('\0')) {
+    return null;
+  }
+  return normalized;
+}
+
+function compressedDistAsset(req, res, next) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  if (req.headers.range) return next();
+  const acceptEncoding = String(req.headers['accept-encoding'] || '');
+  const relativePath = safeAssetRelativePath(req.path);
+  if (!relativePath) return next();
+  const originalAsset = path.resolve(distAssetsDir, relativePath);
+  if (!originalAsset.startsWith(`${distAssetsDir}${path.sep}`) || !fs.existsSync(originalAsset)) return next();
+
+  const candidates = [];
+  if (/\bbr\b/i.test(acceptEncoding)) candidates.push({ suffix: '.br', encoding: 'br' });
+  if (/\bgzip\b/i.test(acceptEncoding)) candidates.push({ suffix: '.gz', encoding: 'gzip' });
+
+  for (const candidate of candidates) {
+    const compressedAsset = `${originalAsset}${candidate.suffix}`;
+    if (!fs.existsSync(compressedAsset)) continue;
+    res.setHeader('Content-Encoding', candidate.encoding);
+    res.setHeader('Cache-Control', `public, max-age=${oneYearSeconds}, immutable`);
+    res.vary('Accept-Encoding');
+    res.type(path.extname(originalAsset));
+    return res.sendFile(compressedAsset);
+  }
+  return next();
+}
 
 function findLatestDistAsset(prefix, extension) {
   try {
-    const assetsDir = path.join(distDir, 'assets');
-    const files = fs.readdirSync(assetsDir)
+    const files = fs.readdirSync(distAssetsDir)
       .filter((file) => file.startsWith(`${prefix}-`) && file.endsWith(extension))
       .map((file) => ({
         file,
-        mtimeMs: fs.statSync(path.join(assetsDir, file)).mtimeMs,
+        mtimeMs: fs.statSync(path.join(distAssetsDir, file)).mtimeMs,
       }))
       .sort((a, b) => b.mtimeMs - a.mtimeMs);
-    return files[0] ? path.join(assetsDir, files[0].file) : null;
+    return files[0] ? path.join(distAssetsDir, files[0].file) : null;
   } catch (_) {
     return null;
   }
 }
 
 app.use('/assets', setStaticCacheHint);
-app.use('/assets', express.static(path.join(distDir, 'assets'), distAssetCache));
+app.use('/assets', compressedDistAsset);
+app.use('/assets', express.static(distAssetsDir, distAssetCache));
 app.use('/assets', express.static(ASSETS_DIR, staticCache));
 app.get(/^\/assets\/(index|generated-admin|vendor-react)-[^/]+\.(js|css)$/, (req, res, next) => {
   const fallbackAsset = findLatestDistAsset(req.params[0], `.${req.params[1]}`);
@@ -1520,6 +1570,133 @@ function ensurePaymentTestTryoutQuestions(database) {
   } catch (error) {
     console.warn('[tryout-packages] failed to ensure Cek Payment questions:', error.message);
   }
+}
+
+function ensureProductionPremiumTryoutQuestions(database) {
+  const targetTryoutId = 'bimbel-persiapan-pretest-tpb';
+  const sourceTryoutId = 'tryout-premium-tpb-prep';
+
+  try {
+    const targetPackage = database.prepare(
+      'SELECT id FROM tryout_packages WHERE tryout_id = ? LIMIT 1'
+    ).get(targetTryoutId);
+    if (!targetPackage) return;
+
+    const existing = Number(database.prepare(
+      'SELECT COUNT(*) AS count FROM tryout_questions WHERE tryout_id = ?'
+    ).get(targetTryoutId).count) || 0;
+    if (existing > 0) return;
+
+    let sourceQuestions = database.prepare(`
+      SELECT id, question_text, question_display, answer_display, acceptable_answers,
+             difficulty, question_type, mc_options, image_url, image_alt, sort_order, created_at
+      FROM tryout_questions
+      WHERE tryout_id = ?
+      ORDER BY sort_order, id
+    `).all(sourceTryoutId);
+    let stepsByQuestionId = null;
+
+    if (!sourceQuestions.length) {
+      const seeded = readSeededTryoutQuestions(sourceTryoutId);
+      sourceQuestions = seeded.questions;
+      stepsByQuestionId = seeded.stepsByQuestionId;
+    }
+
+    if (!sourceQuestions.length) return;
+
+    const dbStepsByQuestionId = stepsByQuestionId || (() => {
+      const sourceQuestionIds = sourceQuestions.map((question) => Number(question.id)).filter(Boolean);
+      if (!sourceQuestionIds.length) return new Map();
+      const placeholders = sourceQuestionIds.map(() => '?').join(',');
+      const rows = database.prepare(`
+        SELECT tryout_question_id, step_order, title, content, why, intuition, mistakes, mistake_result
+        FROM tryout_question_steps
+        WHERE tryout_question_id IN (${placeholders})
+        ORDER BY tryout_question_id, step_order, id
+      `).all(...sourceQuestionIds);
+      return groupTryoutStepsByQuestionId(rows);
+    })();
+
+    const insertQuestion = database.prepare(`
+      INSERT INTO tryout_questions (
+        tryout_id, question_text, question_display, answer_display, acceptable_answers,
+        difficulty, question_type, mc_options, image_url, image_alt, sort_order, created_by, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, COALESCE(?, CURRENT_TIMESTAMP))
+    `);
+    const insertStep = database.prepare(`
+      INSERT INTO tryout_question_steps (
+        tryout_question_id, step_order, title, content, why, intuition, mistakes, mistake_result
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const copyQuestions = database.transaction(() => {
+      for (const question of sourceQuestions) {
+        const info = insertQuestion.run(
+          targetTryoutId,
+          question.question_text || '',
+          question.question_display || question.question_text || '',
+          question.answer_display || '',
+          question.acceptable_answers || '[]',
+          question.difficulty || 'Easy',
+          question.question_type || 'mc',
+          question.mc_options || '[]',
+          question.image_url || '',
+          question.image_alt || '',
+          Number(question.sort_order) || 0,
+          question.created_at || null
+        );
+        const newQuestionId = Number(info.lastInsertRowid);
+        for (const step of dbStepsByQuestionId.get(Number(question.id)) || []) {
+          insertStep.run(
+            newQuestionId,
+            Number(step.step_order) || 1,
+            step.title || '',
+            step.content || '',
+            step.why || '',
+            step.intuition || '',
+            step.mistakes || '',
+            step.mistake_result || ''
+          );
+        }
+      }
+    });
+    copyQuestions();
+    console.info(`[tryout-packages] copied premium tryout questions to ${targetTryoutId}`);
+  } catch (error) {
+    console.warn('[tryout-packages] failed to ensure production premium questions:', error.message);
+  }
+}
+
+function readSeededTryoutQuestions(sourceTryoutId) {
+  try {
+    const seedPath = path.join(DB_DIR, 'seeds', 'tryout-bank.json');
+    if (!fs.existsSync(seedPath)) return { questions: [], stepsByQuestionId: new Map() };
+    const bank = JSON.parse(fs.readFileSync(seedPath, 'utf-8'));
+    const questions = Array.isArray(bank.tryout_questions)
+      ? bank.tryout_questions.filter((question) => question.tryout_id === sourceTryoutId)
+      : [];
+    const sourceQuestionIds = new Set(questions.map((question) => Number(question.id)).filter(Boolean));
+    const steps = Array.isArray(bank.tryout_question_steps)
+      ? bank.tryout_question_steps.filter((step) => sourceQuestionIds.has(Number(step.tryout_question_id)))
+      : [];
+    return { questions, stepsByQuestionId: groupTryoutStepsByQuestionId(steps) };
+  } catch (error) {
+    console.warn('[tryout-packages] failed to read seeded premium tryout bank:', error.message);
+    return { questions: [], stepsByQuestionId: new Map() };
+  }
+}
+
+function groupTryoutStepsByQuestionId(rows) {
+  const grouped = new Map();
+  for (const row of rows || []) {
+    const questionId = Number(row.tryout_question_id);
+    if (!questionId) continue;
+    if (!grouped.has(questionId)) grouped.set(questionId, []);
+    grouped.get(questionId).push(row);
+  }
+  return grouped;
 }
 
 function seedInitialTryoutQuestions(database) {

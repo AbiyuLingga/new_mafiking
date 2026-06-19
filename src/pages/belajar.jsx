@@ -51,7 +51,12 @@ function buildChapterPracticeContext(chapter, mapel) {
     mapel,
     chapterSlug: slugifyBelajarPath(chapter?.title || chapter?.id),
     mapelSlug: slugifyBelajarPath(mapel),
+    requiresSpecialPractice: true,
   };
+}
+
+function openPremiumChapterPractice(setRoute, chapter, mapel, hasPremiumAccess) {
+  setRoute({ route: "practice", practice: buildChapterPracticeContext(chapter, mapel) });
 }
 
 function getTwoWordDisplayName(user) {
@@ -216,12 +221,14 @@ const Belajar = ({ setRoute, tweaks, isAdmin, isLoggedIn = false, currentUser = 
 
 // ─── Semester kicker (header) ─────────────────────────────────────────────
 const PREMIUM_TRYOUT_ID = "tryout-premium-tpb-prep";
+const PREMIUM_TRYOUT_IDS = ["bimbel-persiapan-pretest-tpb", PREMIUM_TRYOUT_ID];
 const PREMIUM_TRYOUT_FALLBACK = {
   tryout_id: PREMIUM_TRYOUT_ID,
   title: "Tryout Premium: The Trinity TPB",
   duration: "90 mnt",
   questions: 30,
   price: "Rp 100.000",
+  access_features: ["tryout-access"],
 };
 
 function parseBelajarTryoutDurationSeconds(value, fallbackSeconds) {
@@ -231,28 +238,74 @@ function parseBelajarTryoutDurationSeconds(value, fallbackSeconds) {
   return text.includes("jam") ? number * 60 * 60 : number * 60;
 }
 
+function parseBelajarPackageAccessFeatures(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
+  const text = String(value || "").trim();
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : [];
+  } catch (_) {
+    return text.split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
+  }
+}
+
+function isPaidBelajarTryoutPackage(pkg) {
+  const priceText = String(pkg?.price || "").trim().toLowerCase();
+  return Boolean(priceText && priceText !== "gratis" && priceText !== "free" && !priceText.includes("gratis"));
+}
+
+function hasBelajarTryoutQuestions(pkg) {
+  if (pkg?.question_count === undefined && pkg?.questionCount === undefined) return true;
+  return Number(pkg?.question_count ?? pkg?.questionCount ?? 0) > 0;
+}
+
+function isLikelyBelajarPremiumPackage(pkg) {
+  const text = `${pkg?.tryout_id || pkg?.tryoutId || ""} ${pkg?.title || ""}`.toLowerCase();
+  if (/(^|\s|-)(test|cek|qris|lokal)(\s|-|$)/.test(text)) return false;
+  return /(bimbel|premium|pretest|tpb|trinity)/.test(text);
+}
+
+function selectBelajarPremiumPackage(packages) {
+  const list = Array.isArray(packages) ? packages.filter(Boolean) : [];
+  const withTryoutAccess = list.filter((pkg) => (
+    isPaidBelajarTryoutPackage(pkg)
+    && parseBelajarPackageAccessFeatures(pkg.access_features).includes("tryout-access")
+    && String(pkg.tryout_id || pkg.tryoutId || "").trim()
+    && hasBelajarTryoutQuestions(pkg)
+  ));
+  const exactPremium = withTryoutAccess.find((pkg) => PREMIUM_TRYOUT_IDS.includes(pkg.tryout_id || pkg.tryoutId));
+  const namedPremium = withTryoutAccess.find(isLikelyBelajarPremiumPackage);
+  return exactPremium || namedPremium || withTryoutAccess[0] || null;
+}
+
 const TryOutBelajarPanel = ({ setRoute, isLoggedIn, isAdmin = false }) => {
-  const [premiumPackage, setPremiumPackage] = useState(PREMIUM_TRYOUT_FALLBACK);
+  const [premiumPackage, setPremiumPackage] = useState(null);
   const [activePackages, setActivePackages] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
+    const activePackagesRequest = (isLoggedIn || isAdmin)
+      ? MafikingAPI.get('/api/payment/active-packages').catch(() => [])
+      : Promise.resolve([]);
     Promise.all([
       MafikingAPI.get('/api/tryout-packages').catch(() => []),
-      MafikingAPI.get('/api/payment/active-packages').catch(() => []),
+      activePackagesRequest,
     ]).then(([packages, active]) => {
       if (cancelled) return;
-      const premium = (Array.isArray(packages) ? packages : []).find((pkg) => pkg.tryout_id === PREMIUM_TRYOUT_ID);
-      if (premium) setPremiumPackage({ ...PREMIUM_TRYOUT_FALLBACK, ...premium });
+      const premium = selectBelajarPremiumPackage(packages);
+      setPremiumPackage(premium ? { ...PREMIUM_TRYOUT_FALLBACK, ...premium } : null);
       setActivePackages(Array.isArray(active) ? active : []);
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [isLoggedIn, isAdmin]);
 
+  const displayPremiumPackage = premiumPackage || PREMIUM_TRYOUT_FALLBACK;
+  const premiumPackageReady = Boolean(premiumPackage && String(premiumPackage.tryout_id || premiumPackage.tryoutId || "").trim());
   const hasPremiumAccess = isAdmin
     || activePackages.includes("tryout-access")
-    || activePackages.includes(premiumPackage.title)
-    || activePackages.includes(premiumPackage.tryout_id)
+    || activePackages.includes(displayPremiumPackage.title)
+    || activePackages.includes(displayPremiumPackage.tryout_id)
     || activePackages.some((title) => ["Trial 7 Hari", "Bulanan", "Semester"].includes(title));
 
   const startPractice = () => {
@@ -288,6 +341,10 @@ const TryOutBelajarPanel = ({ setRoute, isLoggedIn, isAdmin = false }) => {
   };
 
   const startPremiumTryout = () => {
+    if (!premiumPackage || !String(premiumPackage.tryout_id || premiumPackage.tryoutId || "").trim()) {
+      showToast("Paket premium sedang dimuat. Coba lagi sebentar.", "info");
+      return;
+    }
     if (!hasPremiumAccess) {
       setRoute("tryout");
       return;
@@ -360,23 +417,24 @@ const TryOutBelajarPanel = ({ setRoute, isLoggedIn, isAdmin = false }) => {
             </span>
             <div className="h-7 sm:h-8 min-w-[3rem] sm:min-w-[3.75rem] px-1.5 sm:px-2 rounded-lg bg-white/5 flex items-center justify-center gap-1 text-[9px] sm:text-[10px] font-mono font-bold tracking-widest uppercase text-white/65 border border-white/10">
               <Icon.Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-              {premiumPackage.duration || "90 mnt"}
+              {displayPremiumPackage.duration || "90 mnt"}
             </div>
           </div>
 
           <h2 className="font-display font-extrabold text-lg sm:text-2xl leading-tight tracking-tight mb-2 sm:mb-3 text-white">
-            {premiumPackage.title || "Tryout Premium"}
+            {displayPremiumPackage.title || "Tryout Premium"}
           </h2>
           <div className="mt-auto pt-3 sm:pt-4 border-t border-white/10 flex items-center justify-between gap-2 sm:gap-3 w-full">
             <span className="text-[10px] sm:text-xs font-mono font-bold text-white/50">
-              {hasPremiumAccess ? "Akses aktif" : "Perlu akses"}
+              {!premiumPackageReady ? "Memuat paket" : hasPremiumAccess ? "Akses aktif" : "Perlu akses"}
             </span>
             <button
               onClick={startPremiumTryout}
+              disabled={!premiumPackageReady}
               className={hasPremiumAccess ? "btn-yel !px-3 !py-1.5 sm:!px-4 sm:!py-2 text-[10px] sm:text-xs shrink-0" : "inline-flex items-center gap-1.5 sm:gap-2 rounded-full border border-white bg-white px-3 py-1.5 sm:px-4 sm:py-2 text-[10px] sm:text-xs font-bold text-ink shadow-sm hover:bg-slate-100 transition-colors shrink-0"}
               type="button"
             >
-              {hasPremiumAccess ? "Mulai" : "Beli"}
+              {!premiumPackageReady ? "Memuat" : hasPremiumAccess ? "Mulai" : "Beli"}
               <Icon.Arrow className="w-3 h-3 sm:w-3.5 sm:h-3.5 transition-transform group-hover:translate-x-1" />
             </button>
           </div>
@@ -648,7 +706,7 @@ const ChaptersNumbered = ({ chapters, setRoute, mapel, hasPremiumAccess = false 
       return (
         <button
           key={c.id}
-          onClick={() => setRoute({ route: "practice", practice: buildChapterPracticeContext(c, mapel) })}
+          onClick={() => openPremiumChapterPractice(setRoute, c, mapel, hasPremiumAccess)}
           className={`group text-left flex gap-5 md:gap-8 py-7 -mx-2 px-2 rounded-xl transition-all hover:bg-ink/[0.018] ${i > 0 ? "border-t hairline" : ""}`}
         >
           <div className="font-display font-bold text-5xl md:text-7xl tnum text-ink/10 shrink-0 w-16 md:w-24 text-right leading-none mt-1">
@@ -701,7 +759,7 @@ const ChaptersSoft = ({ chapters, setRoute, mapel, hasPremiumAccess = false }) =
       return (
         <button
           key={c.id}
-          onClick={() => setRoute({ route: "practice", practice: buildChapterPracticeContext(c, mapel) })}
+          onClick={() => openPremiumChapterPractice(setRoute, c, mapel, hasPremiumAccess)}
           className={`text-left card-premium card-premium-subject-art ${toneClass} ${artClass} p-4 sm:p-6 group flex flex-col justify-between transition-all`}
         >
           {/* Ambient Glows */}
@@ -789,7 +847,7 @@ const ChaptersMagazine = ({ chapters, setRoute, mapel, hasPremiumAccess = false 
       return (
         <button
           key={c.id}
-          onClick={() => setRoute({ route: "practice", practice: buildChapterPracticeContext(c, mapel) })}
+          onClick={() => openPremiumChapterPractice(setRoute, c, mapel, hasPremiumAccess)}
           className={`shrink-0 text-left flex flex-col group hover:-translate-y-1 transition-all
             ${isHero ? "w-[340px] md:w-[420px] bg-ink text-white rounded-[var(--card-radius)] p-6 md:p-8" : "w-[260px] md:w-[300px] card pad-d"}`}
         >

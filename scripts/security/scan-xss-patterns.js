@@ -32,6 +32,7 @@ const PATTERNS = [
 // Helpers that are known to be safe (escape or render with a safe API).
 const SAFE_HELPERS = new Set([
   'renderMafikingMathHTML',
+  'renderTryoutMathHTML',
   'renderNarrativeHTML',
   'renderEquationHTML',
   'renderKatexToString',

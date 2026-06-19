@@ -34,6 +34,9 @@ const MAX_ADJACENT_PREFETCHES = 3;
 const routePromises = new Map();
 const scheduledRoutes = new Set();
 const pendingRouteMarks = new Map();
+const deferredAdjacentRoutes = new Set();
+let initialRouteSettled = false;
+let deferredFlushScheduled = false;
 
 function existingRouteModule(routeName) {
   const entry = ROUTE_LOADERS[routeName];
@@ -51,6 +54,14 @@ function shouldSpeculativelyPrefetch() {
   return true;
 }
 
+function isMarketingRoute(routeName) {
+  return routeName === "lobby" || routeName === "landing";
+}
+
+function hasInitialRouteSettled() {
+  return initialRouteSettled || Boolean(typeof window !== "undefined" && window.__mafikingInitialRouteSettled);
+}
+
 function scheduleIdle(cb) {
   if (typeof window === "undefined") return;
   if (typeof window.requestIdleCallback === "function") {
@@ -58,6 +69,23 @@ function scheduleIdle(cb) {
     return;
   }
   window.setTimeout(cb, 1200);
+}
+
+function flushDeferredAdjacentPrefetches() {
+  deferredFlushScheduled = false;
+  if (!hasInitialRouteSettled() || !shouldSpeculativelyPrefetch()) return;
+  const routes = Array.from(deferredAdjacentRoutes);
+  deferredAdjacentRoutes.clear();
+  for (const routeName of routes) {
+    if (isMarketingRoute(routeName)) continue;
+    prefetchAdjacentRoutes(routeName);
+  }
+}
+
+function scheduleDeferredAdjacentFlush() {
+  if (typeof window === "undefined" || deferredFlushScheduled) return;
+  deferredFlushScheduled = true;
+  scheduleIdle(flushDeferredAdjacentPrefetches);
 }
 
 function loadRoute(routeName) {
@@ -108,6 +136,12 @@ function prefetchSequence(routeNames, index = 0) {
 
 function prefetchAdjacentRoutes(currentRoute) {
   if (!shouldSpeculativelyPrefetch()) return;
+  if (isMarketingRoute(currentRoute)) return;
+  if (!hasInitialRouteSettled()) {
+    deferredAdjacentRoutes.add(currentRoute);
+    scheduleDeferredAdjacentFlush();
+    return;
+  }
   const routes = (ROUTE_PREFETCHES[currentRoute] || [])
     .filter((routeName) => routeName !== currentRoute)
     .slice(0, MAX_ADJACENT_PREFETCHES);
@@ -132,6 +166,9 @@ function markRouteIntent(routeName) {
 
 function markRouteRendered(routeName) {
   if (typeof window === "undefined" || typeof performance === "undefined") return;
+  initialRouteSettled = true;
+  window.__mafikingInitialRouteSettled = true;
+  scheduleDeferredAdjacentFlush();
   const pending = pendingRouteMarks.get(routeName);
   if (!pending || typeof performance.mark !== "function" || typeof performance.measure !== "function") return;
   pendingRouteMarks.delete(routeName);

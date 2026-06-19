@@ -348,6 +348,31 @@ assert.doesNotMatch(
     /\bprice\s*=/,
     'server startup must preserve admin-edited Cek Payment price'
 );
+const publicTryoutPackagesRouteSource = serverSource.match(
+    /app\.get\('\/api\/tryout-packages'[\s\S]*?\n\}\);/
+)?.[0] || '';
+assert.ok(publicTryoutPackagesRouteSource, 'public tryout packages route must exist');
+assert.match(
+    publicTryoutPackagesRouteSource,
+    /rows\.filter\(\(p\) => !p\.is_hidden\)/,
+    'public tryout packages must hide only explicitly hidden packages'
+);
+assert.doesNotMatch(
+    publicTryoutPackagesRouteSource,
+    /question_count[\s\S]*return/,
+    'public tryout packages must not disappear just because no tryout questions exist yet'
+);
+const tryoutPageSource = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'pages', 'tryout.jsx'), 'utf8');
+assert.match(
+    tryoutPageSource,
+    /if \(hasKnownEmptyTryout && hasAccess\)/,
+    'empty tryout packages may block starting owned packages but must not block buying them'
+);
+assert.doesNotMatch(
+    tryoutPageSource,
+    /if \(hasKnownEmptyTryout\) \{\s*showToast/,
+    'empty tryout package guard must not run before the purchase branch'
+);
 
 const gatewayState = paymentGatewayState({ NODE_ENV: 'production', PAYMENT_MOCK_MODE: 'false' });
 assert.strictEqual(gatewayState.active, false);

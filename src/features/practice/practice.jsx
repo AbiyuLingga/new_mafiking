@@ -4,7 +4,7 @@ const CANVAS_DEMO_VIDEO_SRC = "/assets/saas_demo_video_popup.mp4";
 const CANVAS_INTRO_LAST_SHOWN_KEY = "mafiking:canvasIntroLastShownAt";
 const CANVAS_INTRO_COOLDOWN_MS = 15 * 60 * 1000;
 const CANVAS_INTRO_PLAYBACK_RATE = 1.75;
-const CANVAS_COACH_CONTINUE_DELAY_MS = 2000;
+const CANVAS_COACH_CONTINUE_DELAY_MS = 4000;
 
 function slugifyPracticePath(value, fallback = "latihan") {
   const slug = String(value || "")
@@ -2062,7 +2062,6 @@ const CanvasView = ({
           </button>
           <div className="mafiking-session-copy">
             <strong>Canvas untuk stylus pen</strong>
-            <span>Tulis jawaban di paper, lalu kirim ke AI.</span>
           </div>
           <div className="mafiking-session-stats">
             <ModeSegment value="canvas" onChange={onSwitchMode} />

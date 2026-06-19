@@ -39,6 +39,7 @@ const paymentLimiter = rateLimit({
 const QRIS_DEFAULT_EXPIRY_MINUTES = 20;
 const MANUAL_SUFFIX_MIN = 1;
 const MANUAL_SUFFIX_MAX = 399;
+const MAFIKING_ADMIN_WHATSAPP = '6281246049951';
 
 const SUBSCRIPTION_PACKAGES = {
     'cek-payment': { label: 'Cek Payment', price: 500 },
@@ -65,7 +66,7 @@ function qrisConfig(env = process.env) {
         staticString: String(env.QRIS_STATIC_STRING || '').trim(),
         merchantName: String(env.QRIS_MERCHANT_NAME || 'MAFIKING').trim(),
         expiryMinutes: Number.isInteger(expiryMinutes) && expiryMinutes > 0 ? expiryMinutes : QRIS_DEFAULT_EXPIRY_MINUTES,
-        adminWhatsapp: String(env.QRIS_ADMIN_WHATSAPP || '').replace(/[^0-9]/g, ''),
+        adminWhatsapp: MAFIKING_ADMIN_WHATSAPP,
         webhookEnabled: Boolean(String(env.PAYMENT_WEBHOOK_SECRET || '').trim()),
     };
 }
@@ -226,10 +227,32 @@ function canCreatePayment({ db, userId, env = process.env }) {
     return isRegisteredPaymentUser({ db, userId }) || Boolean(userId && isLocalGuestCheckoutEnabled(env));
 }
 
-function paymentStatusPayload(payment, status) {
+function readPaymentAccessFeatures(db, productDetails) {
+    if (!db || !productDetails) return [];
+    try {
+        const pkg = db.prepare('SELECT access_features FROM tryout_packages WHERE title = ? LIMIT 1')
+            .get(String(productDetails));
+        return normalizePackageAccessFeatures(pkg?.access_features || '[]', { useDefault: false });
+    } catch (_) {
+        return [];
+    }
+}
+
+function readPaymentBuyerName(db, userId) {
+    if (!db || !userId) return '';
+    try {
+        const user = db.prepare('SELECT display_name, username, email FROM users WHERE id = ?').get(userId);
+        return String(user?.display_name || user?.username || user?.email || '').trim();
+    } catch (_) {
+        return '';
+    }
+}
+
+function paymentStatusPayload(payment, status, db = null) {
     const provider = payment.reference && String(payment.reference).startsWith('MANUAL-')
         ? 'manual'
         : 'qris';
+    const accessFeatures = readPaymentAccessFeatures(db, payment.product_details);
     return {
         status,
         merchantOrderId: payment.merchant_order_id,
@@ -239,6 +262,9 @@ function paymentStatusPayload(payment, status) {
         fullAmount: payment.qris_full_amount || payment.amount,
         productDetails: payment.product_details,
         email: payment.email,
+        buyerName: readPaymentBuyerName(db, payment.user_id),
+        accessFeatures,
+        requiresBimbelCommunity: accessFeatures.includes('bimbel'),
         provider,
         qrImageDataUrl: payment.qris_image_data_url || '',
         qrString: payment.qris_dynamic_string || payment.qr_string || '',
@@ -651,28 +677,28 @@ router.get('/status/:merchantOrderId', async (req, res) => {
     if (!payment) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' });
 
     if (payment.status === 'SUCCESS' || payment.status === 'FAILED' || payment.status === 'EXPIRED') {
-        return res.json(paymentStatusPayload(payment, payment.status));
+        return res.json(paymentStatusPayload(payment, payment.status, db));
     }
 
     if (payment.reference && String(payment.reference).startsWith('MANUAL-')) {
         return res.json({
-            ...paymentStatusPayload(payment, payment.status),
+            ...paymentStatusPayload(payment, payment.status, db),
             statusMessage: 'Menunggu konfirmasi manual admin.',
         });
     }
 
     if (payment.qris_full_amount) {
         return res.json({
-            ...paymentStatusPayload(payment, payment.status),
+            ...paymentStatusPayload(payment, payment.status, db),
             statusMessage: 'Menunggu rekonsiliasi QRIS.',
         });
     }
 
     if (isMockPaymentEnabled()) {
-        return res.json({ ...paymentStatusPayload(payment, payment.status), statusMessage: 'Mock status checked' });
+        return res.json({ ...paymentStatusPayload(payment, payment.status, db), statusMessage: 'Mock status checked' });
     }
 
-    return res.json(paymentStatusPayload(payment, payment.status));
+    return res.json(paymentStatusPayload(payment, payment.status, db));
 });
 
 // GET /api/payment/stream/:merchantOrderId — Server-Sent Events for real-time payment status push.
